@@ -1,0 +1,13 @@
+{
+  "name": "schedulx-core",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "dev:gateway": "pnpm --filter @repo/api-gateway dev",
+    "dev:identity": "pnpm --filter @repo/identity-tenant dev",
+    "dev:worker": "pnpm --filter @repo/background-worker dev",
+    "dev:frontend": "pnpm --filter @repo/frontend-react dev",
+    "build": "pnpm -r run build"
+  }
+}

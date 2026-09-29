@@ -1,0 +1,39 @@
+"use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SuperAdminAuthMiddleware = void 0;
+const common_1 = require("@nestjs/common");
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+let SuperAdminAuthMiddleware = class SuperAdminAuthMiddleware {
+    use(req, res, next) {
+        const token = req.cookies?.superadmin_access_token ||
+            req.headers.authorization?.replace(/^Bearer\s+/i, '');
+        if (!token) {
+            throw new common_1.UnauthorizedException('SuperAdmin authentication token missing');
+        }
+        try {
+            const globalSecret = process.env.JWT_SECRET;
+            const secret = process.env.SUPERADMIN_JWT_SECRET ||
+                (globalSecret ? `${globalSecret}_superadmin` : 'superadmin_access_secret_2025');
+            const decoded = jsonwebtoken_1.default.verify(token, secret);
+            req.superAdmin = decoded;
+            req.user = decoded;
+            next();
+        }
+        catch (err) {
+            throw new common_1.UnauthorizedException('Invalid or expired superadmin authentication token');
+        }
+    }
+};
+exports.SuperAdminAuthMiddleware = SuperAdminAuthMiddleware;
+exports.SuperAdminAuthMiddleware = SuperAdminAuthMiddleware = __decorate([
+    (0, common_1.Injectable)()
+], SuperAdminAuthMiddleware);

@@ -1,0 +1,18 @@
+import { Router } from "express";
+import { TenantRepository } from "../../repository/TenantRepository.js";
+import { TenantService } from "../../services/tenantService.js";
+import { TenantController } from "../controller/TenantController.js";
+import { CacheRepository } from "../../repository/CacheRepository.js";
+import { redisClient } from "../../config/redis.js";
+import { emailProducer } from "../../producers/emailProducer.js";
+const tenantRepo = new TenantRepository();
+const cacheRepo = new CacheRepository(redisClient);
+export const tenantService = new TenantService(tenantRepo, cacheRepo, emailProducer);
+const tenantController = new TenantController(tenantService);
+const router = Router();
+router.post("/register", tenantController.register);
+router.get("/verify-email", tenantController.verifyEmail);
+router.post("/login", tenantController.login);
+router.post("/refresh-token", tenantController.refreshToken);
+router.post("/logout", tenantController.logout);
+export default router;

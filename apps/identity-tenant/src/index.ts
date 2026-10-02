@@ -1,14 +1,12 @@
 import "reflect-metadata";
+import { createRequire } from "node:module";
 import { NestFactory } from "@nestjs/core";
 import { MicroserviceOptions, Transport } from "@nestjs/microservices";
 import { AppModule } from "./app.module.js";
 import { ConfigService } from "@nestjs/config";
 import mongoose from "mongoose";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
-import cookieParser from "cookie-parser";
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+
+const require = createRequire(import.meta.url);
 
 async function bootstrap() {
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(
@@ -17,10 +15,12 @@ async function bootstrap() {
       transport: Transport.GRPC,
       options: {
         url: "0.0.0.0:50051",
-        package: ["tenant", "superadmin"],
+        package: ["tenant", "superadmin", "dashboard", "knowledge"],
         protoPath: [
-          join(__dirname, "./proto/tenant.proto"),
-          join(__dirname, "./proto/superadmin.proto"),
+          require.resolve("@repo/proto/tenant.proto"),
+          require.resolve("@repo/proto/superadmin.proto"),
+          require.resolve("@repo/proto/dashboard.proto"),
+          require.resolve("@repo/proto/knowledge.proto"),
         ],
         loader: {
           keepCase: true,

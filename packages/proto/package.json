@@ -1,0 +1,45 @@
+{
+  "name": "@repo/proto",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./tenant": {
+      "types": "./dist/interfaces/tenant.d.ts",
+      "default": "./dist/interfaces/tenant.js"
+    },
+    "./superadmin": {
+      "types": "./dist/interfaces/superadmin.d.ts",
+      "default": "./dist/interfaces/superadmin.js"
+    },
+    "./dashboard": {
+      "types": "./dist/interfaces/dashboard.d.ts",
+      "default": "./dist/interfaces/dashboard.js"
+    },
+    "./knowledge": {
+      "types": "./dist/interfaces/knowledge.d.ts",
+      "default": "./dist/interfaces/knowledge.js"
+    },
+    "./tenant.proto": "./src/tenant.proto",
+    "./superadmin.proto": "./src/superadmin.proto",
+    "./dashboard.proto": "./src/dashboard.proto",
+    "./knowledge.proto": "./src/knowledge.proto"
+  },
+  "scripts": {
+    "build": "mkdir -p ./src/interfaces && protoc -I=./src --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=./src/interfaces ./src/*.proto --ts_proto_opt=esModuleInterop=true,outputEncodeMethods=false,outputJsonMethods=false,nestJs=true,snakeToCamel=false && tsc"
+  },
+  "dependencies": {
+    "@nestjs/microservices": "^12.1.0",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "ts-proto": "^2.6.1",
+    "typescript": "^5.9.3"
+  }
+}

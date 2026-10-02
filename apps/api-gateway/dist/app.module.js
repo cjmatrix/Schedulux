@@ -8,58 +8,96 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
+const config_1 = require("@nestjs/config");
 const microservices_1 = require("@nestjs/microservices");
-const path_1 = require("path");
-const tenant_controller_js_1 = require("./tenant/tenant.controller.js");
-const superadmin_controller_js_1 = require("./superadmin/superadmin.controller.js");
-const superadmin_auth_middleware_js_1 = require("./middleware/superadmin-auth.middleware.js");
+const tenant_controller_js_1 = require("./controllers/tenant/tenant.controller.js");
+const superadmin_controller_js_1 = require("./controllers/superadmin/superadmin.controller.js");
+const superadmin_tenant_controller_js_1 = require("./controllers/superadmin/superadmin-tenant.controller.js");
+const dashboard_user_auth_controller_js_1 = require("./controllers/dashboarduser/dashboard-user-auth.controller.js");
+const knowledge_controller_js_1 = require("./controllers/knowledge/knowledge.controller.js");
 let AppModule = class AppModule {
-    configure(consumer) {
-        consumer
-            .apply(superadmin_auth_middleware_js_1.SuperAdminAuthMiddleware)
-            .forRoutes({ path: 'api/v1/superadmin/auth/me', method: common_1.RequestMethod.GET });
-    }
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
+            config_1.ConfigModule.forRoot({
+                isGlobal: true,
+            }),
             microservices_1.ClientsModule.register([
                 {
-                    name: 'TENANT_PACKAGE',
+                    name: "TENANT_PACKAGE",
                     transport: microservices_1.Transport.GRPC,
                     options: {
-                        url: 'localhost:50051',
-                        package: 'tenant',
-                        protoPath: (0, path_1.join)(process.cwd(), 'src/grpc/proto/tenant.proto'),
+                        url: "localhost:50051",
+                        package: "tenant",
+                        protoPath: require.resolve("@repo/proto/tenant.proto"),
                         loader: {
                             keepCase: true,
                             longs: String,
                             enums: String,
                             defaults: true,
                             oneofs: true,
-                        }
+                        },
                     },
                 },
                 {
-                    name: 'SUPERADMIN_PACKAGE',
+                    name: "DASHBOARD_PACKAGE",
                     transport: microservices_1.Transport.GRPC,
                     options: {
-                        url: 'localhost:50051',
-                        package: 'superadmin',
-                        protoPath: (0, path_1.join)(process.cwd(), 'src/grpc/proto/superadmin.proto'),
+                        url: "localhost:50051",
+                        package: "dashboard",
+                        protoPath: require.resolve("@repo/proto/dashboard.proto"),
                         loader: {
                             keepCase: true,
                             longs: String,
                             enums: String,
                             defaults: true,
                             oneofs: true,
-                        }
+                        },
+                    },
+                },
+                {
+                    name: "SUPERADMIN_PACKAGE",
+                    transport: microservices_1.Transport.GRPC,
+                    options: {
+                        url: "localhost:50051",
+                        package: "superadmin",
+                        protoPath: require.resolve("@repo/proto/superadmin.proto"),
+                        loader: {
+                            keepCase: true,
+                            longs: String,
+                            enums: String,
+                            defaults: true,
+                            oneofs: true,
+                        },
+                    },
+                },
+                {
+                    name: "KNOWLEDGE_PACKAGE",
+                    transport: microservices_1.Transport.GRPC,
+                    options: {
+                        url: "localhost:50051",
+                        package: "knowledge",
+                        protoPath: require.resolve("@repo/proto/knowledge.proto"),
+                        loader: {
+                            keepCase: true,
+                            longs: String,
+                            enums: String,
+                            defaults: true,
+                            oneofs: true,
+                        },
                     },
                 },
             ]),
         ],
-        controllers: [tenant_controller_js_1.TenantController, superadmin_controller_js_1.SuperAdminController],
-        providers: [superadmin_auth_middleware_js_1.SuperAdminAuthMiddleware],
+        controllers: [
+            tenant_controller_js_1.TenantController,
+            superadmin_controller_js_1.SuperAdminController,
+            superadmin_tenant_controller_js_1.SuperAdminTenantController,
+            dashboard_user_auth_controller_js_1.DashboardUserAuthController,
+            knowledge_controller_js_1.KnowledgeController,
+        ],
+        providers: [],
     })
 ], AppModule);

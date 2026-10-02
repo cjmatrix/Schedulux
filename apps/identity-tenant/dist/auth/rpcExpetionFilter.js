@@ -20,8 +20,9 @@ let AllExceptionsFilter = class AllExceptionsFilter {
                 message = exception.message;
                 break;
             case 'EMAIL_ALREADY_EXISTS':
+            case 'USER_ALREADY_EXISTS':
                 code = grpc.status.ALREADY_EXISTS;
-                message = 'An account with this email already exists';
+                message = 'An account or user with this email already exists';
                 break;
             case 'INVALID_OR_EXPIRED_TOKEN':
                 code = grpc.status.INVALID_ARGUMENT;
@@ -44,6 +45,14 @@ let AllExceptionsFilter = class AllExceptionsFilter {
             case 'SUPERADMIN_NOT_FOUND':
                 code = grpc.status.UNAUTHENTICATED;
                 message = 'Session expired or invalid. Please log in again.';
+                break;
+            case 'TENANT_NOT_FOUND':
+                code = grpc.status.NOT_FOUND;
+                message = 'Tenant not found';
+                break;
+            case 'ONLY_ACTIVE_TENANTS_CAN_BE_SUSPENDED':
+                code = grpc.status.FAILED_PRECONDITION;
+                message = 'Only active tenants can be suspended';
                 break;
             default:
                 console.error('Unhandled Microservice Error:', exception);

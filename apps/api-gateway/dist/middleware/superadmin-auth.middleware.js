@@ -14,8 +14,7 @@ const common_1 = require("@nestjs/common");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 let SuperAdminAuthMiddleware = class SuperAdminAuthMiddleware {
     use(req, res, next) {
-        const token = req.cookies?.superadmin_access_token ||
-            req.headers.authorization?.replace(/^Bearer\s+/i, '');
+        const token = req.cookies?.superadmin_access_token;
         if (!token) {
             throw new common_1.UnauthorizedException('SuperAdmin authentication token missing');
         }

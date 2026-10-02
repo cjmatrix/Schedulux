@@ -5,7 +5,9 @@ export interface ITenant extends Document<string>{
   _id: string;
   business_name: string;
   contact_email: string;
-  password_hash: string;
+  password_hash?: string;
+  auth_provider?: 'local' | 'google';
+  google_id?: string;
   timezone: string;
   currency: string;
   tier: string;
@@ -19,7 +21,9 @@ const tenantSchema = new mongoose.Schema({
   _id: { type: String },
   business_name: { type: String, required: true, trim: true },
   contact_email: { type: String, required: true, lowercase: true, trim: true, unique: true },
-  password_hash: { type: String, required: true },
+  password_hash: { type: String, required: false, default: '' },
+  auth_provider: { type: String, enum: ['local', 'google'], default: 'local' },
+  google_id: { type: String, default: null },
   timezone: { type: String, default: 'UTC' },
   currency: { type: String, default: 'USD' },
   tier: { type: String, required: true }, 

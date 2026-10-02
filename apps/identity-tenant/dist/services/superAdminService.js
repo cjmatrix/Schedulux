@@ -12,23 +12,25 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 import { Injectable, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { nanoid } from 'nanoid';
-import { SuperAdminRepository } from '../repository/SuperAdminRepository.js';
-import { CacheRepository } from '../repository/CacheRepository.js';
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '7d';
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days in seconds
 let SuperAdminService = class SuperAdminService {
     superAdminRepo;
     cacheRepo;
+    tenantRepo;
+    passwordHasher;
+    jwtService;
     configService;
     jwtSecret;
     jwtRefreshSecret;
-    constructor(superAdminRepo, cacheRepo, configService) {
+    constructor(superAdminRepo, cacheRepo, tenantRepo, passwordHasher, jwtService, configService) {
         this.superAdminRepo = superAdminRepo;
         this.cacheRepo = cacheRepo;
+        this.tenantRepo = tenantRepo;
+        this.passwordHasher = passwordHasher;
+        this.jwtService = jwtService;
         this.configService = configService;
         const globalSecret = this.configService.get('JWT_SECRET');
         const globalRefreshSecret = this.configService.get('JWT_REFRESH_SECRET');
@@ -42,19 +44,19 @@ let SuperAdminService = class SuperAdminService {
         if (!admin) {
             throw new Error('INVALID_CREDENTIALS');
         }
-        const isMatch = await bcrypt.compare(password, admin.password_hash);
+        const isMatch = await this.passwordHasher.compare(password, admin.password_hash);
         if (!isMatch) {
             throw new Error('INVALID_CREDENTIALS');
         }
         const adminId = admin._id.toString();
         const tokenId = nanoid(16);
-        const accessToken = jwt.sign({
+        const accessToken = this.jwtService.sign({
             super_admin_id: adminId,
             email: admin.email,
             name: admin.name,
             role: admin.role,
         }, this.jwtSecret, { expiresIn: ACCESS_TOKEN_EXPIRY });
-        const refreshToken = jwt.sign({
+        const refreshToken = this.jwtService.sign({
             super_admin_id: adminId,
             token_id: tokenId,
             role: admin.role,
@@ -75,7 +77,7 @@ let SuperAdminService = class SuperAdminService {
     async refreshToken(incomingRefreshToken) {
         let payload;
         try {
-            payload = jwt.verify(incomingRefreshToken, this.jwtRefreshSecret);
+            payload = this.jwtService.verify(incomingRefreshToken, this.jwtRefreshSecret);
         }
         catch {
             throw new Error('INVALID_OR_EXPIRED_REFRESH_TOKEN');
@@ -98,13 +100,13 @@ let SuperAdminService = class SuperAdminService {
         }
         const adminId = admin._id.toString();
         const nextTokenId = nanoid(16);
-        const newAccessToken = jwt.sign({
+        const newAccessToken = this.jwtService.sign({
             super_admin_id: adminId,
             email: admin.email,
             name: admin.name,
             role: admin.role,
         }, this.jwtSecret, { expiresIn: ACCESS_TOKEN_EXPIRY });
-        const newRefreshToken = jwt.sign({
+        const newRefreshToken = this.jwtService.sign({
             super_admin_id: adminId,
             token_id: nextTokenId,
             role: admin.role,
@@ -125,7 +127,7 @@ let SuperAdminService = class SuperAdminService {
         if (!incomingRefreshToken)
             return;
         try {
-            const payload = jwt.verify(incomingRefreshToken, this.jwtRefreshSecret);
+            const payload = this.jwtService.verify(incomingRefreshToken, this.jwtRefreshSecret);
             if (payload?.super_admin_id && payload?.token_id) {
                 await this.cacheRepo.delete(`superadmin_refresh_token:${payload.super_admin_id}:${payload.token_id}`);
             }
@@ -138,7 +140,7 @@ let SuperAdminService = class SuperAdminService {
         if (existing) {
             throw new Error('SUPERADMIN_ALREADY_EXISTS');
         }
-        const password_hash = await bcrypt.hash(data.password, 10);
+        const password_hash = await this.passwordHasher.hash(data.password, 10);
         const admin = await this.superAdminRepo.create({
             email: data.email.toLowerCase().trim(),
             password_hash,
@@ -166,14 +168,39 @@ let SuperAdminService = class SuperAdminService {
             created_at: admin.created_at,
         };
     }
+    async ListTenants(data) {
+        return this.tenantRepo.listTenants(data);
+    }
+    async suspendTenant(tenantId) {
+        const tenant = await this.tenantRepo.findByTenantId(tenantId);
+        if (!tenant) {
+            throw new Error('TENANT_NOT_FOUND');
+        }
+        const nextStatus = tenant.status === 'suspended' ? 'active' : 'suspended';
+        const updated = await this.tenantRepo.updateStatus(tenantId, nextStatus);
+        if (!updated) {
+            throw new Error('FAILED_TO_UPDATE_TENANT_STATUS');
+        }
+        return {
+            message: `Tenant ${nextStatus === 'active' ? 'reactivated' : 'suspended'} successfully`,
+            tenant: {
+                tenant_id: updated._id.toString(),
+                business_name: updated.business_name,
+                contact_email: updated.contact_email,
+                tier: updated.tier,
+                status: updated.status,
+            },
+        };
+    }
 };
 SuperAdminService = __decorate([
     Injectable(),
-    __param(0, Inject(SuperAdminRepository)),
-    __param(1, Inject(CacheRepository)),
-    __param(2, Inject(ConfigService)),
-    __metadata("design:paramtypes", [SuperAdminRepository,
-        CacheRepository,
-        ConfigService])
+    __param(0, Inject('ISuperAdminRepository')),
+    __param(1, Inject('ICacheRepository')),
+    __param(2, Inject('ITenantRepository')),
+    __param(3, Inject('IPasswordHasher')),
+    __param(4, Inject('IJwtService')),
+    __param(5, Inject(ConfigService)),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, ConfigService])
 ], SuperAdminService);
 export { SuperAdminService };

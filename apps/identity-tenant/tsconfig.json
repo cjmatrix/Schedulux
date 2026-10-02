@@ -10,6 +10,13 @@
     "rootDir": "./src",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
+    "paths": {
+      "@repo/proto": ["../../packages/proto/src/index.ts"],
+      "@repo/proto/*": ["../../packages/proto/src/interfaces/*.ts"]
+    }
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../../packages/proto" }
+  ]
 }

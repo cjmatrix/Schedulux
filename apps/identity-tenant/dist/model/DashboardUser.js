@@ -6,7 +6,7 @@ const DashboardUserSchema = new Schema({
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password_hash: { type: String, required: true },
     name: { type: String, required: true },
-    system_role: { type: String, enum: ['owner', 'manager', 'provider'], required: true }
+    system_role: { type: String, enum: ['root', 'manager'], required: true }
 }, {
     timestamps: { createdAt: 'created_at', updatedAt: false },
     versionKey: false

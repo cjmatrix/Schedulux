@@ -20,7 +20,7 @@ import {
   PhoneCall,
   Loader2,
 } from 'lucide-react';
-
+import { useAuthStore } from '../store/useAuthStore';
 
 interface VerticalData {
   name: string;
@@ -107,6 +107,7 @@ const VERTICALS: Record<string, VerticalData> = {
 };
 
 export default function LandingPage() {
+  const { user, isAuthenticated } = useAuthStore();
   const [activeVertical, setActiveVertical] = useState<'clinics' | 'auto' | 'salons'>('clinics');
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [showDemoModal, setShowDemoModal] = useState(false);
@@ -160,12 +161,22 @@ export default function LandingPage() {
             >
               Contact sales
             </button>
-            <Link
-              to="/login"
-              className="rounded-full bg-neutral-950 text-white text-sm font-medium px-5 py-2 hover:bg-neutral-800 transition shadow-xs cursor-pointer inline-flex items-center justify-center"
-            >
-              Log in
-            </Link>
+            {isAuthenticated ? (
+              <Link
+                to="/tenant/bookings"
+                className="rounded-full bg-neutral-950 text-white text-sm font-medium px-5 py-2 hover:bg-neutral-800 transition shadow-xs cursor-pointer inline-flex items-center gap-2"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                {user?.business_name || 'Dashboard'}
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                className="rounded-full bg-neutral-950 text-white text-sm font-medium px-5 py-2 hover:bg-neutral-800 transition shadow-xs cursor-pointer inline-flex items-center justify-center"
+              >
+                Log in
+              </Link>
+            )}
           </div>
         </div>
       </header>
@@ -178,12 +189,22 @@ export default function LandingPage() {
               Bringing autonomous scheduling to life
             </h1>
             <div className="mt-8 flex flex-wrap items-center gap-4">
-              <Link
-                to="/register"
-                className="rounded-full bg-neutral-950 text-white px-6 py-3 text-sm font-medium hover:bg-neutral-800 transition shadow-sm cursor-pointer inline-flex items-center justify-center"
-              >
-                Build your agent free
-              </Link>
+              {isAuthenticated ? (
+                <Link
+                  to="/tenant/users"
+                  className="rounded-full bg-neutral-950 text-white px-6 py-3 text-sm font-medium hover:bg-neutral-800 transition shadow-sm cursor-pointer inline-flex items-center gap-2"
+                >
+                  Go to Workspace Dashboard
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              ) : (
+                <Link
+                  to="/register"
+                  className="rounded-full bg-neutral-950 text-white px-6 py-3 text-sm font-medium hover:bg-neutral-800 transition shadow-sm cursor-pointer inline-flex items-center justify-center"
+                >
+                  Build your agent free
+                </Link>
+              )}
               <button
                 onClick={() => setShowDemoModal(true)}
                 className="rounded-full border border-neutral-300 bg-white text-neutral-800 px-6 py-3 text-sm font-medium hover:border-neutral-400 hover:bg-neutral-50 transition cursor-pointer"

@@ -9,6 +9,15 @@ export interface TenantVerificationEmailData {
   verification_url?: string;
 }
 
+export interface UserInvitationEmailData {
+  to: string;
+  name: string;
+  tenant_id: string;
+  business_name?: string;
+  password: string;
+  system_role: string;
+}
+
 export class EmailService {
   private transporter: nodemailer.Transporter | null = null;
 
@@ -123,6 +132,85 @@ export class EmailService {
       console.log(`Tenant ID: ${data.tenant_id}`);
       console.log(`Verify Link: ${verifyUrl}`);
       console.log('=========================================================\n');
+    }
+  }
+
+  async sendUserInvitationEmail(data: UserInvitationEmailData): Promise<void> {
+    const loginUrl = process.env.FRONTEND_URL || 'http://localhost:5173/login';
+    const fromAddress = process.env.FROM_EMAIL || '"Schedulux AI" <no-reply@schedulux.ai>';
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>You've been invited to Schedulux AI</title>
+        </head>
+        <body style="margin: 0; padding: 24px; background-color: #0b0f19; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #e2e8f0;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 580px; margin: 0 auto; background-color: #131b2e; border: 1px solid #1e293b; border-radius: 14px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+            <tr>
+              <td style="padding: 36px 32px;">
+                <div style="font-size: 24px; font-weight: 700; color: #6366f1; letter-spacing: -0.5px; margin-bottom: 24px;">
+                  Schedulux AI
+                </div>
+
+                <h1 style="font-size: 22px; font-weight: 700; color: #ffffff; margin: 0 0 16px 0; line-height: 1.3;">
+                  Dashboard Access Invitation
+                </h1>
+
+                <p style="font-size: 15px; line-height: 1.6; color: #94a3b8; margin: 0 0 16px 0;">
+                  Hello <strong style="color: #f8fafc;">${data.name}</strong>,
+                </p>
+                <p style="font-size: 15px; line-height: 1.6; color: #94a3b8; margin: 0 0 24px 0;">
+                  You have been invited to join the Schedulux dashboard with role <strong style="color: #818cf8; text-transform: uppercase;">${data.system_role}</strong>. Here are your generated login credentials:
+                </p>
+
+                <!-- Credentials Box -->
+                <div style="background-color: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 20px; margin-bottom: 28px;">
+                  <p style="margin: 0 0 8px 0; font-size: 14px; color: #94a3b8;"><strong>Email:</strong> <span style="color: #ffffff;">${data.to}</span></p>
+                  <p style="margin: 0 0 8px 0; font-size: 14px; color: #94a3b8;"><strong>Temporary Password:</strong> <code style="background: #1e293b; padding: 3px 8px; border-radius: 4px; color: #818cf8; font-family: monospace; font-size: 15px; font-weight: 600;">${data.password}</code></p>
+                  <p style="margin: 0; font-size: 14px; color: #94a3b8;"><strong>Role:</strong> <span style="color: #ffffff;">${data.system_role}</span></p>
+                </div>
+
+                <!-- Login Button -->
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto 24px auto; width: 100%; text-align: center;">
+                  <tr>
+                    <td align="center">
+                      <a href="${loginUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #4f46e5; color: #ffffff !important; padding: 14px 36px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);">
+                        Log in to Schedulux Dashboard
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+
+                <div style="margin-top: 32px; padding-top: 18px; border-top: 1px solid #1e293b; font-size: 12px; color: #64748b; line-height: 1.5;">
+                  <p style="margin: 0;">Please change your password after logging in for security.</p>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
+    `;
+
+    if (this.transporter) {
+      await this.transporter.sendMail({
+        from: fromAddress,
+        to: data.to,
+        subject: `Invitation to Schedulux Dashboard (${data.system_role})`,
+        text: `Hello ${data.name},\n\nYou have been invited to the Schedulux dashboard.\n\nEmail: ${data.to}\nPassword: ${data.password}\nRole: ${data.system_role}\n\nLog in here: ${loginUrl}`,
+        html: htmlContent,
+      });
+      console.log(`✉️  [EmailService] Invitation email successfully sent to ${data.to}`);
+    } else {
+      console.log('\n================== [DEV INVITATION EMAIL PREVIEW] ==================');
+      console.log(`To: ${data.to}`);
+      console.log(`Name: ${data.name}`);
+      console.log(`Role: ${data.system_role}`);
+      console.log(`Password: ${data.password}`);
+      console.log(`Tenant ID: ${data.tenant_id}`);
+      console.log('===================================================================\n');
     }
   }
 }

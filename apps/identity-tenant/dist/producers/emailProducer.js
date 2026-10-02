@@ -32,6 +32,14 @@ let EmailProducer = class EmailProducer {
             removeOnFail: 1000,
         });
     }
+    async sendUserInvitationEmail(data) {
+        await this.emailQueue.add('send-user-invitation', data, {
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 2000 },
+            removeOnComplete: true,
+            removeOnFail: 1000,
+        });
+    }
 };
 EmailProducer = __decorate([
     Injectable(),

@@ -15,6 +15,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SuperAdminController = void 0;
 const common_1 = require("@nestjs/common");
 const rxjs_1 = require("rxjs");
+const nestjs_zod_1 = require("nestjs-zod");
+const superAdmin_dto_js_1 = require("./dtos/superAdmin.dto.js");
 let SuperAdminController = class SuperAdminController {
     client;
     superAdminAuthService;
@@ -117,10 +119,11 @@ let SuperAdminController = class SuperAdminController {
 exports.SuperAdminController = SuperAdminController;
 __decorate([
     (0, common_1.Post)('login'),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Res)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:paramtypes", [superAdmin_dto_js_1.SuperAdminLoginDto, Object]),
     __metadata("design:returntype", Promise)
 ], SuperAdminController.prototype, "login", null);
 __decorate([

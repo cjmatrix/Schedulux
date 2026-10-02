@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import cookieParser from 'cookie-parser';
+import { GlobalExceptionFilter } from './utils/global-error.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -13,6 +14,9 @@ async function bootstrap() {
   app.use(cookieParser());
 
   const PORT = process.env.PORT || 5000;
+
+  app.useGlobalFilters(new GlobalExceptionFilter());
+
   await app.listen(PORT);
   console.log(`[API-GATEWAY] routing traffic live on http://localhost:${PORT}`);
 }

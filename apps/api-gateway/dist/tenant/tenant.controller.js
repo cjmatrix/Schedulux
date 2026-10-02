@@ -15,18 +15,26 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TenantController = void 0;
 const common_1 = require("@nestjs/common");
 const rxjs_1 = require("rxjs");
+const nestjs_zod_1 = require("nestjs-zod");
+const tenant_dto_js_1 = require("./dtos/tenant.dto.js");
 let TenantController = class TenantController {
     client;
+    dashboardClient;
     tenantAuthService;
-    constructor(client) {
+    tenantServiceClient;
+    dashboardUserServiceClient;
+    constructor(client, dashboardClient) {
         this.client = client;
+        this.dashboardClient = dashboardClient;
     }
     onModuleInit() {
         this.tenantAuthService = this.client.getService('TenantAuthService');
+        this.tenantServiceClient = this.client.getService('TenantService');
+        this.dashboardUserServiceClient = this.dashboardClient.getService('DashboardUserService');
     }
     async register(body, res) {
         try {
-            const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.Register(body));
+            const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.register(body));
             return res.status(201).json(response);
         }
         catch (err) {
@@ -39,7 +47,7 @@ let TenantController = class TenantController {
     }
     async login(body, res) {
         try {
-            const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.Login(body));
+            const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.login(body));
             const isProduction = process.env.NODE_ENV === 'production';
             res.cookie('access_token', response.access_token, {
                 httpOnly: true,
@@ -70,7 +78,7 @@ let TenantController = class TenantController {
     }
     async verifyEmail(token, res) {
         try {
-            const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.VerifyEmail({ token }));
+            const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.verifyEmail({ token }));
             return res.status(200).json(response);
         }
         catch (err) {
@@ -82,7 +90,7 @@ let TenantController = class TenantController {
     async refreshToken(req, res) {
         try {
             const token = req.cookies?.refresh_token || req.body?.refresh_token;
-            const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.RefreshToken({ refresh_token: token }));
+            const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.refreshToken({ refresh_token: token }));
             const isProduction = process.env.NODE_ENV === 'production';
             res.cookie('access_token', response.access_token, {
                 httpOnly: true,
@@ -111,7 +119,7 @@ let TenantController = class TenantController {
     async logout(req, res) {
         try {
             const token = req.cookies?.refresh_token || req.body?.refresh_token;
-            const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.Logout({ refresh_token: token }));
+            const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.logout({ refresh_token: token }));
             res.clearCookie('access_token');
             res.clearCookie('refresh_token');
             return res.status(200).json(response);
@@ -122,22 +130,54 @@ let TenantController = class TenantController {
             return res.status(500).json({ error: err.details || 'Internal server error' });
         }
     }
+    async inviteUser(body, res) {
+        try {
+            const response = await (0, rxjs_1.lastValueFrom)(this.dashboardUserServiceClient.inviteUser(body));
+            return res.status(201).json(response);
+        }
+        catch (err) {
+            if (err.code === 6)
+                return res.status(409).json({ error: err.details });
+            if (err.code === 5)
+                return res.status(404).json({ error: err.details });
+            if (err.code === 3)
+                return res.status(400).json({ error: err.details });
+            return res.status(500).json({ error: err.details || 'Internal server error' });
+        }
+    }
+    async listWorkspaceUsers(tenant_id, page, limit, search, role, res) {
+        try {
+            const response = await (0, rxjs_1.lastValueFrom)(this.dashboardUserServiceClient.listWorkspaceUsers({
+                tenant_id: tenant_id || '',
+                page: page ? parseInt(page, 10) : undefined,
+                limit: limit ? parseInt(limit, 10) : undefined,
+                search: search || undefined,
+                role: role || undefined,
+            }));
+            return res.status(200).json(response);
+        }
+        catch (err) {
+            return res.status(500).json({ error: err.details || 'Internal server error' });
+        }
+    }
 };
 exports.TenantController = TenantController;
 __decorate([
     (0, common_1.Post)('register'),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Res)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:paramtypes", [tenant_dto_js_1.TenantRegisterDto, Object]),
     __metadata("design:returntype", Promise)
 ], TenantController.prototype, "register", null);
 __decorate([
     (0, common_1.Post)('login'),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Res)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:paramtypes", [tenant_dto_js_1.TenantLoginDto, Object]),
     __metadata("design:returntype", Promise)
 ], TenantController.prototype, "login", null);
 __decorate([
@@ -164,8 +204,30 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], TenantController.prototype, "logout", null);
+__decorate([
+    (0, common_1.Post)('invite-user'),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [tenant_dto_js_1.InviteUserDto, Object]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "inviteUser", null);
+__decorate([
+    (0, common_1.Get)('workspace-users'),
+    __param(0, (0, common_1.Query)('tenant_id')),
+    __param(1, (0, common_1.Query)('page')),
+    __param(2, (0, common_1.Query)('limit')),
+    __param(3, (0, common_1.Query)('search')),
+    __param(4, (0, common_1.Query)('role')),
+    __param(5, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String, String, String, Object]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "listWorkspaceUsers", null);
 exports.TenantController = TenantController = __decorate([
     (0, common_1.Controller)('api/v1/tenant/auth'),
     __param(0, (0, common_1.Inject)('TENANT_PACKAGE')),
-    __metadata("design:paramtypes", [Object])
+    __param(1, (0, common_1.Inject)('DASHBOARD_PACKAGE')),
+    __metadata("design:paramtypes", [Object, Object])
 ], TenantController);

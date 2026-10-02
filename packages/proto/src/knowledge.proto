@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package knowledge;
+
+service KnowledgeService {
+  rpc CrawlSite (CrawlSiteRequest) returns (CrawlSiteResponse);
+  rpc GetCrawlStatus (GetCrawlStatusRequest) returns (GetCrawlStatusResponse);
+}
+
+message CrawlSiteRequest {
+  string tenant_id = 1;
+  string url = 2;
+}
+
+message CrawlSiteResponse {
+  string message = 1;
+  string job_id = 2;
+  string status = 3;
+}
+
+message GetCrawlStatusRequest {
+  string tenant_id = 1;
+  string job_id = 2;
+}
+
+message CrawlPageResult {
+  string url = 1;
+  string markdown = 2;
+  bool success = 3;
+  string error = 4;
+}
+
+message GetCrawlStatusResponse {
+  string job_id = 1;
+  string status = 2;
+  int32 pages_crawled = 3;
+  repeated CrawlPageResult pages = 4;
+}

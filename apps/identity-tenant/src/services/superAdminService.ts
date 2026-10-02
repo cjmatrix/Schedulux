@@ -1,11 +1,12 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { nanoid } from 'nanoid';
 import { ISuperAdminRepository } from '../interfaces/ISuperAdminRepository.js';
 import { ICacheRepository } from '../interfaces/ICacheRepository.js';
-
+import { ListTenantsRequest } from "@repo/proto/tenant";
+import { ITenantRepository } from '../interfaces/ITenantRepository.js';
+import { IPasswordHasher } from '../interfaces/IPasswordHasher.js';
+import { IJwtService } from '../interfaces/IJwtService.js';
 
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '7d';
@@ -19,6 +20,9 @@ export class SuperAdminService {
   constructor(
     @Inject('ISuperAdminRepository') private superAdminRepo: ISuperAdminRepository,
     @Inject('ICacheRepository') private cacheRepo: ICacheRepository,
+    @Inject('ITenantRepository') private tenantRepo: ITenantRepository,
+    @Inject('IPasswordHasher') private passwordHasher: IPasswordHasher,
+    @Inject('IJwtService') private jwtService: IJwtService,
     @Inject(ConfigService) private configService: ConfigService
   ) {
     const globalSecret = this.configService.get<string>('JWT_SECRET');
@@ -37,7 +41,7 @@ export class SuperAdminService {
       throw new Error('INVALID_CREDENTIALS');
     }
 
-    const isMatch = await bcrypt.compare(password, admin.password_hash);
+    const isMatch = await this.passwordHasher.compare(password, admin.password_hash);
     if (!isMatch) {
       throw new Error('INVALID_CREDENTIALS');
     }
@@ -46,7 +50,7 @@ export class SuperAdminService {
     const tokenId = nanoid(16);
 
   
-    const accessToken = jwt.sign(
+    const accessToken = this.jwtService.sign(
       {
         super_admin_id: adminId,
         email: admin.email,
@@ -58,7 +62,7 @@ export class SuperAdminService {
     );
 
   
-    const refreshToken = jwt.sign(
+    const refreshToken = this.jwtService.sign(
       {
         super_admin_id: adminId,
         token_id: tokenId,
@@ -91,7 +95,7 @@ export class SuperAdminService {
   async refreshToken(incomingRefreshToken: string) {
     let payload: { super_admin_id: string; token_id: string; role?: string };
     try {
-      payload = jwt.verify(incomingRefreshToken, this.jwtRefreshSecret) as {
+      payload = this.jwtService.verify(incomingRefreshToken, this.jwtRefreshSecret) as {
         super_admin_id: string;
         token_id: string;
         role?: string;
@@ -125,7 +129,7 @@ export class SuperAdminService {
     const adminId = admin._id.toString();
     const nextTokenId = nanoid(16);
 
-    const newAccessToken = jwt.sign(
+    const newAccessToken = this.jwtService.sign(
       {
         super_admin_id: adminId,
         email: admin.email,
@@ -136,7 +140,7 @@ export class SuperAdminService {
       { expiresIn: ACCESS_TOKEN_EXPIRY }
     );
 
-    const newRefreshToken = jwt.sign(
+    const newRefreshToken = this.jwtService.sign(
       {
         super_admin_id: adminId,
         token_id: nextTokenId,
@@ -168,7 +172,7 @@ export class SuperAdminService {
     if (!incomingRefreshToken) return;
 
     try {
-      const payload = jwt.verify(incomingRefreshToken, this.jwtRefreshSecret) as {
+      const payload = this.jwtService.verify(incomingRefreshToken, this.jwtRefreshSecret) as {
         super_admin_id: string;
         token_id: string;
       };
@@ -189,7 +193,7 @@ export class SuperAdminService {
       throw new Error('SUPERADMIN_ALREADY_EXISTS');
     }
 
-    const password_hash = await bcrypt.hash(data.password, 10);
+    const password_hash = await this.passwordHasher.hash(data.password, 10);
     const admin = await this.superAdminRepo.create({
       email: data.email.toLowerCase().trim(),
       password_hash,
@@ -217,6 +221,35 @@ export class SuperAdminService {
       name: admin.name,
       role: admin.role,
       created_at: admin.created_at,
+    };
+  }
+
+
+  async ListTenants(data:ListTenantsRequest){
+    return this.tenantRepo.listTenants(data);
+  }
+
+  async suspendTenant(tenantId: string) {
+    const tenant = await this.tenantRepo.findByTenantId(tenantId);
+    if (!tenant) {
+      throw new Error('TENANT_NOT_FOUND');
+    }
+
+    const nextStatus = tenant.status === 'suspended' ? 'active' : 'suspended';
+    const updated = await this.tenantRepo.updateStatus(tenantId, nextStatus);
+    if (!updated) {
+      throw new Error('FAILED_TO_UPDATE_TENANT_STATUS');
+    }
+
+    return {
+      message: `Tenant ${nextStatus === 'active' ? 'reactivated' : 'suspended'} successfully`,
+      tenant: {
+        tenant_id: updated._id.toString(),
+        business_name: updated.business_name,
+        contact_email: updated.contact_email,
+        tier: updated.tier,
+        status: updated.status,
+      },
     };
   }
 }

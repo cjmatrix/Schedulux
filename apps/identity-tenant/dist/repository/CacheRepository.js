@@ -11,6 +11,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
 import { Injectable, Inject } from '@nestjs/common';
+import { Redis } from 'ioredis';
 let CacheRepository = class CacheRepository {
     redisClient;
     constructor(redisClient) {
@@ -20,7 +21,18 @@ let CacheRepository = class CacheRepository {
         return await this.redisClient.get(key);
     }
     async set(key, value, options) {
-        await this.redisClient.set(key, value, options);
+        if (options?.EX) {
+            await this.redisClient.set(key, value, 'EX', options.EX);
+        }
+        else if (options?.PX) {
+            await this.redisClient.set(key, value, 'PX', options.PX);
+        }
+        else if (options?.ttlSeconds) {
+            await this.redisClient.set(key, value, 'EX', options.ttlSeconds);
+        }
+        else {
+            await this.redisClient.set(key, value);
+        }
     }
     async delete(key) {
         const result = await this.redisClient.del(key);
@@ -37,6 +49,6 @@ let CacheRepository = class CacheRepository {
 CacheRepository = __decorate([
     Injectable(),
     __param(0, Inject('REDIS_CLIENT')),
-    __metadata("design:paramtypes", [Object])
+    __metadata("design:paramtypes", [Redis])
 ], CacheRepository);
 export { CacheRepository };

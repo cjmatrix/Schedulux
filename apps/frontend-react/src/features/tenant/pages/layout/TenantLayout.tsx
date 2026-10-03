@@ -17,8 +17,8 @@ import {
   LogOut,
   Loader2,
 } from "lucide-react";
+import { useLogout, useTenantProfile } from "../../hooks/useAuth";
 import { useAuthStore } from "../../../../store/useAuthStore";
-import { useLogout } from "../../../../hooks/useAuth";
 
 const ALL_NAV_ITEMS = [
   { icon: Calendar, label: "Calendar & Bookings", path: "/tenant/bookings" },
@@ -38,46 +38,69 @@ const ALL_NAV_ITEMS = [
   { icon: Code2, label: "Embed Widget", path: "/tenant/widget" },
 ];
 
-export default function TenantLayout() {
+interface TenantLayoutProps {
+  isTenant?: boolean;
+}
+
+export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout: authStoreLogout } = useAuthStore();
+  const { data: profileData } = useTenantProfile(isTenant);
   const logoutMutation = useLogout();
+  const authUser = useAuthStore((state) => state.user);
 
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
-      onSuccess: () => {
-        authStoreLogout();
-        navigate("/login");
-      },
-      onError: () => {
-        authStoreLogout();
-        navigate("/login");
-      },
+      onSuccess: () => navigate(isTenant ? "/login" : "/dashboarduser/login"),
+      onError: () => navigate(isTenant ? "/login" : "/dashboarduser/login"),
     });
   };
 
-  let NAV_ITEMS = ALL_NAV_ITEMS;
+  const userRole = authUser?.system_role;
 
-  if (user?.system_role === "root") {
-    NAV_ITEMS = ALL_NAV_ITEMS.filter((item) => item.path !== "/tenant/billing");
-  } else if (user?.system_role === "manager") {
-    NAV_ITEMS = ALL_NAV_ITEMS.filter(
-      (item) =>
-        ![
-          "/tenant/knowledge",
-          "/tenant/users",
-          "/tenant/settings",
-          "/tenant/billing",
-          "/tenant/widget",
-        ].includes(item.path),
-    );
-  }
+  
+  const NAV_ITEMS = ALL_NAV_ITEMS.filter((item) => {
+  
+    if (!userRole || userRole === "owner") {
+      return true;
+    }
 
-  const currentBusinessName = user?.business_name || "Apex Dental Clinic";
+    
+    if (userRole === "root") {
+      return item.path !== "/tenant/billing";
+    }
+
+   
+    if (userRole === "manager") {
+      const hiddenForManager = [
+        "/tenant/users",
+        "/tenant/billing",
+        "/tenant/widget",
+        "/tenant/knowledge",
+      ];
+      return !hiddenForManager.includes(item.path);
+    }
+
+    return true;
+  });
+
+  const canAccessAgentStudio = isTenant && (!userRole || userRole === "owner");
+
+  const currentTenant = profileData?.data;
+  const currentBusinessName =
+    currentTenant?.business_name || authUser?.business_name || "My Workspace";
   const currentUserFullName =
-    user?.name || user?.contact_email?.split("@")[0] || "Workspace Member";
-  const currentUserRole = user?.system_role || "owner";
+    authUser?.name ||
+    authUser?.email?.split("@")[0] ||
+    currentTenant?.business_name ||
+    currentTenant?.contact_email?.split("@")[0] ||
+    "Workspace Member";
+  const currentUserRole =
+    authUser?.system_role === "root"
+      ? "Root Admin"
+      : authUser?.system_role === "manager"
+        ? "Manager"
+        : "Tenant Owner";
   const userInitials = currentUserFullName.substring(0, 2).toUpperCase();
 
   return (
@@ -108,7 +131,7 @@ export default function TenantLayout() {
                 <button
                   key={item.path}
                   onClick={() => navigate(item.path)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                     isActive
                       ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs"
                       : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
@@ -130,13 +153,15 @@ export default function TenantLayout() {
         </div>
 
         <div className="p-3 border-t border-slate-100 flex flex-col gap-2">
-          <button
-            onClick={() => navigate("/")}
-            className="w-full py-2 px-3 bg-black hover:bg-slate-900 text-white rounded-full text-xs font-semibold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-98 cursor-pointer"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Agent Studio</span>
-          </button>
+          {canAccessAgentStudio && (
+            <button
+              onClick={() => navigate("/")}
+              className="w-full py-2 px-3 bg-black hover:bg-slate-900 text-white rounded-full text-xs font-semibold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-98 cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Agent Studio</span>
+            </button>
+          )}
 
           <div className="flex items-center justify-between px-2 py-1">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -179,14 +204,7 @@ export default function TenantLayout() {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="relative w-64">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search bookings, clients..."
-                className="w-full pl-9 pr-3 py-1.5 bg-slate-100/70 border border-slate-200/60 rounded-full text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400 focus:bg-white transition-all"
-              />
-            </div>
+           
 
             <button className="p-1.5 text-slate-500 hover:text-slate-800 rounded-full hover:bg-slate-100 transition-colors">
               <Bell className="w-4 h-4" />

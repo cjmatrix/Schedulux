@@ -8,3 +8,9 @@ export const DashboardUserLoginSchema: z.ZodType<DashboardUserLoginRequest> = z.
 });
 
 export class DashboardUserLoginDto extends createZodDto(DashboardUserLoginSchema) {}
+
+export const DashboardUserRefreshTokenSchema = z.object({
+  refresh_token: z.string().optional(),
+});
+
+export class DashboardUserRefreshTokenDto extends createZodDto(DashboardUserRefreshTokenSchema) {}

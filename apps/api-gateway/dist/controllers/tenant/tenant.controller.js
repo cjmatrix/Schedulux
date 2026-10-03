@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const rxjs_1 = require("rxjs");
 const nestjs_zod_1 = require("nestjs-zod");
 const tenant_dto_js_1 = require("./dtos/tenant.dto.js");
+const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
 let TenantController = class TenantController {
     client;
     dashboardClient;
@@ -31,6 +32,14 @@ let TenantController = class TenantController {
         this.tenantAuthService = this.client.getService('TenantAuthService');
         this.tenantServiceClient = this.client.getService('TenantService');
         this.dashboardUserServiceClient = this.dashboardClient.getService('DashboardUserService');
+    }
+    async getProfile(req) {
+        const tenantId = req.tenant?.tenant_id || '';
+        const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.getProfile({ tenant_id: tenantId }));
+        return {
+            message: 'Profile retrieved successfully',
+            data: response.tenant,
+        };
     }
     async register(body) {
         const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.register(body));
@@ -112,11 +121,15 @@ let TenantController = class TenantController {
     }
     async logout(req, body, res) {
         const token = req.cookies?.refresh_token || body?.refresh_token || '';
-        const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.logout({ refresh_token: token }));
+        if (token) {
+            await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.logout({ refresh_token: token })).catch(() => { });
+        }
         res.clearCookie('access_token');
         res.clearCookie('refresh_token');
+        res.clearCookie('dashboarduser_access_token');
+        res.clearCookie('dashboarduser_refresh_token');
         return {
-            message: response.message || 'Logged out successfully',
+            message: 'Logged out successfully',
             data: null,
         };
     }
@@ -147,6 +160,14 @@ let TenantController = class TenantController {
     }
 };
 exports.TenantController = TenantController;
+__decorate([
+    (0, common_1.Get)('me'),
+    (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "getProfile", null);
 __decorate([
     (0, common_1.Post)('register'),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),

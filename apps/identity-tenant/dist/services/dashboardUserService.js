@@ -50,7 +50,7 @@ let DashboardUserService = class DashboardUserService {
             tenant_id: user.tenant_id,
             email: user.email,
             system_role: user.system_role,
-            role: 'dashboard_user',
+            role: user.system_role,
         }, this.jwtSecret, { expiresIn: ACCESS_TOKEN_EXPIRY });
         const tokenId = nanoid(16);
         const refreshToken = this.jwtService.sign({
@@ -72,6 +72,73 @@ let DashboardUserService = class DashboardUserService {
             },
             access_token: accessToken,
             refresh_token: refreshToken,
+        };
+    }
+    async getProfile(data) {
+        if (!data.user_id) {
+            throw new Error('USER_ID_REQUIRED');
+        }
+        const user = await this.dashboardUserRepo.findById(data.user_id);
+        if (!user) {
+            throw new Error('USER_NOT_FOUND');
+        }
+        return {
+            user: {
+                user_id: user._id.toString(),
+                tenant_id: user.tenant_id,
+                email: user.email,
+                name: user.name,
+                system_role: user.system_role,
+                created_at: user.created_at ? user.created_at.toISOString() : new Date().toISOString(),
+            },
+        };
+    }
+    async refreshToken(data) {
+        if (!data.refresh_token) {
+            throw new Error('REFRESH_TOKEN_REQUIRED');
+        }
+        let decoded;
+        try {
+            decoded = this.jwtService.verify(data.refresh_token, this.jwtRefreshSecret);
+        }
+        catch (err) {
+            throw new Error('INVALID_REFRESH_TOKEN');
+        }
+        const userId = decoded.user_id;
+        const tokenId = decoded.tokenId;
+        if (!userId || !tokenId || decoded.type !== 'dashboard_refresh') {
+            throw new Error('INVALID_REFRESH_TOKEN');
+        }
+        const cachedToken = await this.cacheRepo.get(`dashboard_refreshToken:${userId}:${tokenId}`);
+        if (cachedToken !== data.refresh_token) {
+            // Possible token reuse attack
+            await this.cacheRepo.delete(`dashboard_refreshToken:${userId}:${tokenId}`);
+            throw new Error('INVALID_REFRESH_TOKEN');
+        }
+        const user = await this.dashboardUserRepo.findById(userId);
+        if (!user) {
+            throw new Error('USER_NOT_FOUND');
+        }
+        const newAccessToken = this.jwtService.sign({
+            user_id: user._id.toString(),
+            tenant_id: user.tenant_id,
+            email: user.email,
+            system_role: user.system_role,
+            role: user.system_role,
+        }, this.jwtSecret, { expiresIn: ACCESS_TOKEN_EXPIRY });
+        const newTokenId = nanoid(16);
+        const newRefreshToken = this.jwtService.sign({
+            user_id: user._id.toString(),
+            tenant_id: user.tenant_id,
+            tokenId: newTokenId,
+            type: 'dashboard_refresh',
+        }, this.jwtRefreshSecret, { expiresIn: REFRESH_TOKEN_EXPIRY });
+        await this.cacheRepo.delete(`dashboard_refreshToken:${userId}:${tokenId}`);
+        await this.cacheRepo.set(`dashboard_refreshToken:${userId}:${newTokenId}`, newRefreshToken, { EX: REFRESH_TOKEN_TTL_SECONDS });
+        return {
+            message: 'Token refreshed successfully',
+            access_token: newAccessToken,
+            refresh_token: newRefreshToken,
         };
     }
 };

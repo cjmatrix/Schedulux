@@ -126,9 +126,7 @@ export default function TenantListPage() {
             <ChevronDown className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           </div>
 
-          <button className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-md text-xs font-medium text-white transition-colors">
-            <Plus className="w-4 h-4" /> Provision Tenant
-          </button>
+          
         </div>
       </div>
 

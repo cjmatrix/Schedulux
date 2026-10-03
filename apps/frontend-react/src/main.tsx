@@ -6,10 +6,10 @@ import { createBrowserRouter, RouterProvider, Navigate } from "react-router";
 import "./index.css";
 import App from "./App.tsx";
 import LandingPage from "./pages/LandingPage.tsx";
-import RegisterPage from "./pages/RegisterPage.tsx";
-import LoginPage from "./pages/LoginPage.tsx";
-import DashboardUserLoginPage from "./pages/DashboardUserLoginPage.tsx";
-import VerifyEmailPage from "./pages/VerifyEmailPage.tsx";
+import RegisterPage from "./features/tenant/pages/RegisterPage.tsx";
+import LoginPage from "./features/tenant/pages/LoginPage.tsx";
+import DashboardUserLoginPage from "./features/dashboard-user/DashboardUserLoginPage.tsx";
+import VerifyEmailPage from "./features/tenant/pages/VerifyEmailPage.tsx";
 
 // Superadmin Feature Imports
 import SuperAdminLoginPage from "./features/superadmin/pages/SuperAdminLoginPage.tsx";
@@ -18,10 +18,14 @@ import SuperAdminDashboard from "./features/superadmin/pages/SuperAdminDashboard
 import TenantListPage from "./features/superadmin/pages/TenantListPage.tsx";
 import SystemHealthPage from "./features/superadmin/pages/SystemHealthPage.tsx";
 import GlobalSettingsPage from "./features/superadmin/pages/GlobalSettingsPage.tsx";
+import { SuperAdminProtectedRoute } from "./features/superadmin/components/SuperAdminProtectedRoute.tsx";
 
 // Tenant Dashboard Feature Imports
 import TenantLayout from "./features/tenant/pages/layout/TenantLayout.tsx";
 import WorkspaceUsersPage from "./features/tenant/pages/WorkspaceUsersPage.tsx";
+import BookingsPage from "./features/tenant/pages/BookingsPage.tsx";
+import { TenantProtectedRoute } from "./features/tenant/components/TenantProtectedRoute.tsx";
+import { DashboardUserProtectedRoute } from "./features/dashboard-user/components/DashboardUserProtectedRoute.tsx";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,7 +54,7 @@ const router = createBrowserRouter([
     element: <LoginPage />,
   },
   {
-    path: "/dashboard/login",
+    path: "/dashboarduser/login",
     element: <DashboardUserLoginPage />,
   },
   {
@@ -67,51 +71,85 @@ const router = createBrowserRouter([
   },
   {
     path: "/superadmin",
-    element: <AdminLayout />,
+    element: <SuperAdminProtectedRoute />,
     children: [
       {
-        index: true,
-        element: <Navigate to="/superadmin/dashboard" replace />,
-      },
-      {
-        path: "dashboard",
-        element: <SuperAdminDashboard />,
-      },
-      {
-        path: "tenants",
-        element: <TenantListPage />,
-      },
-      {
-        path: "system-health",
-        element: <SystemHealthPage />,
-      },
-      {
-        path: "settings",
-        element: <GlobalSettingsPage />,
+        element: <AdminLayout />,
+        children: [
+          {
+            index: true,
+            element: <Navigate to="/superadmin/dashboard" replace />,
+          },
+          {
+            path: "dashboard",
+            element: <SuperAdminDashboard />,
+          },
+          {
+            path: "tenants",
+            element: <TenantListPage />,
+          },
+          {
+            path: "system-health",
+            element: <SystemHealthPage />,
+          },
+          {
+            path: "settings",
+            element: <GlobalSettingsPage />,
+          },
+        ],
       },
     ],
   },
   {
     path: "/tenant",
-    element: <TenantLayout />,
+    element: <TenantProtectedRoute />,
     children: [
       {
-        index: true,
-        element: <Navigate to="/tenant/users" replace />,
-      },
-      {
-        path: "dashboard",
-        element: <Navigate to="/tenant/users" replace />,
-      },
-      {
-        path: "users",
-        element: <WorkspaceUsersPage />,
+        element: <TenantLayout isTenant={true} />,
+        children: [
+          {
+            index: true,
+            element: <Navigate to="/tenant/users" replace />,
+          },
+          {
+            path: "dashboard",
+            element: <Navigate to="/tenant/users" replace />,
+          },
+          {
+            path: "users",
+            element: <WorkspaceUsersPage />,
+          },
+          {
+            path: "bookings",
+            element: <BookingsPage />,
+          },
+        ],
       },
     ],
   },
   {
     path: "/workspace/users",
     element: <Navigate to="/tenant/users" replace />,
+  },
+  {
+    path: "/dashboarduser",
+    element: <DashboardUserProtectedRoute />,
+    children: [
+      {
+        path: "tenant",
+        element: <TenantLayout isTenant={false} />,
+        children: [
+          {
+            index: true,
+            element: <Navigate to="/dashboarduser/tenant/bookings" replace />,
+          },
+          {
+            path: "bookings",
+            element: <BookingsPage />,
+          },
+        ],
+      },
+    ],
   },
 ]);
 

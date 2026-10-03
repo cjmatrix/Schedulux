@@ -24,22 +24,16 @@ import {
   SuperAdminRefreshTokenDto,
   SuperAdminLogoutDto,
 } from "./dtos/superAdmin.dto.js";
-
-interface SuperAdminAuthService {
-  Login(data: any): Observable<any>;
-  RefreshToken(data: any): Observable<any>;
-  Logout(data: any): Observable<any>;
-  GetProfile(data: any): Observable<any>;
-}
+import { SuperAdminAuthServiceClient } from "@repo/proto/superadmin";
 
 @Controller("api/v1/superadmin/auth")
 export class SuperAdminController implements OnModuleInit {
-  private superAdminAuthService!: SuperAdminAuthService;
+  private superAdminAuthService!: SuperAdminAuthServiceClient;
 
   constructor(@Inject("SUPERADMIN_PACKAGE") private client: ClientGrpc) {}
 
   onModuleInit() {
-    this.superAdminAuthService = this.client.getService<SuperAdminAuthService>(
+    this.superAdminAuthService = this.client.getService<SuperAdminAuthServiceClient>(
       "SuperAdminAuthService",
     );
   }
@@ -50,8 +44,8 @@ export class SuperAdminController implements OnModuleInit {
     @Body() body: SuperAdminLoginDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const response: any = await lastValueFrom(
-      this.superAdminAuthService.Login(body),
+    const response = await lastValueFrom(
+      this.superAdminAuthService.login(body),
     );
     const isProduction = process.env.NODE_ENV === "production";
 
@@ -84,8 +78,8 @@ export class SuperAdminController implements OnModuleInit {
   ) {
     const token =
       req.cookies?.superadmin_refresh_token || body?.refresh_token || "";
-    const response: any = await lastValueFrom(
-      this.superAdminAuthService.RefreshToken({ refresh_token: token }),
+    const response = await lastValueFrom(
+      this.superAdminAuthService.refreshToken({ refresh_token: token }),
     );
     const isProduction = process.env.NODE_ENV === "production";
 
@@ -118,8 +112,8 @@ export class SuperAdminController implements OnModuleInit {
   ) {
     const token =
       req.cookies?.superadmin_refresh_token || body?.refresh_token || "";
-    const response: any = await lastValueFrom(
-      this.superAdminAuthService.Logout({ refresh_token: token }),
+    const response = await lastValueFrom(
+      this.superAdminAuthService.logout({ refresh_token: token }),
     );
     res.clearCookie("superadmin_access_token");
     res.clearCookie("superadmin_refresh_token");
@@ -137,8 +131,8 @@ export class SuperAdminController implements OnModuleInit {
       throw new UnauthorizedException("Unauthorized");
     }
 
-    const response: any = await lastValueFrom(
-      this.superAdminAuthService.GetProfile({ superadmin_id: superAdminId }),
+    const response = await lastValueFrom(
+      this.superAdminAuthService.getProfile({ superadmin_id: superAdminId }),
     );
     return {
       message: "Profile retrieved successfully",

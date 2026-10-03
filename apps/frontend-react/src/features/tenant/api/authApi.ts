@@ -25,14 +25,8 @@ export interface TenantInfo {
   status: string;
 }
 
-export interface DashboardUserInfo {
-  user_id: string;
-  tenant_id: string;
-  email: string;
-  name: string;
-  system_role: "root" | "manager";
-  created_at: string;
-}
+export type { DashboardUserInfo } from "../../dashboard-user/api/authApi";
+
 
 export const authApi = {
   register: async (
@@ -65,21 +59,19 @@ export const authApi = {
     return data;
   },
 
-  dashboardLogin: async (
-    payload: LoginTenantPayload,
-  ): Promise<ApiResponse<DashboardUserInfo>> => {
-    const { data } = await axiosClient.post<ApiResponse<DashboardUserInfo>>(
-      "/api/v1/dashboard-user/auth/login",
-      payload,
-    );
-    return data;
-  },
 
   verifyEmail: async (
     token: string,
   ): Promise<ApiResponse<{ tenant_id: string }>> => {
     const { data } = await axiosClient.get<ApiResponse<{ tenant_id: string }>>(
       `/api/v1/tenant/auth/verify-email?token=${encodeURIComponent(token)}`,
+    );
+    return data;
+  },
+
+  getProfile: async (): Promise<ApiResponse<TenantInfo>> => {
+    const { data } = await axiosClient.get<ApiResponse<TenantInfo>>(
+      "/api/v1/tenant/auth/me",
     );
     return data;
   },

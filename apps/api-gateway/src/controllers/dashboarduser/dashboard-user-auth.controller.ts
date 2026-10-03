@@ -4,15 +4,19 @@ import {
   Inject,
   OnModuleInit,
   Post,
+  Get,
+  Req,
   Res,
   UsePipes,
+  UseGuards,
 } from "@nestjs/common";
 import { ClientGrpc } from "@nestjs/microservices";
 import { DashboardAuthServiceClient } from "@repo/proto/dashboard";
 import { lastValueFrom } from "rxjs";
-import { Response } from "express";
+import { Request, Response } from "express";
 import { ZodValidationPipe } from "nestjs-zod";
-import { DashboardUserLoginDto } from "./dtos/dashboard-user.dto.js";
+import { DashboardUserLoginDto, DashboardUserRefreshTokenDto } from "./dtos/dashboard-user.dto.js";
+import { TenantAuthGuard, AuthenticatedTenantRequest } from "../../guards/tenant-auth.guard.js";
 
 @Controller("api/v1/dashboard-user/auth")
 export class DashboardUserAuthController implements OnModuleInit {
@@ -53,6 +57,62 @@ export class DashboardUserAuthController implements OnModuleInit {
 
     return {
       message: response.message || "Dashboard user logged in successfully",
+      data: response.user,
+    };
+  }
+
+  @Post("refresh-token")
+  @UsePipes(ZodValidationPipe)
+  async refreshToken(
+    @Req() req: Request,
+    @Body() body: DashboardUserRefreshTokenDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const token = req.cookies?.dashboarduser_refresh_token || body?.refresh_token || "";
+    if (!token) {
+      throw new Error("No refresh token provided");
+    }
+
+    const response = await lastValueFrom(
+      this.dashboardUserAuthClient.refreshToken({ refresh_token: token }),
+    );
+    const isProduction = process.env.NODE_ENV === "production";
+
+    res.cookie("dashboarduser_access_token", response.access_token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
+      maxAge: 15 * 60 * 1000,
+    });
+
+    res.cookie("dashboarduser_refresh_token", response.refresh_token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return {
+      message: response.message,
+      data: null,
+    };
+  }
+
+  @Get("me")
+  @UseGuards(TenantAuthGuard)
+  async getProfile(@Req() req: AuthenticatedTenantRequest) {
+    
+    const userId = req.dashboardUser?.user_id;
+    if (!userId) {
+      throw new Error("User ID not found in request");
+    }
+
+    const response = await lastValueFrom(
+      this.dashboardUserAuthClient.getProfile({ user_id: userId })
+    );
+
+    return {
+      message: "Profile retrieved successfully",
       data: response.user,
     };
   }

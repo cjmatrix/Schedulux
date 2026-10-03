@@ -28,7 +28,7 @@ let SuperAdminController = class SuperAdminController {
         this.superAdminAuthService = this.client.getService("SuperAdminAuthService");
     }
     async login(body, res) {
-        const response = await (0, rxjs_1.lastValueFrom)(this.superAdminAuthService.Login(body));
+        const response = await (0, rxjs_1.lastValueFrom)(this.superAdminAuthService.login(body));
         const isProduction = process.env.NODE_ENV === "production";
         res.cookie("superadmin_access_token", response.access_token, {
             httpOnly: true,
@@ -49,7 +49,7 @@ let SuperAdminController = class SuperAdminController {
     }
     async refreshToken(req, body, res) {
         const token = req.cookies?.superadmin_refresh_token || body?.refresh_token || "";
-        const response = await (0, rxjs_1.lastValueFrom)(this.superAdminAuthService.RefreshToken({ refresh_token: token }));
+        const response = await (0, rxjs_1.lastValueFrom)(this.superAdminAuthService.refreshToken({ refresh_token: token }));
         const isProduction = process.env.NODE_ENV === "production";
         res.cookie("superadmin_access_token", response.access_token, {
             httpOnly: true,
@@ -70,7 +70,7 @@ let SuperAdminController = class SuperAdminController {
     }
     async logout(req, body, res) {
         const token = req.cookies?.superadmin_refresh_token || body?.refresh_token || "";
-        const response = await (0, rxjs_1.lastValueFrom)(this.superAdminAuthService.Logout({ refresh_token: token }));
+        const response = await (0, rxjs_1.lastValueFrom)(this.superAdminAuthService.logout({ refresh_token: token }));
         res.clearCookie("superadmin_access_token");
         res.clearCookie("superadmin_refresh_token");
         return {
@@ -83,7 +83,7 @@ let SuperAdminController = class SuperAdminController {
         if (!superAdminId) {
             throw new common_1.UnauthorizedException("Unauthorized");
         }
-        const response = await (0, rxjs_1.lastValueFrom)(this.superAdminAuthService.GetProfile({ superadmin_id: superAdminId }));
+        const response = await (0, rxjs_1.lastValueFrom)(this.superAdminAuthService.getProfile({ superadmin_id: superAdminId }));
         return {
             message: "Profile retrieved successfully",
             data: response.superAdmin,

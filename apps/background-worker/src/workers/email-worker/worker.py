@@ -6,7 +6,7 @@ from bullmq import Worker
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 
 
-# ─── Browser & Crawl Configuration ───────────────────────────────────────────
+
 
 browser_cfg = BrowserConfig(
     headless=True,
@@ -20,7 +20,7 @@ run_cfg = CrawlerRunConfig(
 )
 
 
-# ─── Link Filtering ──────────────────────────────────────────────────────────
+
 
 def filter_internal_links(base_url: str, raw_links: list) -> set:
     """Filters out external domains, anchors, and media formats."""
@@ -46,7 +46,7 @@ def filter_internal_links(base_url: str, raw_links: list) -> set:
     return clean_urls
 
 
-# ─── Core Crawl Logic ────────────────────────────────────────────────────────
+
 
 async def crawl_site_knowledge(target_url: str) -> dict:
     """Crawls a site homepage and all discovered internal pages, returns {url: markdown}."""
@@ -86,7 +86,7 @@ async def crawl_site_knowledge(target_url: str) -> dict:
     return site_knowledge
 
 
-# ─── BullMQ Job Processor ────────────────────────────────────────────────────
+
 
 async def process_crawl_job(job, token):
     """BullMQ job processor — receives a crawl-site job and returns knowledge dict."""
@@ -113,7 +113,7 @@ async def process_crawl_job(job, token):
         raise
 
 
-# ─── Worker Entrypoint ───────────────────────────────────────────────────────
+
 
 async def main():
     print("[Worker] Starting knowledge-crawl-queue worker...")

@@ -42,22 +42,34 @@ let TenantService = class TenantService {
         this.googleClient = new OAuth2Client(this.configService.get('GOOGLE_CLIENT_ID'));
     }
     async register(data) {
-        const existingUser = await this.tenantRepo.findByEmail(data.email);
-        if (existingUser) {
-            throw new Error('EMAIL_ALREADY_EXISTS');
-        }
-        const tenantId = `tnt_${nanoid(21)}`;
+        let tenantId = `tnt_${nanoid(21)}`;
         const passwordHash = await this.passwordHasher.hash(data.password, 12);
         const verificationToken = crypto.randomBytes(32).toString('hex');
+        let tenant;
+        const existingUser = await this.tenantRepo.findByEmail(data.email);
+        if (existingUser) {
+            if (existingUser.status === 'pending') {
+                tenantId = existingUser._id;
+                tenant = await this.tenantRepo.update(existingUser._id, {
+                    business_name: data.business_name,
+                    password_hash: passwordHash,
+                });
+            }
+            else {
+                throw new Error('EMAIL_ALREADY_EXISTS');
+            }
+        }
+        else {
+            tenant = await this.tenantRepo.create({
+                _id: tenantId,
+                business_name: data.business_name,
+                contact_email: data.email,
+                password_hash: passwordHash,
+                tier: 'starter',
+                status: 'pending'
+            });
+        }
         await this.cacheRepo.set(`tenant_verificationToken:${verificationToken}`, tenantId, { EX: 3600 });
-        const tenant = await this.tenantRepo.create({
-            _id: tenantId,
-            business_name: data.business_name,
-            contact_email: data.email,
-            password_hash: passwordHash,
-            tier: 'starter',
-            status: 'pending'
-        });
         if (this.emailProducer) {
             await this.emailProducer.sendVerificationEmail({
                 to: data.email,
@@ -68,7 +80,7 @@ let TenantService = class TenantService {
             });
         }
         return {
-            tenant_id: tenant._id,
+            tenant_id: tenantId,
             message: 'Registration successful. Please check your email to verify your account.',
             verification_token: verificationToken
         };
@@ -186,6 +198,24 @@ let TenantService = class TenantService {
         return {
             accessToken,
             refreshToken,
+            tenant: {
+                tenant_id: tenant._id,
+                business_name: tenant.business_name,
+                contact_email: tenant.contact_email,
+                tier: tenant.tier,
+                status: tenant.status,
+            },
+        };
+    }
+    async getProfile(tenantId) {
+        const tenant = await this.tenantRepo.findByTenantId(tenantId);
+        if (!tenant) {
+            throw new Error('TENANT_NOT_FOUND');
+        }
+        if (tenant.status !== 'active') {
+            throw new Error('ACCOUNT_INACTIVE');
+        }
+        return {
             tenant: {
                 tenant_id: tenant._id,
                 business_name: tenant.business_name,

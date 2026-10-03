@@ -3,6 +3,12 @@ export declare const protobufPackage = "tenant";
 export interface TenantGoogleLoginRequest {
     id_token: string;
 }
+export interface TenantGetProfileRequest {
+    tenant_id: string;
+}
+export interface TenantGetProfileResponse {
+    tenant: TenantInfo | undefined;
+}
 export interface RegisterRequest {
     business_name: string;
     full_name: string;
@@ -78,6 +84,7 @@ export interface TenantAuthServiceClient {
     verifyEmail(request: VerifyEmailRequest): Observable<VerifyEmailResponse>;
     logout(request: LogoutRequest): Observable<LogoutResponse>;
     refreshToken(request: RefreshTokenRequest): Observable<RefreshTokenResponse>;
+    getProfile(request: TenantGetProfileRequest): Observable<TenantGetProfileResponse>;
 }
 export interface TenantAuthServiceController {
     register(request: RegisterRequest): Promise<RegisterResponse> | Observable<RegisterResponse> | RegisterResponse;
@@ -86,6 +93,7 @@ export interface TenantAuthServiceController {
     verifyEmail(request: VerifyEmailRequest): Promise<VerifyEmailResponse> | Observable<VerifyEmailResponse> | VerifyEmailResponse;
     logout(request: LogoutRequest): Promise<LogoutResponse> | Observable<LogoutResponse> | LogoutResponse;
     refreshToken(request: RefreshTokenRequest): Promise<RefreshTokenResponse> | Observable<RefreshTokenResponse> | RefreshTokenResponse;
+    getProfile(request: TenantGetProfileRequest): Promise<TenantGetProfileResponse> | Observable<TenantGetProfileResponse> | TenantGetProfileResponse;
 }
 export declare function TenantAuthServiceControllerMethods(): (constructor: Function) => void;
 export declare const TENANT_AUTH_SERVICE_NAME = "TenantAuthService";

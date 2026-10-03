@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DashboardUserLoginDto = exports.DashboardUserLoginSchema = void 0;
+exports.DashboardUserRefreshTokenDto = exports.DashboardUserRefreshTokenSchema = exports.DashboardUserLoginDto = exports.DashboardUserLoginSchema = void 0;
 const nestjs_zod_1 = require("nestjs-zod");
 const zod_1 = require("zod");
 exports.DashboardUserLoginSchema = zod_1.z.object({
@@ -10,3 +10,9 @@ exports.DashboardUserLoginSchema = zod_1.z.object({
 class DashboardUserLoginDto extends (0, nestjs_zod_1.createZodDto)(exports.DashboardUserLoginSchema) {
 }
 exports.DashboardUserLoginDto = DashboardUserLoginDto;
+exports.DashboardUserRefreshTokenSchema = zod_1.z.object({
+    refresh_token: zod_1.z.string().optional(),
+});
+class DashboardUserRefreshTokenDto extends (0, nestjs_zod_1.createZodDto)(exports.DashboardUserRefreshTokenSchema) {
+}
+exports.DashboardUserRefreshTokenDto = DashboardUserRefreshTokenDto;

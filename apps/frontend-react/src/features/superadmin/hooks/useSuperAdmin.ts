@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { superAdminAuthApi } from '../api/superAdminAuthApi';
 import { superAdminApi } from '../api/superAdminApi';
+import { useSuperAdminStore } from '../store/useSuperAdminStore';
 import type {
   LoginSuperAdminPayload,
   SuperAdminInfo,
@@ -9,30 +10,44 @@ import type { ApiResponse } from '../../../api/axiosClient';
 
 export function useSuperAdminLogin() {
   const queryClient = useQueryClient();
+  const setSuperAdmin = useSuperAdminStore((state) => state.setSuperAdmin);
 
   return useMutation<ApiResponse<SuperAdminInfo>, Error, LoginSuperAdminPayload>({
     mutationFn: (payload) => superAdminAuthApi.login(payload),
     onSuccess: (res) => {
-      queryClient.setQueryData(['superAdmin'], res.data);
+      queryClient.setQueryData(['superAdmin'], res);
+      if (res?.data) {
+        setSuperAdmin(res.data);
+      }
     },
   });
 }
 
 export function useSuperAdminLogout() {
   const queryClient = useQueryClient();
+  const superAdminLogout = useSuperAdminStore((state) => state.logout);
 
   return useMutation<ApiResponse<null>, Error, void>({
     mutationFn: () => superAdminAuthApi.logout(),
     onSuccess: () => {
       queryClient.removeQueries({ queryKey: ['superAdmin'] });
+      superAdminLogout();
     },
   });
 }
 
 export function useSuperAdminProfile() {
+  const setSuperAdmin = useSuperAdminStore((state) => state.setSuperAdmin);
+
   return useQuery<ApiResponse<SuperAdminInfo>, Error>({
     queryKey: ['superAdmin'],
-    queryFn: () => superAdminAuthApi.getProfile(),
+    queryFn: async () => {
+      const res = await superAdminAuthApi.getProfile();
+      if (res?.data) {
+        setSuperAdmin(res.data);
+      }
+      return res;
+    },
     retry: false,
     staleTime: 5 * 60 * 1000,
   });

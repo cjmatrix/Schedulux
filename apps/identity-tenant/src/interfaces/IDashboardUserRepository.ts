@@ -12,6 +12,7 @@ export interface FindWorkspaceUsersOptions {
 export interface IDashboardUserRepository {
   create(data: Partial<IDashboardUser>): Promise<IDashboardUser>;
   findByEmail(email: string): Promise<IDashboardUser | null>;
+  findById(id: string): Promise<IDashboardUser | null>;
   findByTenantId(tenantId: string): Promise<IDashboardUser[]>;
   findWorkspaceUsers(options: FindWorkspaceUsersOptions): Promise<{ users: IDashboardUser[]; total_count: number }>;
 }

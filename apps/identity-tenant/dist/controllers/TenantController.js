@@ -84,6 +84,12 @@ let TenantAuthController = class TenantAuthController {
             refresh_token: result.refreshToken,
         };
     }
+    async getProfile(data) {
+        const { tenant_id } = data;
+        if (!tenant_id)
+            throw new Error("Tenant ID is required");
+        return await this.tenantService.getProfile(tenant_id);
+    }
     async logout(data) {
         const { refresh_token } = data;
         await this.tenantService.logout(refresh_token);
@@ -120,6 +126,12 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], TenantAuthController.prototype, "refreshToken", null);
+__decorate([
+    GrpcMethod("TenantAuthService", "GetProfile"),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], TenantAuthController.prototype, "getProfile", null);
 __decorate([
     GrpcMethod("TenantAuthService", "Logout"),
     __metadata("design:type", Function),

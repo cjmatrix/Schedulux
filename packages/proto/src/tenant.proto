@@ -9,10 +9,19 @@ service TenantAuthService {
   rpc VerifyEmail (VerifyEmailRequest) returns (VerifyEmailResponse);
   rpc Logout (LogoutRequest) returns (LogoutResponse);
   rpc RefreshToken (RefreshTokenRequest) returns (RefreshTokenResponse);
+  rpc GetProfile (TenantGetProfileRequest) returns (TenantGetProfileResponse);
 }
 
 message TenantGoogleLoginRequest {
   string id_token = 1;
+}
+
+message TenantGetProfileRequest {
+  string tenant_id = 1;
+}
+
+message TenantGetProfileResponse {
+  TenantInfo tenant = 1;
 }
 
 service TenantService {

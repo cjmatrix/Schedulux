@@ -9,6 +9,7 @@ import {
   TenantGoogleLoginRequest,
   RefreshTokenRequest,
   LogoutRequest,
+  TenantGetProfileRequest,
 } from "@repo/proto/tenant";
 import {
   InviteUserRequest,
@@ -94,6 +95,13 @@ export class TenantAuthController {
       access_token: result.accessToken,
       refresh_token: result.refreshToken,
     };
+  }
+
+  @GrpcMethod("TenantAuthService", "GetProfile")
+  async getProfile(data: TenantGetProfileRequest) {
+    const { tenant_id } = data;
+    if (!tenant_id) throw new Error("Tenant ID is required");
+    return await this.tenantService.getProfile(tenant_id);
   }
 
   @GrpcMethod("TenantAuthService", "Logout")

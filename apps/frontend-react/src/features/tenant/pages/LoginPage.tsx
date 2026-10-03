@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, Link, useSearchParams } from 'react-router';
+import { useState } from "react";
+import { useNavigate, Link, useSearchParams, Navigate } from "react-router";
 import {
   ArrowLeft,
   ArrowRight,
@@ -9,31 +9,55 @@ import {
   Calendar,
   Loader2,
   CheckCircle2,
-} from 'lucide-react';
-import { GoogleLogin } from '@react-oauth/google';
-import { useLogin, useGoogleLoginTenant } from '../hooks/useAuth';
-import { useAuthStore } from '../store/useAuthStore';
+} from "lucide-react";
+import { GoogleLogin } from "@react-oauth/google";
+import {
+  useLogin,
+  useGoogleLoginTenant,
+  useTenantProfile,
+} from "../hooks/useAuth";
+import { useAuthStore } from "../../../store/useAuthStore";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState("");
 
+  const { data: profileData, isLoading: isCheckingSession } =
+    useTenantProfile();
   const loginMutation = useLogin();
   const googleLoginMutation = useGoogleLoginTenant();
   const authStoreLogin = useAuthStore((state) => state.login);
-  const justVerified = searchParams.get('verified') === 'true';
+  const justVerified = searchParams.get("verified") === "true";
+
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen bg-[#f8f9fa] flex flex-col items-center justify-center gap-4 text-slate-800">
+        <div className="w-12 h-12 bg-black rounded-2xl flex items-center justify-center text-white shadow-lg animate-pulse">
+          <Calendar className="w-6 h-6" />
+        </div>
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+          <Loader2 className="w-4 h-4 animate-spin text-black" />
+          <span>Verifying session status...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (profileData?.data) {
+    return <Navigate to="/tenant/users" replace />;
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage('');
+    setErrorMessage("");
 
     if (!email.trim() || !password) {
-      setErrorMessage('Please enter your email and password.');
+      setErrorMessage("Please enter your email and password.");
       return;
     }
 
@@ -47,16 +71,18 @@ export default function LoginPage() {
           if (res?.data) {
             authStoreLogin(res.data);
           }
-          navigate('/tenant/users');
+          navigate("/tenant/users");
         },
         onError: (err) => {
-          if (err.message === 'EMAIL_NOT_VERIFIED') {
-            setErrorMessage('Your email is not verified yet. Please check your inbox and click the verification link.');
+          if (err.message === "EMAIL_NOT_VERIFIED") {
+            setErrorMessage(
+              "Your email is not verified yet. Please check your inbox and click the verification link.",
+            );
           } else {
-            setErrorMessage(err.message || 'Invalid email or password.');
+            setErrorMessage(err.message || "Invalid email or password.");
           }
         },
-      }
+      },
     );
   };
 
@@ -92,7 +118,9 @@ export default function LoginPage() {
               <div className="w-7 h-7 bg-black rounded-lg flex items-center justify-center text-white shadow-sm">
                 <Calendar className="w-4 h-4" />
               </div>
-              <span className="font-bold text-gray-900 text-sm">Schedulux AI</span>
+              <span className="font-bold text-gray-900 text-sm">
+                Schedulux AI
+              </span>
             </div>
 
             {/* Title & Subtitle */}
@@ -109,7 +137,9 @@ export default function LoginPage() {
             {justVerified && (
               <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs text-center font-medium flex items-center justify-center gap-2">
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Account verified! Please sign in with your credentials.</span>
+                <span>
+                  Account verified! Please sign in with your credentials.
+                </span>
               </div>
             )}
 
@@ -125,7 +155,7 @@ export default function LoginPage() {
                   <GoogleLogin
                     onSuccess={(credentialResponse) => {
                       if (credentialResponse.credential) {
-                        setErrorMessage('');
+                        setErrorMessage("");
                         googleLoginMutation.mutate(
                           { id_token: credentialResponse.credential },
                           {
@@ -133,17 +163,21 @@ export default function LoginPage() {
                               if (res?.data) {
                                 authStoreLogin(res.data);
                               }
-                              navigate('/tenant/users');
+                              navigate("/tenant/users");
                             },
                             onError: (err) => {
-                              setErrorMessage(err.message || 'Google sign-in failed.');
+                              setErrorMessage(
+                                err.message || "Google sign-in failed.",
+                              );
                             },
-                          }
+                          },
                         );
                       }
                     }}
                     onError={() => {
-                      setErrorMessage('Google authentication was cancelled or failed.');
+                      setErrorMessage(
+                        "Google authentication was cancelled or failed.",
+                      );
                     }}
                     theme="outline"
                     size="large"
@@ -197,13 +231,16 @@ export default function LoginPage() {
                   <label className="block text-[11px] font-semibold text-gray-600 uppercase tracking-wide">
                     Password
                   </label>
-                  <a href="#" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                  <a
+                    href="#"
+                    className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                  >
                     Forgot password?
                   </a>
                 </div>
                 <div className="relative flex items-center bg-[#f3f4f6] rounded-xl px-3.5 py-3 border border-transparent focus-within:border-gray-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-black/5 transition-all">
                   <input
-                    type={showPassword ? 'text' : 'password'}
+                    type={showPassword ? "text" : "password"}
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -215,7 +252,11 @@ export default function LoginPage() {
                     onClick={() => setShowPassword(!showPassword)}
                     className="text-gray-400 hover:text-gray-600 focus:outline-none ml-2"
                   >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -242,8 +283,11 @@ export default function LoginPage() {
 
             {/* Switch to Register */}
             <div className="text-center mt-6 pt-5 border-t border-gray-100 text-xs text-gray-600">
-              Don't have an account?{' '}
-              <Link to="/register" className="font-bold text-gray-900 hover:underline">
+              Don't have an account?{" "}
+              <Link
+                to="/register"
+                className="font-bold text-gray-900 hover:underline"
+              >
                 Get started
               </Link>
             </div>
@@ -253,11 +297,16 @@ export default function LoginPage() {
           <div className="mt-6 text-center space-y-2">
             <div className="inline-flex items-center gap-2 text-xs font-medium text-gray-600">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Autonomous Cluster: US-East (Virginia) • 99.99% operational</span>
+              <span>
+                Autonomous Cluster: US-East (Virginia) • 99.99% operational
+              </span>
             </div>
             <div className="flex items-center justify-center gap-1.5 text-[11px] text-gray-400">
               <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
-              <span>Enterprise SAML 2.0 Ready • SOC2 Type II Certified • 256-Bit Vault Storage</span>
+              <span>
+                Enterprise SAML 2.0 Ready • SOC2 Type II Certified • 256-Bit
+                Vault Storage
+              </span>
             </div>
           </div>
         </div>
@@ -270,9 +319,15 @@ export default function LoginPage() {
         </div>
 
         <div className="flex items-center gap-5">
-          <a href="#" className="hover:text-gray-600 transition-colors">Privacy Policy</a>
-          <a href="#" className="hover:text-gray-600 transition-colors">Terms of Service</a>
-          <a href="#" className="hover:text-gray-600 transition-colors">System Status</a>
+          <a href="#" className="hover:text-gray-600 transition-colors">
+            Privacy Policy
+          </a>
+          <a href="#" className="hover:text-gray-600 transition-colors">
+            Terms of Service
+          </a>
+          <a href="#" className="hover:text-gray-600 transition-colors">
+            System Status
+          </a>
         </div>
       </footer>
     </div>

@@ -14,6 +14,14 @@ export interface TenantGoogleLoginRequest {
   id_token: string;
 }
 
+export interface TenantGetProfileRequest {
+  tenant_id: string;
+}
+
+export interface TenantGetProfileResponse {
+  tenant: TenantInfo | undefined;
+}
+
 export interface RegisterRequest {
   business_name: string;
   full_name: string;
@@ -110,6 +118,8 @@ export interface TenantAuthServiceClient {
   logout(request: LogoutRequest): Observable<LogoutResponse>;
 
   refreshToken(request: RefreshTokenRequest): Observable<RefreshTokenResponse>;
+
+  getProfile(request: TenantGetProfileRequest): Observable<TenantGetProfileResponse>;
 }
 
 export interface TenantAuthServiceController {
@@ -128,11 +138,23 @@ export interface TenantAuthServiceController {
   refreshToken(
     request: RefreshTokenRequest,
   ): Promise<RefreshTokenResponse> | Observable<RefreshTokenResponse> | RefreshTokenResponse;
+
+  getProfile(
+    request: TenantGetProfileRequest,
+  ): Promise<TenantGetProfileResponse> | Observable<TenantGetProfileResponse> | TenantGetProfileResponse;
 }
 
 export function TenantAuthServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ["register", "login", "googleLogin", "verifyEmail", "logout", "refreshToken"];
+    const grpcMethods: string[] = [
+      "register",
+      "login",
+      "googleLogin",
+      "verifyEmail",
+      "logout",
+      "refreshToken",
+      "getProfile",
+    ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
       GrpcMethod("TenantAuthService", method)(constructor.prototype[method], method, descriptor);

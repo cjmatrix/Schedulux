@@ -14,7 +14,15 @@ exports.protobufPackage = "tenant";
 exports.TENANT_PACKAGE_NAME = "tenant";
 function TenantAuthServiceControllerMethods() {
     return function (constructor) {
-        const grpcMethods = ["register", "login", "googleLogin", "verifyEmail", "logout", "refreshToken"];
+        const grpcMethods = [
+            "register",
+            "login",
+            "googleLogin",
+            "verifyEmail",
+            "logout",
+            "refreshToken",
+            "getProfile",
+        ];
         for (const method of grpcMethods) {
             const descriptor = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
             (0, microservices_1.GrpcMethod)("TenantAuthService", method)(constructor.prototype[method], method, descriptor);

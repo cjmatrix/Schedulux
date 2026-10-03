@@ -14,7 +14,7 @@ exports.protobufPackage = "dashboard";
 exports.DASHBOARD_PACKAGE_NAME = "dashboard";
 function DashboardAuthServiceControllerMethods() {
     return function (constructor) {
-        const grpcMethods = ["login"];
+        const grpcMethods = ["login", "getProfile", "refreshToken"];
         for (const method of grpcMethods) {
             const descriptor = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
             (0, microservices_1.GrpcMethod)("DashboardAuthService", method)(constructor.prototype[method], method, descriptor);

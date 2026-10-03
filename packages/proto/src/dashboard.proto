@@ -4,6 +4,8 @@ package dashboard;
 
 service DashboardAuthService {
   rpc Login (DashboardUserLoginRequest) returns (DashboardUserLoginResponse);
+  rpc GetProfile (DashboardUserProfileRequest) returns (DashboardUserProfileResponse);
+  rpc RefreshToken (DashboardUserRefreshTokenRequest) returns (DashboardUserRefreshTokenResponse);
 }
 
 service DashboardUserService {
@@ -21,6 +23,24 @@ message DashboardUserLoginResponse {
   WorkspaceUserInfo user = 2;
   string access_token = 3;
   string refresh_token = 4;
+}
+
+message DashboardUserProfileRequest {
+  string user_id = 1;
+}
+
+message DashboardUserProfileResponse {
+  WorkspaceUserInfo user = 1;
+}
+
+message DashboardUserRefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message DashboardUserRefreshTokenResponse {
+  string message = 1;
+  string access_token = 2;
+  string refresh_token = 3;
 }
 
 message InviteUserRequest {

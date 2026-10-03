@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Query, Req, Res, Inject, OnModuleInit, UsePipes, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, Req, Res, Inject, OnModuleInit, UsePipes, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { Request, Response } from 'express';
 import { Observable, lastValueFrom } from 'rxjs';
@@ -6,6 +6,7 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { TenantRegisterDto, TenantLoginDto, TenantGoogleLoginDto, InviteUserDto, VerifyEmailDto, RefreshTokenDto, LogoutDto, ListWorkspaceUsersDto } from './dtos/tenant.dto.js';
 import { TenantAuthServiceClient, TenantServiceClient } from '@repo/proto/tenant';
 import { DashboardUserServiceClient } from '@repo/proto/dashboard';
+import { TenantAuthGuard, AuthenticatedTenantRequest } from '../../guards/tenant-auth.guard.js';
 
 @Controller('api/v1/tenant/auth')
 export class TenantController implements OnModuleInit {
@@ -24,11 +25,22 @@ export class TenantController implements OnModuleInit {
     this.dashboardUserServiceClient = this.dashboardClient.getService<DashboardUserServiceClient>('DashboardUserService');
   }
 
+  @Get('me')
+  @UseGuards(TenantAuthGuard)
+  async getProfile(@Req() req: AuthenticatedTenantRequest) {
+    const tenantId = req.tenant?.tenant_id || '';
+    const response = await lastValueFrom(this.tenantAuthService.getProfile({ tenant_id: tenantId }));
+    return {
+      message: 'Profile retrieved successfully',
+      data: response.tenant,
+    };
+  }
+
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(ZodValidationPipe)
   async register(@Body() body: TenantRegisterDto) {
-    const response: any = await lastValueFrom(this.tenantAuthService.register(body));
+    const response = await lastValueFrom(this.tenantAuthService.register(body));
     return {
       message: response.message,
       data: {
@@ -41,7 +53,7 @@ export class TenantController implements OnModuleInit {
   @Post('login')
   @UsePipes(ZodValidationPipe)
   async login(@Body() body: TenantLoginDto, @Res({ passthrough: true }) res: Response) {
-    const response: any = await lastValueFrom(this.tenantAuthService.login(body));
+    const response = await lastValueFrom(this.tenantAuthService.login(body));
     const isProduction = process.env.NODE_ENV === 'production';
 
     res.cookie('access_token', response.access_token, {
@@ -67,7 +79,7 @@ export class TenantController implements OnModuleInit {
   @Post('google')
   @UsePipes(ZodValidationPipe)
   async googleLogin(@Body() body: TenantGoogleLoginDto, @Res({ passthrough: true }) res: Response) {
-    const response: any = await lastValueFrom(this.tenantAuthService.googleLogin({ id_token: body.id_token }));
+    const response = await lastValueFrom(this.tenantAuthService.googleLogin({ id_token: body.id_token }));
     const isProduction = process.env.NODE_ENV === 'production';
 
     res.cookie('access_token', response.access_token, {
@@ -93,7 +105,7 @@ export class TenantController implements OnModuleInit {
   @Get('verify-email')
   @UsePipes(ZodValidationPipe)
   async verifyEmail(@Query() query: VerifyEmailDto) {
-    const response: any = await lastValueFrom(this.tenantAuthService.verifyEmail({ token: query.token }));
+    const response = await lastValueFrom(this.tenantAuthService.verifyEmail({ token: query.token }));
     return {
       message: response.message,
       data: { tenant_id: response.tenant_id },
@@ -108,7 +120,7 @@ export class TenantController implements OnModuleInit {
     @Res({ passthrough: true }) res: Response,
   ) {
     const token = req.cookies?.refresh_token || body?.refresh_token || '';
-    const response: any = await lastValueFrom(this.tenantAuthService.refreshToken({ refresh_token: token }));
+    const response = await lastValueFrom(this.tenantAuthService.refreshToken({ refresh_token: token }));
     const isProduction = process.env.NODE_ENV === 'production';
 
     res.cookie('access_token', response.access_token, {
@@ -139,11 +151,15 @@ export class TenantController implements OnModuleInit {
     @Res({ passthrough: true }) res: Response,
   ) {
     const token = req.cookies?.refresh_token || body?.refresh_token || '';
-    const response: any = await lastValueFrom(this.tenantAuthService.logout({ refresh_token: token }));
+    if (token) {
+      await lastValueFrom(this.tenantAuthService.logout({ refresh_token: token })).catch(() => {});
+    }
     res.clearCookie('access_token');
     res.clearCookie('refresh_token');
+    res.clearCookie('dashboarduser_access_token');
+    res.clearCookie('dashboarduser_refresh_token');
     return {
-      message: response.message || 'Logged out successfully',
+      message: 'Logged out successfully',
       data: null,
     };
   }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router';
+import { useNavigate, Link, Navigate } from 'react-router';
 import {
   Shield,
   Eye,
@@ -9,7 +9,7 @@ import {
   Mail,
   AlertCircle,
 } from 'lucide-react';
-import { useSuperAdminLogin } from '../hooks/useSuperAdmin';
+import { useSuperAdminLogin, useSuperAdminProfile } from '../hooks/useSuperAdmin';
 
 export default function SuperAdminLoginPage() {
   const navigate = useNavigate();
@@ -18,7 +18,26 @@ export default function SuperAdminLoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  const { data: profileData, isLoading: isCheckingSession } = useSuperAdminProfile();
   const loginMutation = useSuperAdminLogin();
+
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen bg-[#06080f] flex flex-col items-center justify-center gap-4 text-slate-100">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-rose-600 to-violet-600 flex items-center justify-center shadow-xl shadow-rose-600/30 animate-pulse">
+          <Shield className="w-7 h-7 text-white" />
+        </div>
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+          <Loader2 className="w-4 h-4 animate-spin text-rose-500" />
+          <span>Verifying session status...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (profileData?.data) {
+    return <Navigate to="/superadmin/dashboard" replace />;
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,13 +83,7 @@ export default function SuperAdminLoginPage() {
       {/* Card */}
       <div className="relative z-10 w-full max-w-[420px]">
         {/* Header badge */}
-        <div className="flex justify-center mb-6">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs font-semibold tracking-widest uppercase">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
-            Internal Access Only
-          </div>
-        </div>
-
+        
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-rose-600 via-rose-500 to-violet-600 flex items-center justify-center shadow-xl shadow-rose-600/25 mb-4">

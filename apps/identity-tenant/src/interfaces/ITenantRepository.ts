@@ -17,6 +17,7 @@ export interface ITenantRepository {
   findById(id: string): Promise<ITenant | null>
   findByTenantId(tenantId: string): Promise<ITenant | null>
   findByEmail(email: string): Promise<ITenant | null>
+  update(id: string, data: any): Promise<ITenant | null>
   updateStatus(tenantId: string, status: string): Promise<ITenant | null>
   listTenants(data: ListTenantsRequest): Promise<ListTenantsResponse>
 }

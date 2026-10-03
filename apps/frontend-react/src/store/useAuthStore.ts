@@ -17,35 +17,28 @@ export interface UserData {
 interface AuthState {
   user: UserData | null;
   isAuthenticated: boolean;
+  setUser: (userData: UserData | null) => void;
   login: (userData: UserData) => void;
   logout: () => void;
 }
 
-const getInitialUser = (): UserData | null => {
-  try {
-    const item = localStorage.getItem('auth_user');
-    return item ? JSON.parse(item) : null;
-  } catch {
-    return null;
-  }
-};
-
 export const useAuthStore = create<AuthState>((set) => ({
-  user: getInitialUser(),
-  isAuthenticated: getInitialUser() !== null,
+  user: null,
+  isAuthenticated: false,
+
+  setUser: (userData: UserData | null) => {
+    set({ user: userData, isAuthenticated: Boolean(userData) });
+  },
 
   login: (userData: UserData) => {
-    
     const processedUser = {
       ...userData,
       system_role: userData.system_role || 'owner',
     };
-    localStorage.setItem('auth_user', JSON.stringify(processedUser));
     set({ user: processedUser, isAuthenticated: true });
   },
 
   logout: () => {
-    localStorage.removeItem('auth_user');
     set({ user: null, isAuthenticated: false });
   },
 }));

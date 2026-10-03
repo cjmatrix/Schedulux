@@ -9,14 +9,20 @@ import {
   UsePipes,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from "@nestjs/common";
 import { ClientGrpc } from "@nestjs/microservices";
 import { lastValueFrom } from "rxjs";
 import { ZodValidationPipe } from "nestjs-zod";
 import { KnowledgeServiceClient } from "@repo/proto/knowledge";
 import { CrawlSiteDto, GetCrawlStatusDto } from "./dtos/knowledge.dto.js";
+import { TenantAuthGuard } from "../../guards/tenant-auth.guard.js";
+import { RolesGuard } from "../../guards/roles.guard.js";
+import { Roles } from "../../decorators/roles.decorator.js";
 
 @Controller("api/v1/tenant/knowledge")
+@UseGuards(TenantAuthGuard, RolesGuard)
+@Roles("tenant_owner", "root") 
 export class KnowledgeController implements OnModuleInit {
   private knowledgeService!: KnowledgeServiceClient;
 

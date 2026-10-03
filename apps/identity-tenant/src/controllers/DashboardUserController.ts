@@ -10,6 +10,10 @@ import {
   InviteUserResponse,
   ListWorkspaceUsersRequest,
   ListWorkspaceUsersResponse,
+  DashboardUserProfileRequest,
+  DashboardUserProfileResponse,
+  DashboardUserRefreshTokenRequest,
+  DashboardUserRefreshTokenResponse
 } from "@repo/proto/dashboard";
 
 @Controller()
@@ -26,6 +30,16 @@ export class DashboardUserController {
       throw new Error("Email and password are required");
     }
     return await this.dashboardUserService.login(data);
+  }
+
+  @GrpcMethod("DashboardAuthService", "GetProfile")
+  async getProfile(data: DashboardUserProfileRequest): Promise<DashboardUserProfileResponse> {
+    return await this.dashboardUserService.getProfile(data);
+  }
+
+  @GrpcMethod("DashboardAuthService", "RefreshToken")
+  async refreshToken(data: DashboardUserRefreshTokenRequest): Promise<DashboardUserRefreshTokenResponse> {
+    return await this.dashboardUserService.refreshToken(data);
   }
 
   @GrpcMethod("DashboardUserService", "InviteUser")

@@ -28,6 +28,12 @@ let DashboardUserController = class DashboardUserController {
         }
         return await this.dashboardUserService.login(data);
     }
+    async getProfile(data) {
+        return await this.dashboardUserService.getProfile(data);
+    }
+    async refreshToken(data) {
+        return await this.dashboardUserService.refreshToken(data);
+    }
     async inviteUser(data) {
         const { tenant_id, email, name, system_role } = data;
         if (!tenant_id || !email || !name) {
@@ -52,6 +58,18 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], DashboardUserController.prototype, "login", null);
+__decorate([
+    GrpcMethod("DashboardAuthService", "GetProfile"),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], DashboardUserController.prototype, "getProfile", null);
+__decorate([
+    GrpcMethod("DashboardAuthService", "RefreshToken"),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], DashboardUserController.prototype, "refreshToken", null);
 __decorate([
     GrpcMethod("DashboardUserService", "InviteUser"),
     __metadata("design:type", Function),

@@ -17,6 +17,9 @@ const common_1 = require("@nestjs/common");
 const rxjs_1 = require("rxjs");
 const nestjs_zod_1 = require("nestjs-zod");
 const knowledge_dto_js_1 = require("./dtos/knowledge.dto.js");
+const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
+const roles_guard_js_1 = require("../../guards/roles.guard.js");
+const roles_decorator_js_1 = require("../../decorators/roles.decorator.js");
 let KnowledgeController = class KnowledgeController {
     client;
     knowledgeService;
@@ -70,6 +73,8 @@ __decorate([
 ], KnowledgeController.prototype, "getCrawlStatus", null);
 exports.KnowledgeController = KnowledgeController = __decorate([
     (0, common_1.Controller)("api/v1/tenant/knowledge"),
+    (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),
+    (0, roles_decorator_js_1.Roles)("tenant_owner", "root"),
     __param(0, (0, common_1.Inject)("KNOWLEDGE_PACKAGE")),
     __metadata("design:paramtypes", [Object])
 ], KnowledgeController);

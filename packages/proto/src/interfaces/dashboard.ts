@@ -22,6 +22,24 @@ export interface DashboardUserLoginResponse {
   refresh_token: string;
 }
 
+export interface DashboardUserProfileRequest {
+  user_id: string;
+}
+
+export interface DashboardUserProfileResponse {
+  user: WorkspaceUserInfo | undefined;
+}
+
+export interface DashboardUserRefreshTokenRequest {
+  refresh_token: string;
+}
+
+export interface DashboardUserRefreshTokenResponse {
+  message: string;
+  access_token: string;
+  refresh_token: string;
+}
+
 export interface InviteUserRequest {
   tenant_id: string;
   email: string;
@@ -63,17 +81,32 @@ export const DASHBOARD_PACKAGE_NAME = "dashboard";
 
 export interface DashboardAuthServiceClient {
   login(request: DashboardUserLoginRequest): Observable<DashboardUserLoginResponse>;
+
+  getProfile(request: DashboardUserProfileRequest): Observable<DashboardUserProfileResponse>;
+
+  refreshToken(request: DashboardUserRefreshTokenRequest): Observable<DashboardUserRefreshTokenResponse>;
 }
 
 export interface DashboardAuthServiceController {
   login(
     request: DashboardUserLoginRequest,
   ): Promise<DashboardUserLoginResponse> | Observable<DashboardUserLoginResponse> | DashboardUserLoginResponse;
+
+  getProfile(
+    request: DashboardUserProfileRequest,
+  ): Promise<DashboardUserProfileResponse> | Observable<DashboardUserProfileResponse> | DashboardUserProfileResponse;
+
+  refreshToken(
+    request: DashboardUserRefreshTokenRequest,
+  ):
+    | Promise<DashboardUserRefreshTokenResponse>
+    | Observable<DashboardUserRefreshTokenResponse>
+    | DashboardUserRefreshTokenResponse;
 }
 
 export function DashboardAuthServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ["login"];
+    const grpcMethods: string[] = ["login", "getProfile", "refreshToken"];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
       GrpcMethod("DashboardAuthService", method)(constructor.prototype[method], method, descriptor);

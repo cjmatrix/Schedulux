@@ -3,7 +3,7 @@ import { ClientGrpc } from '@nestjs/microservices';
 import { Request, Response } from 'express';
 import { Observable, lastValueFrom } from 'rxjs';
 import { ZodValidationPipe } from 'nestjs-zod';
-import { TenantRegisterDto, TenantLoginDto, TenantGoogleLoginDto, InviteUserDto, VerifyEmailDto, RefreshTokenDto, LogoutDto, ListWorkspaceUsersDto } from './dtos/tenant.dto.js';
+import { TenantRegisterDto, TenantLoginDto, TenantGoogleLoginDto, InviteUserDto, VerifyEmailDto, RefreshTokenDto, LogoutDto, ListWorkspaceUsersDto, ForgotPasswordDto, ResetPasswordDto } from './dtos/tenant.dto.js';
 import { TenantAuthServiceClient, TenantServiceClient } from '@repo/proto/tenant';
 import { DashboardUserServiceClient } from '@repo/proto/dashboard';
 import { TenantAuthGuard, AuthenticatedTenantRequest } from '../../guards/tenant-auth.guard.js';
@@ -160,6 +160,29 @@ export class TenantController implements OnModuleInit {
     res.clearCookie('dashboarduser_refresh_token');
     return {
       message: 'Logged out successfully',
+      data: null,
+    };
+  }
+
+  @Post('forgot-password')
+  @UsePipes(ZodValidationPipe)
+  async forgotPassword(@Body() body: ForgotPasswordDto) {
+    const response = await lastValueFrom(this.tenantAuthService.forgotPassword(body));
+    return {
+      message: response.message,
+      data: null,
+    };
+  }
+
+  @Post('reset-password')
+  @UsePipes(ZodValidationPipe)
+  async resetPassword(@Body() body: ResetPasswordDto) {
+    const response = await lastValueFrom(this.tenantAuthService.resetPassword({
+      token: body.token,
+      new_password: body.new_password
+    }));
+    return {
+      message: response.message,
       data: null,
     };
   }

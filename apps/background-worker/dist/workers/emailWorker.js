@@ -16,6 +16,11 @@ export const createEmailWorker = () => {
                 await emailService.sendUserInvitationEmail(payload);
                 return { status: 'sent', recipient: payload.to };
             }
+            case 'send-forgot-password': {
+                const payload = job.data;
+                await emailService.sendForgotPasswordEmail(payload);
+                return { status: 'sent', recipient: payload.to };
+            }
             default:
                 console.warn(`[EmailWorker] Unknown job name: ${job.name}`);
                 throw new Error(`Unsupported job name: ${job.name}`);

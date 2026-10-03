@@ -71,6 +71,23 @@ let DashboardUserAuthController = class DashboardUserAuthController {
             data: null,
         };
     }
+    async forgotPassword(body) {
+        const response = await (0, rxjs_1.lastValueFrom)(this.dashboardUserAuthClient.forgotPassword(body));
+        return {
+            message: response.message,
+            data: null,
+        };
+    }
+    async resetPassword(body) {
+        const response = await (0, rxjs_1.lastValueFrom)(this.dashboardUserAuthClient.resetPassword({
+            token: body.token,
+            new_password: body.new_password
+        }));
+        return {
+            message: response.message,
+            data: null,
+        };
+    }
     async getProfile(req) {
         const userId = req.dashboardUser?.user_id;
         if (!userId) {
@@ -103,6 +120,22 @@ __decorate([
     __metadata("design:paramtypes", [Object, dashboard_user_dto_js_1.DashboardUserRefreshTokenDto, Object]),
     __metadata("design:returntype", Promise)
 ], DashboardUserAuthController.prototype, "refreshToken", null);
+__decorate([
+    (0, common_1.Post)('forgot-password'),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [dashboard_user_dto_js_1.DashboardUserForgotPasswordDto]),
+    __metadata("design:returntype", Promise)
+], DashboardUserAuthController.prototype, "forgotPassword", null);
+__decorate([
+    (0, common_1.Post)('reset-password'),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [dashboard_user_dto_js_1.DashboardUserResetPasswordDto]),
+    __metadata("design:returntype", Promise)
+], DashboardUserAuthController.prototype, "resetPassword", null);
 __decorate([
     (0, common_1.Get)("me"),
     (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard),

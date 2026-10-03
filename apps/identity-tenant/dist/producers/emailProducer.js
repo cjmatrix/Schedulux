@@ -40,6 +40,14 @@ let EmailProducer = class EmailProducer {
             removeOnFail: 1000,
         });
     }
+    async sendForgotPasswordEmail(data) {
+        await this.emailQueue.add('send-forgot-password', data, {
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 2000 },
+            removeOnComplete: true,
+            removeOnFail: 1000,
+        });
+    }
 };
 EmailProducer = __decorate([
     Injectable(),

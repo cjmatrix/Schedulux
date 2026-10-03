@@ -143,7 +143,7 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Google Identity Services (GSI) Button */}
+           
             <div className="w-full flex flex-col items-center justify-center">
               {googleLoginMutation.isPending ? (
                 <div className="w-full py-3 rounded-full bg-gray-100 flex items-center justify-center gap-2 text-xs font-medium text-gray-700">
@@ -231,12 +231,12 @@ export default function LoginPage() {
                   <label className="block text-[11px] font-semibold text-gray-600 uppercase tracking-wide">
                     Password
                   </label>
-                  <a
-                    href="#"
+                  <Link
+                    to="/forgot-password"
                     className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
                   >
                     Forgot password?
-                  </a>
+                  </Link>
                 </div>
                 <div className="relative flex items-center bg-[#f3f4f6] rounded-xl px-3.5 py-3 border border-transparent focus-within:border-gray-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-black/5 transition-all">
                   <input

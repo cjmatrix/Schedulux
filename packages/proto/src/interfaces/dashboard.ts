@@ -40,6 +40,23 @@ export interface DashboardUserRefreshTokenResponse {
   refresh_token: string;
 }
 
+export interface DashboardUserForgotPasswordRequest {
+  email: string;
+}
+
+export interface DashboardUserForgotPasswordResponse {
+  message: string;
+}
+
+export interface DashboardUserResetPasswordRequest {
+  token: string;
+  new_password: string;
+}
+
+export interface DashboardUserResetPasswordResponse {
+  message: string;
+}
+
 export interface InviteUserRequest {
   tenant_id: string;
   email: string;
@@ -85,6 +102,10 @@ export interface DashboardAuthServiceClient {
   getProfile(request: DashboardUserProfileRequest): Observable<DashboardUserProfileResponse>;
 
   refreshToken(request: DashboardUserRefreshTokenRequest): Observable<DashboardUserRefreshTokenResponse>;
+
+  forgotPassword(request: DashboardUserForgotPasswordRequest): Observable<DashboardUserForgotPasswordResponse>;
+
+  resetPassword(request: DashboardUserResetPasswordRequest): Observable<DashboardUserResetPasswordResponse>;
 }
 
 export interface DashboardAuthServiceController {
@@ -102,11 +123,25 @@ export interface DashboardAuthServiceController {
     | Promise<DashboardUserRefreshTokenResponse>
     | Observable<DashboardUserRefreshTokenResponse>
     | DashboardUserRefreshTokenResponse;
+
+  forgotPassword(
+    request: DashboardUserForgotPasswordRequest,
+  ):
+    | Promise<DashboardUserForgotPasswordResponse>
+    | Observable<DashboardUserForgotPasswordResponse>
+    | DashboardUserForgotPasswordResponse;
+
+  resetPassword(
+    request: DashboardUserResetPasswordRequest,
+  ):
+    | Promise<DashboardUserResetPasswordResponse>
+    | Observable<DashboardUserResetPasswordResponse>
+    | DashboardUserResetPasswordResponse;
 }
 
 export function DashboardAuthServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ["login", "getProfile", "refreshToken"];
+    const grpcMethods: string[] = ["login", "getProfile", "refreshToken", "forgotPassword", "resetPassword"];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
       GrpcMethod("DashboardAuthService", method)(constructor.prototype[method], method, descriptor);

@@ -13,7 +13,11 @@ import {
   DashboardUserProfileRequest,
   DashboardUserProfileResponse,
   DashboardUserRefreshTokenRequest,
-  DashboardUserRefreshTokenResponse
+  DashboardUserRefreshTokenResponse,
+  DashboardUserForgotPasswordRequest,
+  DashboardUserForgotPasswordResponse,
+  DashboardUserResetPasswordRequest,
+  DashboardUserResetPasswordResponse
 } from "@repo/proto/dashboard";
 
 @Controller()
@@ -40,6 +44,18 @@ export class DashboardUserController {
   @GrpcMethod("DashboardAuthService", "RefreshToken")
   async refreshToken(data: DashboardUserRefreshTokenRequest): Promise<DashboardUserRefreshTokenResponse> {
     return await this.dashboardUserService.refreshToken(data);
+  }
+
+  @GrpcMethod("DashboardAuthService", "ForgotPassword")
+  async forgotPassword(data: DashboardUserForgotPasswordRequest): Promise<DashboardUserForgotPasswordResponse> {
+    if (!data.email) throw new Error("Email is required");
+    return await this.dashboardUserService.forgotPassword(data.email);
+  }
+
+  @GrpcMethod("DashboardAuthService", "ResetPassword")
+  async resetPassword(data: DashboardUserResetPasswordRequest): Promise<DashboardUserResetPasswordResponse> {
+    if (!data.token || !data.new_password) throw new Error("Token and new password are required");
+    return await this.dashboardUserService.resetPassword(data.token, data.new_password);
   }
 
   @GrpcMethod("DashboardUserService", "InviteUser")

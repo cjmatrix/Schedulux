@@ -34,6 +34,16 @@ let DashboardUserController = class DashboardUserController {
     async refreshToken(data) {
         return await this.dashboardUserService.refreshToken(data);
     }
+    async forgotPassword(data) {
+        if (!data.email)
+            throw new Error("Email is required");
+        return await this.dashboardUserService.forgotPassword(data.email);
+    }
+    async resetPassword(data) {
+        if (!data.token || !data.new_password)
+            throw new Error("Token and new password are required");
+        return await this.dashboardUserService.resetPassword(data.token, data.new_password);
+    }
     async inviteUser(data) {
         const { tenant_id, email, name, system_role } = data;
         if (!tenant_id || !email || !name) {
@@ -70,6 +80,18 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], DashboardUserController.prototype, "refreshToken", null);
+__decorate([
+    GrpcMethod("DashboardAuthService", "ForgotPassword"),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], DashboardUserController.prototype, "forgotPassword", null);
+__decorate([
+    GrpcMethod("DashboardAuthService", "ResetPassword"),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], DashboardUserController.prototype, "resetPassword", null);
 __decorate([
     GrpcMethod("DashboardUserService", "InviteUser"),
     __metadata("design:type", Function),

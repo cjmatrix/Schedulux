@@ -38,6 +38,9 @@ let DashboardUserRepository = class DashboardUserRepository extends BaseReposito
         ]);
         return { users, total_count };
     }
+    async update(id, data) {
+        return this.model.findByIdAndUpdate(id, data, { new: true }).exec();
+    }
 };
 DashboardUserRepository = __decorate([
     Injectable(),

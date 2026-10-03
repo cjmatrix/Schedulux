@@ -24,6 +24,19 @@ export interface DashboardUserRefreshTokenResponse {
     access_token: string;
     refresh_token: string;
 }
+export interface DashboardUserForgotPasswordRequest {
+    email: string;
+}
+export interface DashboardUserForgotPasswordResponse {
+    message: string;
+}
+export interface DashboardUserResetPasswordRequest {
+    token: string;
+    new_password: string;
+}
+export interface DashboardUserResetPasswordResponse {
+    message: string;
+}
 export interface InviteUserRequest {
     tenant_id: string;
     email: string;
@@ -61,11 +74,15 @@ export interface DashboardAuthServiceClient {
     login(request: DashboardUserLoginRequest): Observable<DashboardUserLoginResponse>;
     getProfile(request: DashboardUserProfileRequest): Observable<DashboardUserProfileResponse>;
     refreshToken(request: DashboardUserRefreshTokenRequest): Observable<DashboardUserRefreshTokenResponse>;
+    forgotPassword(request: DashboardUserForgotPasswordRequest): Observable<DashboardUserForgotPasswordResponse>;
+    resetPassword(request: DashboardUserResetPasswordRequest): Observable<DashboardUserResetPasswordResponse>;
 }
 export interface DashboardAuthServiceController {
     login(request: DashboardUserLoginRequest): Promise<DashboardUserLoginResponse> | Observable<DashboardUserLoginResponse> | DashboardUserLoginResponse;
     getProfile(request: DashboardUserProfileRequest): Promise<DashboardUserProfileResponse> | Observable<DashboardUserProfileResponse> | DashboardUserProfileResponse;
     refreshToken(request: DashboardUserRefreshTokenRequest): Promise<DashboardUserRefreshTokenResponse> | Observable<DashboardUserRefreshTokenResponse> | DashboardUserRefreshTokenResponse;
+    forgotPassword(request: DashboardUserForgotPasswordRequest): Promise<DashboardUserForgotPasswordResponse> | Observable<DashboardUserForgotPasswordResponse> | DashboardUserForgotPasswordResponse;
+    resetPassword(request: DashboardUserResetPasswordRequest): Promise<DashboardUserResetPasswordResponse> | Observable<DashboardUserResetPasswordResponse> | DashboardUserResetPasswordResponse;
 }
 export declare function DashboardAuthServiceControllerMethods(): (constructor: Function) => void;
 export declare const DASHBOARD_AUTH_SERVICE_NAME = "DashboardAuthService";

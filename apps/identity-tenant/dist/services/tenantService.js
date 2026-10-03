@@ -285,6 +285,33 @@ let TenantService = class TenantService {
         }
         return { message: 'Logged out successfully' };
     }
+    async forgotPassword(email) {
+        const tenant = await this.tenantRepo.findByEmail(email.toLowerCase().trim());
+        if (!tenant || tenant.status !== 'active') {
+            return { message: "If that email exists, a password reset link has been sent." };
+        }
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        await this.cacheRepo.set(`tenant_password_reset:${resetToken}`, tenant._id, { EX: 900 });
+        if (this.emailProducer) {
+            await this.emailProducer.sendForgotPasswordEmail({
+                to: tenant.contact_email,
+                name: tenant.business_name,
+                reset_token: resetToken,
+                role: 'tenant'
+            });
+        }
+        return { message: "If that email exists, a password reset link has been sent." };
+    }
+    async resetPassword(token, new_password) {
+        const tenantId = await this.cacheRepo.get(`tenant_password_reset:${token}`);
+        if (!tenantId) {
+            throw new Error("INVALID_OR_EXPIRED_TOKEN");
+        }
+        const password_hash = await this.passwordHasher.hash(new_password, 12);
+        await this.tenantRepo.update(tenantId, { password_hash });
+        await this.cacheRepo.delete(`tenant_password_reset:${token}`);
+        return { message: "Password has been successfully reset. You can now log in." };
+    }
     async inviteUser(data) {
         const tenant = await this.tenantRepo.findByTenantId(data.tenant_id);
         if (!tenant) {

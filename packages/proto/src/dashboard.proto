@@ -6,6 +6,8 @@ service DashboardAuthService {
   rpc Login (DashboardUserLoginRequest) returns (DashboardUserLoginResponse);
   rpc GetProfile (DashboardUserProfileRequest) returns (DashboardUserProfileResponse);
   rpc RefreshToken (DashboardUserRefreshTokenRequest) returns (DashboardUserRefreshTokenResponse);
+  rpc ForgotPassword (DashboardUserForgotPasswordRequest) returns (DashboardUserForgotPasswordResponse);
+  rpc ResetPassword (DashboardUserResetPasswordRequest) returns (DashboardUserResetPasswordResponse);
 }
 
 service DashboardUserService {
@@ -41,6 +43,23 @@ message DashboardUserRefreshTokenResponse {
   string message = 1;
   string access_token = 2;
   string refresh_token = 3;
+}
+
+message DashboardUserForgotPasswordRequest {
+  string email = 1;
+}
+
+message DashboardUserForgotPasswordResponse {
+  string message = 1;
+}
+
+message DashboardUserResetPasswordRequest {
+  string token = 1;
+  string new_password = 2;
+}
+
+message DashboardUserResetPasswordResponse {
+  string message = 1;
 }
 
 message InviteUserRequest {

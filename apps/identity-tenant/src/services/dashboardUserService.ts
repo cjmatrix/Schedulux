@@ -5,7 +5,9 @@ import { IDashboardUserRepository } from '../interfaces/IDashboardUserRepository
 import { ICacheRepository } from '../interfaces/ICacheRepository.js';
 import { IPasswordHasher } from '../interfaces/IPasswordHasher.js';
 import { IJwtService } from '../interfaces/IJwtService.js';
+import { IEmailProducer } from '../interfaces/IEmailProducer.js';
 import { DashboardUserLoginRequest, DashboardUserLoginResponse, DashboardUserProfileRequest, DashboardUserProfileResponse, DashboardUserRefreshTokenRequest, DashboardUserRefreshTokenResponse } from '@repo/proto/dashboard';
+import crypto from 'crypto';
 
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '7d';
@@ -21,7 +23,8 @@ export class DashboardUserService {
     @Inject('ICacheRepository') private cacheRepo: ICacheRepository,
     @Inject('IPasswordHasher') private passwordHasher: IPasswordHasher,
     @Inject('IJwtService') private jwtService: IJwtService,
-    @Inject(ConfigService) private configService: ConfigService
+    @Inject(ConfigService) private configService: ConfigService,
+    @Inject('IEmailProducer') private emailProducer?: IEmailProducer
   ) {
     this.jwtSecret = this.configService.get<string>('JWT_SECRET') || 'dev-secret-change-in-prod';
     this.jwtRefreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET') || this.jwtSecret;
@@ -130,7 +133,7 @@ export class DashboardUserService {
 
     const cachedToken = await this.cacheRepo.get(`dashboard_refreshToken:${userId}:${tokenId}`);
     if (cachedToken !== data.refresh_token) {
-      // Possible token reuse attack
+     
       await this.cacheRepo.delete(`dashboard_refreshToken:${userId}:${tokenId}`);
       throw new Error('INVALID_REFRESH_TOKEN');
     }
@@ -176,5 +179,39 @@ export class DashboardUserService {
       access_token: newAccessToken,
       refresh_token: newRefreshToken,
     };
+  }
+
+  async forgotPassword(email: string) {
+    const user = await this.dashboardUserRepo.findByEmail(email.toLowerCase().trim());
+    if (!user) {
+      return { message: "If that email exists, a password reset link has been sent." };
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    await this.cacheRepo.set(`dashboard_password_reset:${resetToken}`, user._id.toString(), { EX: 900 });
+
+    if (this.emailProducer) {
+      await this.emailProducer.sendForgotPasswordEmail({
+        to: user.email,
+        name: user.name,
+        reset_token: resetToken,
+        role: 'dashboard_user'
+      });
+    }
+
+    return { message: "If that email exists, a password reset link has been sent." };
+  }
+
+  async resetPassword(token: string, new_password: string) {
+    const userId = await this.cacheRepo.get(`dashboard_password_reset:${token}`);
+    if (!userId) {
+      throw new Error("INVALID_OR_EXPIRED_TOKEN");
+    }
+
+    const password_hash = await this.passwordHasher.hash(new_password, 10);
+    await this.dashboardUserRepo.update(userId, { password_hash });
+    await this.cacheRepo.delete(`dashboard_password_reset:${token}`);
+
+    return { message: "Password has been successfully reset. You can now log in." };
   }
 }

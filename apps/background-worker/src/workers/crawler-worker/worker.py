@@ -4,9 +4,12 @@ import signal
 from urllib.parse import urlparse, urljoin
 from bullmq import Worker
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
+import os
+from dotenv import load_dotenv
 
 
-
+dotenv_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', '.env')
+load_dotenv(dotenv_path)
 
 browser_cfg = BrowserConfig(
     headless=True,
@@ -118,11 +121,12 @@ async def process_crawl_job(job, token):
 async def main():
     print("[Worker] Starting knowledge-crawl-queue worker...")
     
+    redis_uri = os.environ.get("REDIS_URI", "redis://localhost:6379")
     worker = Worker(
         "knowledge-crawl-queue",
         process_crawl_job,
         {
-            "connection": "redis://localhost:6379",
+            "connection": redis_uri,
             "concurrency": 1,
         }
     )

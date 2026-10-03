@@ -15,7 +15,7 @@ import { DashboardAuthServiceClient } from "@repo/proto/dashboard";
 import { lastValueFrom } from "rxjs";
 import { Request, Response } from "express";
 import { ZodValidationPipe } from "nestjs-zod";
-import { DashboardUserLoginDto, DashboardUserRefreshTokenDto } from "./dtos/dashboard-user.dto.js";
+import { DashboardUserLoginDto, DashboardUserRefreshTokenDto, DashboardUserForgotPasswordDto, DashboardUserResetPasswordDto } from "./dtos/dashboard-user.dto.js";
 import { TenantAuthGuard, AuthenticatedTenantRequest } from "../../guards/tenant-auth.guard.js";
 
 @Controller("api/v1/dashboard-user/auth")
@@ -92,6 +92,29 @@ export class DashboardUserAuthController implements OnModuleInit {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
+    return {
+      message: response.message,
+      data: null,
+    };
+  }
+
+  @Post('forgot-password')
+  @UsePipes(ZodValidationPipe)
+  async forgotPassword(@Body() body: DashboardUserForgotPasswordDto) {
+    const response = await lastValueFrom(this.dashboardUserAuthClient.forgotPassword(body));
+    return {
+      message: response.message,
+      data: null,
+    };
+  }
+
+  @Post('reset-password')
+  @UsePipes(ZodValidationPipe)
+  async resetPassword(@Body() body: DashboardUserResetPasswordDto) {
+    const response = await lastValueFrom(this.dashboardUserAuthClient.resetPassword({
+      token: body.token,
+      new_password: body.new_password
+    }));
     return {
       message: response.message,
       data: null,

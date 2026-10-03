@@ -49,4 +49,8 @@ export class DashboardUserRepository
 
     return { users, total_count };
   }
+
+  async update(id: string, data: Partial<IDashboardUser>): Promise<IDashboardUser | null> {
+    return this.model.findByIdAndUpdate(id, data, { new: true }).exec();
+  }
 }

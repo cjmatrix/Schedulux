@@ -10,6 +10,8 @@ import {
   RefreshTokenRequest,
   LogoutRequest,
   TenantGetProfileRequest,
+  ForgotPasswordRequest,
+  ResetPasswordRequest
 } from "@repo/proto/tenant";
 import {
   InviteUserRequest,
@@ -109,5 +111,19 @@ export class TenantAuthController {
     const { refresh_token } = data;
     await this.tenantService.logout(refresh_token);
     return { message: "Logged out successfully" };
+  }
+
+  @GrpcMethod("TenantAuthService", "ForgotPassword")
+  async forgotPassword(data: ForgotPasswordRequest) {
+    const { email } = data;
+    if (!email) throw new Error("Email is required");
+    return await this.tenantService.forgotPassword(email);
+  }
+
+  @GrpcMethod("TenantAuthService", "ResetPassword")
+  async resetPassword(data: ResetPasswordRequest) {
+    const { token, new_password } = data;
+    if (!token || !new_password) throw new Error("Token and new password are required");
+    return await this.tenantService.resetPassword(token, new_password);
   }
 }

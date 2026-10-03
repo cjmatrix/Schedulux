@@ -13,6 +13,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 import { Injectable, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { nanoid } from 'nanoid';
+import crypto from 'crypto';
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '7d';
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -22,14 +23,16 @@ let DashboardUserService = class DashboardUserService {
     passwordHasher;
     jwtService;
     configService;
+    emailProducer;
     jwtSecret;
     jwtRefreshSecret;
-    constructor(dashboardUserRepo, cacheRepo, passwordHasher, jwtService, configService) {
+    constructor(dashboardUserRepo, cacheRepo, passwordHasher, jwtService, configService, emailProducer) {
         this.dashboardUserRepo = dashboardUserRepo;
         this.cacheRepo = cacheRepo;
         this.passwordHasher = passwordHasher;
         this.jwtService = jwtService;
         this.configService = configService;
+        this.emailProducer = emailProducer;
         this.jwtSecret = this.configService.get('JWT_SECRET') || 'dev-secret-change-in-prod';
         this.jwtRefreshSecret = this.configService.get('JWT_REFRESH_SECRET') || this.jwtSecret;
     }
@@ -141,6 +144,33 @@ let DashboardUserService = class DashboardUserService {
             refresh_token: newRefreshToken,
         };
     }
+    async forgotPassword(email) {
+        const user = await this.dashboardUserRepo.findByEmail(email.toLowerCase().trim());
+        if (!user) {
+            return { message: "If that email exists, a password reset link has been sent." };
+        }
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        await this.cacheRepo.set(`dashboard_password_reset:${resetToken}`, user._id.toString(), { EX: 900 });
+        if (this.emailProducer) {
+            await this.emailProducer.sendForgotPasswordEmail({
+                to: user.email,
+                name: user.name,
+                reset_token: resetToken,
+                role: 'dashboard_user'
+            });
+        }
+        return { message: "If that email exists, a password reset link has been sent." };
+    }
+    async resetPassword(token, new_password) {
+        const userId = await this.cacheRepo.get(`dashboard_password_reset:${token}`);
+        if (!userId) {
+            throw new Error("INVALID_OR_EXPIRED_TOKEN");
+        }
+        const password_hash = await this.passwordHasher.hash(new_password, 10);
+        await this.dashboardUserRepo.update(userId, { password_hash });
+        await this.cacheRepo.delete(`dashboard_password_reset:${token}`);
+        return { message: "Password has been successfully reset. You can now log in." };
+    }
 };
 DashboardUserService = __decorate([
     Injectable(),
@@ -149,6 +179,7 @@ DashboardUserService = __decorate([
     __param(2, Inject('IPasswordHasher')),
     __param(3, Inject('IJwtService')),
     __param(4, Inject(ConfigService)),
-    __metadata("design:paramtypes", [Object, Object, Object, Object, ConfigService])
+    __param(5, Inject('IEmailProducer')),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, ConfigService, Object])
 ], DashboardUserService);
 export { DashboardUserService };

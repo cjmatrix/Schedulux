@@ -133,6 +133,23 @@ let TenantController = class TenantController {
             data: null,
         };
     }
+    async forgotPassword(body) {
+        const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.forgotPassword(body));
+        return {
+            message: response.message,
+            data: null,
+        };
+    }
+    async resetPassword(body) {
+        const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.resetPassword({
+            token: body.token,
+            new_password: body.new_password
+        }));
+        return {
+            message: response.message,
+            data: null,
+        };
+    }
     async inviteUser(body) {
         const response = await (0, rxjs_1.lastValueFrom)(this.dashboardUserServiceClient.inviteUser(body));
         return {
@@ -223,6 +240,22 @@ __decorate([
     __metadata("design:paramtypes", [Object, tenant_dto_js_1.LogoutDto, Object]),
     __metadata("design:returntype", Promise)
 ], TenantController.prototype, "logout", null);
+__decorate([
+    (0, common_1.Post)('forgot-password'),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [tenant_dto_js_1.ForgotPasswordDto]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "forgotPassword", null);
+__decorate([
+    (0, common_1.Post)('reset-password'),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [tenant_dto_js_1.ResetPasswordDto]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "resetPassword", null);
 __decorate([
     (0, common_1.Post)('invite-user'),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),

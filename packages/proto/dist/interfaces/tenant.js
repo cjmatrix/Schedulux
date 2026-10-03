@@ -22,6 +22,8 @@ function TenantAuthServiceControllerMethods() {
             "logout",
             "refreshToken",
             "getProfile",
+            "forgotPassword",
+            "resetPassword",
         ];
         for (const method of grpcMethods) {
             const descriptor = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

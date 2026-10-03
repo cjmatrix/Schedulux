@@ -1,7 +1,7 @@
 [project]
-name = "email-worker"
+name = "crawler-worker"
 version = "0.1.0"
-description = "Add your description here"
+description = "Web crawler background worker"
 readme = "README.md"
 authors = [
     { name = "cjmatrix", email = "cjmartingarrix@gmail.com" }
@@ -12,10 +12,3 @@ dependencies = [
     "crawl4ai>=0.9.4",
     "pydantic>=2.13.5",
 ]
-
-[project.scripts]
-email-worker = "email_worker:main"
-
-[build-system]
-requires = ["uv_build>=0.12.20,<0.13.0"]
-build-backend = "uv_build"

@@ -188,5 +188,82 @@ export class EmailService {
             console.log('===================================================================\n');
         }
     }
+    async sendForgotPasswordEmail(data) {
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        // We can direct them to a unified reset password page, or separate ones. Let's use a unified one and pass role as param, or let frontend figure it out
+        const resetUrl = `${frontendUrl}/reset-password?token=${encodeURIComponent(data.reset_token)}&role=${data.role}`;
+        const fromAddress = process.env.FROM_EMAIL || '"Schedulux AI" <no-reply@schedulux.ai>';
+        const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Reset your password - Schedulux AI</title>
+        </head>
+        <body style="margin: 0; padding: 24px; background-color: #0b0f19; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #e2e8f0;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 580px; margin: 0 auto; background-color: #131b2e; border: 1px solid #1e293b; border-radius: 14px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+            <tr>
+              <td style="padding: 36px 32px;">
+                <div style="font-size: 24px; font-weight: 700; color: #6366f1; letter-spacing: -0.5px; margin-bottom: 24px;">
+                  Schedulux AI
+                </div>
+                <h1 style="font-size: 22px; font-weight: 700; color: #ffffff; margin: 0 0 16px 0; line-height: 1.3;">
+                  Reset your password
+                </h1>
+                <p style="font-size: 15px; line-height: 1.6; color: #94a3b8; margin: 0 0 16px 0;">
+                  Hello <strong style="color: #f8fafc;">${data.name}</strong>,
+                </p>
+                <p style="font-size: 15px; line-height: 1.6; color: #94a3b8; margin: 0 0 28px 0;">
+                  We received a request to reset your password. Click the button below to choose a new password:
+                </p>
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto 30px auto; width: 100%; text-align: center;">
+                  <tr>
+                    <td align="center">
+                      <a href="${resetUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #4f46e5; color: #ffffff !important; padding: 14px 36px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);">
+                        Reset Password
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+                <div style="background-color: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 16px; margin-top: 24px;">
+                  <p style="font-size: 12px; color: #94a3b8; margin: 0 0 8px 0;">
+                    Or copy and paste this link into your browser:
+                  </p>
+                  <p style="margin: 0; word-break: break-all; font-size: 13px;">
+                    <a href="${resetUrl}" target="_blank" rel="noopener noreferrer" style="color: #818cf8; text-decoration: underline;">
+                      ${resetUrl}
+                    </a>
+                  </p>
+                </div>
+                <div style="margin-top: 32px; padding-top: 18px; border-top: 1px solid #1e293b; font-size: 12px; color: #64748b; line-height: 1.5;">
+                  <p style="margin: 0 0 6px 0;">This password reset link will expire in 15 minutes.</p>
+                  <p style="margin: 0;">If you did not request a password reset, you can safely ignore this email.</p>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
+    `;
+        if (this.transporter) {
+            await this.transporter.sendMail({
+                from: fromAddress,
+                to: data.to,
+                subject: `Reset your password - Schedulux AI`,
+                text: `Hello ${data.name},\n\nPlease click the link below to reset your password:\n\n${resetUrl}\n\nThis link expires in 15 minutes.\n\nIf you did not request this, please disregard this email.`,
+                html: htmlContent,
+            });
+            console.log(`✉️  [EmailService] Password reset email successfully sent to ${data.to}`);
+        }
+        else {
+            console.log('\n================== [DEV PASSWORD RESET PREVIEW] ==================');
+            console.log(`To: ${data.to}`);
+            console.log(`Name: ${data.name}`);
+            console.log(`Role: ${data.role}`);
+            console.log(`Reset Link: ${resetUrl}`);
+            console.log('==================================================================\n');
+        }
+    }
 }
 export const emailService = new EmailService();

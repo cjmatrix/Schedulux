@@ -104,6 +104,23 @@ export interface RefreshTokenResponse {
   refresh_token: string;
 }
 
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ForgotPasswordResponse {
+  message: string;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  new_password: string;
+}
+
+export interface ResetPasswordResponse {
+  message: string;
+}
+
 export const TENANT_PACKAGE_NAME = "tenant";
 
 export interface TenantAuthServiceClient {
@@ -120,6 +137,10 @@ export interface TenantAuthServiceClient {
   refreshToken(request: RefreshTokenRequest): Observable<RefreshTokenResponse>;
 
   getProfile(request: TenantGetProfileRequest): Observable<TenantGetProfileResponse>;
+
+  forgotPassword(request: ForgotPasswordRequest): Observable<ForgotPasswordResponse>;
+
+  resetPassword(request: ResetPasswordRequest): Observable<ResetPasswordResponse>;
 }
 
 export interface TenantAuthServiceController {
@@ -142,6 +163,14 @@ export interface TenantAuthServiceController {
   getProfile(
     request: TenantGetProfileRequest,
   ): Promise<TenantGetProfileResponse> | Observable<TenantGetProfileResponse> | TenantGetProfileResponse;
+
+  forgotPassword(
+    request: ForgotPasswordRequest,
+  ): Promise<ForgotPasswordResponse> | Observable<ForgotPasswordResponse> | ForgotPasswordResponse;
+
+  resetPassword(
+    request: ResetPasswordRequest,
+  ): Promise<ResetPasswordResponse> | Observable<ResetPasswordResponse> | ResetPasswordResponse;
 }
 
 export function TenantAuthServiceControllerMethods() {
@@ -154,6 +183,8 @@ export function TenantAuthServiceControllerMethods() {
       "logout",
       "refreshToken",
       "getProfile",
+      "forgotPassword",
+      "resetPassword",
     ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

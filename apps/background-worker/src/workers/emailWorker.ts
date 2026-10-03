@@ -1,6 +1,6 @@
 import { Worker, Job } from 'bullmq';
 import { workerRedisConnection } from '../config/redis.js';
-import { emailService, TenantVerificationEmailData, UserInvitationEmailData } from '../services/emailService.js';
+import { emailService, TenantVerificationEmailData, UserInvitationEmailData, ForgotPasswordEmailData } from '../services/emailService.js';
 
 export const EMAIL_QUEUE_NAME = 'email-queue';
 
@@ -20,6 +20,12 @@ export const createEmailWorker = () => {
         case 'send-user-invitation': {
           const payload = job.data as UserInvitationEmailData;
           await emailService.sendUserInvitationEmail(payload);
+          return { status: 'sent', recipient: payload.to };
+        }
+
+        case 'send-forgot-password': {
+          const payload = job.data as ForgotPasswordEmailData;
+          await emailService.sendForgotPasswordEmail(payload);
           return { status: 'sent', recipient: payload.to };
         }
 

@@ -95,6 +95,18 @@ let TenantAuthController = class TenantAuthController {
         await this.tenantService.logout(refresh_token);
         return { message: "Logged out successfully" };
     }
+    async forgotPassword(data) {
+        const { email } = data;
+        if (!email)
+            throw new Error("Email is required");
+        return await this.tenantService.forgotPassword(email);
+    }
+    async resetPassword(data) {
+        const { token, new_password } = data;
+        if (!token || !new_password)
+            throw new Error("Token and new password are required");
+        return await this.tenantService.resetPassword(token, new_password);
+    }
 };
 __decorate([
     GrpcMethod("TenantAuthService", "Register"),
@@ -138,6 +150,18 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], TenantAuthController.prototype, "logout", null);
+__decorate([
+    GrpcMethod("TenantAuthService", "ForgotPassword"),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], TenantAuthController.prototype, "forgotPassword", null);
+__decorate([
+    GrpcMethod("TenantAuthService", "ResetPassword"),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], TenantAuthController.prototype, "resetPassword", null);
 TenantAuthController = __decorate([
     Controller(),
     UseFilters(new AllExceptionsFilter()),

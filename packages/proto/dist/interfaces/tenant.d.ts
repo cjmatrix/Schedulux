@@ -76,6 +76,19 @@ export interface RefreshTokenResponse {
     access_token: string;
     refresh_token: string;
 }
+export interface ForgotPasswordRequest {
+    email: string;
+}
+export interface ForgotPasswordResponse {
+    message: string;
+}
+export interface ResetPasswordRequest {
+    token: string;
+    new_password: string;
+}
+export interface ResetPasswordResponse {
+    message: string;
+}
 export declare const TENANT_PACKAGE_NAME = "tenant";
 export interface TenantAuthServiceClient {
     register(request: RegisterRequest): Observable<RegisterResponse>;
@@ -85,6 +98,8 @@ export interface TenantAuthServiceClient {
     logout(request: LogoutRequest): Observable<LogoutResponse>;
     refreshToken(request: RefreshTokenRequest): Observable<RefreshTokenResponse>;
     getProfile(request: TenantGetProfileRequest): Observable<TenantGetProfileResponse>;
+    forgotPassword(request: ForgotPasswordRequest): Observable<ForgotPasswordResponse>;
+    resetPassword(request: ResetPasswordRequest): Observable<ResetPasswordResponse>;
 }
 export interface TenantAuthServiceController {
     register(request: RegisterRequest): Promise<RegisterResponse> | Observable<RegisterResponse> | RegisterResponse;
@@ -94,6 +109,8 @@ export interface TenantAuthServiceController {
     logout(request: LogoutRequest): Promise<LogoutResponse> | Observable<LogoutResponse> | LogoutResponse;
     refreshToken(request: RefreshTokenRequest): Promise<RefreshTokenResponse> | Observable<RefreshTokenResponse> | RefreshTokenResponse;
     getProfile(request: TenantGetProfileRequest): Promise<TenantGetProfileResponse> | Observable<TenantGetProfileResponse> | TenantGetProfileResponse;
+    forgotPassword(request: ForgotPasswordRequest): Promise<ForgotPasswordResponse> | Observable<ForgotPasswordResponse> | ForgotPasswordResponse;
+    resetPassword(request: ResetPasswordRequest): Promise<ResetPasswordResponse> | Observable<ResetPasswordResponse> | ResetPasswordResponse;
 }
 export declare function TenantAuthServiceControllerMethods(): (constructor: Function) => void;
 export declare const TENANT_AUTH_SERVICE_NAME = "TenantAuthService";

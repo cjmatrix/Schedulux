@@ -10,6 +10,8 @@ import RegisterPage from "./features/tenant/pages/RegisterPage.tsx";
 import LoginPage from "./features/tenant/pages/LoginPage.tsx";
 import DashboardUserLoginPage from "./features/dashboard-user/DashboardUserLoginPage.tsx";
 import VerifyEmailPage from "./features/tenant/pages/VerifyEmailPage.tsx";
+import ForgotPasswordPage from "./features/tenant/pages/ForgotPasswordPage.tsx";
+import ResetPasswordPage from "./features/tenant/pages/ResetPasswordPage.tsx";
 
 // Superadmin Feature Imports
 import SuperAdminLoginPage from "./features/superadmin/pages/SuperAdminLoginPage.tsx";
@@ -64,6 +66,18 @@ const router = createBrowserRouter([
   {
     path: "/verify-email",
     element: <VerifyEmailPage />,
+  },
+  {
+    path: "/forgot-password",
+    element: <ForgotPasswordPage />,
+  },
+  {
+    path: "/dashboarduser/forgot-password",
+    element: <ForgotPasswordPage />,
+  },
+  {
+    path: "/reset-password",
+    element: <ResetPasswordPage />,
   },
   {
     path: "/superadmin/login",

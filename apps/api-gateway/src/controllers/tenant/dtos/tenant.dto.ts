@@ -66,4 +66,17 @@ export const ListWorkspaceUsersSchema: z.ZodType<ListWorkspaceUsersRequest> = z.
 
 export class ListWorkspaceUsersDto extends createZodDto(ListWorkspaceUsersSchema) {}
 
+export const ForgotPasswordSchema = z.object({
+  email: z.string().trim().email('Please provide a valid email address'),
+});
+
+export class ForgotPasswordDto extends createZodDto(ForgotPasswordSchema) {}
+
+export const ResetPasswordSchema = z.object({
+  token: z.string().min(1, 'Token is required'),
+  new_password: z.string().min(6, 'Password must be at least 6 characters'),
+});
+
+export class ResetPasswordDto extends createZodDto(ResetPasswordSchema) {}
+
 

@@ -59,6 +59,22 @@ export const authApi = {
     return data;
   },
 
+  forgotPassword: async (email: string): Promise<ApiResponse<null>> => {
+    const { data } = await axiosClient.post<ApiResponse<null>>(
+      "/api/v1/tenant/auth/forgot-password",
+      { email },
+    );
+    return data;
+  },
+
+  resetPassword: async (payload: { token: string; new_password: string }): Promise<ApiResponse<null>> => {
+    const { data } = await axiosClient.post<ApiResponse<null>>(
+      "/api/v1/tenant/auth/reset-password",
+      payload,
+    );
+    return data;
+  },
+
 
   verifyEmail: async (
     token: string,

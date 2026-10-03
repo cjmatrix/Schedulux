@@ -10,6 +10,8 @@ service TenantAuthService {
   rpc Logout (LogoutRequest) returns (LogoutResponse);
   rpc RefreshToken (RefreshTokenRequest) returns (RefreshTokenResponse);
   rpc GetProfile (TenantGetProfileRequest) returns (TenantGetProfileResponse);
+  rpc ForgotPassword (ForgotPasswordRequest) returns (ForgotPasswordResponse);
+  rpc ResetPassword (ResetPasswordRequest) returns (ResetPasswordResponse);
 }
 
 message TenantGoogleLoginRequest {
@@ -111,4 +113,21 @@ message RefreshTokenResponse {
   string message = 1;
   string access_token = 2;
   string refresh_token = 3;
+}
+
+message ForgotPasswordRequest {
+  string email = 1;
+}
+
+message ForgotPasswordResponse {
+  string message = 1;
+}
+
+message ResetPasswordRequest {
+  string token = 1;
+  string new_password = 2;
+}
+
+message ResetPasswordResponse {
+  string message = 1;
 }

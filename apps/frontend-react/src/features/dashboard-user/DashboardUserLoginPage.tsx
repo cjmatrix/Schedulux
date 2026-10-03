@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "../../store/useAuthStore";
 import { useDashboardLogin, useDashboardProfile } from "../tenant/hooks/useAuth";
-import { Navigate, useNavigate } from "react-router";
+import { Navigate, useNavigate, Link } from "react-router";
 
 export default function DashboardUserLoginPage() {
   const navigate = useNavigate();
@@ -138,12 +138,12 @@ export default function DashboardUserLoginPage() {
                   <label className="block text-[11px] font-semibold text-gray-600 uppercase tracking-wide">
                     Password
                   </label>
-                  <a
-                    href="#"
+                  <Link
+                    to="/dashboarduser/forgot-password"
                     className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
                   >
                     Forgot password?
-                  </a>
+                  </Link>
                 </div>
                 <div className="relative flex items-center bg-[#f3f4f6] rounded-xl px-3.5 py-3 border border-transparent focus-within:border-gray-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-black/5 transition-all">
                   <input

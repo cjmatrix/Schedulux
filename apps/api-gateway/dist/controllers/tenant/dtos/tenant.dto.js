@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ListWorkspaceUsersDto = exports.ListWorkspaceUsersSchema = exports.InviteUserDto = exports.InviteUserSchema = exports.LogoutDto = exports.LogoutSchema = exports.RefreshTokenDto = exports.RefreshTokenSchema = exports.VerifyEmailDto = exports.VerifyEmailSchema = exports.TenantLoginDto = exports.TenantLoginSchema = exports.TenantRegisterDto = exports.TenantRegisterSchema = exports.TenantGoogleLoginDto = exports.TenantGoogleLoginSchema = void 0;
+exports.ResetPasswordDto = exports.ResetPasswordSchema = exports.ForgotPasswordDto = exports.ForgotPasswordSchema = exports.ListWorkspaceUsersDto = exports.ListWorkspaceUsersSchema = exports.InviteUserDto = exports.InviteUserSchema = exports.LogoutDto = exports.LogoutSchema = exports.RefreshTokenDto = exports.RefreshTokenSchema = exports.VerifyEmailDto = exports.VerifyEmailSchema = exports.TenantLoginDto = exports.TenantLoginSchema = exports.TenantRegisterDto = exports.TenantRegisterSchema = exports.TenantGoogleLoginDto = exports.TenantGoogleLoginSchema = void 0;
 const nestjs_zod_1 = require("nestjs-zod");
 const zod_1 = require("zod");
 exports.TenantGoogleLoginSchema = zod_1.z.object({
@@ -66,3 +66,16 @@ exports.ListWorkspaceUsersSchema = zod_1.z.object({
 class ListWorkspaceUsersDto extends (0, nestjs_zod_1.createZodDto)(exports.ListWorkspaceUsersSchema) {
 }
 exports.ListWorkspaceUsersDto = ListWorkspaceUsersDto;
+exports.ForgotPasswordSchema = zod_1.z.object({
+    email: zod_1.z.string().trim().email('Please provide a valid email address'),
+});
+class ForgotPasswordDto extends (0, nestjs_zod_1.createZodDto)(exports.ForgotPasswordSchema) {
+}
+exports.ForgotPasswordDto = ForgotPasswordDto;
+exports.ResetPasswordSchema = zod_1.z.object({
+    token: zod_1.z.string().min(1, 'Token is required'),
+    new_password: zod_1.z.string().min(6, 'Password must be at least 6 characters'),
+});
+class ResetPasswordDto extends (0, nestjs_zod_1.createZodDto)(exports.ResetPasswordSchema) {
+}
+exports.ResetPasswordDto = ResetPasswordDto;

@@ -7,6 +7,7 @@
     "dev:gateway": "pnpm --filter @repo/api-gateway dev",
     "dev:identity": "pnpm --filter @repo/identity-tenant dev",
     "dev:worker": "pnpm --filter @repo/background-worker dev",
+    "dev:worker:python": "pnpm --filter @repo/background-worker worker:python",
     "dev:frontend": "pnpm --filter @repo/frontend-react dev",
     "build": "pnpm -r run build"
   }

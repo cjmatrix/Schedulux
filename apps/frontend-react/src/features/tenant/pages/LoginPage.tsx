@@ -163,7 +163,7 @@ export default function LoginPage() {
                               if (res?.data) {
                                 authStoreLogin(res.data);
                               }
-                              navigate("/tenant/users");
+                              navigate("/tenant/landingboard");
                             },
                             onError: (err) => {
                               setErrorMessage(

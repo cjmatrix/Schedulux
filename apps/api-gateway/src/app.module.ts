@@ -5,7 +5,7 @@ import { TenantController } from "./controllers/tenant/tenant.controller.js";
 import { SuperAdminController } from "./controllers/superadmin/superadmin.controller.js";
 import { SuperAdminTenantController } from "./controllers/superadmin/superadmin-tenant.controller.js";
 import { DashboardUserAuthController } from "./controllers/dashboarduser/dashboard-user-auth.controller.js";
-import { KnowledgeController } from "./controllers/knowledge/knowledge.controller.js";
+import { KnowledgeController } from "./controllers/agentOrchestrator/knowledge.controller.js";
 
 @Module({
   imports: [
@@ -65,7 +65,7 @@ import { KnowledgeController } from "./controllers/knowledge/knowledge.controlle
         name: "KNOWLEDGE_PACKAGE",
         transport: Transport.GRPC,
         options: {
-          url: "localhost:50051",
+          url: "localhost:50052",
           package: "knowledge",
           protoPath: require.resolve("@repo/proto/knowledge.proto"),
           loader: {

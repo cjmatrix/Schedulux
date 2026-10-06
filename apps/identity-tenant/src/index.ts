@@ -15,12 +15,11 @@ async function bootstrap() {
       transport: Transport.GRPC,
       options: {
         url: "0.0.0.0:50051",
-        package: ["tenant", "superadmin", "dashboard", "knowledge"],
+        package: ["tenant", "superadmin", "dashboard"],
         protoPath: [
           require.resolve("@repo/proto/tenant.proto"),
           require.resolve("@repo/proto/superadmin.proto"),
           require.resolve("@repo/proto/dashboard.proto"),
-          require.resolve("@repo/proto/knowledge.proto"),
         ],
         loader: {
           keepCase: true,

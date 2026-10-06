@@ -1,7 +1,7 @@
 [project]
-name = "crawler-worker"
+name = "python-worker"
 version = "0.1.0"
-description = "Web crawler background worker"
+description = "Background Python workers (crawler & schema generator)"
 readme = "README.md"
 authors = [
     { name = "cjmatrix", email = "cjmartingarrix@gmail.com" }
@@ -11,4 +11,8 @@ dependencies = [
     "bullmq>=3.3.0",
     "crawl4ai>=0.9.4",
     "pydantic>=2.13.5",
+    "langchain>=0.1.13",
+    "langchain-core>=0.1.33",
+    "langchain-openai>=0.1.1",
+    "python-dotenv>=1.0.1",
 ]

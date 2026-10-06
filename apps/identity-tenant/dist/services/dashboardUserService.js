@@ -114,7 +114,6 @@ let DashboardUserService = class DashboardUserService {
         }
         const cachedToken = await this.cacheRepo.get(`dashboard_refreshToken:${userId}:${tokenId}`);
         if (cachedToken !== data.refresh_token) {
-            // Possible token reuse attack
             await this.cacheRepo.delete(`dashboard_refreshToken:${userId}:${tokenId}`);
             throw new Error('INVALID_REFRESH_TOKEN');
         }

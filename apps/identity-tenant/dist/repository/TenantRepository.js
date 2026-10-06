@@ -27,6 +27,12 @@ let TenantRepository = class TenantRepository extends BaseRepository {
         tenant.status = status;
         return tenant.save();
     }
+    async ListUserByDate(date) {
+        const tenants = await this.find({
+            createdAt: { $eq: `${date}` }
+        });
+        return tenants;
+    }
     async listTenants(data) {
         const page = Math.max(1, data.page);
         const limit = Math.max(1, Math.min(data.limit, 100));

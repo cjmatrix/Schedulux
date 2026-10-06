@@ -28,6 +28,7 @@ import WorkspaceUsersPage from "./features/tenant/pages/WorkspaceUsersPage.tsx";
 import BookingsPage from "./features/tenant/pages/BookingsPage.tsx";
 import { TenantProtectedRoute } from "./features/tenant/components/TenantProtectedRoute.tsx";
 import { DashboardUserProtectedRoute } from "./features/dashboard-user/components/DashboardUserProtectedRoute.tsx";
+import SchedulingOnboarding from "./pages/SchedulingOnboarding.tsx";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -118,6 +119,11 @@ const router = createBrowserRouter([
     path: "/tenant",
     element: <TenantProtectedRoute />,
     children: [
+      {
+        path:"landingboard",
+        element:<SchedulingOnboarding></SchedulingOnboarding>
+      },
+
       {
         element: <TenantLayout isTenant={true} />,
         children: [

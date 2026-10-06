@@ -1,0 +1,22 @@
+[project]
+name = "agent-orchestrator"
+version = "0.1.0"
+description = "Agent orchetsrator"
+readme = "README.md"
+authors = [
+    { name = "cjmatrix", email = "cjmartingarrix@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "grpcio>=1.62.0",
+    "grpcio-tools>=1.62.0",
+    "bullmq>=3.3.0",
+    "langchain>=0.1.13",
+    "langchain-core>=0.1.33",
+    "langchain-openai>=0.1.1",
+    "pydantic>=2.6.4",
+    "python-dotenv>=1.0.1",
+]
+
+[project.scripts]
+agent-orchestrator = "agent_orchestrator.main:main"

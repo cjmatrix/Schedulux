@@ -10,7 +10,6 @@ import {
   Settings,
   CreditCard,
   Code2,
-  Search,
   Bell,
   HelpCircle,
   ArrowLeft,

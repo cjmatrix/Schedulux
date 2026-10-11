@@ -21,8 +21,8 @@ load_dotenv(dotenv_path)
 redis_uri = os.environ.get("REDIS_URI", "redis://localhost:6379")
 
 async def main():
-    print("[Python Worker] Starting background workers...")
-    print(f"[Python Worker] Connecting to Redis: {redis_uri}")
+    print("[Python Worker] Starting background workers...", flush=True)
+    print(f"[Python Worker] Connecting to Redis: {redis_uri}", flush=True)
 
     crawler_worker = Worker(
         "knowledge-crawl-queue",
@@ -38,7 +38,7 @@ async def main():
         process_schema_generation,
         {
             "connection": redis_uri,
-            "concurrency": 2,
+            "concurrency": 1,
         }
     )
 

@@ -3,7 +3,7 @@ from bullmq import Queue
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
 
-# Load shared .env
+
 dotenv_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..', '.env')
 if not os.path.exists(dotenv_path):
     dotenv_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', '.env')
@@ -11,7 +11,7 @@ load_dotenv(dotenv_path)
 
 redis_uri = os.environ.get("REDIS_URI", "redis://localhost:6379")
 
-# Global singleton instances
+
 _schema_queue: Queue | None = None
 _crawl_queue: Queue | None = None
 _redis_client: aioredis.Redis | None = None

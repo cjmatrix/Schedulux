@@ -14,7 +14,9 @@ const tenant_controller_js_1 = require("./controllers/tenant/tenant.controller.j
 const superadmin_controller_js_1 = require("./controllers/superadmin/superadmin.controller.js");
 const superadmin_tenant_controller_js_1 = require("./controllers/superadmin/superadmin-tenant.controller.js");
 const dashboard_user_auth_controller_js_1 = require("./controllers/dashboarduser/dashboard-user-auth.controller.js");
-const knowledge_controller_js_1 = require("./controllers/knowledge/knowledge.controller.js");
+const knowledge_controller_js_1 = require("./controllers/agentOrchestrator/knowledge.controller.js");
+const redis_service_js_1 = require("./services/redis.service.js");
+const schema_gateway_js_1 = require("./websockets/schema.gateway.js");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -77,7 +79,7 @@ exports.AppModule = AppModule = __decorate([
                     name: "KNOWLEDGE_PACKAGE",
                     transport: microservices_1.Transport.GRPC,
                     options: {
-                        url: "localhost:50051",
+                        url: "localhost:50052",
                         package: "knowledge",
                         protoPath: require.resolve("@repo/proto/knowledge.proto"),
                         loader: {
@@ -98,6 +100,17 @@ exports.AppModule = AppModule = __decorate([
             dashboard_user_auth_controller_js_1.DashboardUserAuthController,
             knowledge_controller_js_1.KnowledgeController,
         ],
-        providers: [],
+        providers: [
+            redis_service_js_1.RedisService,
+            {
+                provide: "ISchemaEventSubscriber",
+                useExisting: redis_service_js_1.RedisService,
+            },
+            {
+                provide: "ISchemaCacheService",
+                useExisting: redis_service_js_1.RedisService,
+            },
+            schema_gateway_js_1.SchemaGateway,
+        ],
     })
 ], AppModule);

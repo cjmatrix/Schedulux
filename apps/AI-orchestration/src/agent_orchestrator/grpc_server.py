@@ -7,9 +7,11 @@ from dotenv import load_dotenv
 from bullmq import Queue
 import agent_orchestrator.knowledge_pb2 as knowledge_pb2
 import agent_orchestrator.knowledge_pb2_grpc as knowledge_pb2_grpc
+import json
+from agent_orchestrator.tenant_agent import start_onboarding_session, resume_onboarding_session, get_current_draft
 
-dotenv_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '.env')
-load_dotenv(dotenv_path)
+local_env = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
+load_dotenv(local_env)
 
 redis_uri = os.environ.get("REDIS_URI", "redis://localhost:6379")
 
@@ -92,18 +94,70 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             context.set_details(f"INTERNAL_STATUS_QUERY_ERROR: {str(e)}")
             return knowledge_pb2.GetCrawlStatusResponse()
 
+    async def StartOnboardingSession(self, request, context) -> knowledge_pb2.OnboardingResponse:
+        print(f"[gRPC] Received StartOnboardingSession request for tenant: {request.tenant_id}")
+        
+        try:
+            initial_draft = {}
+            if request.initial_draft_json:
+                initial_draft = json.loads(request.initial_draft_json)
+                
+            payload = await start_onboarding_session(request.tenant_id, initial_draft)
+            draft_json = json.dumps(await get_current_draft(request.tenant_id))
+            
+            return knowledge_pb2.OnboardingResponse(
+                status=payload.get("status", "error"),
+                question=payload.get("question") or "",
+                field=payload.get("field") or "",
+                type=payload.get("type") or "",
+                draft_schema_json=draft_json
+            )
+        except Exception as e:
+            print(f"[gRPC Error] StartOnboardingSession failed: {str(e)}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"START_ONBOARDING_ERROR: {str(e)}")
+            return knowledge_pb2.OnboardingResponse()
+
+    async def ResumeOnboardingSession(self, request, context) -> knowledge_pb2.OnboardingResponse:
+        print(f"[gRPC] Received ResumeOnboardingSession request for tenant: {request.tenant_id}")
+        
+        try:
+            payload = await resume_onboarding_session(request.tenant_id, request.user_answer)
+            draft_json = json.dumps(await get_current_draft(request.tenant_id))
+            
+            return knowledge_pb2.OnboardingResponse(
+                status=payload.get("status", "error"),
+                question=payload.get("question") or "",
+                field=payload.get("field") or "",
+                type=payload.get("type") or "",
+                draft_schema_json=draft_json
+            )
+        except Exception as e:
+            print(f"[gRPC Error] ResumeOnboardingSession failed: {str(e)}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"RESUME_ONBOARDING_ERROR: {str(e)}")
+            return knowledge_pb2.OnboardingResponse()
+
 async def serve():
-   
     server = grpc.aio.server()
     knowledge_pb2_grpc.add_KnowledgeServiceServicer_to_server(KnowledgeServiceServicer(), server)
     
-    port = "50052"
+    port = os.environ.get("PORT", "50052")
     server.add_insecure_port(f'[::]:{port}')
-    print(f"Starting native Async gRPC server on port {port}...")
+    print(f"Starting native Async gRPC server on port {port}...", flush=True)
     await server.start()
     
-    
-    await server.wait_for_termination()
+    try:
+        await server.wait_for_termination()
+    except (asyncio.CancelledError, KeyboardInterrupt):
+        pass
+    finally:
+        print("[AI Orchestrator Service] Shutting down gRPC server...", flush=True)
+        await server.stop(grace=1.0)
+        try:
+            await crawl_queue.close()
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     try:

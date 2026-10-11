@@ -1,0 +1,579 @@
+{
+  "$schema": "https://schedulux.ai/schema/v2/agent_runtime_config.json",
+  "$comment": "This is the compiled runtime config emitted by the Schedulux Agent Builder Studio when a service owner finishes configuring their agent. It is the single source of truth consumed by the Schedulux AI runtime engine for every customer-facing conversation, slot-locking decision, and guardrail evaluation.",
+
+  "schema_version": "2.4",
+  "compiled_at": "2026-09-22T10:41:00.000Z",
+  "compiler_latency_ms": 18,
+  "compiler_hash": "sha256:4f8b92d1c3a7e5f9b2d4c6e8a0b1f3d5",
+  "status": "live",
+
+  "tenant_id": "tenant_apex_dental_01",
+  "agent_id": "agent_apex_dental_01_v2",
+
+  "business_profile": {
+    "name": "Apex Dental & Oral Care",
+    "vertical": "medical_dental",
+    "timezone": "America/New_York",
+    "locale": "en-US",
+    "currency": "USD",
+    "address": "742 Evergreen Terrace, Suite 300, New York, NY 10001",
+    "contact": {
+      "support_email": "support@apexdental.com",
+      "public_phone": "+1-555-019-2834",
+      "escalation_phone": "+1-555-999-0000"
+    },
+    "terminology": {
+      "customer_singular": "Patient",
+      "customer_plural": "Patients",
+      "primary_metric": "Active Care Plans",
+      "action_metric": "Next Recall Due"
+    },
+    "brand": {
+      "primary_color": "#0F0F11",
+      "logo_url": "https://cdn.schedulux.ai/tenants/apex/logo.png"
+    }
+  },
+
+  "widget_config": {
+    "agent_name": "Apex AI Assistant",
+    "avatar_url": "https://cdn.schedulux.ai/tenants/apex/avatar.png",
+    "initial_greeting": "Hi! I'm the Apex Dental AI assistant. How can I help you book an appointment today?",
+    "fallback_message": "I'll connect you with our front desk team right away. Please hold for a moment.",
+    "position": "right",
+    "launcher_style": "icon_pill",
+    "sound_on_load": true,
+    "auto_expand_delay_seconds": 6,
+    "platform_sources": ["web_widget"],
+    "whitelisted_domains": ["apexclinic.com", "apexdental.com"]
+  },
+
+  "llm_engine": {
+    "$comment": "Resolved from SuperAdmin Global Settings. Tenants cannot override this directly.",
+    "studio_model": "anthropic/claude-3-7-sonnet",
+    "chat_model": "google-vertex/gemini-2.5-flash",
+    "chat_fallback_model": "anthropic/claude-3-5-haiku",
+    "fallback_trigger_latency_ms": 350,
+    "temperature": 0.1,
+    "schema_validation": "strict",
+    "semantic_caching": true,
+    "streaming": "sse_chunked",
+    "prompt_compiler_token_limit": 8192
+  },
+
+  "supervisor_prompt": "You are a helpful scheduling assistant for Apex Dental & Oral Care. You must NEVER attempt to diagnose clinical symptoms or offer medical advice. You must strictly adhere to the provided JSON availability array. Always confirm the patient's full legal name before proceeding. Emphasize arrival paperwork for new patients. Never retain or log PHI beyond the current session scope.",
+
+  "knowledge_base": {
+    "namespace": "kb_apex_dental_01",
+    "qdrant_collection": "kc_apex_dental_01",
+    "sources": [
+      {
+        "asset_id": "ka_001",
+        "title": "Cancellation & Rescheduling Policy",
+        "asset_type": "pdf",
+        "source_uri": "https://cdn.schedulux.ai/tenants/apex/cancellation_policy.pdf",
+        "sync_status": "synced",
+        "last_synced_at": "2026-09-20T08:00:00.000Z"
+      },
+      {
+        "asset_id": "ka_002",
+        "title": "Apex Clinic Pricing Page",
+        "asset_type": "web_crawler",
+        "source_uri": "https://apexclinic.com/pricing",
+        "sync_status": "synced",
+        "last_synced_at": "2026-09-21T06:00:00.000Z"
+      },
+      {
+        "asset_id": "ka_003",
+        "title": "Post-Procedure Care Instructions",
+        "asset_type": "docx",
+        "source_uri": "https://cdn.schedulux.ai/tenants/apex/post_care_instructions.docx",
+        "sync_status": "synced",
+        "last_synced_at": "2026-09-18T10:00:00.000Z"
+      }
+    ]
+  },
+
+  "scheduling_engine": {
+    "allocation_model": "time_slot",
+    "slot_granularity_minutes": 15,
+    "default_lead_time_hours": 2,
+    "max_advance_booking_days": 60,
+    "cancellation_window_hours": 24,
+    "hold_duration_minutes": 10,
+    "overbooking_buffer": 0
+  },
+
+  "operating_hours": {
+    "$comment": "These are the GLOBAL clinic hours. Individual resource shift overrides are defined inside each resource object.",
+    "monday": [
+      { "start": "08:00", "end": "13:00" },
+      { "start": "14:00", "end": "17:00" }
+    ],
+    "tuesday": [{ "start": "08:00", "end": "17:00" }],
+    "wednesday": [{ "start": "08:00", "end": "17:00" }],
+    "thursday": [{ "start": "08:00", "end": "17:00" }],
+    "friday": [{ "start": "08:00", "end": "15:00" }],
+    "saturday": [],
+    "sunday": [],
+    "blackout_dates": [
+      {
+        "date": "2026-11-26",
+        "reason": "Thanksgiving Day",
+        "is_closed": true
+      },
+      {
+        "date": "2026-12-25",
+        "reason": "Christmas Day",
+        "is_closed": true
+      }
+    ]
+  },
+
+  "resources": [
+    {
+      "resource_id": "res_dr_aris_smith",
+      "resource_type": "staff",
+      "name": "Dr. Aris Smith",
+      "title": "Lead Dentist & Oral Surgeon",
+      "category": "Orthodontist",
+      "description": "Enforce mandatory 15-minute room sterilization buffer between surgical root canal procedures. For IV sedation sessions, require at least 1 assistant assigned in Operatory Bay 1.",
+      "is_bookable": true,
+      "dispatch_status": "active",
+      "custom_shift_overrides": {
+        "$comment": "These override the global operating_hours only for this specific resource.",
+        "friday": [{ "start": "09:00", "end": "12:00" }]
+      }
+    },
+    {
+      "resource_id": "res_dr_elena_vance",
+      "resource_type": "staff",
+      "name": "Dr. Elena Vance",
+      "title": "Orthodontist",
+      "category": "Orthodontist",
+      "description": "Specializes in pediatric orthodontics. Requires 15-minute patient transition buffer.",
+      "is_bookable": true,
+      "dispatch_status": "active",
+      "custom_shift_overrides": {}
+    },
+    {
+      "resource_id": "res_operatory_bay_3",
+      "resource_type": "physical_asset",
+      "name": "Operatory Bay 3",
+      "title": "Rapid Recovery & Emergency Triage Unit",
+      "category": "Treatment Room",
+      "description": "Reserved for emergency triage and rapid-recovery procedures. Requires 10-minute reset after each session.",
+      "is_bookable": true,
+      "dispatch_status": "active",
+      "custom_shift_overrides": {}
+    },
+    {
+      "resource_id": "res_xray_room",
+      "resource_type": "physical_asset",
+      "name": "Panoramic X-Ray Room",
+      "title": "Diagnostic Imaging Suite",
+      "category": "Diagnostic Room",
+      "description": "Full-rotation panoramic radiography suite. Required for all surgical extraction procedures.",
+      "is_bookable": true,
+      "dispatch_status": "active",
+      "custom_shift_overrides": {}
+    }
+  ],
+
+  "services": [
+    {
+      "service_id": "srv_general_consult",
+      "name": "General Dental Consultation",
+      "category": "Consultation",
+      "description": "Standard clinical examination. AI will inform new patients about arrival paperwork requirements.",
+      "duration_minutes": 20,
+      "buffer_minutes": 15,
+      "price": {
+        "type": "fixed",
+        "amount": 75.00,
+        "currency": "USD"
+      },
+      "deposit": {
+        "required": false,
+        "amount": 0,
+        "processor": null,
+        "upi_id": null,
+        "qr_code_url": null
+      },
+      "eligible_resource_ids": ["res_dr_aris_smith", "res_dr_elena_vance"],
+      "required_asset_ids": [],
+      "recall_interval_days": 180
+    },
+    {
+      "service_id": "srv_root_canal",
+      "name": "Root Canal Treatment",
+      "category": "Endodontics",
+      "description": "Endodontic therapy for infected pulp. Mandatory 15-minute room sterilization after procedure.",
+      "duration_minutes": 60,
+      "buffer_minutes": 15,
+      "price": {
+        "type": "fixed",
+        "amount": 890.00,
+        "currency": "USD"
+      },
+      "deposit": {
+        "required": true,
+        "amount": 100.00,
+        "processor": "upi_direct",
+        "upi_id": "apexdental@hdfcbank",
+        "qr_code_url": "https://cdn.schedulux.ai/tenants/apex/upi_qr.png",
+        "confirmation_method": "utr_reference",
+        "payment_instructions": "Please pay ₹100 deposit to UPI ID: apexdental@hdfcbank and share your UTR/transaction reference to confirm your slot."
+      },
+      "eligible_resource_ids": ["res_dr_aris_smith"],
+      "required_asset_ids": ["res_xray_room"],
+      "recall_interval_days": null
+    },
+    {
+      "service_id": "srv_wisdom_extraction",
+      "name": "Wisdom Tooth Extraction",
+      "category": "Surgery",
+      "description": "Surgical removal of impacted third molars with local anesthesia and post-op suture protocol.",
+      "duration_minutes": 60,
+      "buffer_minutes": 20,
+      "price": {
+        "type": "fixed",
+        "amount": 350.00,
+        "currency": "USD"
+      },
+      "deposit": {
+        "required": true,
+        "amount": 50.00,
+        "processor": "upi_direct",
+        "upi_id": "apexdental@hdfcbank",
+        "qr_code_url": "https://cdn.schedulux.ai/tenants/apex/upi_qr.png",
+        "confirmation_method": "utr_reference",
+        "payment_instructions": "Please pay ₹50 deposit to UPI ID: apexdental@hdfcbank and share your UTR/transaction reference to confirm your slot."
+      },
+      "eligible_resource_ids": ["res_dr_aris_smith"],
+      "required_asset_ids": ["res_xray_room"],
+      "recall_interval_days": null
+    },
+    {
+      "service_id": "srv_deep_cleaning",
+      "name": "Deep Cleaning & Hygiene",
+      "category": "General Preventive",
+      "description": "Full-mouth scaling and root planing. Recommended every 6 months.",
+      "duration_minutes": 45,
+      "buffer_minutes": 15,
+      "price": {
+        "type": "fixed",
+        "amount": 180.00,
+        "currency": "USD"
+      },
+      "deposit": {
+        "required": false,
+        "amount": 0,
+        "processor": null,
+        "upi_id": null,
+        "qr_code_url": null
+      },
+      "eligible_resource_ids": ["res_dr_aris_smith", "res_dr_elena_vance"],
+      "required_asset_ids": [],
+      "recall_interval_days": 180
+    },
+    {
+      "service_id": "srv_emergency_triage",
+      "name": "Emergency Triage Slot",
+      "category": "Emergency",
+      "description": "Priority triage slot for acute pain, trauma, or urgent dental emergencies. Reserved in Operatory Bay 3.",
+      "duration_minutes": 30,
+      "buffer_minutes": 10,
+      "price": {
+        "type": "fixed",
+        "amount": 150.00,
+        "currency": "USD"
+      },
+      "deposit": {
+        "required": false,
+        "amount": 0,
+        "processor": null,
+        "upi_id": null,
+        "qr_code_url": null
+      },
+      "eligible_resource_ids": ["res_dr_aris_smith"],
+      "required_asset_ids": ["res_operatory_bay_3"],
+      "recall_interval_days": null
+    }
+  ],
+
+  "intake_rules": {
+    "new_patient_notice": "Please arrive 10 minutes early to complete new patient paperwork. Bring your insurance card and a valid photo ID.",
+    "verification_policy": {
+      "require_otp_for_new_booking": false,
+      "require_otp_for_reschedule": true,
+      "require_otp_for_cancel": true,
+      "require_otp_for_history_access": true,
+      "otp_delivery_channel": "sms",
+      "otp_expiry_seconds": 300
+    },
+    "required_patient_fields": [
+      {
+        "field_name": "full_name",
+        "data_type": "string",
+        "is_required": true,
+        "prompt_if_missing": "May I have your full legal name?"
+      },
+      {
+        "field_name": "phone_number",
+        "data_type": "phone",
+        "is_required": true,
+        "prompt_if_missing": "What is the best phone number to send your booking confirmation to?"
+      },
+      {
+        "field_name": "email",
+        "data_type": "email",
+        "is_required": false,
+        "prompt_if_missing": "Would you like to provide an email for your appointment summary?"
+      }
+    ]
+  },
+
+  "guardrails": {
+    "phi_scrubbing": {
+      "enabled": true,
+      "policy": "zero_retention",
+      "description": "Automated tokenization of patient notes before storing in analytics logs. Replaces identifiers with encrypted hashes.",
+      "hipaa_compliant": true
+    },
+    "triage_emergency": {
+      "enabled": true,
+      "rule_id": "SAN_015",
+      "trigger_type": "keyword_match",
+      "keywords": [
+        "chest pain",
+        "uncontrollable bleeding",
+        "severe trauma",
+        "difficulty breathing",
+        "throat swelling",
+        "unconscious",
+        "stroke",
+        "feverish",
+        "swelling getting worse"
+      ],
+      "action": "halt_and_divert",
+      "agent_locked_on_trigger": true,
+      "response_override": "This sounds like an urgent clinical emergency. Please hang up and call 911 or visit your nearest emergency room immediately. Our team has been notified.",
+      "notify_front_desk": true,
+      "front_desk_contact": "+1-555-019-2834"
+    },
+    "human_handoff": {
+      "enabled": true,
+      "trigger_topics": [
+        "billing disputes",
+        "malpractice inquiries",
+        "complex clinical diagnostic questions",
+        "insurance coverage disputes",
+        "HIPAA data requests"
+      ],
+      "action": "notify_and_lock",
+      "target_action": "notify_front_desk",
+      "reception_contact": "+1-555-019-2834",
+      "lock_agent_on_handoff": true,
+      "handoff_message": "I'm connecting you with our clinical team right away. Please hold for a moment."
+    },
+    "off_hours_policy": {
+      "action": "inform_and_offer_callback",
+      "response": "Our clinic is currently closed. Our hours are Monday–Friday, 8:00 AM to 5:00 PM Eastern. Would you like to book an appointment for our next available slot, or leave a callback number?"
+    },
+    "no_diagnosis_policy": {
+      "enabled": true,
+      "response_override": "I'm not able to provide clinical diagnoses. I can help you book an appointment with one of our doctors who can properly evaluate your symptoms."
+    }
+  },
+
+  "sub_agents": [
+    {
+      "agent_id": "sub_booking",
+      "agent_type": "booking",
+      "routing_trigger_description": "Patient wants to schedule, reschedule, or cancel an appointment.",
+      "system_prompt": "You are a dental appointment booking specialist. Always check availability before confirming any slot. Enforce buffer rules strictly. Require full name and phone number before creating any booking. Never double-book a resource.",
+      "allowed_tools": [
+        "check_availability",
+        "create_booking",
+        "reschedule_booking",
+        "cancel_booking",
+        "send_otp",
+        "verify_otp"
+      ],
+      "required_state_variables": [
+        {
+          "variable_key": "patient_name",
+          "data_type": "string",
+          "description": "Full legal name of the patient",
+          "is_required": true,
+          "prompt_if_missing": "May I have your full legal name?"
+        },
+        {
+          "variable_key": "patient_phone",
+          "data_type": "phone",
+          "description": "Patient's primary phone number for OTP and confirmations",
+          "is_required": true,
+          "prompt_if_missing": "What phone number should I send your booking confirmation to?"
+        },
+        {
+          "variable_key": "requested_service",
+          "data_type": "string",
+          "description": "The service the patient wants to book",
+          "is_required": true,
+          "prompt_if_missing": "Which service are you looking to book today?"
+        },
+        {
+          "variable_key": "preferred_date",
+          "data_type": "date",
+          "description": "Patient's preferred appointment date",
+          "is_required": true,
+          "prompt_if_missing": "What date works best for you?"
+        },
+        {
+          "variable_key": "preferred_time",
+          "data_type": "time",
+          "description": "Patient's preferred appointment time",
+          "is_required": false,
+          "prompt_if_missing": "Do you have a preferred time, or would you like to see all available slots?"
+        },
+        {
+          "variable_key": "preferred_provider",
+          "data_type": "string",
+          "description": "Preferred staff member if specified",
+          "is_required": false,
+          "prompt_if_missing": null
+        }
+      ]
+    },
+    {
+      "agent_id": "sub_faq_rag",
+      "agent_type": "faq_rag",
+      "routing_trigger_description": "Patient asks about services, pricing, clinic information, policies, post-care instructions, or operating hours.",
+      "system_prompt": "You are a knowledgeable clinic information specialist. Answer questions accurately using only the provided knowledge base namespace. If the answer is not in the knowledge base, say so honestly and offer to connect them with the front desk. Never fabricate clinical information.",
+      "allowed_tools": [
+        "query_knowledge_base",
+        "get_service_list",
+        "get_operating_hours"
+      ],
+      "required_state_variables": []
+    },
+    {
+      "agent_id": "sub_deposit_payment",
+      "agent_type": "payment",
+      "routing_trigger_description": "A booking has been confirmed for a service where deposit.required is true. Guides the patient through paying via the tenant's UPI ID or QR code, then collects UTR reference as payment proof.",
+      "system_prompt": "You are a payment coordination assistant. Your only job is to share the clinic's UPI payment details with the patient and wait for them to confirm payment by providing a UTR/transaction reference number. Send the QR code image and UPI ID clearly. Once the patient provides a valid UTR number, call confirm_deposit_by_utr to mark the deposit as paid and the booking as confirmed. If the patient has payment issues or disputes, escalate to the front desk immediately. Never ask for card numbers, CVV, or bank passwords.",
+      "allowed_tools": [
+        "send_upi_payment_details",
+        "send_qr_code_image",
+        "confirm_deposit_by_utr",
+        "mark_booking_confirmed",
+        "notify_tenant_of_payment"
+      ],
+      "required_state_variables": [
+        {
+          "variable_key": "booking_id",
+          "data_type": "string",
+          "description": "The booking ID requiring deposit confirmation",
+          "is_required": true,
+          "prompt_if_missing": null
+        },
+        {
+          "variable_key": "deposit_amount",
+          "data_type": "number",
+          "description": "Amount the patient needs to pay as deposit",
+          "is_required": true,
+          "prompt_if_missing": null
+        },
+        {
+          "variable_key": "utr_reference",
+          "data_type": "string",
+          "description": "UTR / transaction reference number provided by patient as payment proof",
+          "is_required": true,
+          "prompt_if_missing": "Please share your UPI transaction reference number (UTR) to confirm your deposit and lock your slot."
+        }
+      ]
+    },
+    {
+      "agent_id": "sub_recall_outbound",
+      "agent_type": "recall_outbound",
+      "routing_trigger_description": "Proactive outbound recall — patient is due for a follow-up based on service recall_interval_days. Triggered by cron job, not by inbound chat.",
+      "system_prompt": "You are an outbound recall coordinator for Apex Dental. Your goal is to proactively reach out to patients whose last visit exceeded their recall interval and schedule their next appointment. Be warm, professional, and non-pushy. If the patient declines, log the refusal and do not contact again for 30 days.",
+      "allowed_tools": [
+        "check_availability",
+        "create_booking",
+        "send_sms_notification"
+      ],
+      "required_state_variables": [
+        {
+          "variable_key": "patient_name",
+          "data_type": "string",
+          "description": "Full name of patient being recalled",
+          "is_required": true,
+          "prompt_if_missing": null
+        },
+        {
+          "variable_key": "last_service",
+          "data_type": "string",
+          "description": "Service the patient last received",
+          "is_required": true,
+          "prompt_if_missing": null
+        }
+      ]
+    }
+  ],
+
+  "integrations": {
+    "stripe": {
+      "enabled": true,
+      "use_case": "platform_subscription_billing_only",
+      "$comment": "Stripe is used ONLY for Schedulux platform subscriptions (tenant billing). It is NOT used for deposit collection from patients. Money never passes through Schedulux."
+    },
+    "payment_gateway": {
+      "model": "pass_through",
+      "$comment": "Tenant collects deposits directly from patients. Schedulux only facilitates the flow — sends payment details, collects UTR reference as proof. Zero platform fee on deposits.",
+      "supported_processors": ["upi_direct", "bank_transfer", "cash_on_arrival"],
+      "active_processor": "upi_direct",
+      "upi_config": {
+        "upi_id": "apexdental@hdfcbank",
+        "display_name": "Apex Dental & Oral Care",
+        "qr_code_url": "https://cdn.schedulux.ai/tenants/apex/upi_qr.png",
+        "accepted_apps": ["GPay", "PhonePe", "Paytm", "BHIM", "Any UPI App"]
+      },
+      "confirmation_method": "utr_reference",
+      "refund_policy": "tenant_managed",
+      "$comment_refund": "Refunds are handled directly by the tenant. Schedulux logs the refund request and notifies the tenant, but does not process the refund."
+    },
+    "twilio": {
+      "enabled": true,
+      "use_cases": ["otp_sms", "booking_confirmation_sms", "recall_outbound_sms"]
+    }
+  },
+
+  "compliance": {
+    "hipaa_mode": true,
+    "phi_scrubbing": true,
+    "data_retention_policy": "session_only",
+    "zero_hallucination_mode": true,
+    "audit_trail_enabled": true
+  },
+
+  "subscription": {
+    "tier": "pro",
+    "monthly_token_limit": 50000,
+    "tokens_used_this_month": 42300,
+    "overage_rate_per_100_tokens": 0.12,
+    "priority_queue": "P1"
+  },
+
+  "runtime_meta": {
+    "template_id": "tpl_medical_dental_v2",
+    "template_name": "Medical & Dental Clinic",
+    "agent_version": "v1.0.4",
+    "last_published_at": "2026-09-21T08:00:00.000Z",
+    "last_compiled_by": "john@apex.com",
+    "compiler_mode": "deterministic_strict",
+    "deterministic_conflict_check": true,
+    "live_preview_lag_ms": 0
+  }
+}

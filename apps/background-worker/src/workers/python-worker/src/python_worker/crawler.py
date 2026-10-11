@@ -6,7 +6,7 @@ from urllib.parse import urlparse, urljoin
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 from python_worker.queues import get_schema_queue, get_redis_client
 
-# Cache TTL: 24 hours (86400 seconds)
+
 CACHE_TTL_SECONDS = int(os.environ.get("CRAWL_CACHE_TTL_SECONDS", "86400"))
 
 browser_cfg = BrowserConfig(
@@ -157,7 +157,11 @@ async def process_crawl_job(job, token):
                 "job_id": job_id,
                 "crawled_data": knowledge
             },
-            {"jobId": f"schema_{job_id}"}
+            {
+                "jobId": f"schema_{job_id}",
+                "removeOnComplete": {"count": 10},
+                "removeOnFail": {"count": 10},
+            }
         )
         
         await job.updateProgress(100)

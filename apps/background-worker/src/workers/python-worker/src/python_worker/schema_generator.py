@@ -1,13 +1,13 @@
 import os
 import json
 from langchain_core.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.output_parsers import JsonOutputParser
 from dotenv import load_dotenv
+from python_worker.queues import get_redis_client
 
-dotenv_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..', '.env')
-if not os.path.exists(dotenv_path):
-    dotenv_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', '.env')
+current_dir = os.path.dirname(__file__)
+dotenv_path = os.path.abspath(os.path.join(current_dir, '../../../../..', '.env'))
 load_dotenv(dotenv_path)
 
 def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) -> dict:
@@ -16,9 +16,9 @@ def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) -> dict:
     Dynamically infers operating hours, services, resources, and terminology
     from crawl data.
     """
-    api_key = os.environ.get("OPENAI_API_KEY")
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not api_key:
-        print("[Schema Generator] OPENAI_API_KEY not found in environment. Returning fallback mockup schema.")
+        print("[Schema Generator] GEMINI_API_KEY / GOOGLE_API_KEY not found in environment. Returning fallback mockup schema.")
         return {
             "$schema": "https://schedulux.ai/schema/v2/agent_runtime_config.json",
             "schema_version": "2.4",
@@ -62,7 +62,12 @@ def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) -> dict:
             }
         }
 
-    llm = ChatOpenAI(model="gpt-4-turbo-preview", temperature=0)
+    gemini_model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+    llm = ChatGoogleGenerativeAI(
+        model=gemini_model,
+        google_api_key=api_key,
+        temperature=0,
+    )
     parser = JsonOutputParser()
 
     prompt = PromptTemplate(
@@ -169,14 +174,37 @@ async def process_schema_generation(job, token):
     job_id = data.get("job_id")
     crawled_data = data.get("crawled_data", {})
 
-    print(f"[Schema Worker] Processing schema generation for tenant: {tenant_id}, URL: {url}, job_id: {job_id}")
+    print(f"[Schema Worker] Processing schema generation for tenant: {tenant_id}, URL: {url}, job_id: {job_id}", flush=True)
 
     await job.updateProgress(20)
 
-   
+  
     schema = generate_agent_schema(crawled_data, tenant_id, url)
 
+  
+    redis = get_redis_client()
+    draft_key = f"agent:draft:{tenant_id}:{job_id}"
+    latest_key = f"agent:draft:{tenant_id}"
+    schema_json = json.dumps(schema)
+
+    await redis.setex(draft_key, 86400, schema_json)
+    await redis.setex(latest_key, 86400, schema_json)
+
+    print(f"[Schema Worker] Stored draft schema in Redis: {draft_key}", flush=True)
+    print(f"[Schema Worker] Schema JSON preview: {schema_json[:500]}...", flush=True)
+
+    pubsub_channel = "schema-generation-events"
+    event_payload = {
+        "event": "SCHEMA_GENERATED",
+        "tenant_id": tenant_id,
+        "job_id": job_id,
+        "url": url,
+        "schema": schema,
+    }
+    await redis.publish(pubsub_channel, json.dumps(event_payload))
+    print(f"[Schema Worker] Published event to Redis channel '{pubsub_channel}' for job {job_id}", flush=True)
+
     await job.updateProgress(100)
-    print(f"[Schema Worker] Successfully compiled agent schema for tenant: {tenant_id}")
+    print(f"[Schema Worker] Successfully compiled agent schema for tenant: {tenant_id}", flush=True)
 
     return schema

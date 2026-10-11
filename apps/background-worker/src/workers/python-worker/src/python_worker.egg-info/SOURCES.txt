@@ -1,0 +1,11 @@
+README.md
+pyproject.toml
+src/python_worker/__init__.py
+src/python_worker/crawler.py
+src/python_worker/queues.py
+src/python_worker/schema_generator.py
+src/python_worker.egg-info/PKG-INFO
+src/python_worker.egg-info/SOURCES.txt
+src/python_worker.egg-info/dependency_links.txt
+src/python_worker.egg-info/requires.txt
+src/python_worker.egg-info/top_level.txt

@@ -29,6 +29,7 @@ import BookingsPage from "./features/tenant/pages/BookingsPage.tsx";
 import { TenantProtectedRoute } from "./features/tenant/components/TenantProtectedRoute.tsx";
 import { DashboardUserProtectedRoute } from "./features/dashboard-user/components/DashboardUserProtectedRoute.tsx";
 import SchedulingOnboarding from "./pages/SchedulingOnboarding.tsx";
+import AgentOnboardingWizard from "./pages/AgentOnboardingWizard.tsx";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -122,6 +123,10 @@ const router = createBrowserRouter([
       {
         path:"landingboard",
         element:<SchedulingOnboarding></SchedulingOnboarding>
+      },
+      {
+        path: "agent-setup",
+        element: <AgentOnboardingWizard />
       },
 
       {

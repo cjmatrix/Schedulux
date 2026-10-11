@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   Download,
-  Plus,
   ChevronDown,
   Ban,
 } from 'lucide-react';

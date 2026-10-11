@@ -9,7 +9,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "worker:python": "cd src/workers/python-worker && uv run worker.py"
+    "worker:python": "cd src/workers/python-worker && PYTHONUNBUFFERED=1 uv run worker.py"
   },
   "dependencies": {
     "bullmq": "^5.66.4",

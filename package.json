@@ -3,12 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "pnpm -r --parallel run dev",
     "dev:gateway": "pnpm --filter @repo/api-gateway dev",
     "dev:identity": "pnpm --filter @repo/identity-tenant dev",
+    "dev:frontend": "pnpm --filter @repo/frontend-react dev",
     "dev:worker": "pnpm --filter @repo/background-worker dev",
     "dev:worker:python": "pnpm --filter @repo/background-worker worker:python",
-    "dev:frontend": "pnpm --filter @repo/frontend-react dev",
+    "dev:ai:grpc": "cd apps/AI-orchestration && PYTHONUNBUFFERED=1 uv run agent-orchestrator",
+    "dev": "concurrently --kill-others --names \"GATEWAY,IDENTITY,FRONTEND,WORKER-TS,WORKER-PY,AI-GRPC\" -c \"blue,green,magenta,yellow,cyan,red\" \"pnpm dev:gateway\" \"pnpm dev:identity\" \"pnpm dev:frontend\" \"pnpm dev:worker\" \"pnpm dev:worker:python\" \"pnpm dev:ai:grpc\"",
     "build": "pnpm -r run build"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
   }
 }

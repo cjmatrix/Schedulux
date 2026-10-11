@@ -6,6 +6,10 @@ import { SuperAdminController } from "./controllers/superadmin/superadmin.contro
 import { SuperAdminTenantController } from "./controllers/superadmin/superadmin-tenant.controller.js";
 import { DashboardUserAuthController } from "./controllers/dashboarduser/dashboard-user-auth.controller.js";
 import { KnowledgeController } from "./controllers/agentOrchestrator/knowledge.controller.js";
+import { RedisService } from "./services/redis.service.js";
+import { SchemaGateway } from "./websockets/schema.gateway.js";
+import { RolesGuard } from "./guards/roles.guard.js";
+import { TenantAuthGuard } from "./guards/tenant-auth.guard.js";
 
 @Module({
   imports: [
@@ -86,6 +90,19 @@ import { KnowledgeController } from "./controllers/agentOrchestrator/knowledge.c
     DashboardUserAuthController,
     KnowledgeController,
   ],
-  providers: [],
+  providers: [
+    RedisService,
+    {
+      provide: "ISchemaEventSubscriber",
+      useExisting: RedisService,
+    },
+    {
+      provide: "ISchemaCacheService",
+      useExisting: RedisService,
+    },
+    SchemaGateway,
+    RolesGuard,
+    TenantAuthGuard,
+  ],
 })
 export class AppModule {}

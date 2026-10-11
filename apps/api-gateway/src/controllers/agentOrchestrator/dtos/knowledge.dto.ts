@@ -15,3 +15,17 @@ export const GetCrawlStatusSchema: z.ZodType<GetCrawlStatusRequest> = z.object({
 });
 
 export class GetCrawlStatusDto extends createZodDto(GetCrawlStatusSchema) {}
+
+export const StartOnboardingSchema = z.object({
+  tenant_id: z.string().min(1, 'Tenant ID is required'),
+  initial_draft_json: z.string().optional().default('{}'),
+});
+
+export class StartOnboardingDto extends createZodDto(StartOnboardingSchema) {}
+
+export const ResumeOnboardingSchema = z.object({
+  tenant_id: z.string().min(1, 'Tenant ID is required'),
+  user_answer: z.string().min(1, 'User answer is required'),
+});
+
+export class ResumeOnboardingDto extends createZodDto(ResumeOnboardingSchema) {}

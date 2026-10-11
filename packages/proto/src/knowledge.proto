@@ -5,6 +5,8 @@ package knowledge;
 service KnowledgeService {
   rpc CrawlSite (CrawlSiteRequest) returns (CrawlSiteResponse);
   rpc GetCrawlStatus (GetCrawlStatusRequest) returns (GetCrawlStatusResponse);
+  rpc StartOnboardingSession (StartOnboardingRequest) returns (OnboardingResponse);
+  rpc ResumeOnboardingSession (ResumeOnboardingRequest) returns (OnboardingResponse);
 }
 
 message CrawlSiteRequest {
@@ -35,4 +37,22 @@ message GetCrawlStatusResponse {
   string status = 2;
   int32 pages_crawled = 3;
   repeated CrawlPageResult pages = 4;
+}
+
+message StartOnboardingRequest {
+  string tenant_id = 1;
+  string initial_draft_json = 2;
+}
+
+message ResumeOnboardingRequest {
+  string tenant_id = 1;
+  string user_answer = 2;
+}
+
+message OnboardingResponse {
+  string status = 1;
+  string question = 2;
+  string field = 3;
+  string type = 4;
+  string draft_schema_json = 5;
 }

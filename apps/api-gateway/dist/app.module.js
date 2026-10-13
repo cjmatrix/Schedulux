@@ -15,8 +15,11 @@ const superadmin_controller_js_1 = require("./controllers/superadmin/superadmin.
 const superadmin_tenant_controller_js_1 = require("./controllers/superadmin/superadmin-tenant.controller.js");
 const dashboard_user_auth_controller_js_1 = require("./controllers/dashboarduser/dashboard-user-auth.controller.js");
 const knowledge_controller_js_1 = require("./controllers/agentOrchestrator/knowledge.controller.js");
+const scheduling_controller_js_1 = require("./controllers/scheduling/scheduling.controller.js");
 const redis_service_js_1 = require("./services/redis.service.js");
 const schema_gateway_js_1 = require("./websockets/schema.gateway.js");
+const roles_guard_js_1 = require("./guards/roles.guard.js");
+const tenant_auth_guard_js_1 = require("./guards/tenant-auth.guard.js");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -91,6 +94,22 @@ exports.AppModule = AppModule = __decorate([
                         },
                     },
                 },
+                {
+                    name: "SCHEDULING_PACKAGE",
+                    transport: microservices_1.Transport.GRPC,
+                    options: {
+                        url: "localhost:50053",
+                        package: "scheduling",
+                        protoPath: require.resolve("@repo/proto/scheduling.proto"),
+                        loader: {
+                            keepCase: true,
+                            longs: String,
+                            enums: String,
+                            defaults: true,
+                            oneofs: true,
+                        },
+                    },
+                },
             ]),
         ],
         controllers: [
@@ -99,6 +118,7 @@ exports.AppModule = AppModule = __decorate([
             superadmin_tenant_controller_js_1.SuperAdminTenantController,
             dashboard_user_auth_controller_js_1.DashboardUserAuthController,
             knowledge_controller_js_1.KnowledgeController,
+            scheduling_controller_js_1.SchedulingController,
         ],
         providers: [
             redis_service_js_1.RedisService,
@@ -111,6 +131,8 @@ exports.AppModule = AppModule = __decorate([
                 useExisting: redis_service_js_1.RedisService,
             },
             schema_gateway_js_1.SchemaGateway,
+            roles_guard_js_1.RolesGuard,
+            tenant_auth_guard_js_1.TenantAuthGuard,
         ],
     })
 ], AppModule);

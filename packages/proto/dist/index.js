@@ -36,11 +36,12 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.KnowledgeProto = exports.SuperAdminProto = exports.DashboardProto = void 0;
+exports.SchedulingProto = exports.KnowledgeProto = exports.SuperAdminProto = exports.DashboardProto = void 0;
 __exportStar(require("./interfaces/tenant.js"), exports);
 exports.DashboardProto = __importStar(require("./interfaces/dashboard.js"));
 exports.SuperAdminProto = __importStar(require("./interfaces/superadmin.js"));
 exports.KnowledgeProto = __importStar(require("./interfaces/knowledge.js"));
+exports.SchedulingProto = __importStar(require("./interfaces/scheduling.js"));
 // export type {
 //   DashboardUserLoginRequest,
 //   DashboardUserLoginResponse,

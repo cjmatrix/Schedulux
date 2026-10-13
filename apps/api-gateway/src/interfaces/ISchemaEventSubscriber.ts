@@ -3,7 +3,8 @@ export interface SchemaGeneratedEvent {
   tenant_id: string;
   job_id: string;
   url: string;
-  schema: any;
+  schema?: any;
+  error?: string;
   timestamp?: string;
 }
 

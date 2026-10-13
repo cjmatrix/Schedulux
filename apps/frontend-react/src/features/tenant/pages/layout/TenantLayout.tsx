@@ -15,11 +15,13 @@ import {
   ArrowLeft,
   LogOut,
   Loader2,
+  Bot,
 } from "lucide-react";
 import { useLogout, useTenantProfile } from "../../hooks/useAuth";
 import { useAuthStore } from "../../../../store/useAuthStore";
 
 const ALL_NAV_ITEMS = [
+  { icon: Bot, label: "AI Agents", path: "/tenant/agents" },
   { icon: Calendar, label: "Calendar & Bookings", path: "/tenant/bookings" },
   { icon: BookOpen, label: "Knowledge Base", path: "/tenant/knowledge" },
   {
@@ -154,7 +156,7 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
         <div className="p-3 border-t border-slate-100 flex flex-col gap-2">
           {canAccessAgentStudio && (
             <button
-              onClick={() => navigate("/")}
+              onClick={() => navigate("/tenant/landingboard")}
               className="w-full py-2 px-3 bg-black hover:bg-slate-900 text-white rounded-full text-xs font-semibold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-98 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />

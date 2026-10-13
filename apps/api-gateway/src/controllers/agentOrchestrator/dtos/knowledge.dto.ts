@@ -18,6 +18,7 @@ export class GetCrawlStatusDto extends createZodDto(GetCrawlStatusSchema) {}
 
 export const StartOnboardingSchema = z.object({
   tenant_id: z.string().min(1, 'Tenant ID is required'),
+  agent_id: z.string().optional(),
   initial_draft_json: z.string().optional().default('{}'),
 });
 
@@ -29,3 +30,21 @@ export const ResumeOnboardingSchema = z.object({
 });
 
 export class ResumeOnboardingDto extends createZodDto(ResumeOnboardingSchema) {}
+
+export const SaveInitialAgentDraftSchema = z.object({
+  tenant_id: z.string().optional(),
+  draft_json: z.string().optional(),
+  creation_source: z
+    .enum([
+      'medical',
+      'auto',
+      'hospitality',
+      'custom',
+      'web_crawl',
+    ])
+    .optional()
+    .default('web_crawl'),
+  name: z.string().optional(),
+});
+
+export class SaveInitialAgentDraftDto extends createZodDto(SaveInitialAgentDraftSchema) {}

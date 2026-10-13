@@ -6,6 +6,7 @@ import { SuperAdminController } from "./controllers/superadmin/superadmin.contro
 import { SuperAdminTenantController } from "./controllers/superadmin/superadmin-tenant.controller.js";
 import { DashboardUserAuthController } from "./controllers/dashboarduser/dashboard-user-auth.controller.js";
 import { KnowledgeController } from "./controllers/agentOrchestrator/knowledge.controller.js";
+import { SchedulingController } from "./controllers/scheduling/scheduling.controller.js";
 import { RedisService } from "./services/redis.service.js";
 import { SchemaGateway } from "./websockets/schema.gateway.js";
 import { RolesGuard } from "./guards/roles.guard.js";
@@ -81,6 +82,22 @@ import { TenantAuthGuard } from "./guards/tenant-auth.guard.js";
           },
         },
       },
+      {
+        name: "SCHEDULING_PACKAGE",
+        transport: Transport.GRPC,
+        options: {
+          url: "localhost:50053",
+          package: "scheduling",
+          protoPath: require.resolve("@repo/proto/scheduling.proto"),
+          loader: {
+            keepCase: true,
+            longs: String,
+            enums: String,
+            defaults: true,
+            oneofs: true,
+          },
+        },
+      },
     ]),
   ],
   controllers: [
@@ -89,6 +106,7 @@ import { TenantAuthGuard } from "./guards/tenant-auth.guard.js";
     SuperAdminTenantController,
     DashboardUserAuthController,
     KnowledgeController,
+    SchedulingController,
   ],
   providers: [
     RedisService,

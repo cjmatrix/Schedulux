@@ -75,6 +75,18 @@ export function useAgentSchemaGeneration(): UseAgentSchemaGenerationReturn {
       }
     });
 
+    socket.on('schema:failed', (payload: any) => {
+      console.warn('[WebSocket] Received schema:failed notification:', payload);
+      setError(payload?.error || 'Failed to generate agent schema');
+      setStage('error');
+      setProgressMessage('');
+      setSchema(null);
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    });
+
     socket.on('connect_error', (err) => {
       console.warn('[WebSocket] Connection warning:', err.message);
     });
@@ -89,12 +101,10 @@ export function useAgentSchemaGeneration(): UseAgentSchemaGenerationReturn {
   useEffect(() => {
     if (stage !== 'generating' || !jobId) return;
 
-   
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
     }
 
-   
     const startDelay = setTimeout(() => {
       console.log('[Polling] WebSocket may have missed schema:ready — starting REST polling fallback');
       pollIntervalRef.current = setInterval(async () => {
@@ -138,7 +148,7 @@ export function useAgentSchemaGeneration(): UseAgentSchemaGenerationReturn {
         jobIdRef.current = newJobId;
         setProgressMessage('Website crawled! Analyzing services & compiling schema with AI...');
         setStage('generating');
-        // Immediately join the job room (socket may already be connected)
+       
         socketRef.current?.emit('join:job', { job_id: newJobId });
       }
     },

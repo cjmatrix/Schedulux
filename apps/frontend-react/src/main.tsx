@@ -26,6 +26,7 @@ import { SuperAdminProtectedRoute } from "./features/superadmin/components/Super
 import TenantLayout from "./features/tenant/pages/layout/TenantLayout.tsx";
 import WorkspaceUsersPage from "./features/tenant/pages/WorkspaceUsersPage.tsx";
 import BookingsPage from "./features/tenant/pages/BookingsPage.tsx";
+import TenantAgentsPage from "./features/tenant/pages/TenantAgentsPage.tsx";
 import { TenantProtectedRoute } from "./features/tenant/components/TenantProtectedRoute.tsx";
 import { DashboardUserProtectedRoute } from "./features/dashboard-user/components/DashboardUserProtectedRoute.tsx";
 import SchedulingOnboarding from "./pages/SchedulingOnboarding.tsx";
@@ -125,7 +126,7 @@ const router = createBrowserRouter([
         element:<SchedulingOnboarding></SchedulingOnboarding>
       },
       {
-        path: "agent-setup",
+        path: "agent-setup/:id",
         element: <AgentOnboardingWizard />
       },
 
@@ -134,11 +135,15 @@ const router = createBrowserRouter([
         children: [
           {
             index: true,
-            element: <Navigate to="/tenant/users" replace />,
+            element: <Navigate to="/tenant/agents" replace />,
           },
           {
             path: "dashboard",
-            element: <Navigate to="/tenant/users" replace />,
+            element: <Navigate to="/tenant/agents" replace />,
+          },
+          {
+            path: "agents",
+            element: <TenantAgentsPage />,
           },
           {
             path: "users",

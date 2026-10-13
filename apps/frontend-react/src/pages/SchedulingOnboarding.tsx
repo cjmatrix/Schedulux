@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { 
   ArrowRight, 
   Sparkles, 
@@ -8,9 +9,11 @@ import {
   Building2, 
   Layers, 
   AlertCircle, 
-  Code2
+  Code2,
+  Settings2
 } from "lucide-react";
 import { useAgentSchemaGeneration } from "../hooks/useAgentSchemaGeneration.js";
+import { knowledgeApi } from "../api/knowledgeApi.js";
 
 type ServiceType = {
   id: string;
@@ -56,11 +59,13 @@ const services: ServiceType[] = [
 ];
 
 export default function SchedulingOnboarding() {
-  const [selected, setSelected] = useState("medical");
+  const [selected, setSelected] = useState("web_crawl");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [showJsonRaw, setShowJsonRaw] = useState(false);
+  const navigate = useNavigate();
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [saveDraftError, setSaveDraftError] = useState<string | null>(null);
 
-  
   const {
     startCrawl,
     isLoading,
@@ -81,12 +86,34 @@ export default function SchedulingOnboarding() {
     startCrawl(websiteUrl);
   };
 
-  const handleContinue = () => {
-    console.log("Proceeding with configuration:", {
-      selectedTemplate: selectedService,
-      generatedSchema: schema,
-    });
+  const handleConfigureAndSaveDraft = async (source:string) => {
+
+    try {
+      setIsSavingDraft(true);
+      setSaveDraftError(null);
+      await knowledgeApi.saveInitialAgentDraft({
+        name: schema?.business_profile?.name || "AI Scheduling Agent",
+        creation_source: source,
+      });
+
+      navigate("/tenant/agents");
+    } catch (err: any) {
+      console.error("Failed to save initial agent draft:", err);
+      setSaveDraftError(err?.response?.data?.message || err?.message || "Failed to save agent draft");
+    } finally {
+      setIsSavingDraft(false);
+    }
   };
+
+  const handleContinue = () => {
+    if(schema)
+    handleConfigureAndSaveDraft("web_crawl");
+    else{
+      handleConfigureAndSaveDraft(selected)
+    }
+  };
+
+ 
 
   return (
     <div className="min-h-screen bg-white text-neutral-900 antialiased selection:bg-neutral-900 selection:text-white">
@@ -196,16 +223,29 @@ export default function SchedulingOnboarding() {
 
           {/* Error Message */}
           {error && (
-            <div className="mt-4 flex items-center gap-2 rounded-xl bg-rose-50 border border-rose-200 p-3.5 text-xs text-rose-700">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
-              <span className="flex-1">{error}</span>
-              <button
-                type="button"
-                onClick={reset}
-                className="font-semibold underline hover:text-rose-900 ml-2"
-              >
-                Dismiss
-              </button>
+            <div className="mt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-2xl bg-rose-50 border border-rose-200 p-4 text-xs text-rose-800 shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <AlertCircle className="w-5 h-5 shrink-0 text-rose-600" />
+                <span className="font-medium text-rose-900 leading-relaxed">{error}</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                {websiteUrl && (
+                  <button
+                    type="button"
+                    onClick={() => startCrawl(websiteUrl)}
+                    className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-full text-xs shadow-xs transition cursor-pointer"
+                  >
+                    Try Again
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={reset}
+                  className="px-3 py-1.5 text-neutral-600 hover:text-neutral-900 font-medium rounded-full text-xs hover:bg-neutral-100 transition cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
             </div>
           )}
 
@@ -230,7 +270,7 @@ export default function SchedulingOnboarding() {
           )}
 
           {/* Generated Schema Display (Real-time via WebSocket) */}
-          {schema && (
+          {schema && stage === 'completed' && (
             <div className="mt-8 rounded-2xl border border-emerald-300 bg-emerald-50/30 p-6 shadow-sm animate-in slide-in-from-top-4 duration-400">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-emerald-200/60">
                 <div className="flex items-center gap-2.5">
@@ -354,15 +394,37 @@ export default function SchedulingOnboarding() {
                 </div>
               )}
 
+              {/* Error message if draft save failed */}
+              {saveDraftError && (
+                <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{saveDraftError}</span>
+                </div>
+              )}
+
               {/* Action to proceed with generated schema */}
-              <div className="mt-6 flex justify-end">
+              <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-neutral-100">
+                <span className="text-xs text-neutral-500">
+                  Ready to configure? Click below to save this draft to your agents collection.
+                </span>
                 <button
                   type="button"
+                  disabled={isSavingDraft}
                   onClick={handleContinue}
-                  className="rounded-full bg-neutral-950 px-6 py-3 text-xs font-bold text-white hover:bg-neutral-800 transition cursor-pointer flex items-center gap-2 shadow-sm"
+                  className="rounded-full bg-neutral-950 px-6 py-3 text-xs font-bold text-white hover:bg-neutral-800 transition cursor-pointer flex items-center gap-2 shadow-sm disabled:opacity-60"
                 >
-                  Continue with this AI Schema
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  {isSavingDraft ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Saving to Agent Drafts...
+                    </>
+                  ) : (
+                    <>
+                      <Settings2 className="w-3.5 h-3.5" />
+                      Configure / Edit
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </>
+                  )}
                 </button>
               </div>
             </div>

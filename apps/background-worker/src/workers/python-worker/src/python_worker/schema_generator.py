@@ -1,26 +1,42 @@
 import os
 import json
+from pydantic import BaseModel
 from langchain_core.prompts import PromptTemplate
+from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.output_parsers import JsonOutputParser
 from dotenv import load_dotenv
 from python_worker.queues import get_redis_client
+from python_worker.schema_validator import (
+    GeneratedAgentDraftSchema,
+    StrictDraftPatchValidator,
+    validate_and_sanitize_schema,
+)
+
+try:
+    from langchain_groq import ChatGroq
+except ImportError:
+    ChatGroq = None
 
 current_dir = os.path.dirname(__file__)
-dotenv_path = os.path.abspath(os.path.join(current_dir, '../../../../..', '.env'))
-load_dotenv(dotenv_path)
+for env_path in [
+    os.path.abspath(os.path.join(current_dir, '../../../../..', '.env')),
+    os.path.abspath(os.path.join(current_dir, '../../../../../../', '.env')),
+]:
+    if os.path.exists(env_path):
+        load_dotenv(env_path)
 
-def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) -> dict:
+async def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) -> dict:
     """
-    Generates a Schedulux agent_runtime_config JSON payload using LangChain.
-    Dynamically infers operating hours, services, resources, and terminology
-    from crawl data.
+    Generates a Schedulux agent_runtime_config JSON payload using LangChain with_structured_output.
+    Prefers Groq (openai/gpt-oss-120b) for ultra-fast structured synthesis, falling back to Gemini.
     """
-    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        print("[Schema Generator] GEMINI_API_KEY / GOOGLE_API_KEY not found in environment. Returning fallback mockup schema.")
+    groq_api_key = os.environ.get("GROQ_API_KEY")
+    gemini_api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+
+    if not groq_api_key and not gemini_api_key:
+        print("[Schema Generator] Neither GROQ_API_KEY nor GEMINI_API_KEY found in environment. Returning fallback mockup schema.")
         return {
-            "$schema": "https://schedulux.ai/schema/v2/agent_runtime_config.json",
+            "schema_ref": "https://schedulux.ai/schema/v2/agent_runtime_config.json",
             "schema_version": "2.4",
             "status": "draft",
             "tenant_id": tenant_id,
@@ -62,108 +78,88 @@ def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) -> dict:
             }
         }
 
-    gemini_model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
-    llm = ChatGoogleGenerativeAI(
-        model=gemini_model,
-        google_api_key=api_key,
-        temperature=0,
-    )
-    parser = JsonOutputParser()
+    if groq_api_key:
+        groq_model = os.environ.get("GROQ_MODEL") or "openai/gpt-oss-120b"
+        if ChatGroq is not None:
+            print(f"[Schema Generator] Initializing ChatGroq with model '{groq_model}'.", flush=True)
+            llm = ChatGroq(
+                model_name=groq_model,
+                groq_api_key=groq_api_key,
+                temperature=0,
+            )
+        else:
+            print(f"[Schema Generator] Initializing ChatOpenAI (Groq endpoint) with model '{groq_model}'.", flush=True)
+            llm = ChatOpenAI(
+                model=groq_model,
+                api_key=groq_api_key,
+                base_url="https://api.groq.com/openai/v1",
+                temperature=0,
+            )
+    else:
+        model_name = os.environ.get("GEMINI_MODEL") or "gemini-3.8-flash"
+        if "gemma" in model_name.lower():
+            model_name = "gemini-3.6-flash"
+        print(f"[Schema Generator] Initializing ChatGoogleGenerativeAI with model '{model_name}'.", flush=True)
+        llm = ChatGoogleGenerativeAI(
+            model=model_name,
+            google_api_key=gemini_api_key,
+            temperature=0,
+        )
 
     prompt = PromptTemplate(
         template="""You are an expert AI system architect for Schedulux AI.
-Your task is to generate a comprehensive JSON configuration file for an AI booking agent based on the provided website crawl data.
+Your task is to extract and generate a comprehensive AI booking agent configuration from website crawl data for tenant: {tenant_id} (website URL: {url}).
 
-CRITICAL INSTRUCTIONS FOR MISSING DATA & TIME SLOTS:
-1. FOR ALL SERVICES, identify and specify the "allocation_model". 
-   - Set "time_slot" for services booked at specific times (e.g., dental clinics, hair salons, auto repairs).
-   - Set "date_range" for services booked over days/dates (e.g., hotel stays, multi-day car rentals).
-2. IF OPERATING HOURS OR SERVICE DURATIONS ARE NOT EXPLICITLY FOUND in the crawled data, DO NOT perform a live search. Instead, use your parametric knowledge to make highly accurate industry-standard guesses based on the business vertical (e.g., Dental consults are 30 min, Dental offices open Mon-Fri 08:00 to 17:00).
-3. Keep track of all fields you guessed or filled with defaults. List them explicitly in the `runtime_meta.inferred_fields` array (e.g., ["operating_hours", "services.srv_general_consult.duration_minutes"]).
-
-The generated JSON must EXACTLY follow this structure:
-
-{{
-  "$schema": "https://schedulux.ai/schema/v2/agent_runtime_config.json",
-  "schema_version": "2.4",
-  "tenant_id": "{tenant_id}",
-  "business_profile": {{
-    "name": "Extract clinic or business name",
-    "vertical": "Identify vertical (e.g., medical_dental, lodging, auto_repair)",
-    "timezone": "Determine from data or default America/New_York",
-    "address": "Extract physical address",
-    "contact": {{
-       "support_email": "Extract or null",
-       "public_phone": "Extract phone"
-    }}
-  }},
-  "operating_hours": {{
-    "monday": [{{ "start": "08:00", "end": "17:00" }}],
-    "tuesday": [{{ "start": "08:00", "end": "17:00" }}],
-    "wednesday": [{{ "start": "08:00", "end": "17:00" }}],
-    "thursday": [{{ "start": "08:00", "end": "17:00" }}],
-    "friday": [{{ "start": "08:00", "end": "17:00" }}],
-    "saturday": [],
-    "sunday": []
-  }},
-  "resources": [
-     {{
-        "resource_id": "res_dr_aris_smith",
-        "resource_type": "staff",
-        "name": "Dr. Aris Smith",
-        "title": "Lead Dentist",
-        "category": "Orthodontist",
-        "description": "Short bio or details extracted",
-        "is_bookable": true,
-        "dispatch_status": "active"
-     }}
-  ],
-  "services": [
-     {{
-        "service_id": "srv_general_consult",
-        "name": "General Dental Consultation",
-        "allocation_model": "time_slot",
-        "duration_minutes": 30,
-        "price": {{
-           "type": "fixed",
-           "amount": 75,
-           "currency": "USD"
-        }},
-        "eligible_resource_ids": ["res_dr_aris_smith"],
-        "required_asset_ids": []
-     }}
-  ],
-  "runtime_meta": {{
-     "template_id": "tpl_medical_dental_v2",
-     "compiler_mode": "deterministic_strict",
-     "inferred_fields": ["operating_hours", "services.srv_general_consult.price"]
-  }}
-}}
+CRITICAL DOMAIN INSTRUCTIONS:
+1. SERVICES ALLOCATION MODEL:
+   - Identify and specify the "allocation_model" for every service.
+   - Use "time_slot" for services booked at specific times/hours (e.g., dental clinics, hair salons, auto repairs, consultation appointments).
+   - Use "date_range" for services booked over days/dates (e.g., hotel stays, multi-day equipment or car rentals).
+2. OPERATING HOURS & SERVICE DURATIONS:
+   - If operating hours or service durations are not explicitly found in the crawled data, use your parametric knowledge to make accurate industry-standard guesses based on the vertical (e.g., Dental consults are 30 min, Dental offices open Mon-Fri 08:00 to 17:00).
+   - Keep track of all fields you guessed or filled with defaults, and list them in `runtime_meta.inferred_fields`.
+3. ACCURACY & RESOURCES:
+   - Extract real clinic or business name, address, contact phone/email, and timezone into `business_profile`.
+   - Extract real staff, practitioners, or assets into `resources`.
+   - Extract all offered services, categories, and prices into `services`.
 
 Crawled Data:
 {crawled_data}
-
-Return ONLY valid JSON matching the format instructions.
-{format_instructions}
 """,
         input_variables=["tenant_id", "url", "crawled_data"],
-        partial_variables={"format_instructions": parser.get_format_instructions()},
     )
 
-    crawl_text = json.dumps(crawled_data)[:30000]
+    crawl_text = json.dumps(crawled_data)[:25000]
 
-    chain = prompt | llm | parser
+    structured_llm = llm.with_structured_output(GeneratedAgentDraftSchema)
+    chain = prompt | structured_llm
 
     try:
-        response = chain.invoke({
+        structured_result = await chain.ainvoke({
             "tenant_id": tenant_id,
             "url": url,
-            "crawled_data": crawl_text
+            "crawled_data": crawl_text,
         })
-        return response
+
+        if isinstance(structured_result, BaseModel):
+            schema_dict = structured_result.model_dump(mode="json", exclude_none=True)
+        elif isinstance(structured_result, dict):
+            schema_dict = structured_result
+        else:
+            schema_dict = dict(structured_result)
+
+        schema_dict["schema_ref"] = "https://schedulux.ai/schema/v2/agent_runtime_config.json"
+        schema_dict["schema_version"] = "2.4"
+        schema_dict["tenant_id"] = tenant_id
+        schema_dict["status"] = "draft"
+        if not schema_dict.get("agent_id"):
+            schema_dict["agent_id"] = f"agent_{tenant_id}_v1"
+
+        print(f"[Schema Generator] Generated valid schema via with_structured_output.", flush=True)
+        return schema_dict
     except Exception as e:
-        print(f"[Schema Generator] Error generating schema: {e}")
-        return {"error": str(e)}
+        print(f"[Schema Generator] Error generating structured schema: {e}", flush=True)
+        raise
 
 
 async def process_schema_generation(job, token):
@@ -178,33 +174,68 @@ async def process_schema_generation(job, token):
 
     await job.updateProgress(20)
 
-  
-    schema = generate_agent_schema(crawled_data, tenant_id, url)
+    try:
+        schema = await generate_agent_schema(crawled_data, tenant_id, url)
 
-  
-    redis = get_redis_client()
-    draft_key = f"agent:draft:{tenant_id}:{job_id}"
-    latest_key = f"agent:draft:{tenant_id}"
-    schema_json = json.dumps(schema)
+        validated_schema, is_valid, validation_errors = validate_and_sanitize_schema(schema)
+        if is_valid:
+            print(f"[Schema Worker] Draft schema validated successfully with StrictDraftPatchValidator.", flush=True)
+            schema = validated_schema
+        else:
+            print(f"[Schema Worker] Validation WARNING - StrictDraftPatchValidator detected issues: {validation_errors}", flush=True)
 
-    await redis.setex(draft_key, 86400, schema_json)
-    await redis.setex(latest_key, 86400, schema_json)
+        redis = get_redis_client()
+        draft_key = f"agent:draft:{tenant_id}:{job_id}"
+        latest_key = f"agent:draft:{tenant_id}"
+        schema_json = json.dumps(schema)
 
-    print(f"[Schema Worker] Stored draft schema in Redis: {draft_key}", flush=True)
-    print(f"[Schema Worker] Schema JSON preview: {schema_json[:500]}...", flush=True)
+        await redis.setex(draft_key, 86400, schema_json)
+        await redis.setex(latest_key, 86400, schema_json)
 
-    pubsub_channel = "schema-generation-events"
-    event_payload = {
-        "event": "SCHEMA_GENERATED",
-        "tenant_id": tenant_id,
-        "job_id": job_id,
-        "url": url,
-        "schema": schema,
-    }
-    await redis.publish(pubsub_channel, json.dumps(event_payload))
-    print(f"[Schema Worker] Published event to Redis channel '{pubsub_channel}' for job {job_id}", flush=True)
+        print(f"[Schema Worker] Stored draft schema in Redis: {draft_key}", flush=True)
+        print(f"[Schema Worker] Schema JSON preview: {schema_json[:500]}...", flush=True)
 
-    await job.updateProgress(100)
-    print(f"[Schema Worker] Successfully compiled agent schema for tenant: {tenant_id}", flush=True)
+        pubsub_channel = "schema-generation-events"
+        event_payload = {
+            "event": "SCHEMA_GENERATED",
+            "tenant_id": tenant_id,
+            "job_id": job_id,
+            "url": url,
+            "schema": schema,
+        }
+        await redis.publish(pubsub_channel, json.dumps(event_payload))
+        print(f"[Schema Worker] Published event to Redis channel '{pubsub_channel}' for job {job_id}", flush=True)
 
-    return schema
+        await job.updateProgress(100)
+        print(f"[Schema Worker] Successfully compiled agent schema for tenant: {tenant_id}", flush=True)
+
+        return schema
+
+    except Exception as exc:
+        raw_err = str(exc)
+        print(f"[Schema Worker] Exception caught during schema generation for tenant {tenant_id}: {raw_err}", flush=True)
+
+        if "503" in raw_err or "high demand" in raw_err.lower():
+            friendly_err = "The AI model is temporarily experiencing high demand (503). Please wait a moment and try again."
+        elif "429" in raw_err or "quota" in raw_err.lower() or "rate_limit" in raw_err.lower() or "rate limit" in raw_err.lower():
+            friendly_err = "API rate limit reached. Please wait a minute and retry."
+        else:
+            friendly_err = f"AI schema synthesis failed: {raw_err}"
+
+        pubsub_channel = "schema-generation-events"
+        event_payload = {
+            "event": "SCHEMA_GENERATION_FAILED",
+            "tenant_id": tenant_id,
+            "job_id": job_id,
+            "url": url,
+            "error": friendly_err,
+        }
+        try:
+            redis = get_redis_client()
+            await redis.publish(pubsub_channel, json.dumps(event_payload))
+            print(f"[Schema Worker] Published failure event to '{pubsub_channel}': {friendly_err}", flush=True)
+        except Exception as pub_err:
+            print(f"[Schema Worker] Failed to publish error event to redis: {pub_err}", flush=True)
+
+     
+        raise RuntimeError(friendly_err) from exc

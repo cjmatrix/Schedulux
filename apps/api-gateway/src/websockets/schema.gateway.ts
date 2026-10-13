@@ -68,11 +68,21 @@ export class SchemaGateway implements OnGatewayConnection, OnGatewayDisconnect, 
   }
 
   private handleSchemaGenerated(event: SchemaGeneratedEvent) {
+    if (event.event === 'SCHEMA_GENERATION_FAILED' || event.error) {
+      this.logger.warn(`Broadcasting schema:failed for job ${event.job_id}: ${event.error}`);
+      const payload = {
+        job_id: event.job_id,
+        tenant_id: event.tenant_id,
+        error: event.error || 'Failed to generate agent schema',
+      };
+      this.server.to(`job:${event.job_id}`).emit('schema:failed', payload);
+      this.server.to(`tenant:${event.tenant_id}`).emit('schema:failed', payload);
+      return;
+    }
+
     this.logger.log(`Broadcasting schema:ready for job ${event.job_id} / tenant ${event.tenant_id}`);
 
     this.server.to(`job:${event.job_id}`).emit('schema:ready', event);
-
-   
     this.server.to(`tenant:${event.tenant_id}`).emit('schema:ready', event);
   }
 }

@@ -1,444 +1,519 @@
 """
-Schedulux Agent Runtime Config — MongoDB Model (mongoengine ODM)
+Schedulux Agent Runtime Config — MongoDB Model (Beanie Async ODM)
 
-Industry-standard Python MongoDB model for the agent_runtime_config document.
-Collection: agent_runtime_configs
+Industry-standard Python MongoDB models for agent_runtime_configs and agent_drafts.
+Collections: agent_runtime_configs, agent_drafts
 Database:   schedulux_ai (or configured via MONGO_URI)
 
 Design decisions:
-  - EmbeddedDocuments for all nested objects (single-document reads, no joins)
-  - DictField used for flexible sub-structures (operating_hours by day, custom_shift_overrides)
-  - StringField enums with choices enforced at ODM level
+  - Beanie Document (native async Motor/PyMongo + Pydantic v2)
+  - Pydantic BaseModel for all embedded structures
   - Indexes on tenant_id + status + agent_id for runtime hot-path queries
-  - meta.allow_inheritance = False on all embeds to keep bson lean
+  - ConfigDict(extra="allow") for seamless backwards/forwards schema compatibility
 """
 
 from __future__ import annotations
-from datetime import datetime
-from mongoengine import (
-    Document,
-    EmbeddedDocument,
-    StringField,
-    IntField,
-    FloatField,
-    BooleanField,
-    DateTimeField,
-    ListField,
-    DictField,
-    EmbeddedDocumentField,
-    EmbeddedDocumentListField,
-)
+import copy
+import os
+import urllib.parse
+from datetime import datetime, timezone
+from typing import Any, Literal
+from pydantic import BaseModel, ConfigDict, Field
+from pymongo import AsyncMongoClient, IndexModel
+from beanie import Document, init_beanie
 
 
+class ContactEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
-class ContactEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
+    support_email: str | None = None
+    public_phone: str | None = None
+    escalation_phone: str | None = None
 
-    support_email      = StringField()
-    public_phone       = StringField()
-    escalation_phone   = StringField()
 
+class TerminologyEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
-class TerminologyEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
+    customer_singular: str | None = None
+    customer_plural: str | None = None
+    primary_metric: str | None = None
+    action_metric: str | None = None
 
-    customer_singular = StringField()
-    customer_plural   = StringField()
-    primary_metric    = StringField()
-    action_metric     = StringField()
 
+class BrandEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
-class BrandEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
+    primary_color: str | None = None
+    logo_url: str | None = None
 
-    primary_color = StringField()
-    logo_url      = StringField()
 
+class BusinessProfileEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
-class BusinessProfileEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
+    name: str = ""
+    vertical: str = ""  # e.g. "medical", "auto", "hospitality", "custom"
+    timezone: str = "UTC"
+    locale: str | None = None
+    currency: str | None = "USD"
+    address: str | None = None
+    contact: ContactEmbed | None = None
+    terminology: TerminologyEmbed | None = None
+    brand: BrandEmbed | None = None
 
-    name        = StringField(required=True)
-    vertical    = StringField(required=True)  # e.g. "medical_dental", "lodging"
-    timezone    = StringField(required=True)
-    locale      = StringField()
-    currency    = StringField()
-    address     = StringField()
-    contact     = EmbeddedDocumentField(ContactEmbed)
-    terminology = EmbeddedDocumentField(TerminologyEmbed)
-    brand       = EmbeddedDocumentField(BrandEmbed)
 
+class WidgetConfigEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
+    agent_name: str | None = None
+    avatar_url: str | None = None
+    initial_greeting: str | None = None
+    fallback_message: str | None = None
+    position: str | None = "right"
+    launcher_style: str | None = None
+    sound_on_load: bool = False
+    auto_expand_delay_seconds: int | None = None
+    platform_sources: list[str] = Field(default_factory=list)
+    whitelisted_domains: list[str] = Field(default_factory=list)
 
 
-class WidgetConfigEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
+class LlmEngineEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
-    agent_name              = StringField()
-    avatar_url              = StringField()
-    initial_greeting        = StringField()
-    fallback_message        = StringField()
-    position                = StringField(choices=["left", "right"])
-    launcher_style          = StringField()
-    sound_on_load           = BooleanField(default=False)
-    auto_expand_delay_seconds = IntField()
-    platform_sources        = ListField(StringField())
-    whitelisted_domains     = ListField(StringField())
+    studio_model: str | None = None
+    chat_model: str | None = None
+    chat_fallback_model: str | None = None
+    fallback_trigger_latency_ms: int | None = None
+    temperature: float = 0.1
+    schema_validation: str | None = "strict"
+    semantic_caching: bool = True
+    streaming: str | None = None
+    prompt_compiler_token_limit: int | None = None
 
 
+class KnowledgeAssetEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
+    asset_id: str
+    title: str | None = None
+    asset_type: str | None = None
+    source_uri: str | None = None
+    sync_status: str | None = None
+    last_synced_at: datetime | None = None
 
-class LlmEngineEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
 
-    studio_model               = StringField()
-    chat_model                 = StringField()
-    chat_fallback_model        = StringField()
-    fallback_trigger_latency_ms = IntField()
-    temperature                = FloatField(default=0.1)
-    schema_validation          = StringField(choices=["strict", "lenient"])
-    semantic_caching           = BooleanField(default=True)
-    streaming                  = StringField()
-    prompt_compiler_token_limit = IntField()
+class KnowledgeBaseEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
+    namespace: str | None = None
+    qdrant_collection: str | None = None
+    sources: list[KnowledgeAssetEmbed] = Field(default_factory=list)
 
 
-class KnowledgeAssetEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
+class SchedulingEngineEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
-    asset_id      = StringField(required=True)
-    title         = StringField()
-    asset_type    = StringField(choices=["pdf", "docx", "web_crawler", "text", "csv"])
-    source_uri    = StringField()
-    sync_status   = StringField(choices=["synced", "pending", "failed"])
-    last_synced_at = DateTimeField()
+    allocation_model: str = "time_slot"
+    default_lead_time_hours: int = 2
+    max_advance_booking_days: int = 60
+    cancellation_window_hours: int = 24
+    hold_duration_minutes: int = 10
 
 
-class KnowledgeBaseEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
+class BlackoutDateEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
-    namespace          = StringField()
-    qdrant_collection  = StringField()
-    sources            = EmbeddedDocumentListField(KnowledgeAssetEmbed)
+    date: str
+    reason: str | None = None
+    is_closed: bool = True
 
 
+class OperatingHoursEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
+    monday: list[dict[str, Any]] = Field(default_factory=list)
+    tuesday: list[dict[str, Any]] = Field(default_factory=list)
+    wednesday: list[dict[str, Any]] = Field(default_factory=list)
+    thursday: list[dict[str, Any]] = Field(default_factory=list)
+    friday: list[dict[str, Any]] = Field(default_factory=list)
+    saturday: list[dict[str, Any]] = Field(default_factory=list)
+    sunday: list[dict[str, Any]] = Field(default_factory=list)
+    blackout_dates: list[BlackoutDateEmbed] = Field(default_factory=list)
 
-class SchedulingEngineEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
 
-    allocation_model         = StringField(choices=["time_slot", "date_range"], default="time_slot")
-    default_lead_time_hours  = IntField(default=2)
-    max_advance_booking_days = IntField(default=60)
-    cancellation_window_hours = IntField(default=24)
-    hold_duration_minutes    = IntField(default=10)
-   
+class ResourceEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
+    resource_id: str
+    resource_type: str = "staff"
+    name: str
+    title: str | None = None
+    category: str | None = None
+    description: str | None = None
+    is_bookable: bool = True
+    dispatch_status: str = "active"
+    custom_shift_overrides: dict[str, Any] = Field(default_factory=dict)
 
 
-class BlackoutDateEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
+class PriceEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
-    date      = StringField(required=True)   # ISO date "YYYY-MM-DD"
-    reason    = StringField()
-    is_closed = BooleanField(default=True)
+    type: str = "fixed"
+    amount: float = 0.0
+    currency: str = "USD"
 
 
-class OperatingHoursEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
+class DepositEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
-   
-    monday    = ListField(DictField())
-    tuesday   = ListField(DictField())
-    wednesday = ListField(DictField())
-    thursday  = ListField(DictField())
-    friday    = ListField(DictField())
-    saturday  = ListField(DictField())
-    sunday    = ListField(DictField())
-    blackout_dates = EmbeddedDocumentListField(BlackoutDateEmbed)
+    required: bool = False
+    amount: float = 0.0
+    processor: str | None = None
+    upi_id: str | None = None
+    qr_code_url: str | None = None
+    confirmation_method: str | None = None
+    payment_instructions: str | None = None
 
 
+class ServiceEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
+    service_id: str
+    name: str
+    category: str | None = None
+    description: str | None = None
+    duration_minutes: int = 30
+    buffer_minutes: int = 0
+    allocation_model: str = "time_slot"
+    price: PriceEmbed | None = None
+    deposit: DepositEmbed | None = None
+    eligible_resource_ids: list[str] = Field(default_factory=list)
+    required_asset_ids: list[str] = Field(default_factory=list)
+    recall_interval_days: int | None = None
 
-class ResourceEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
 
-    resource_id            = StringField(required=True)
-    resource_type          = StringField(required=True, choices=["staff", "physical_asset"])
-    name                   = StringField(required=True)
-    title                  = StringField()
-    category               = StringField()
-    description            = StringField()
-    is_bookable            = BooleanField(default=True)
-    dispatch_status        = StringField(choices=["active", "inactive", "on_leave"], default="active")
-    # custom_shift_overrides: day-name → list of {start, end} dicts (same structure as OperatingHoursEmbed)
-    custom_shift_overrides = DictField()
+class VerificationPolicyEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
+    require_otp_for_new_booking: bool = False
+    require_otp_for_reschedule: bool = True
+    require_otp_for_cancel: bool = True
+    require_otp_for_history_access: bool = True
+    otp_delivery_channel: str | None = None
+    otp_expiry_seconds: int = 300
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SERVICES
-# ─────────────────────────────────────────────────────────────────────────────
 
-class PriceEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
+class PatientFieldEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
-    type     = StringField(choices=["fixed", "variable", "free"], default="fixed")
-    amount   = FloatField(default=0.0)
-    currency = StringField(default="USD")
+    field_name: str
+    data_type: str | None = None
+    is_required: bool = True
+    prompt_if_missing: str | None = None
 
 
-class DepositEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
+class PhiScrubEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
-    required               = BooleanField(default=False)
-    amount                 = FloatField(default=0.0)
-    processor              = StringField(choices=["upi_direct", "stripe", "bank_transfer", "cash_on_arrival"])
-    upi_id                 = StringField()
-    qr_code_url            = StringField()
-    confirmation_method    = StringField()
-    payment_instructions   = StringField()
+    enabled: bool = True
+    policy: str | None = None
+    description: str | None = None
+    hipaa_compliant: bool = True
 
 
-class ServiceEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
+class TriageEmergencyEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
-    service_id            = StringField(required=True)
-    name                  = StringField(required=True)
-    category              = StringField()
-    description           = StringField()
-    duration_minutes      = IntField(required=True)  
-    buffer_minutes        = IntField(default=0)       
-    allocation_model      = StringField(choices=["time_slot", "date_range"], default="time_slot")
-    price                 = EmbeddedDocumentField(PriceEmbed)
-    deposit               = EmbeddedDocumentField(DepositEmbed)
-    eligible_resource_ids = ListField(StringField())
-    required_asset_ids    = ListField(StringField())
-    recall_interval_days  = IntField()  
+    enabled: bool = True
+    rule_id: str | None = None
+    trigger_type: str | None = None
+    keywords: list[str] = Field(default_factory=list)
+    action: str | None = None
+    agent_locked_on_trigger: bool = True
+    response_override: str | None = None
+    notify_front_desk: bool = True
+    front_desk_contact: str | None = None
 
 
+class HumanHandoffEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
+    enabled: bool = True
+    trigger_topics: list[str] = Field(default_factory=list)
+    action: str | None = None
+    target_action: str | None = None
+    reception_contact: str | None = None
+    lock_agent_on_handoff: bool = True
+    handoff_message: str | None = None
 
-class VerificationPolicyEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
 
-    require_otp_for_new_booking    = BooleanField(default=False)
-    require_otp_for_reschedule     = BooleanField(default=True)
-    require_otp_for_cancel         = BooleanField(default=True)
-    require_otp_for_history_access = BooleanField(default=True)
-    otp_delivery_channel           = StringField(choices=["sms", "email", "whatsapp"])
-    otp_expiry_seconds             = IntField(default=300)
+class OffHoursPolicyEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
+    action: str | None = None
+    response: str | None = None
 
-class PatientFieldEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
 
-    field_name       = StringField(required=True)
-    data_type        = StringField(choices=["string", "phone", "email", "date", "number", "boolean"])
-    is_required      = BooleanField(default=True)
-    prompt_if_missing = StringField()
+class NoDiagnosisPolicyEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
+    enabled: bool = True
+    response_override: str | None = None
 
 
+class GuardrailsEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
+    phi_scrubbing: PhiScrubEmbed | None = None
+    triage_emergency: TriageEmergencyEmbed | None = None
+    human_handoff: HumanHandoffEmbed | None = None
+    off_hours_policy: OffHoursPolicyEmbed | None = None
+    no_diagnosis_policy: NoDiagnosisPolicyEmbed | None = None
 
 
-class PhiScrubEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
-    enabled        = BooleanField(default=True)
-    policy         = StringField(choices=["zero_retention", "anonymize"])
-    description    = StringField()
-    hipaa_compliant = BooleanField(default=True)
+class StateVariableEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
+    variable_key: str
+    data_type: str | None = None
+    description: str | None = None
+    is_required: bool = True
+    prompt_if_missing: str | None = None
 
-class TriageEmergencyEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
-    enabled               = BooleanField(default=True)
-    rule_id               = StringField()
-    trigger_type          = StringField()
-    keywords              = ListField(StringField())
-    action                = StringField()
-    agent_locked_on_trigger = BooleanField(default=True)
-    response_override     = StringField()
-    notify_front_desk     = BooleanField(default=True)
-    front_desk_contact    = StringField()
 
+class SubAgentEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
-class HumanHandoffEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
-    enabled              = BooleanField(default=True)
-    trigger_topics       = ListField(StringField())
-    action               = StringField()
-    target_action        = StringField()
-    reception_contact    = StringField()
-    lock_agent_on_handoff = BooleanField(default=True)
-    handoff_message      = StringField()
+    agent_id: str
+    agent_type: str
+    routing_trigger_description: str | None = None
+    system_prompt: str | None = None
+    allowed_tools: list[str] = Field(default_factory=list)
+    required_state_variables: list[StateVariableEmbed] = Field(default_factory=list)
 
 
-class OffHoursPolicyEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
-    action   = StringField()
-    response = StringField()
+class UpiConfigEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
+    upi_id: str | None = None
+    display_name: str | None = None
+    qr_code_url: str | None = None
+    accepted_apps: list[str] = Field(default_factory=list)
 
-class NoDiagnosisPolicyEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
-    enabled           = BooleanField(default=True)
-    response_override = StringField()
 
+class PaymentGatewayEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
-class GuardrailsEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
-    phi_scrubbing          = EmbeddedDocumentField(PhiScrubEmbed)
-    triage_emergency       = EmbeddedDocumentField(TriageEmergencyEmbed)
-    human_handoff          = EmbeddedDocumentField(HumanHandoffEmbed)
-    off_hours_policy       = EmbeddedDocumentField(OffHoursPolicyEmbed)
-    no_diagnosis_policy    = EmbeddedDocumentField(NoDiagnosisPolicyEmbed)
+    model: str | None = None
+    supported_processors: list[str] = Field(default_factory=list)
+    active_processor: str | None = None
+    upi_config: UpiConfigEmbed | None = None
+    confirmation_method: str | None = None
+    refund_policy: str | None = None
 
 
+class IntegrationsEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
+    stripe: dict[str, Any] = Field(default_factory=dict)
+    payment_gateway: PaymentGatewayEmbed | None = None
+    twilio: dict[str, Any] = Field(default_factory=dict)
 
-class StateVariableEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
-    variable_key      = StringField(required=True)
-    data_type         = StringField(choices=["string", "phone", "email", "date", "time", "number", "boolean"])
-    description       = StringField()
-    is_required       = BooleanField(default=True)
-    prompt_if_missing = StringField()
 
+class ComplianceEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
-class SubAgentEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
-    agent_id                      = StringField(required=True)
-    agent_type                    = StringField(
-        required=True,
-        choices=["booking", "faq_rag", "payment", "recall_outbound", "custom"]
-    )
-    routing_trigger_description   = StringField()
-    system_prompt                 = StringField()
-    allowed_tools                 = ListField(StringField())
-    required_state_variables      = EmbeddedDocumentListField(StateVariableEmbed)
+    hipaa_mode: bool = False
+    phi_scrubbing: bool = False
+    data_retention_policy: str | None = None
+    zero_hallucination_mode: bool = True
+    audit_trail_enabled: bool = True
 
 
+class SubscriptionEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
+    tier: str | None = "starter"
+    tokens_used_this_month: int = 0
 
-class UpiConfigEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
-    upi_id        = StringField()
-    display_name  = StringField()
-    qr_code_url   = StringField()
-    accepted_apps = ListField(StringField())
 
+class RuntimeMetaEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
-class PaymentGatewayEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
-    model                = StringField(choices=["pass_through", "platform_managed"])
-    supported_processors = ListField(StringField())
-    active_processor     = StringField()
-    upi_config           = EmbeddedDocumentField(UpiConfigEmbed)
-    confirmation_method  = StringField()
-    refund_policy        = StringField()
-
-
-class IntegrationsEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
-    # Stripe / Twilio stored as flexible dicts since their shape varies by tier
-    stripe          = DictField()
-    payment_gateway = EmbeddedDocumentField(PaymentGatewayEmbed)
-    twilio          = DictField()
-
-
-
-
-class ComplianceEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
-    hipaa_mode             = BooleanField(default=False)
-    phi_scrubbing          = BooleanField(default=False)
-    data_retention_policy  = StringField(choices=["session_only", "30_days", "1_year", "indefinite"])
-    zero_hallucination_mode = BooleanField(default=True)
-    audit_trail_enabled    = BooleanField(default=True)
-
-
-
-
-class SubscriptionEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
-    tier                       = StringField(choices=["starter", "pro", "enterprise"])
-    tokens_used_this_month     = IntField(default=0)
-   
-
-
-
-class RuntimeMetaEmbed(EmbeddedDocument):
-    meta = {"allow_inheritance": False}
-    template_id                 = StringField()
-    template_name               = StringField()
-    agent_version               = StringField()
-    last_published_at           = DateTimeField()
-    last_compiled_by            = StringField()
-    compiler_mode               = StringField(choices=["deterministic_strict", "permissive", "mock"])
-    deterministic_conflict_check = BooleanField(default=True)
-    live_preview_lag_ms         = IntField(default=0)
-    inferred_fields             = ListField(StringField())  # fields AI-inferred during schema gen
-
+    template_id: str | None = None
+    template_name: str | None = None
+    agent_version: str | None = None
+    last_published_at: datetime | None = None
+    last_compiled_by: str | None = None
+    compiler_mode: str | None = None
+    deterministic_conflict_check: bool = True
+    live_preview_lag_ms: int = 0
+    inferred_fields: list[str] = Field(default_factory=list)
 
 
 class AgentRuntimeConfig(Document):
     """
     Top-level document for a compiled Schedulux agent runtime configuration.
-
     One document per active agent per tenant.
     Indexed for runtime hot-path: tenant_id + status is the primary lookup.
     """
+    model_config = ConfigDict(extra="allow")
 
-    meta = {
-        "collection": "agent_runtime_configs",
-        "allow_inheritance": False,
-        "indexes": [
-            {"fields": ["tenant_id", "status"], "name": "idx_tenant_status"},
-            {"fields": ["agent_id"], "name": "idx_agent_id", "unique": True, "sparse": True},
-            {"fields": ["tenant_id", "status", "-compiled_at"], "name": "idx_tenant_latest"},
-        ],
-    }
+    schema_version: str = "2.4"
+    status: str = "draft"
+    tenant_id: str
+    agent_id: str | None = None
 
-    # ── Identity ──────────────────────────────────────────────────────────
-    schema_version  = StringField(default="2.4")
-    status          = StringField(
-        required=True,
-        choices=["draft", "live", "archived", "paused"],
-        default="draft",
+    compiled_at: datetime = Field(default_factory=datetime.utcnow)
+    compiler_latency_ms: int | None = None
+    compiler_hash: str | None = None
+
+    business_profile: BusinessProfileEmbed | None = None
+    widget_config: WidgetConfigEmbed | None = None
+    llm_engine: LlmEngineEmbed | None = None
+    supervisor_prompt: str | None = None
+    knowledge_base: KnowledgeBaseEmbed | None = None
+    scheduling_engine: SchedulingEngineEmbed | None = None
+    operating_hours: OperatingHoursEmbed | None = None
+
+    resources: list[ResourceEmbed] = Field(default_factory=list)
+    services: list[ServiceEmbed] = Field(default_factory=list)
+
+    guardrails: GuardrailsEmbed | None = None
+    sub_agents: list[SubAgentEmbed] = Field(default_factory=list)
+
+    integrations: IntegrationsEmbed | None = None
+    compliance: ComplianceEmbed | None = None
+    subscription: SubscriptionEmbed | None = None
+
+    runtime_meta: RuntimeMetaEmbed | None = None
+
+    class Settings:
+        name = "agent_runtime_configs"
+        indexes = [
+            IndexModel([("tenant_id", 1), ("status", 1)], name="idx_tenant_status"),
+            IndexModel([("agent_id", 1)], unique=True, sparse=True, name="idx_agent_id"),
+            IndexModel([("tenant_id", 1), ("status", 1), ("compiled_at", -1)], name="idx_tenant_latest"),
+        ]
+
+
+class DraftCheckpointEmbed(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    checkpoint_id: str
+    message_id: str
+    user_prompt: str | None = ""
+    summary: str | None = ""
+    draft_snapshot: dict[str, Any] = Field(default_factory=dict)
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+class AgentDraft(Document):
+    """
+    Workspace staging document for in-progress agent configurations.
+    Maintains a rolling timeline of the last 20 message checkpoints (full snapshots)
+    enabling instant Google Antigravity-style time travel rewind to any message.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    tenant_id: str
+    agent_id: str
+    name: str
+    creation_source: str = "custom"
+    last_edited_by: str | None = None
+
+    current_draft: dict[str, Any] = Field(default_factory=dict)
+    active_message_id: str | None = None
+
+    checkpoints: list[DraftCheckpointEmbed] = Field(default_factory=list)
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "agent_drafts"
+        indexes = [
+            IndexModel([("tenant_id", 1), ("agent_id", 1)], unique=True, name="idx_tenant_agent"),
+            IndexModel([("tenant_id", 1), ("updated_at", -1)], name="idx_tenant_updated"),
+        ]
+
+    def add_checkpoint(
+        self,
+        checkpoint_id: str,
+        message_id: str,
+        draft_snapshot: dict[str, Any],
+        user_prompt: str = "",
+        summary: str = "",
+        max_checkpoints: int = 20,
+    ) -> None:
+        """Appends a new message checkpoint and enforces a rolling window of max 20."""
+        new_cp = DraftCheckpointEmbed(
+            checkpoint_id=checkpoint_id,
+            message_id=message_id,
+            user_prompt=user_prompt,
+            summary=summary,
+            draft_snapshot=copy.deepcopy(draft_snapshot) if draft_snapshot else {},
+            timestamp=datetime.utcnow(),
+        )
+        self.checkpoints.append(new_cp)
+
+        if len(self.checkpoints) > max_checkpoints:
+            self.checkpoints = self.checkpoints[-max_checkpoints:]
+
+        self.current_draft = new_cp.draft_snapshot
+        self.active_message_id = message_id
+        self.updated_at = datetime.utcnow()
+
+    def rewind_to_message(self, target_message_id: str) -> DraftCheckpointEmbed | None:
+        """
+        Rewinds the draft back to the state of target_message_id.
+        Truncates any forward checkpoints after this message (linear time travel).
+        Returns the target checkpoint so LangGraph can rewind its thread state too.
+        """
+        target_idx = None
+        for idx, cp in enumerate(self.checkpoints):
+            if cp.message_id == target_message_id:
+                target_idx = idx
+                break
+
+        if target_idx is None:
+            return None
+
+        target_cp = self.checkpoints[target_idx]
+
+        self.checkpoints = self.checkpoints[: target_idx + 1]
+        self.current_draft = copy.deepcopy(target_cp.draft_snapshot)
+        self.active_message_id = target_cp.message_id
+        self.updated_at = datetime.utcnow()
+
+        return target_cp
+
+
+_client: AsyncMongoClient | None = None
+_db_initialized = False
+
+
+async def init_db(mongo_uri: str | None = None):
+    """
+    Initializes Beanie connection with PyMongo AsyncMongoClient.
+    Idempotent: safe to call multiple times.
+    """
+    global _client, _db_initialized
+    if _db_initialized:
+        return
+    if mongo_uri is None:
+        mongo_uri = os.environ.get("MONGO_URI", "mongodb://localhost:27017/schedulux_ai")
+
+    parsed = urllib.parse.urlparse(mongo_uri)
+    db_name = parsed.path.lstrip('/') if parsed.path else ""
+    if not db_name or "?" in db_name:
+        db_name = db_name.split("?")[0] if db_name else ""
+    if not db_name:
+        db_name = "schedulux_ai"
+
+    _client = AsyncMongoClient(mongo_uri)
+    db = _client[db_name]
+    await init_beanie(
+        database=db,
+        document_models=[AgentDraft, AgentRuntimeConfig],
     )
-    tenant_id       = StringField(required=True, db_field="tenant_id")
-    agent_id        = StringField()
-
-    # ── Compiler metadata ─────────────────────────────────────────────────
-    compiled_at        = DateTimeField(default=datetime.utcnow)
-    compiler_latency_ms = IntField()
-    compiler_hash      = StringField()
-
-    # ── Core configuration blocks ─────────────────────────────────────────
-    business_profile    = EmbeddedDocumentField(BusinessProfileEmbed, required=True)
-    widget_config       = EmbeddedDocumentField(WidgetConfigEmbed)
-    llm_engine          = EmbeddedDocumentField(LlmEngineEmbed)
-    supervisor_prompt   = StringField()
-    knowledge_base      = EmbeddedDocumentField(KnowledgeBaseEmbed)
-    scheduling_engine   = EmbeddedDocumentField(SchedulingEngineEmbed)
-    operating_hours     = EmbeddedDocumentField(OperatingHoursEmbed)
-
-    # ── Resources, services ───────────────────────────────────────────────
-    resources  = EmbeddedDocumentListField(ResourceEmbed)
-    services   = EmbeddedDocumentListField(ServiceEmbed)
-
-    # ── Behaviour rules ───────────────────────────────────────────────────
-
-    guardrails    = EmbeddedDocumentField(GuardrailsEmbed)
-
-    # ── Agent routing ─────────────────────────────────────────────────────
-    sub_agents = EmbeddedDocumentListField(SubAgentEmbed)
-
-    # ── Platform configs ──────────────────────────────────────────────────
-    integrations = EmbeddedDocumentField(IntegrationsEmbed)
-    compliance   = EmbeddedDocumentField(ComplianceEmbed)
-    subscription = EmbeddedDocumentField(SubscriptionEmbed)
-
-    # ── Runtime / compile metadata ────────────────────────────────────────
-    runtime_meta = EmbeddedDocumentField(RuntimeMetaEmbed)
+    _db_initialized = True

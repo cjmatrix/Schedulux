@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useParams } from 'react-router';
 import { axiosClient } from '../api/axiosClient';
 import { Send, Bot, User, CheckCircle } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
@@ -11,6 +12,8 @@ interface Message {
 }
 
 export default function AgentOnboardingWizard() {
+  const { id: agentId } = useParams<{ id: string }>();
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [draftSchema, setDraftSchema] = useState<any>({});
@@ -29,12 +32,12 @@ export default function AgentOnboardingWizard() {
 
   useEffect(() => {
     const startSession = async () => {
-      if (!tenantId) return;
+      if (!tenantId || !agentId) return;
       setStatus('loading');
       try {
         const res = await axiosClient.post('/api/v1/tenant/knowledge/onboarding/start', {
           tenant_id: tenantId,
-          initial_draft_json: localStorage.getItem('crawled_schema') || '{}' // Optionally pick up crawled data
+          agent_id: agentId,
         });
         
         const data = res.data.data;

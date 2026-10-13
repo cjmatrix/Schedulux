@@ -4,19 +4,27 @@ import {
   Get,
   Body,
   Query,
+  Req,
   Inject,
   OnModuleInit,
   UsePipes,
   HttpCode,
   HttpStatus,
   UseGuards,
+  UnauthorizedException,
 } from "@nestjs/common";
 import { ClientGrpc } from "@nestjs/microservices";
 import { lastValueFrom } from "rxjs";
 import { ZodValidationPipe } from "nestjs-zod";
 import { KnowledgeServiceClient } from "@repo/proto/knowledge";
-import { CrawlSiteDto, GetCrawlStatusDto, StartOnboardingDto, ResumeOnboardingDto } from "./dtos/knowledge.dto.js";
-import { TenantAuthGuard } from "../../guards/tenant-auth.guard.js";
+import {
+  CrawlSiteDto,
+  GetCrawlStatusDto,
+  StartOnboardingDto,
+  ResumeOnboardingDto,
+  SaveInitialAgentDraftDto,
+} from "./dtos/knowledge.dto.js";
+import { TenantAuthGuard, AuthenticatedTenantRequest } from "../../guards/tenant-auth.guard.js";
 import { RolesGuard } from "../../guards/roles.guard.js";
 import { Roles } from "../../decorators/roles.decorator.js";
 
@@ -110,7 +118,8 @@ export class KnowledgeController implements OnModuleInit {
     const response = await lastValueFrom(
       this.knowledgeService.startOnboardingSession({
         tenant_id: body.tenant_id,
-        initial_draft_json: body.initial_draft_json,
+        initial_draft_json: body.initial_draft_json || "{}",
+        agent_id: body.agent_id || "",
       })
     );
     return {
@@ -144,6 +153,55 @@ export class KnowledgeController implements OnModuleInit {
         type: response.type,
         draft_schema: JSON.parse(response.draft_schema_json || '{}')
       }
+    };
+  }
+
+  @Post("agents/draft")
+  @HttpCode(HttpStatus.CREATED)
+  @UsePipes(ZodValidationPipe)
+  async saveInitialDraft(
+    @Req() req: AuthenticatedTenantRequest,
+    @Body() body: SaveInitialAgentDraftDto,
+  ) {
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id || body.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException("Tenant ID is required");
+    }
+
+    const response = await lastValueFrom(
+      this.knowledgeService.saveInitialAgentDraft({
+        tenant_id: tenantId,
+        draft_json: body.draft_json || "",
+        creation_source: body.creation_source || "web_crawl",
+        name: body.name || "",
+      })
+    );
+
+    return {
+      message: response.message,
+      data: {
+        agent_id: response.agent_id,
+        status: response.status,
+      },
+    };
+  }
+
+  @Get("agents")
+  async listAgents(@Req() req: AuthenticatedTenantRequest) {
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException("Tenant ID is required");
+    }
+
+    const response = await lastValueFrom(
+      this.knowledgeService.listTenantAgents({
+        tenant_id: tenantId,
+      })
+    );
+
+    return {
+      message: "Agents retrieved successfully",
+      data: response.agents || [],
     };
   }
 }

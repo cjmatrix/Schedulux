@@ -25,10 +25,15 @@
       "types": "./dist/interfaces/knowledge.d.ts",
       "default": "./dist/interfaces/knowledge.js"
     },
+    "./scheduling": {
+      "types": "./dist/interfaces/scheduling.d.ts",
+      "default": "./dist/interfaces/scheduling.js"
+    },
     "./tenant.proto": "./src/tenant.proto",
     "./superadmin.proto": "./src/superadmin.proto",
     "./dashboard.proto": "./src/dashboard.proto",
-    "./knowledge.proto": "./src/knowledge.proto"
+    "./knowledge.proto": "./src/knowledge.proto",
+    "./scheduling.proto": "./src/scheduling.proto"
   },
   "scripts": {
     "build": "mkdir -p ./src/interfaces && protoc -I=./src --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=./src/interfaces ./src/*.proto --ts_proto_opt=esModuleInterop=true,outputEncodeMethods=false,outputJsonMethods=false,nestJs=true,snakeToCamel=false && tsc"

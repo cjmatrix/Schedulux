@@ -848,7 +848,7 @@ async def node_apply_json_patches(state: GraphState) -> dict:
         patcher = jsonpatch.JsonPatch(patches)
         updated_draft = patcher.apply(copy.deepcopy(state["draft"]))
         
-        # Boundary validation: Strip hallucinations and check required fields
+       
         StrictDraftPatchValidator.model_validate(updated_draft)
         
         print(f"[Patch Node] Applied {len(patches)} patches to draft and passed schema validation.", flush=True)
@@ -895,10 +895,9 @@ async def node_ask_human_semantic(state: GraphState) -> dict:
 
 async def node_finalize_and_save(state: GraphState) -> dict:
     """
-    Stamps the config as live and upserts to MongoDB via mongoengine.
+    Stamps the config as live and upserts to MongoDB via Beanie.
     One live config per tenant (upsert by tenant_id).
     """
-    import mongoengine
     from agent_orchestrator.models import (
         AgentRuntimeConfig,
         BusinessProfileEmbed,
@@ -910,28 +909,22 @@ async def node_finalize_and_save(state: GraphState) -> dict:
         DepositEmbed,
         ResourceEmbed,
         SchedulingEngineEmbed,
+        init_db,
     )
 
-    mongo_uri = os.environ.get("MONGO_URI", "mongodb://localhost:27017/schedulux_ai")
-
-  
-    try:
-        mongoengine.get_connection("default")
-    except Exception:
-        mongoengine.connect(host=mongo_uri, alias="default", uuidRepresentation="standard")
+    await init_db()
 
     draft     = state["draft"]
     tenant_id = state["tenant_id"]
 
-   
     bp   = draft.get("business_profile", {})
     ct   = bp.get("contact", {})
     business_profile = BusinessProfileEmbed(
         name     = bp.get("name", ""),
         vertical = bp.get("vertical", ""),
-        timezone = bp.get("timezone", ""),
+        timezone = bp.get("timezone", "UTC"),
         locale   = bp.get("locale"),
-        currency = bp.get("currency"),
+        currency = bp.get("currency", "USD"),
         address  = bp.get("address"),
         contact  = ContactEmbed(
             support_email    = ct.get("support_email"),
@@ -940,7 +933,6 @@ async def node_finalize_and_save(state: GraphState) -> dict:
         ),
     )
 
-  
     oh = draft.get("operating_hours", {})
     operating_hours = OperatingHoursEmbed(
         monday    = oh.get("monday",    []),
@@ -1014,20 +1006,35 @@ async def node_finalize_and_save(state: GraphState) -> dict:
    
     agent_id = draft.get("agent_id") or f"agent_{tenant_id}_v1"
 
-    config_doc = AgentRuntimeConfig.objects(tenant_id=tenant_id).modify(
-        upsert   = True,
-        new      = True,
-        set__agent_id         = agent_id,
-        set__schema_version   = "2.4",
-        set__status           = "live",
-        set__compiled_at      = datetime.now(timezone.utc),
-        set__business_profile = business_profile,
-        set__operating_hours  = operating_hours,
-        set__scheduling_engine= scheduling_engine,
-        set__services         = services,
-        set__resources        = resources_list,
-        set__supervisor_prompt= draft.get("supervisor_prompt"),
-    )
+    existing_config = await AgentRuntimeConfig.find_one({"tenant_id": tenant_id})
+    if existing_config:
+        existing_config.agent_id = agent_id
+        existing_config.schema_version = "2.4"
+        existing_config.status = "live"
+        existing_config.compiled_at = datetime.now(timezone.utc)
+        existing_config.business_profile = business_profile
+        existing_config.operating_hours = operating_hours
+        existing_config.scheduling_engine = scheduling_engine
+        existing_config.services = services
+        existing_config.resources = resources_list
+        existing_config.supervisor_prompt = draft.get("supervisor_prompt")
+        await existing_config.save()
+        config_doc = existing_config
+    else:
+        config_doc = AgentRuntimeConfig(
+            tenant_id=tenant_id,
+            agent_id=agent_id,
+            schema_version="2.4",
+            status="live",
+            compiled_at=datetime.now(timezone.utc),
+            business_profile=business_profile,
+            operating_hours=operating_hours,
+            scheduling_engine=scheduling_engine,
+            services=services,
+            resources=resources_list,
+            supervisor_prompt=draft.get("supervisor_prompt"),
+        )
+        await config_doc.save()
 
     print(f"[TenantAgent] Saved config for tenant {tenant_id} — id: {config_doc.id}", flush=True)
 

@@ -7,6 +7,8 @@ service KnowledgeService {
   rpc GetCrawlStatus (GetCrawlStatusRequest) returns (GetCrawlStatusResponse);
   rpc StartOnboardingSession (StartOnboardingRequest) returns (OnboardingResponse);
   rpc ResumeOnboardingSession (ResumeOnboardingRequest) returns (OnboardingResponse);
+  rpc SaveInitialAgentDraft (SaveInitialAgentDraftRequest) returns (SaveInitialAgentDraftResponse);
+  rpc ListTenantAgents (ListTenantAgentsRequest) returns (ListTenantAgentsResponse);
 }
 
 message CrawlSiteRequest {
@@ -42,6 +44,7 @@ message GetCrawlStatusResponse {
 message StartOnboardingRequest {
   string tenant_id = 1;
   string initial_draft_json = 2;
+  string agent_id = 3;
 }
 
 message ResumeOnboardingRequest {
@@ -55,4 +58,35 @@ message OnboardingResponse {
   string field = 3;
   string type = 4;
   string draft_schema_json = 5;
+}
+
+message SaveInitialAgentDraftRequest {
+  string tenant_id = 1;
+  string draft_json = 2;
+  string creation_source = 3;
+  string name = 4;
+}
+
+message SaveInitialAgentDraftResponse {
+  string message = 1;
+  string agent_id = 2;
+  string status = 3;
+}
+
+message ListTenantAgentsRequest {
+  string tenant_id = 1;
+}
+
+message AgentSummaryInfo {
+  string agent_id = 1;
+  string name = 2;
+  string status = 3; // "pending" or "created"
+  string creation_source = 4;
+  int32 services_count = 5;
+  string updated_at = 6;
+  string created_at = 7;
+}
+
+message ListTenantAgentsResponse {
+  repeated AgentSummaryInfo agents = 1;
 }

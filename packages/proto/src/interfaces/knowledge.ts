@@ -43,6 +43,7 @@ export interface GetCrawlStatusResponse {
 export interface StartOnboardingRequest {
   tenant_id: string;
   initial_draft_json: string;
+  agent_id: string;
 }
 
 export interface ResumeOnboardingRequest {
@@ -58,6 +59,38 @@ export interface OnboardingResponse {
   draft_schema_json: string;
 }
 
+export interface SaveInitialAgentDraftRequest {
+  tenant_id: string;
+  draft_json: string;
+  creation_source: string;
+  name: string;
+}
+
+export interface SaveInitialAgentDraftResponse {
+  message: string;
+  agent_id: string;
+  status: string;
+}
+
+export interface ListTenantAgentsRequest {
+  tenant_id: string;
+}
+
+export interface AgentSummaryInfo {
+  agent_id: string;
+  name: string;
+  /** "pending" or "created" */
+  status: string;
+  creation_source: string;
+  services_count: number;
+  updated_at: string;
+  created_at: string;
+}
+
+export interface ListTenantAgentsResponse {
+  agents: AgentSummaryInfo[];
+}
+
 export const KNOWLEDGE_PACKAGE_NAME = "knowledge";
 
 export interface KnowledgeServiceClient {
@@ -68,6 +101,10 @@ export interface KnowledgeServiceClient {
   startOnboardingSession(request: StartOnboardingRequest): Observable<OnboardingResponse>;
 
   resumeOnboardingSession(request: ResumeOnboardingRequest): Observable<OnboardingResponse>;
+
+  saveInitialAgentDraft(request: SaveInitialAgentDraftRequest): Observable<SaveInitialAgentDraftResponse>;
+
+  listTenantAgents(request: ListTenantAgentsRequest): Observable<ListTenantAgentsResponse>;
 }
 
 export interface KnowledgeServiceController {
@@ -84,11 +121,26 @@ export interface KnowledgeServiceController {
   resumeOnboardingSession(
     request: ResumeOnboardingRequest,
   ): Promise<OnboardingResponse> | Observable<OnboardingResponse> | OnboardingResponse;
+
+  saveInitialAgentDraft(
+    request: SaveInitialAgentDraftRequest,
+  ): Promise<SaveInitialAgentDraftResponse> | Observable<SaveInitialAgentDraftResponse> | SaveInitialAgentDraftResponse;
+
+  listTenantAgents(
+    request: ListTenantAgentsRequest,
+  ): Promise<ListTenantAgentsResponse> | Observable<ListTenantAgentsResponse> | ListTenantAgentsResponse;
 }
 
 export function KnowledgeServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ["crawlSite", "getCrawlStatus", "startOnboardingSession", "resumeOnboardingSession"];
+    const grpcMethods: string[] = [
+      "crawlSite",
+      "getCrawlStatus",
+      "startOnboardingSession",
+      "resumeOnboardingSession",
+      "saveInitialAgentDraft",
+      "listTenantAgents",
+    ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
       GrpcMethod("KnowledgeService", method)(constructor.prototype[method], method, descriptor);

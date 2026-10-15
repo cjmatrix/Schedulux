@@ -1,30 +1,41 @@
 import { Global, Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SchedulingEventsProducer } from './scheduling-events.producer.js';
 
 @Global()
 @Module({
   imports: [
-    ClientsModule.register([
+    ClientsModule.registerAsync([
       {
         name: 'KAFKA_SERVICE',
-        transport: Transport.KAFKA,
-        options: {
-          client: {
-            clientId: 'scheduling-inventory-service',
-            brokers: [process.env.KAFKA_BROKERS || 'localhost:9092'],
-            ssl: process.env.KAFKA_PASSWORD ? { rejectUnauthorized: false } : undefined,
-            sasl: process.env.KAFKA_PASSWORD
-              ? {
-                  mechanism: 'scram-sha-256',
-                  username: process.env.KAFKA_USERNAME || 'avnadmin',
-                  password: process.env.KAFKA_PASSWORD,
-                }
-              : undefined,
-          },
-          consumer: {
-            groupId: 'scheduling-consumer-group',
-          },
+        imports: [ConfigModule],
+        inject: [ConfigService],
+        useFactory: (configService: ConfigService) => {
+          const brokers = configService.get<string>('KAFKA_BROKERS') || process.env.KAFKA_BROKERS || 'localhost:9092';
+          const username = configService.get<string>('KAFKA_USERNAME') || process.env.KAFKA_USERNAME || 'avnadmin';
+          const password = configService.get<string>('KAFKA_PASSWORD') || process.env.KAFKA_PASSWORD;
+
+          return {
+            transport: Transport.KAFKA,
+            options: {
+              client: {
+                clientId: 'scheduling-inventory-service',
+                brokers: [brokers],
+                ssl: password ? { rejectUnauthorized: false } : undefined,
+                sasl: password
+                  ? {
+                      mechanism: 'scram-sha-256',
+                      username,
+                      password,
+                    }
+                  : undefined,
+              },
+              consumer: {
+                groupId: configService.get<string>('KAFKA_CONSUMER_GROUP') || 'scheduling-consumer-group',
+              },
+            },
+          };
         },
       },
     ]),

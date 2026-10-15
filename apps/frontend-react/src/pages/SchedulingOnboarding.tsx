@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { 
+  ArrowLeft,
   ArrowRight, 
   Sparkles, 
   Loader2, 
@@ -119,25 +120,39 @@ export default function SchedulingOnboarding() {
     <div className="min-h-screen bg-white text-neutral-900 antialiased selection:bg-neutral-900 selection:text-white">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-neutral-100 h-16 px-6 sm:px-8 flex items-center justify-between">
-        {/* Logo */}
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-1">
-            <span className="w-1.5 h-5 bg-neutral-950 rounded-full inline-block" />
-            <span className="w-1.5 h-5 bg-neutral-950 rounded-full inline-block" />
+        {/* Logo & Back button */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate("/tenant/agents")}
+            className="p-1.5 rounded-xl border border-neutral-200 hover:bg-neutral-100 text-neutral-600 transition cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+            title="Back to AI Agents Dashboard"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="hidden sm:inline">Back</span>
+          </button>
+
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-1">
+              <span className="w-1.5 h-5 bg-neutral-950 rounded-full inline-block" />
+              <span className="w-1.5 h-5 bg-neutral-950 rounded-full inline-block" />
+            </div>
+            <span className="font-bold text-lg tracking-tight text-neutral-950">
+              Schedulux AI
+            </span>
           </div>
-          <span className="font-bold text-lg tracking-tight text-neutral-950">
-            Schedulux AI
-          </span>
         </div>
 
         {/* Navigation */}
         <div className="absolute left-1/2 -translate-x-1/2 hidden md:block">
           <div className="flex items-center rounded-full bg-neutral-100/80 p-1 text-sm font-medium">
-            <button className="rounded-full bg-white px-5 py-1.5 shadow-sm text-neutral-900 border border-neutral-200/60">
+            <button className="rounded-full bg-white px-5 py-1.5 shadow-sm text-neutral-900 border border-neutral-200/60 font-semibold text-xs">
               Agent Studio
             </button>
-            <button className="px-5 py-1.5 text-neutral-500 hover:text-neutral-900 transition cursor-pointer">
-              Dashboard
+            <button
+              onClick={() => navigate("/tenant/agents")}
+              className="px-5 py-1.5 text-neutral-500 hover:text-neutral-900 transition cursor-pointer text-xs font-medium"
+            >
+              Agents Dashboard
             </button>
           </div>
         </div>

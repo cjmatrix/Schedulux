@@ -4,6 +4,7 @@ exports.ListResourcesQueryDto = exports.ListResourcesQuerySchema = exports.Updat
 const nestjs_zod_1 = require("nestjs-zod");
 const zod_1 = require("zod");
 exports.CreateResourceDtoSchema = zod_1.z.object({
+    agent_id: zod_1.z.string().min(1, 'agent_id is required'),
     resource_type: zod_1.z.enum(['staff', 'room', 'chair', 'bay', 'equipment', 'asset', 'vehicle']).default('staff'),
     name: zod_1.z.string().min(1, 'Resource name is required').trim(),
     title: zod_1.z.string().optional().default(''),
@@ -17,6 +18,7 @@ class CreateResourceDto extends (0, nestjs_zod_1.createZodDto)(exports.CreateRes
 }
 exports.CreateResourceDto = CreateResourceDto;
 exports.UpdateResourceDtoSchema = zod_1.z.object({
+    agent_id: zod_1.z.string().optional(),
     resource_type: zod_1.z.enum(['staff', 'room', 'chair', 'bay', 'equipment', 'asset', 'vehicle']).optional(),
     name: zod_1.z.string().min(1).trim().optional(),
     title: zod_1.z.string().optional(),
@@ -34,6 +36,7 @@ exports.ListResourcesQuerySchema = zod_1.z.object({
     limit: zod_1.z.coerce.number().int().min(1).max(100).default(20),
     resource_type: zod_1.z.string().optional(),
     dispatch_status: zod_1.z.string().optional(),
+    agent_id: zod_1.z.string().optional(),
 });
 class ListResourcesQueryDto extends (0, nestjs_zod_1.createZodDto)(exports.ListResourcesQuerySchema) {
 }

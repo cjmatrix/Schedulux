@@ -30,6 +30,8 @@ export interface ServiceInfo {
     recall_interval_days: number;
     created_at: string;
     updated_at: string;
+    booking_mode: string;
+    agent_id: string;
 }
 export interface CreateServiceRequest {
     tenant_id: string;
@@ -44,6 +46,9 @@ export interface CreateServiceRequest {
     eligible_resource_ids: string[];
     required_asset_ids: string[];
     recall_interval_days: number;
+    booking_mode?: string | undefined;
+    agent_id?: string | undefined;
+    service_id?: string | undefined;
 }
 export interface GetServiceRequest {
     tenant_id: string;
@@ -54,6 +59,7 @@ export interface ListServicesRequest {
     page: number;
     limit: number;
     category: string;
+    agent_id?: string | undefined;
 }
 export interface ListServicesResponse {
     services: ServiceInfo[];
@@ -75,6 +81,8 @@ export interface UpdateServiceRequest {
     eligible_resource_ids: string[];
     required_asset_ids: string[];
     recall_interval_days?: number | undefined;
+    booking_mode?: string | undefined;
+    agent_id?: string | undefined;
 }
 export interface DeleteServiceRequest {
     tenant_id: string;
@@ -101,6 +109,7 @@ export interface ResourceInfo {
     custom_shift_overrides_json: string;
     created_at: string;
     updated_at: string;
+    agent_id: string;
 }
 export interface CreateResourceRequest {
     tenant_id: string;
@@ -112,6 +121,8 @@ export interface CreateResourceRequest {
     is_bookable: boolean;
     dispatch_status: string;
     custom_shift_overrides_json: string;
+    agent_id?: string | undefined;
+    resource_id?: string | undefined;
 }
 export interface GetResourceRequest {
     tenant_id: string;
@@ -123,6 +134,7 @@ export interface ListResourcesRequest {
     limit: number;
     resource_type: string;
     dispatch_status: string;
+    agent_id?: string | undefined;
 }
 export interface ListResourcesResponse {
     resources: ResourceInfo[];
@@ -141,6 +153,7 @@ export interface UpdateResourceRequest {
     is_bookable?: boolean | undefined;
     dispatch_status?: string | undefined;
     custom_shift_overrides_json?: string | undefined;
+    agent_id?: string | undefined;
 }
 export interface DeleteResourceRequest {
     tenant_id: string;
@@ -152,6 +165,18 @@ export interface DeleteResourceResponse {
 }
 export interface ResourceResponse {
     resource: ResourceInfo | undefined;
+    message: string;
+}
+export interface BatchSyncInventoryRequest {
+    tenant_id: string;
+    agent_id: string;
+    resources: CreateResourceRequest[];
+    services: CreateServiceRequest[];
+}
+export interface BatchSyncInventoryResponse {
+    resources: ResourceInfo[];
+    services: ServiceInfo[];
+    success: boolean;
     message: string;
 }
 export declare const SCHEDULING_PACKAGE_NAME = "scheduling";
@@ -168,6 +193,8 @@ export interface SchedulingInventoryServiceClient {
     listResources(request: ListResourcesRequest): Observable<ListResourcesResponse>;
     updateResource(request: UpdateResourceRequest): Observable<ResourceResponse>;
     deleteResource(request: DeleteResourceRequest): Observable<DeleteResourceResponse>;
+    /** Batch / Bulk Operations */
+    batchSyncInventory(request: BatchSyncInventoryRequest): Observable<BatchSyncInventoryResponse>;
 }
 export interface SchedulingInventoryServiceController {
     /** Service CRUD */
@@ -182,6 +209,8 @@ export interface SchedulingInventoryServiceController {
     listResources(request: ListResourcesRequest): Promise<ListResourcesResponse> | Observable<ListResourcesResponse> | ListResourcesResponse;
     updateResource(request: UpdateResourceRequest): Promise<ResourceResponse> | Observable<ResourceResponse> | ResourceResponse;
     deleteResource(request: DeleteResourceRequest): Promise<DeleteResourceResponse> | Observable<DeleteResourceResponse> | DeleteResourceResponse;
+    /** Batch / Bulk Operations */
+    batchSyncInventory(request: BatchSyncInventoryRequest): Promise<BatchSyncInventoryResponse> | Observable<BatchSyncInventoryResponse> | BatchSyncInventoryResponse;
 }
 export declare function SchedulingInventoryServiceControllerMethods(): (constructor: Function) => void;
 export declare const SCHEDULING_INVENTORY_SERVICE_NAME = "SchedulingInventoryService";

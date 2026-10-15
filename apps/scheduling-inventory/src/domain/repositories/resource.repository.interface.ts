@@ -5,6 +5,7 @@ export interface FindResourcesFilter {
   limit: number;
   resourceType?: string;
   dispatchStatus?: string;
+  agentId?: string;
 }
 
 export interface IResourceRepository {
@@ -13,4 +14,6 @@ export interface IResourceRepository {
   findAll(tenantId: string, filter: FindResourcesFilter): Promise<{ resources: ResourceEntity[]; total: number }>;
   update(resource: ResourceEntity): Promise<ResourceEntity | null>;
   delete(tenantId: string, resourceId: string): Promise<boolean>;
+  bulkUpsert(resources: ResourceEntity[]): Promise<ResourceEntity[]>;
+  findByTenant(tenantId: string, agentId?: string): Promise<ResourceEntity[]>;
 }

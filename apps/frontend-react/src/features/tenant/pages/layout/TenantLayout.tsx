@@ -104,25 +104,81 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
         : "Tenant Owner";
   const userInitials = currentUserFullName.substring(0, 2).toUpperCase();
 
+  const currentAgentId = location.pathname.match(/\/tenant\/agents\/([^\/]+)/)?.[1];
+
+  const handleNavItemClick = (itemPath: string) => {
+    if (currentAgentId) {
+      if (itemPath === "/tenant/services") {
+        navigate(`/tenant/agents/${currentAgentId}/services`);
+        return;
+      }
+      if (itemPath === "/tenant/inventory") {
+        navigate(`/tenant/agents/${currentAgentId}/resources`);
+        return;
+      }
+    }
+    navigate(itemPath);
+  };
+
   return (
     <div className="flex h-screen bg-[#f8fafc] font-sans antialiased text-slate-800 overflow-hidden">
       <aside className="w-64 bg-white border-r border-slate-200/80 flex flex-col justify-between shrink-0">
         <div>
-          <div className="p-4 border-b border-slate-100">
-            <div className="flex items-center gap-2.5 mb-3 px-1">
-              <div className="w-7 h-7 rounded-lg bg-black text-white flex items-center justify-center font-bold text-sm shadow-sm">
-                S
+          <div className="p-4 border-b border-slate-100 flex flex-col gap-3">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-black text-white flex items-center justify-center font-bold text-sm shadow-sm">
+                  S
+                </div>
+                <span className="font-bold text-slate-900 tracking-tight text-base">
+                  Schedulux AI
+                </span>
               </div>
-              <span className="font-bold text-slate-900 tracking-tight text-base">
-                Schedulux AI
-              </span>
             </div>
+
+            <button
+              onClick={() => navigate("/tenant/agents")}
+              className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-100/90 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-semibold transition cursor-pointer border border-slate-200/60"
+              title="Return to AI Agents Dashboard"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Bot className="w-4 h-4 text-slate-900 shrink-0" />
+                <span className="truncate">
+                  {currentAgentId ? `Agent: ${currentAgentId}` : "All Agents Hub"}
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-500 font-medium shrink-0 ml-1">
+                Switch
+              </span>
+            </button>
           </div>
 
           <nav className="p-3 flex flex-col gap-0.5">
+            {currentAgentId && (
+              <button
+                onClick={() => navigate(`/tenant/agents/${currentAgentId}/dashboard`)}
+                className={`w-full flex items-center justify-between px-3 py-2 mb-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                  location.pathname === `/tenant/agents/${currentAgentId}/dashboard`
+                    ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Bot className={`w-4 h-4 ${location.pathname.endsWith("/dashboard") ? "text-slate-900" : "text-slate-400"}`} />
+                  <span>Agent Overview</span>
+                </div>
+              </button>
+            )}
+
             {NAV_ITEMS.map((item) => {
+              const isAgentsTab = item.path === "/tenant/agents";
               const isActive =
-                location.pathname === item.path ||
+                (!isAgentsTab && location.pathname === item.path) ||
+                (isAgentsTab && location.pathname === "/tenant/agents") ||
+                (item.path === "/tenant/services" &&
+                  location.pathname.includes("/services")) ||
+                (item.path === "/tenant/inventory" &&
+                  (location.pathname.includes("/inventory") || location.pathname.includes("/resources"))) ||
                 (item.path === "/tenant/users" &&
                   (location.pathname === "/tenant" ||
                     location.pathname === "/tenant/"));
@@ -131,7 +187,7 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
               return (
                 <button
                   key={item.path}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => handleNavItemClick(item.path)}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                     isActive
                       ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs"

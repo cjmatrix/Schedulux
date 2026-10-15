@@ -101,6 +101,7 @@ let KnowledgeController = class KnowledgeController {
         const response = await (0, rxjs_1.lastValueFrom)(this.knowledgeService.resumeOnboardingSession({
             tenant_id: body.tenant_id,
             user_answer: body.user_answer,
+            agent_id: body.agent_id || "",
         }));
         return {
             message: "Message processed",

@@ -4,6 +4,7 @@ export type DispatchStatus = 'active' | 'on_leave' | 'maintenance' | 'retired' |
 export interface ResourceEntityProps {
   id: string;
   tenantId: string;
+  agentId: string;
   resourceType: ResourceType;
   name: string;
   title: string;
@@ -12,6 +13,8 @@ export interface ResourceEntityProps {
   isBookable: boolean;
   dispatchStatus: DispatchStatus;
   customShiftOverridesJson: string;
+  isDeleted?: boolean;
+  deletedAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -19,6 +22,7 @@ export interface ResourceEntityProps {
 export class ResourceEntity {
   private readonly _id: string;
   private readonly _tenantId: string;
+  private readonly _agentId: string;
   private _resourceType: ResourceType;
   private _name: string;
   private _title: string;
@@ -27,6 +31,8 @@ export class ResourceEntity {
   private _isBookable: boolean;
   private _dispatchStatus: DispatchStatus;
   private _customShiftOverridesJson: string;
+  private _isDeleted: boolean;
+  private _deletedAt: Date | null;
   private readonly _createdAt: Date;
   private _updatedAt: Date;
 
@@ -40,6 +46,7 @@ export class ResourceEntity {
 
     this._id = props.id;
     this._tenantId = props.tenantId;
+    this._agentId = props.agentId;
     this._resourceType = props.resourceType ?? 'staff';
     this._name = props.name.trim();
     this._title = props.title?.trim() ?? '';
@@ -48,12 +55,15 @@ export class ResourceEntity {
     this._isBookable = props.isBookable ?? true;
     this._dispatchStatus = props.dispatchStatus ?? 'active';
     this._customShiftOverridesJson = props.customShiftOverridesJson ?? '{}';
+    this._isDeleted = props.isDeleted ?? false;
+    this._deletedAt = props.deletedAt ?? null;
     this._createdAt = props.createdAt ?? new Date();
     this._updatedAt = props.updatedAt ?? new Date();
   }
 
   get id(): string { return this._id; }
   get tenantId(): string { return this._tenantId; }
+  get agentId(): string { return this._agentId; }
   get resourceType(): ResourceType { return this._resourceType; }
   get name(): string { return this._name; }
   get title(): string { return this._title; }
@@ -62,8 +72,16 @@ export class ResourceEntity {
   get isBookable(): boolean { return this._isBookable; }
   get dispatchStatus(): DispatchStatus { return this._dispatchStatus; }
   get customShiftOverridesJson(): string { return this._customShiftOverridesJson; }
+  get isDeleted(): boolean { return this._isDeleted; }
+  get deletedAt(): Date | null { return this._deletedAt; }
   get createdAt(): Date { return this._createdAt; }
   get updatedAt(): Date { return this._updatedAt; }
+
+  softDelete(): void {
+    this._isDeleted = true;
+    this._deletedAt = new Date();
+    this._updatedAt = new Date();
+  }
 
   updateDetails(details: {
     resourceType?: ResourceType;

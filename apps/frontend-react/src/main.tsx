@@ -27,10 +27,15 @@ import TenantLayout from "./features/tenant/pages/layout/TenantLayout.tsx";
 import WorkspaceUsersPage from "./features/tenant/pages/WorkspaceUsersPage.tsx";
 import BookingsPage from "./features/tenant/pages/BookingsPage.tsx";
 import TenantAgentsPage from "./features/tenant/pages/TenantAgentsPage.tsx";
+import ServicesListPage from "./features/tenant/pages/ServicesListPage.tsx";
+import ServiceEditorPage from "./features/tenant/pages/ServiceEditorPage.tsx";
+import ResourcesListPage from "./features/tenant/pages/ResourcesListPage.tsx";
+import ResourceEditorPage from "./features/tenant/pages/ResourceEditorPage.tsx";
 import { TenantProtectedRoute } from "./features/tenant/components/TenantProtectedRoute.tsx";
 import { DashboardUserProtectedRoute } from "./features/dashboard-user/components/DashboardUserProtectedRoute.tsx";
 import SchedulingOnboarding from "./pages/SchedulingOnboarding.tsx";
 import AgentOnboardingWizard from "./pages/AgentOnboardingWizard.tsx";
+import AgentDashboardPage from "./features/tenant/pages/AgentDashboardPage.tsx";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -122,29 +127,28 @@ const router = createBrowserRouter([
     element: <TenantProtectedRoute />,
     children: [
       {
-        path:"landingboard",
-        element:<SchedulingOnboarding></SchedulingOnboarding>
+        index: true,
+        element: <Navigate to="/tenant/agents" replace />,
+      },
+      {
+        path: "dashboard",
+        element: <Navigate to="/tenant/agents" replace />,
+      },
+      {
+        path: "agents",
+        element: <TenantAgentsPage />,
+      },
+      {
+        path: "landingboard",
+        element: <SchedulingOnboarding />,
       },
       {
         path: "agent-setup/:id",
-        element: <AgentOnboardingWizard />
+        element: <AgentOnboardingWizard />,
       },
-
       {
         element: <TenantLayout isTenant={true} />,
         children: [
-          {
-            index: true,
-            element: <Navigate to="/tenant/agents" replace />,
-          },
-          {
-            path: "dashboard",
-            element: <Navigate to="/tenant/agents" replace />,
-          },
-          {
-            path: "agents",
-            element: <TenantAgentsPage />,
-          },
           {
             path: "users",
             element: <WorkspaceUsersPage />,
@@ -152,6 +156,72 @@ const router = createBrowserRouter([
           {
             path: "bookings",
             element: <BookingsPage />,
+          },
+       
+          {
+            path: "agents/:agentId/dashboard",
+            element: <AgentDashboardPage />,
+          },
+          {
+            path: "agents/:agentId/services",
+            element: <ServicesListPage />,
+          },
+          {
+            path: "agents/:agentId/services/new",
+            element: <ServiceEditorPage mode="create" />,
+          },
+          {
+            path: "agents/:agentId/services/:id",
+            element: <ServiceEditorPage mode="edit" />,
+          },
+          {
+            path: "agents/:agentId/resources",
+            element: <ResourcesListPage />,
+          },
+          {
+            path: "agents/:agentId/resources/new",
+            element: <ResourceEditorPage mode="create" />,
+          },
+          {
+            path: "agents/:agentId/resources/:id",
+            element: <ResourceEditorPage mode="edit" />,
+          },
+       
+          {
+            path: "services",
+            element: <ServicesListPage />,
+          },
+          {
+            path: "services/new",
+            element: <ServiceEditorPage mode="create" />,
+          },
+          {
+            path: "services/:id",
+            element: <ServiceEditorPage mode="edit" />,
+          },
+          {
+            path: "inventory",
+            element: <ResourcesListPage />,
+          },
+          {
+            path: "inventory/new",
+            element: <ResourceEditorPage mode="create" />,
+          },
+          {
+            path: "inventory/:id",
+            element: <ResourceEditorPage mode="edit" />,
+          },
+          {
+            path: "resources",
+            element: <Navigate to="/tenant/inventory" replace />,
+          },
+          {
+            path: "resources/new",
+            element: <Navigate to="/tenant/inventory/new" replace />,
+          },
+          {
+            path: "resources/:id",
+            element: <Navigate to="/tenant/inventory/:id" replace />,
           },
         ],
       },

@@ -55,7 +55,7 @@ export default function RegisterPage() {
   }
 
   if (profileData?.data) {
-    return <Navigate to="/tenant/users" replace />;
+    return <Navigate to="/tenant/agents" replace />;
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -201,7 +201,7 @@ export default function RegisterPage() {
                                   if (res?.data) {
                                     authStoreLogin(res.data);
                                   }
-                                  navigate("/tenant/users");
+                                  navigate("/tenant/agents");
                                 },
                                 onError: (err) => {
                                   setValidationError(

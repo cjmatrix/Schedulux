@@ -76,12 +76,14 @@ export class SchedulingController implements OnModuleInit {
     const response = await lastValueFrom(
       this.schedulingService.createService({
         tenant_id: tenantId,
+        agent_id: body.agent_id,
         name: body.name,
         category: body.category,
         description: body.description,
         duration_minutes: body.duration_minutes,
         buffer_minutes: body.buffer_minutes,
         allocation_model: body.allocation_model,
+        booking_mode: body.booking_mode,
         price: body.price,
         deposit: body.deposit,
         eligible_resource_ids: body.eligible_resource_ids,
@@ -109,6 +111,7 @@ export class SchedulingController implements OnModuleInit {
         page: query.page,
         limit: query.limit,
         category: query.category || '',
+        agent_id: query.agent_id,
       }),
     );
 
@@ -160,6 +163,7 @@ export class SchedulingController implements OnModuleInit {
         duration_minutes: body.duration_minutes,
         buffer_minutes: body.buffer_minutes,
         allocation_model: body.allocation_model,
+        booking_mode: body.booking_mode,
         price: body.price,
         deposit: body.deposit,
         eligible_resource_ids: body.eligible_resource_ids ?? [],
@@ -208,6 +212,7 @@ export class SchedulingController implements OnModuleInit {
     const response = await lastValueFrom(
       this.schedulingService.createResource({
         tenant_id: tenantId,
+        agent_id: body.agent_id,
         resource_type: body.resource_type,
         name: body.name,
         title: body.title,
@@ -239,6 +244,7 @@ export class SchedulingController implements OnModuleInit {
         limit: query.limit,
         resource_type: query.resource_type || '',
         dispatch_status: query.dispatch_status || '',
+        agent_id: query.agent_id,
       }),
     );
 

@@ -2,6 +2,7 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { SERVICE_REPOSITORY } from '../../../domain/tokens.js';
 import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
 import { IDeleteServiceUseCase } from '../../interfaces/service-use-cases.interface.js';
+import { SchedulingEventsProducer } from '../../../infrastructure/messaging/scheduling-events.producer.js';
 import { DeleteServiceRequest } from '@repo/proto/scheduling';
 
 @Injectable()
@@ -9,13 +10,24 @@ export class DeleteServiceUseCase implements IDeleteServiceUseCase {
   constructor(
     @Inject(SERVICE_REPOSITORY)
     private readonly serviceRepository: IServiceRepository,
+    private readonly eventsProducer: SchedulingEventsProducer,
   ) {}
 
   async execute(dto: DeleteServiceRequest): Promise<boolean> {
+    // Fetch first to capture agent_id for the CQRS event
+    const existing = await this.serviceRepository.findById(dto.tenant_id, dto.service_id);
+    if (!existing) {
+      throw new NotFoundException(`Service ${dto.service_id} not found for tenant ${dto.tenant_id}`);
+    }
+
     const deleted = await this.serviceRepository.delete(dto.tenant_id, dto.service_id);
     if (!deleted) {
       throw new NotFoundException(`Service ${dto.service_id} not found for tenant ${dto.tenant_id}`);
     }
+
+    // CQRS: fire-and-forget delete event for AI-orchestration consumer
+    await this.eventsProducer.emitServiceDeleted(existing.tenantId, existing.agentId, existing.id);
+
     return true;
   }
 }

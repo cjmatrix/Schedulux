@@ -9,12 +9,14 @@ export class ServiceMapper {
     return new ServiceEntity({
       id: doc._id,
       tenantId: doc.tenant_id,
+      agentId: doc.agent_id,
       name: doc.name,
       category: doc.category,
       description: doc.description,
       durationMinutes: doc.duration_minutes,
       bufferMinutes: doc.buffer_minutes,
       allocationModel: doc.allocation_model,
+      bookingMode: doc.booking_mode ?? 'time_slot',
       price: PriceVO.create(doc.price?.type, doc.price?.amount, doc.price?.currency),
       deposit: DepositVO.create({
         required: doc.deposit?.required,
@@ -28,6 +30,8 @@ export class ServiceMapper {
       eligibleResourceIds: doc.eligible_resource_ids ?? [],
       requiredAssetIds: doc.required_asset_ids ?? [],
       recallIntervalDays: doc.recall_interval_days ?? 0,
+      isDeleted: doc.is_deleted ?? false,
+      deletedAt: doc.deleted_at ?? null,
       createdAt: doc.created_at,
       updatedAt: doc.updated_at,
     });
@@ -37,12 +41,14 @@ export class ServiceMapper {
     return {
       _id: entity.id,
       tenant_id: entity.tenantId,
+      agent_id: entity.agentId,
       name: entity.name,
       category: entity.category,
       description: entity.description,
       duration_minutes: entity.durationMinutes,
       buffer_minutes: entity.bufferMinutes,
       allocation_model: entity.allocationModel,
+      booking_mode: entity.bookingMode,
       price: {
         type: entity.price.type,
         amount: entity.price.amount,
@@ -60,6 +66,8 @@ export class ServiceMapper {
       eligible_resource_ids: entity.eligibleResourceIds,
       required_asset_ids: entity.requiredAssetIds,
       recall_interval_days: entity.recallIntervalDays,
+      is_deleted: entity.isDeleted,
+      deleted_at: entity.deletedAt,
     };
   }
 
@@ -67,12 +75,14 @@ export class ServiceMapper {
     return {
       service_id: entity.id,
       tenant_id: entity.tenantId,
+      agent_id: entity.agentId,
       name: entity.name,
       category: entity.category,
       description: entity.description,
       duration_minutes: entity.durationMinutes,
       buffer_minutes: entity.bufferMinutes,
       allocation_model: entity.allocationModel,
+      booking_mode: entity.bookingMode,
       price: {
         type: entity.price.type,
         amount: entity.price.amount,

@@ -5,6 +5,7 @@ import { ServiceEntity } from '../../../domain/entities/service.entity.js';
 import { PriceVO } from '../../../domain/value-objects/price.vo.js';
 import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
 import { IUpdateServiceUseCase } from '../../interfaces/service-use-cases.interface.js';
+import { SchedulingEventsProducer } from '../../../infrastructure/messaging/scheduling-events.producer.js';
 import { UpdateServiceRequest } from '@repo/proto/scheduling';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
   constructor(
     @Inject(SERVICE_REPOSITORY)
     private readonly serviceRepository: IServiceRepository,
+    private readonly eventsProducer: SchedulingEventsProducer,
   ) {}
 
   async execute(dto: UpdateServiceRequest): Promise<ServiceEntity> {
@@ -43,6 +45,7 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
       durationMinutes: dto.duration_minutes,
       bufferMinutes: dto.buffer_minutes,
       allocationModel: dto.allocation_model,
+      bookingMode: dto.booking_mode,
       price,
       deposit,
       eligibleResourceIds: dto.eligible_resource_ids?.length ? dto.eligible_resource_ids : undefined,
@@ -54,6 +57,10 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
     if (!updated) {
       throw new NotFoundException(`Failed to update service ${dto.service_id}`);
     }
+
+    // CQRS: fire-and-forget event for AI-orchestration consumer
+    await this.eventsProducer.emitServiceUpdated(updated);
+
     return updated;
   }
 }

@@ -12,6 +12,7 @@ from datetime import datetime
 import redis.asyncio as aioredis
 from agent_orchestrator.models import AgentDraft, AgentRuntimeConfig, init_db
 from agent_orchestrator.tenant_agent import start_onboarding_session, resume_onboarding_session, get_current_draft
+from agent_orchestrator.redis_client import get_cached_draft, set_cached_draft, get_redis_client
 
 local_env = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 load_dotenv(local_env)
@@ -104,18 +105,62 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             return knowledge_pb2.GetCrawlStatusResponse()
 
     async def StartOnboardingSession(self, request, context) -> knowledge_pb2.OnboardingResponse:
-        print(f"[gRPC] Received StartOnboardingSession request for tenant: {request.tenant_id}, agent: {request.agent_id}")
+        agent_id = getattr(request, "agent_id", "")
+        print(f"[gRPC] Received StartOnboardingSession request for tenant: {request.tenant_id}, agent: {agent_id}")
         await init_db()
         try:
-            agent_draft = await AgentDraft.find_one({"tenant_id": request.tenant_id, "agent_id": request.agent_id})
-            if not agent_draft:
-                context.set_code(grpc.StatusCode.NOT_FOUND)
-                context.set_details(f"Agent draft not found for agent_id: {request.agent_id}")
-                return knowledge_pb2.OnboardingResponse()
+            initial_draft = None
 
-            initial_draft = agent_draft.current_draft or {}
-            payload = await start_onboarding_session(request.tenant_id, initial_draft)
-            current_draft = await get_current_draft(request.tenant_id)
+       
+            if agent_id:
+                initial_draft = await get_cached_draft(request.tenant_id, agent_id)
+                if initial_draft:
+                    print(f"[StartOnboardingSession] Loaded draft from Redis cache ({request.tenant_id}/{agent_id})", flush=True)
+
+          
+            if not initial_draft and agent_id:
+                agent_draft = await AgentDraft.find_one({"tenant_id": request.tenant_id, "agent_id": agent_id})
+                if agent_draft:
+                    initial_draft = agent_draft.current_draft or {}
+                    print(f"[StartOnboardingSession] Loaded draft from MongoDB AgentDraft ({request.tenant_id}/{agent_id})", flush=True)
+
+            
+            if not initial_draft and agent_id:
+                runtime_cfg = await AgentRuntimeConfig.find_one({"tenant_id": request.tenant_id, "agent_id": agent_id})
+                if runtime_cfg:
+                    initial_draft = {
+                        "schema_version": runtime_cfg.schema_version,
+                        "status": "draft",
+                        "tenant_id": runtime_cfg.tenant_id,
+                        "agent_id": runtime_cfg.agent_id,
+                        "business_profile": runtime_cfg.business_profile.model_dump() if runtime_cfg.business_profile else {},
+                        "operating_hours": runtime_cfg.operating_hours.model_dump() if runtime_cfg.operating_hours else {},
+                        "scheduling_engine": runtime_cfg.scheduling_engine.model_dump() if runtime_cfg.scheduling_engine else {},
+                        "services": [s.model_dump() for s in runtime_cfg.services] if runtime_cfg.services else [],
+                        "resources": [r.model_dump() for r in runtime_cfg.resources] if runtime_cfg.resources else [],
+                        "supervisor_prompt": runtime_cfg.supervisor_prompt,
+                    }
+                    print(f"[StartOnboardingSession] Converted published AgentRuntimeConfig to draft ({request.tenant_id}/{agent_id})", flush=True)
+
+    
+            if not initial_draft:
+                if request.initial_draft_json and request.initial_draft_json != "{}":
+                    try:
+                        initial_draft = json.loads(request.initial_draft_json)
+                    except Exception:
+                        initial_draft = {}
+                else:
+                    if agent_id:
+                        context.set_code(grpc.StatusCode.NOT_FOUND)
+                        context.set_details(f"Agent draft not found for agent_id: {agent_id}")
+                        return knowledge_pb2.OnboardingResponse()
+                    initial_draft = {}
+
+            if agent_id:
+                initial_draft["agent_id"] = agent_id
+
+            payload = await start_onboarding_session(request.tenant_id, initial_draft, agent_id)
+            current_draft = await get_current_draft(request.tenant_id, agent_id)
             draft_json = json.dumps(current_draft or initial_draft)
             
             return knowledge_pb2.OnboardingResponse(
@@ -132,11 +177,13 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             return knowledge_pb2.OnboardingResponse()
 
     async def ResumeOnboardingSession(self, request, context) -> knowledge_pb2.OnboardingResponse:
-        print(f"[gRPC] Received ResumeOnboardingSession request for tenant: {request.tenant_id}")
+        agent_id = getattr(request, "agent_id", "")
+        print(f"[gRPC] Received ResumeOnboardingSession request for tenant: {request.tenant_id}, agent: {agent_id}")
         
         try:
-            payload = await resume_onboarding_session(request.tenant_id, request.user_answer)
-            draft_json = json.dumps(await get_current_draft(request.tenant_id))
+            payload = await resume_onboarding_session(request.tenant_id, request.user_answer, agent_id)
+            current_draft = await get_current_draft(request.tenant_id, agent_id)
+            draft_json = json.dumps(current_draft or {})
             
             return knowledge_pb2.OnboardingResponse(
                 status=payload.get("status", "error"),
@@ -160,9 +207,10 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             
 
             r_client = _get_redis_client()
-            redis_draft = await r_client.get(f"agent:draft:{request.tenant_id}")
+            
 
             if creation_source == "web_crawl":
+                redis_draft = await r_client.get(f"agent:draft:{request.tenant_id}")
                 if redis_draft:
                     print(f"[SaveInitialAgentDraft] Found draft schema in Redis for tenant: {request.tenant_id}", flush=True)
                     draft_dict = json.loads(redis_draft)
@@ -189,15 +237,6 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                     "business_profile": {
                         "name": request.name or template_name,
                         "vertical": creation_source,
-                    },
-                    "operating_hours": {
-                        "monday": [{"start": "09:00", "end": "17:00"}],
-                        "tuesday": [{"start": "09:00", "end": "17:00"}],
-                        "wednesday": [{"start": "09:00", "end": "17:00"}],
-                        "thursday": [{"start": "09:00", "end": "17:00"}],
-                        "friday": [{"start": "09:00", "end": "17:00"}],
-                        "saturday": [],
-                        "sunday": []
                     },
                     "services": [],
                     "resources": [],
@@ -243,6 +282,12 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                 )
                 await agent_draft.save()
 
+      
+            try:
+                await set_cached_draft(request.tenant_id, agent_id, draft_dict)
+            except Exception as re:
+                print(f"[SaveInitialAgentDraft Warning] Failed to cache draft in Redis: {re}", flush=True)
+
             return knowledge_pb2.SaveInitialAgentDraftResponse(
                 message="Agent draft saved successfully",
                 agent_id=agent_id,
@@ -260,7 +305,7 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
         try:
             agents_map = {}
 
-            # 1. Fetch created / active agents from AgentRuntimeConfig
+       
             created_configs = await AgentRuntimeConfig.find({"tenant_id": request.tenant_id}).to_list()
             for cfg in created_configs:
                 aid = cfg.agent_id or str(cfg.id)

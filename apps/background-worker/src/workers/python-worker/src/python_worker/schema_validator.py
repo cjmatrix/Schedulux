@@ -7,6 +7,39 @@ class AllocationModel(str, Enum):
     TIME_SLOT = "time_slot"
     DATE_RANGE = "date_range"
 
+class BookingMode(str, Enum):
+    TIME_SLOT = "time_slot"
+    DATE_RANGE = "date_range"
+
+class ServiceAllocationModel(str, Enum):
+    SINGLE_RESOURCE = "single_resource"
+    MULTI_RESOURCE = "multi_resource"
+    POOLED = "pooled"
+    ASSET_ONLY = "asset_only"
+
+class ResourceType(str, Enum):
+    STAFF = "staff"
+    ROOM = "room"
+    CHAIR = "chair"
+    BAY = "bay"
+    EQUIPMENT = "equipment"
+    ASSET = "asset"
+    VEHICLE = "vehicle"
+
+class DispatchStatus(str, Enum):
+    ACTIVE = "active"
+    ON_LEAVE = "on_leave"
+    MAINTENANCE = "maintenance"
+    RETIRED = "retired"
+    INACTIVE = "inactive"
+
+class PriceType(str, Enum):
+    FIXED = "fixed"
+    STARTING_AT = "starting_at"
+    HOURLY = "hourly"
+    FREE = "free"
+    CUSTOM = "custom"
+
 class StrictContactSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
     support_email: Optional[str] = None
@@ -39,7 +72,7 @@ class StrictBusinessProfileSchema(BaseModel):
 
 class StrictPriceSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    type: Optional[str] = None
+    type: Optional[PriceType] = None
     amount: Optional[float] = None
     currency: Optional[str] = None
 
@@ -61,7 +94,8 @@ class StrictServiceSchema(BaseModel):
     description: Optional[str] = None
     duration_minutes: Optional[int] = None
     buffer_minutes: Optional[int] = None
-    allocation_model: Optional[AllocationModel] = None
+    allocation_model: Optional[ServiceAllocationModel] = None
+    booking_mode: Optional[BookingMode] = None
     price: Optional[StrictPriceSchema] = None
     deposit: Optional[StrictDepositSchema] = None
     eligible_resource_ids: Optional[list[str]] = None
@@ -71,13 +105,13 @@ class StrictServiceSchema(BaseModel):
 class StrictResourceSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
     resource_id: Optional[str] = None
-    resource_type: Optional[str] = None
+    resource_type: Optional[ResourceType] = None
     name: Optional[str] = None
     title: Optional[str] = None
     category: Optional[str] = None
     description: Optional[str] = None
     is_bookable: Optional[bool] = None
-    dispatch_status: Optional[str] = None
+    dispatch_status: Optional[DispatchStatus] = None
     custom_shift_overrides: Optional[dict] = None
 
 class StrictTimeSlotSchema(BaseModel):
@@ -140,42 +174,21 @@ class StrictPhiScrubSchema(BaseModel):
 class StrictTriageEmergencySchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
     enabled: Optional[bool] = None
-    rule_id: Optional[str] = None
-    trigger_type: Optional[str] = None
     keywords: Optional[list[str]] = None
-    action: Optional[str] = None
-    agent_locked_on_trigger: Optional[bool] = None
     response_override: Optional[str] = None
-    notify_front_desk: Optional[bool] = None
-    front_desk_contact: Optional[str] = None
 
 class StrictHumanHandoffSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
     enabled: Optional[bool] = None
     trigger_topics: Optional[list[str]] = None
-    action: Optional[str] = None
-    target_action: Optional[str] = None
     reception_contact: Optional[str] = None
-    lock_agent_on_handoff: Optional[bool] = None
     handoff_message: Optional[str] = None
-
-class StrictOffHoursPolicySchema(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    action: Optional[str] = None
-    response: Optional[str] = None
-
-class StrictNoDiagnosisPolicySchema(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    enabled: Optional[bool] = None
-    response_override: Optional[str] = None
 
 class StrictGuardrailsSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
     phi_scrubbing: Optional[StrictPhiScrubSchema] = None
     triage_emergency: Optional[StrictTriageEmergencySchema] = None
     human_handoff: Optional[StrictHumanHandoffSchema] = None
-    off_hours_policy: Optional[StrictOffHoursPolicySchema] = None
-    no_diagnosis_policy: Optional[StrictNoDiagnosisPolicySchema] = None
 
 class StrictDraftPatchValidator(BaseModel):
     """

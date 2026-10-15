@@ -21,6 +21,7 @@ export class ListResourcesUseCase implements IListResourcesUseCase {
       limit,
       resourceType: dto.resource_type || undefined,
       dispatchStatus: dto.dispatch_status || undefined,
+      agentId: dto.agent_id || undefined,
     });
 
     return { resources, total, page, limit };

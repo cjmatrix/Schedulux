@@ -26,6 +26,7 @@ export class StartOnboardingDto extends createZodDto(StartOnboardingSchema) {}
 
 export const ResumeOnboardingSchema = z.object({
   tenant_id: z.string().min(1, 'Tenant ID is required'),
+  agent_id: z.string().optional(),
   user_answer: z.string().min(1, 'User answer is required'),
 });
 

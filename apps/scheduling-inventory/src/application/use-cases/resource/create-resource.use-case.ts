@@ -4,6 +4,7 @@ import { IResourceRepository } from '../../../domain/repositories/resource.repos
 import { ResourceEntity, ResourceType, DispatchStatus } from '../../../domain/entities/resource.entity.js';
 import { generateSemanticId } from '../../../domain/utils/id-generator.js';
 import { ICreateResourceUseCase } from '../../interfaces/resource-use-cases.interface.js';
+import { SchedulingEventsProducer } from '../../../infrastructure/messaging/scheduling-events.producer.js';
 import { CreateResourceRequest } from '@repo/proto/scheduling';
 
 @Injectable()
@@ -11,6 +12,7 @@ export class CreateResourceUseCase implements ICreateResourceUseCase {
   constructor(
     @Inject(RESOURCE_REPOSITORY)
     private readonly resourceRepository: IResourceRepository,
+    private readonly eventsProducer: SchedulingEventsProducer,
   ) {}
 
   async execute(dto: CreateResourceRequest): Promise<ResourceEntity> {
@@ -19,6 +21,7 @@ export class CreateResourceUseCase implements ICreateResourceUseCase {
     const resource = new ResourceEntity({
       id: resourceId,
       tenantId: dto.tenant_id,
+      agentId: dto.agent_id || '',
       resourceType: (dto.resource_type as ResourceType) || 'staff',
       name: dto.name,
       title: dto.title || '',
@@ -29,6 +32,10 @@ export class CreateResourceUseCase implements ICreateResourceUseCase {
       customShiftOverridesJson: dto.custom_shift_overrides_json || '{}',
     });
 
-    return this.resourceRepository.create(resource);
+    const created = await this.resourceRepository.create(resource);
+
+    await this.eventsProducer.emitResourceCreated(created);
+
+    return created;
   }
 }

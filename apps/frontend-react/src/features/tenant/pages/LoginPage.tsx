@@ -49,7 +49,7 @@ export default function LoginPage() {
   }
 
   if (profileData?.data) {
-    return <Navigate to="/tenant/users" replace />;
+    return <Navigate to="/tenant/agents" replace />;
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -71,7 +71,7 @@ export default function LoginPage() {
           if (res?.data) {
             authStoreLogin(res.data);
           }
-          navigate("/tenant/users");
+          navigate("/tenant/agents");
         },
         onError: (err) => {
           if (err.message === "EMAIL_NOT_VERIFIED") {
@@ -163,7 +163,7 @@ export default function LoginPage() {
                               if (res?.data) {
                                 authStoreLogin(res.data);
                               }
-                              navigate("/tenant/landingboard");
+                              navigate("/tenant/agents");
                             },
                             onError: (err) => {
                               setErrorMessage(

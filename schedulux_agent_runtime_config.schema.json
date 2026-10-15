@@ -158,7 +158,7 @@
     },
     {
       "resource_id": "res_operatory_bay_3",
-      "resource_type": "physical_asset",
+      "resource_type": "bay",
       "name": "Operatory Bay 3",
       "title": "Rapid Recovery & Emergency Triage Unit",
       "category": "Treatment Room",
@@ -169,7 +169,7 @@
     },
     {
       "resource_id": "res_xray_room",
-      "resource_type": "physical_asset",
+      "resource_type": "room",
       "name": "Panoramic X-Ray Room",
       "title": "Diagnostic Imaging Suite",
       "category": "Diagnostic Room",
@@ -188,6 +188,8 @@
       "description": "Standard clinical examination. AI will inform new patients about arrival paperwork requirements.",
       "duration_minutes": 20,
       "buffer_minutes": 15,
+      "allocation_model": "single_resource",
+      "booking_mode": "time_slot",
       "price": {
         "type": "fixed",
         "amount": 75.00,
@@ -196,9 +198,11 @@
       "deposit": {
         "required": false,
         "amount": 0,
-        "processor": null,
-        "upi_id": null,
-        "qr_code_url": null
+        "processor": "",
+        "upi_id": "",
+        "qr_code_url": "",
+        "confirmation_method": "automatic",
+        "payment_instructions": ""
       },
       "eligible_resource_ids": ["res_dr_aris_smith", "res_dr_elena_vance"],
       "required_asset_ids": [],
@@ -211,6 +215,8 @@
       "description": "Endodontic therapy for infected pulp. Mandatory 15-minute room sterilization after procedure.",
       "duration_minutes": 60,
       "buffer_minutes": 15,
+      "allocation_model": "single_resource",
+      "booking_mode": "time_slot",
       "price": {
         "type": "fixed",
         "amount": 890.00,
@@ -227,7 +233,7 @@
       },
       "eligible_resource_ids": ["res_dr_aris_smith"],
       "required_asset_ids": ["res_xray_room"],
-      "recall_interval_days": null
+      "recall_interval_days": 0
     },
     {
       "service_id": "srv_wisdom_extraction",
@@ -236,6 +242,8 @@
       "description": "Surgical removal of impacted third molars with local anesthesia and post-op suture protocol.",
       "duration_minutes": 60,
       "buffer_minutes": 20,
+      "allocation_model": "single_resource",
+      "booking_mode": "time_slot",
       "price": {
         "type": "fixed",
         "amount": 350.00,
@@ -252,7 +260,7 @@
       },
       "eligible_resource_ids": ["res_dr_aris_smith"],
       "required_asset_ids": ["res_xray_room"],
-      "recall_interval_days": null
+      "recall_interval_days": 0
     },
     {
       "service_id": "srv_deep_cleaning",
@@ -261,6 +269,8 @@
       "description": "Full-mouth scaling and root planing. Recommended every 6 months.",
       "duration_minutes": 45,
       "buffer_minutes": 15,
+      "allocation_model": "single_resource",
+      "booking_mode": "time_slot",
       "price": {
         "type": "fixed",
         "amount": 180.00,
@@ -269,9 +279,11 @@
       "deposit": {
         "required": false,
         "amount": 0,
-        "processor": null,
-        "upi_id": null,
-        "qr_code_url": null
+        "processor": "",
+        "upi_id": "",
+        "qr_code_url": "",
+        "confirmation_method": "automatic",
+        "payment_instructions": ""
       },
       "eligible_resource_ids": ["res_dr_aris_smith", "res_dr_elena_vance"],
       "required_asset_ids": [],
@@ -284,6 +296,8 @@
       "description": "Priority triage slot for acute pain, trauma, or urgent dental emergencies. Reserved in Operatory Bay 3.",
       "duration_minutes": 30,
       "buffer_minutes": 10,
+      "allocation_model": "single_resource",
+      "booking_mode": "time_slot",
       "price": {
         "type": "fixed",
         "amount": 150.00,
@@ -292,13 +306,15 @@
       "deposit": {
         "required": false,
         "amount": 0,
-        "processor": null,
-        "upi_id": null,
-        "qr_code_url": null
+        "processor": "",
+        "upi_id": "",
+        "qr_code_url": "",
+        "confirmation_method": "automatic",
+        "payment_instructions": ""
       },
       "eligible_resource_ids": ["res_dr_aris_smith"],
       "required_asset_ids": ["res_operatory_bay_3"],
-      "recall_interval_days": null
+      "recall_interval_days": 0
     }
   ],
 
@@ -343,8 +359,6 @@
     },
     "triage_emergency": {
       "enabled": true,
-      "rule_id": "SAN_015",
-      "trigger_type": "keyword_match",
       "keywords": [
         "chest pain",
         "uncontrollable bleeding",
@@ -356,11 +370,7 @@
         "feverish",
         "swelling getting worse"
       ],
-      "action": "halt_and_divert",
-      "agent_locked_on_trigger": true,
-      "response_override": "This sounds like an urgent clinical emergency. Please hang up and call 911 or visit your nearest emergency room immediately. Our team has been notified.",
-      "notify_front_desk": true,
-      "front_desk_contact": "+1-555-019-2834"
+      "response_override": "This sounds like an urgent clinical emergency. Please hang up and call 911 or visit your nearest emergency room immediately."
     },
     "human_handoff": {
       "enabled": true,
@@ -371,19 +381,8 @@
         "insurance coverage disputes",
         "HIPAA data requests"
       ],
-      "action": "notify_and_lock",
-      "target_action": "notify_front_desk",
       "reception_contact": "+1-555-019-2834",
-      "lock_agent_on_handoff": true,
       "handoff_message": "I'm connecting you with our clinical team right away. Please hold for a moment."
-    },
-    "off_hours_policy": {
-      "action": "inform_and_offer_callback",
-      "response": "Our clinic is currently closed. Our hours are Monday–Friday, 8:00 AM to 5:00 PM Eastern. Would you like to book an appointment for our next available slot, or leave a callback number?"
-    },
-    "no_diagnosis_policy": {
-      "enabled": true,
-      "response_override": "I'm not able to provide clinical diagnoses. I can help you book an appointment with one of our doctors who can properly evaluate your symptoms."
     }
   },
 

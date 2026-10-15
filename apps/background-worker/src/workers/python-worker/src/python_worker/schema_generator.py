@@ -66,15 +66,44 @@ async def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) ->
                 {
                     "service_id": "srv_consultation",
                     "name": "Initial Consultation",
-                    "allocation_model": "time_slot",
+                    "category": "General",
+                    "description": "Initial consultation and evaluation",
                     "duration_minutes": 30,
-                    "price": {"type": "fixed", "amount": 100, "currency": "USD"}
+                    "buffer_minutes": 0,
+                    "allocation_model": "single_resource",
+                    "booking_mode": "time_slot",
+                    "price": {"type": "fixed", "amount": 100.0, "currency": "USD"},
+                    "deposit": {
+                        "required": False,
+                        "amount": 0.0,
+                        "processor": "",
+                        "upi_id": "",
+                        "qr_code_url": "",
+                        "confirmation_method": "automatic",
+                        "payment_instructions": ""
+                    },
+                    "eligible_resource_ids": ["res_staff_default"],
+                    "required_asset_ids": [],
+                    "recall_interval_days": 0
+                }
+            ],
+            "resources": [
+                {
+                    "resource_id": "res_staff_default",
+                    "resource_type": "staff",
+                    "name": "Primary Provider",
+                    "title": "Specialist",
+                    "category": "General",
+                    "description": "Primary staff provider",
+                    "is_bookable": True,
+                    "dispatch_status": "active",
+                    "custom_shift_overrides": {}
                 }
             ],
             "runtime_meta": {
                 "template_id": "tpl_medical_dental_v2",
                 "compiler_mode": "mock",
-                "inferred_fields": ["operating_hours", "services"]
+                "inferred_fields": ["operating_hours", "services", "resources"]
             }
         }
 
@@ -111,14 +140,46 @@ async def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) ->
 Your task is to extract and generate a comprehensive AI booking agent configuration from website crawl data for tenant: {tenant_id} (website URL: {url}).
 
 CRITICAL DOMAIN INSTRUCTIONS:
-1. SERVICES ALLOCATION MODEL:
-   - Identify and specify the "allocation_model" for every service.
-   - Use "time_slot" for services booked at specific times/hours (e.g., dental clinics, hair salons, auto repairs, consultation appointments).
-   - Use "date_range" for services booked over days/dates (e.g., hotel stays, multi-day equipment or car rentals).
-2. OPERATING HOURS & SERVICE DURATIONS:
+1. SERVICES BOOKING MODE, ALLOCATION MODEL & ATTRIBUTES:
+   - For every service, specify both the time dimension (booking_mode) and resource dispatch strategy (allocation_model):
+     * "booking_mode": MUST be "time_slot" for services booked at clock hours/minutes (e.g. consultations, appointments, dental/medical procedures) or "date_range" for services booked over days/dates (e.g. hotel stays, car/equipment rentals). Default: "time_slot".
+     * "allocation_model": MUST be "single_resource" (1 staff or room), "multi_resource" (multiple staff/assets simultaneously), "pooled" (any available provider from team), or "asset_only" (room/equipment with no staff). Default: "single_resource".
+   - For every service, include:
+     * "service_id": Unique identifier string (e.g. srv_consultation)
+     * "name": Name of the service
+     * "category": Category (default 'General')
+     * "description": Detailed description
+     * "duration_minutes": Duration in minutes (must be >= 1, default 30)
+     * "buffer_minutes": Post-service buffer time in minutes (default 0)
+     * "booking_mode": "time_slot" or "date_range"
+     * "allocation_model": "single_resource", "multi_resource", "pooled", or "asset_only"
+     * "price": {{"type": "fixed"|"starting_at"|"hourly"|"free"|"custom", "amount": float, "currency": "USD"}}
+     * "deposit": {{"required": bool, "amount": float, "processor": str, "upi_id": str, "qr_code_url": str, "confirmation_method": str, "payment_instructions": str}}
+     * "eligible_resource_ids": list of resource_id strings that can perform this service
+     * "required_asset_ids": list of asset resource_id strings required
+     * "recall_interval_days": days until next recall/follow-up (default 0)
+
+2. RESOURCES ATTRIBUTES & ENUMS:
+   - Identify practitioners, staff, rooms, chairs, bays, equipment, or vehicles:
+     * "resource_id": Unique identifier string (e.g. res_dr_smith)
+     * "resource_type": MUST be one of: "staff", "room", "chair", "bay", "equipment", "asset", "vehicle" (default: "staff")
+     * "name": Full name or label
+     * "title": Title or role (e.g. "Senior Specialist")
+     * "category": Category (default 'General')
+     * "description": Description
+     * "is_bookable": bool (default true)
+     * "dispatch_status": MUST be one of: "active", "on_leave", "maintenance", "retired", "inactive" (default: "active")
+     * "custom_shift_overrides": dict (default empty object)
+   - Ensure every service in services[] has eligible_resource_ids pointing to these resources.
+
+3. SCHEDULING ENGINE ALLOCATION MODEL:
+   - Set scheduling_engine.allocation_model to "time_slot" for slot-based appointments (clinics, salons, etc.) or "date_range" for multi-day bookings (rentals, hotels).
+
+4. OPERATING HOURS & SERVICE DURATIONS:
    - If operating hours or service durations are not explicitly found in the crawled data, use your parametric knowledge to make accurate industry-standard guesses based on the vertical (e.g., Dental consults are 30 min, Dental offices open Mon-Fri 08:00 to 17:00).
    - Keep track of all fields you guessed or filled with defaults, and list them in `runtime_meta.inferred_fields`.
-3. ACCURACY & RESOURCES:
+
+5. ACCURACY & PROFILE:
    - Extract real clinic or business name, address, contact phone/email, and timezone into `business_profile`.
    - Extract real staff, practitioners, or assets into `resources`.
    - Extract all offered services, categories, and prices into `services`.

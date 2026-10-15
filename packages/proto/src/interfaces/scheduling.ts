@@ -42,6 +42,8 @@ export interface ServiceInfo {
   recall_interval_days: number;
   created_at: string;
   updated_at: string;
+  booking_mode: string;
+  agent_id: string;
 }
 
 export interface CreateServiceRequest {
@@ -57,6 +59,9 @@ export interface CreateServiceRequest {
   eligible_resource_ids: string[];
   required_asset_ids: string[];
   recall_interval_days: number;
+  booking_mode?: string | undefined;
+  agent_id?: string | undefined;
+  service_id?: string | undefined;
 }
 
 export interface GetServiceRequest {
@@ -69,6 +74,7 @@ export interface ListServicesRequest {
   page: number;
   limit: number;
   category: string;
+  agent_id?: string | undefined;
 }
 
 export interface ListServicesResponse {
@@ -92,6 +98,8 @@ export interface UpdateServiceRequest {
   eligible_resource_ids: string[];
   required_asset_ids: string[];
   recall_interval_days?: number | undefined;
+  booking_mode?: string | undefined;
+  agent_id?: string | undefined;
 }
 
 export interface DeleteServiceRequest {
@@ -122,6 +130,7 @@ export interface ResourceInfo {
   custom_shift_overrides_json: string;
   created_at: string;
   updated_at: string;
+  agent_id: string;
 }
 
 export interface CreateResourceRequest {
@@ -134,6 +143,8 @@ export interface CreateResourceRequest {
   is_bookable: boolean;
   dispatch_status: string;
   custom_shift_overrides_json: string;
+  agent_id?: string | undefined;
+  resource_id?: string | undefined;
 }
 
 export interface GetResourceRequest {
@@ -147,6 +158,7 @@ export interface ListResourcesRequest {
   limit: number;
   resource_type: string;
   dispatch_status: string;
+  agent_id?: string | undefined;
 }
 
 export interface ListResourcesResponse {
@@ -167,6 +179,7 @@ export interface UpdateResourceRequest {
   is_bookable?: boolean | undefined;
   dispatch_status?: string | undefined;
   custom_shift_overrides_json?: string | undefined;
+  agent_id?: string | undefined;
 }
 
 export interface DeleteResourceRequest {
@@ -181,6 +194,20 @@ export interface DeleteResourceResponse {
 
 export interface ResourceResponse {
   resource: ResourceInfo | undefined;
+  message: string;
+}
+
+export interface BatchSyncInventoryRequest {
+  tenant_id: string;
+  agent_id: string;
+  resources: CreateResourceRequest[];
+  services: CreateServiceRequest[];
+}
+
+export interface BatchSyncInventoryResponse {
+  resources: ResourceInfo[];
+  services: ServiceInfo[];
+  success: boolean;
   message: string;
 }
 
@@ -210,6 +237,10 @@ export interface SchedulingInventoryServiceClient {
   updateResource(request: UpdateResourceRequest): Observable<ResourceResponse>;
 
   deleteResource(request: DeleteResourceRequest): Observable<DeleteResourceResponse>;
+
+  /** Batch / Bulk Operations */
+
+  batchSyncInventory(request: BatchSyncInventoryRequest): Observable<BatchSyncInventoryResponse>;
 }
 
 export interface SchedulingInventoryServiceController {
@@ -252,6 +283,12 @@ export interface SchedulingInventoryServiceController {
   deleteResource(
     request: DeleteResourceRequest,
   ): Promise<DeleteResourceResponse> | Observable<DeleteResourceResponse> | DeleteResourceResponse;
+
+  /** Batch / Bulk Operations */
+
+  batchSyncInventory(
+    request: BatchSyncInventoryRequest,
+  ): Promise<BatchSyncInventoryResponse> | Observable<BatchSyncInventoryResponse> | BatchSyncInventoryResponse;
 }
 
 export function SchedulingInventoryServiceControllerMethods() {
@@ -267,6 +304,7 @@ export function SchedulingInventoryServiceControllerMethods() {
       "listResources",
       "updateResource",
       "deleteResource",
+      "batchSyncInventory",
     ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

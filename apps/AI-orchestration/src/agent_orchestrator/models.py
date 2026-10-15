@@ -9,7 +9,7 @@ Design decisions:
   - Beanie Document (native async Motor/PyMongo + Pydantic v2)
   - Pydantic BaseModel for all embedded structures
   - Indexes on tenant_id + status + agent_id for runtime hot-path queries
-  - ConfigDict(extra="allow") for seamless backwards/forwards schema compatibility
+  - ConfigDict(extra="ignore") for seamless backwards/forwards schema compatibility
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ import copy
 import os
 import urllib.parse
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 from pymongo import AsyncMongoClient, IndexModel
@@ -24,7 +25,7 @@ from beanie import Document, init_beanie
 
 
 class ContactEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     support_email: str | None = None
     public_phone: str | None = None
@@ -32,7 +33,7 @@ class ContactEmbed(BaseModel):
 
 
 class TerminologyEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     customer_singular: str | None = None
     customer_plural: str | None = None
@@ -41,14 +42,14 @@ class TerminologyEmbed(BaseModel):
 
 
 class BrandEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     primary_color: str | None = None
     logo_url: str | None = None
 
 
 class BusinessProfileEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     name: str = ""
     vertical: str = ""  # e.g. "medical", "auto", "hospitality", "custom"
@@ -62,7 +63,7 @@ class BusinessProfileEmbed(BaseModel):
 
 
 class WidgetConfigEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     agent_name: str | None = None
     avatar_url: str | None = None
@@ -77,21 +78,15 @@ class WidgetConfigEmbed(BaseModel):
 
 
 class LlmEngineEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    studio_model: str | None = None
-    chat_model: str | None = None
-    chat_fallback_model: str | None = None
+    model_config = ConfigDict(extra="ignore")
     fallback_trigger_latency_ms: int | None = None
     temperature: float = 0.1
-    schema_validation: str | None = "strict"
     semantic_caching: bool = True
-    streaming: str | None = None
     prompt_compiler_token_limit: int | None = None
 
 
 class KnowledgeAssetEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     asset_id: str
     title: str | None = None
@@ -102,7 +97,7 @@ class KnowledgeAssetEmbed(BaseModel):
 
 
 class KnowledgeBaseEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     namespace: str | None = None
     qdrant_collection: str | None = None
@@ -110,7 +105,7 @@ class KnowledgeBaseEmbed(BaseModel):
 
 
 class SchedulingEngineEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     allocation_model: str = "time_slot"
     default_lead_time_hours: int = 2
@@ -120,7 +115,7 @@ class SchedulingEngineEmbed(BaseModel):
 
 
 class BlackoutDateEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     date: str
     reason: str | None = None
@@ -128,7 +123,7 @@ class BlackoutDateEmbed(BaseModel):
 
 
 class OperatingHoursEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     monday: list[dict[str, Any]] = Field(default_factory=list)
     tuesday: list[dict[str, Any]] = Field(default_factory=list)
@@ -140,70 +135,107 @@ class OperatingHoursEmbed(BaseModel):
     blackout_dates: list[BlackoutDateEmbed] = Field(default_factory=list)
 
 
+class ResourceType(str, Enum):
+    STAFF = "staff"
+    ROOM = "room"
+    CHAIR = "chair"
+    BAY = "bay"
+    EQUIPMENT = "equipment"
+    ASSET = "asset"
+    VEHICLE = "vehicle"
+
+
+class DispatchStatus(str, Enum):
+    ACTIVE = "active"
+    ON_LEAVE = "on_leave"
+    MAINTENANCE = "maintenance"
+    RETIRED = "retired"
+    INACTIVE = "inactive"
+
+
+class ServiceAllocationModel(str, Enum):
+    SINGLE_RESOURCE = "single_resource"
+    MULTI_RESOURCE = "multi_resource"
+    POOLED = "pooled"
+    ASSET_ONLY = "asset_only"
+
+
+class BookingMode(str, Enum):
+    TIME_SLOT = "time_slot"
+    DATE_RANGE = "date_range"
+
+
+class PriceType(str, Enum):
+    FIXED = "fixed"
+    STARTING_AT = "starting_at"
+    HOURLY = "hourly"
+    FREE = "free"
+    CUSTOM = "custom"
+
+
 class ResourceEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     resource_id: str
-    resource_type: str = "staff"
+    resource_type: ResourceType = ResourceType.STAFF
     name: str
-    title: str | None = None
-    category: str | None = None
-    description: str | None = None
+    title: str = ""
+    category: str = "General"
+    description: str = ""
     is_bookable: bool = True
-    dispatch_status: str = "active"
+    dispatch_status: DispatchStatus = DispatchStatus.ACTIVE
     custom_shift_overrides: dict[str, Any] = Field(default_factory=dict)
 
 
 class PriceEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
-    type: str = "fixed"
+    type: PriceType = PriceType.FIXED
     amount: float = 0.0
     currency: str = "USD"
 
 
 class DepositEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     required: bool = False
     amount: float = 0.0
-    processor: str | None = None
-    upi_id: str | None = None
-    qr_code_url: str | None = None
-    confirmation_method: str | None = None
-    payment_instructions: str | None = None
+    processor: str = ""
+    upi_id: str = ""
+    qr_code_url: str = ""
+    confirmation_method: str = "automatic"
+    payment_instructions: str = ""
 
 
 class ServiceEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     service_id: str
     name: str
-    category: str | None = None
-    description: str | None = None
+    category: str = "General"
+    description: str = ""
     duration_minutes: int = 30
     buffer_minutes: int = 0
-    allocation_model: str = "time_slot"
-    price: PriceEmbed | None = None
-    deposit: DepositEmbed | None = None
+    allocation_model: ServiceAllocationModel = ServiceAllocationModel.SINGLE_RESOURCE
+    booking_mode: BookingMode = BookingMode.TIME_SLOT
+    price: PriceEmbed = Field(default_factory=PriceEmbed)
+    deposit: DepositEmbed = Field(default_factory=DepositEmbed)
     eligible_resource_ids: list[str] = Field(default_factory=list)
     required_asset_ids: list[str] = Field(default_factory=list)
-    recall_interval_days: int | None = None
+    recall_interval_days: int = 0
 
 
 class VerificationPolicyEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     require_otp_for_new_booking: bool = False
     require_otp_for_reschedule: bool = True
     require_otp_for_cancel: bool = True
-    require_otp_for_history_access: bool = True
-    otp_delivery_channel: str | None = None
-    otp_expiry_seconds: int = 300
+
 
 
 class PatientFieldEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     field_name: str
     data_type: str | None = None
@@ -212,7 +244,7 @@ class PatientFieldEmbed(BaseModel):
 
 
 class PhiScrubEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     enabled: bool = True
     policy: str | None = None
@@ -221,57 +253,32 @@ class PhiScrubEmbed(BaseModel):
 
 
 class TriageEmergencyEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     enabled: bool = True
-    rule_id: str | None = None
-    trigger_type: str | None = None
     keywords: list[str] = Field(default_factory=list)
-    action: str | None = None
-    agent_locked_on_trigger: bool = True
     response_override: str | None = None
-    notify_front_desk: bool = True
-    front_desk_contact: str | None = None
 
 
 class HumanHandoffEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     enabled: bool = True
     trigger_topics: list[str] = Field(default_factory=list)
-    action: str | None = None
-    target_action: str | None = None
     reception_contact: str | None = None
-    lock_agent_on_handoff: bool = True
     handoff_message: str | None = None
 
 
-class OffHoursPolicyEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    action: str | None = None
-    response: str | None = None
-
-
-class NoDiagnosisPolicyEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    enabled: bool = True
-    response_override: str | None = None
-
-
 class GuardrailsEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     phi_scrubbing: PhiScrubEmbed | None = None
     triage_emergency: TriageEmergencyEmbed | None = None
     human_handoff: HumanHandoffEmbed | None = None
-    off_hours_policy: OffHoursPolicyEmbed | None = None
-    no_diagnosis_policy: NoDiagnosisPolicyEmbed | None = None
 
 
 class StateVariableEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     variable_key: str
     data_type: str | None = None
@@ -281,7 +288,7 @@ class StateVariableEmbed(BaseModel):
 
 
 class SubAgentEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     agent_id: str
     agent_type: str
@@ -292,7 +299,7 @@ class SubAgentEmbed(BaseModel):
 
 
 class UpiConfigEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     upi_id: str | None = None
     display_name: str | None = None
@@ -301,7 +308,7 @@ class UpiConfigEmbed(BaseModel):
 
 
 class PaymentGatewayEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     model: str | None = None
     supported_processors: list[str] = Field(default_factory=list)
@@ -312,7 +319,7 @@ class PaymentGatewayEmbed(BaseModel):
 
 
 class IntegrationsEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     stripe: dict[str, Any] = Field(default_factory=dict)
     payment_gateway: PaymentGatewayEmbed | None = None
@@ -320,7 +327,7 @@ class IntegrationsEmbed(BaseModel):
 
 
 class ComplianceEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     hipaa_mode: bool = False
     phi_scrubbing: bool = False
@@ -330,14 +337,14 @@ class ComplianceEmbed(BaseModel):
 
 
 class SubscriptionEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     tier: str | None = "starter"
     tokens_used_this_month: int = 0
 
 
 class RuntimeMetaEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     template_id: str | None = None
     template_name: str | None = None
@@ -356,7 +363,7 @@ class AgentRuntimeConfig(Document):
     One document per active agent per tenant.
     Indexed for runtime hot-path: tenant_id + status is the primary lookup.
     """
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     schema_version: str = "2.4"
     status: str = "draft"
@@ -364,8 +371,6 @@ class AgentRuntimeConfig(Document):
     agent_id: str | None = None
 
     compiled_at: datetime = Field(default_factory=datetime.utcnow)
-    compiler_latency_ms: int | None = None
-    compiler_hash: str | None = None
 
     business_profile: BusinessProfileEmbed | None = None
     widget_config: WidgetConfigEmbed | None = None
@@ -397,7 +402,7 @@ class AgentRuntimeConfig(Document):
 
 
 class DraftCheckpointEmbed(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     checkpoint_id: str
     message_id: str
@@ -413,12 +418,13 @@ class AgentDraft(Document):
     Maintains a rolling timeline of the last 20 message checkpoints (full snapshots)
     enabling instant Google Antigravity-style time travel rewind to any message.
     """
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     tenant_id: str
     agent_id: str
     name: str
     creation_source: str = "custom"
+    status: str = "pending"
     last_edited_by: str | None = None
 
     current_draft: dict[str, Any] = Field(default_factory=dict)

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router';
+import { useParams, useNavigate } from 'react-router';
 import { axiosClient } from '../api/axiosClient';
-import { Send, Bot, User, CheckCircle } from 'lucide-react';
+import { Send, Bot, User, CheckCircle, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 
 // Type definitions
@@ -13,6 +13,7 @@ interface Message {
 
 export default function AgentOnboardingWizard() {
   const { id: agentId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -76,6 +77,7 @@ export default function AgentOnboardingWizard() {
     try {
       const res = await axiosClient.post('/api/v1/tenant/knowledge/onboarding/message', {
         tenant_id: tenantId,
+        agent_id: agentId,
         user_answer: userMsg
       });
       
@@ -107,14 +109,44 @@ export default function AgentOnboardingWizard() {
       
       {/* LEFT COLUMN - CHAT INTERFACE */}
       <div className="flex flex-col w-1/2 border-r border-slate-200 bg-white">
-        <div className="p-4 border-b border-slate-200 bg-white sticky top-0 z-10 flex items-center shadow-sm">
-          <Bot className="w-6 h-6 text-indigo-600 mr-2" />
-          <h1 className="text-lg font-semibold text-slate-900">AI Agent Setup Wizard</h1>
-          {status === 'complete' && (
-            <span className="ml-auto flex items-center text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">
-              <CheckCircle className="w-4 h-4 mr-1" /> Live
-            </span>
-          )}
+        <div className="p-4 border-b border-slate-200 bg-white sticky top-0 z-10 flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate("/tenant/agents")}
+              className="p-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition cursor-pointer"
+              title="Back to AI Agents Dashboard"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                <Bot className="w-4 h-4" />
+              </div>
+              <div>
+                <h1 className="text-sm font-bold text-slate-900 leading-tight">AI Agent Setup Wizard</h1>
+                <p className="font-mono text-[10px] text-slate-400 leading-none mt-0.5">{agentId}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            {status === 'complete' ? (
+              <span className="flex items-center text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+                <CheckCircle className="w-3.5 h-3.5 mr-1" /> Live
+              </span>
+            ) : (
+              <span className="flex items-center text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full">
+                Drafting
+              </span>
+            )}
+            <button
+              onClick={() => navigate(`/tenant/agents/${agentId}/dashboard`)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-neutral-950 hover:bg-neutral-800 text-white text-xs font-bold rounded-xl shadow-2xs transition active:scale-98 cursor-pointer"
+            >
+              <span>Go to Dashboard</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -185,7 +217,7 @@ export default function AgentOnboardingWizard() {
         </div>
       </div>
 
-      {/* RIGHT COLUMN - SCHEMA VIEWER */}
+     
       <div className="flex flex-col w-1/2 bg-slate-900 text-slate-300 shadow-inner">
         <div className="p-4 border-b border-slate-700 bg-slate-900 sticky top-0 z-10 shadow-sm flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-100 flex items-center">
@@ -208,7 +240,7 @@ export default function AgentOnboardingWizard() {
   );
 }
 
-// Simple JSON syntax highlighter
+
 function syntaxHighlight(json: string) {
   if (!json) return '';
   json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

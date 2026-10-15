@@ -51,6 +51,7 @@ _GEMINI_MODEL   = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
 
 class GraphState(TypedDict):
     tenant_id:       str
+    agent_id:        Optional[str]
     draft:           dict[str, Any]        
     messages:        Annotated[list, add_messages]  
     structural_gaps: list[dict]            # [{field, question, type, ...}]
@@ -445,11 +446,34 @@ Rules:
 - Do NOT add preamble. Just the question or COMPLETE."""
 
 
+def _format_draft_toon(draft: dict) -> str:
+    """
+    Serializes the draft schema using Recursive Pruning + TOON (Token-Oriented Object Notation).
+    Automatically captures 100% of schema fields (future-proof against schema drift),
+    strips empty/null syntax bloat, and provides optimal token compression for LLM attention.
+    """
+    def prune_empty(d):
+        if isinstance(d, dict):
+            return {k: prune_empty(v) for k, v in d.items() if v not in (None, "", {}, [])}
+        elif isinstance(d, list):
+            return [prune_empty(v) for v in d if v not in (None, "", {}, [])]
+        return d
+
+    pruned = prune_empty(copy.deepcopy(draft))
+    try:
+        import toon
+        return toon.encode(pruned)
+    except Exception as e:
+        print(f"[TOON Warning] Fallback to pruned json: {e}", flush=True)
+        return json.dumps(pruned, indent=2)
+
 
 async def node_load_draft(state: GraphState) -> dict:
     """Entry point. Ensures baseline dict structure."""
     draft = copy.deepcopy(state.get("draft", {}))
+    agent_id = state.get("agent_id") or draft.get("agent_id") or f"agent_{state['tenant_id']}_v1"
     draft.setdefault("tenant_id",        state["tenant_id"])
+    draft.setdefault("agent_id",         agent_id)
     draft.setdefault("status",           "draft")
     draft.setdefault("schema_version",   "2.4")
     draft.setdefault("business_profile", {})
@@ -457,6 +481,8 @@ async def node_load_draft(state: GraphState) -> dict:
     draft.setdefault("services",         [])
     draft.setdefault("resources",        [])
     return {
+        "tenant_id":       state["tenant_id"],
+        "agent_id":        agent_id,
         "draft":           draft,
         "status":          "onboarding",
         "structural_gaps": [],
@@ -515,7 +541,7 @@ async def node_llm_semantic_review(state: GraphState) -> dict:
     history_msgs = state.get("messages", [])[-6:]
     history = "\n".join([m.content for m in history_msgs]) if history_msgs else "No conversation history yet."
     
-    # Check if patches were applied in the immediate preceding step
+ 
     last_msg = history_msgs[-1] if history_msgs else None
     just_applied_patches = bool(
         last_msg
@@ -557,13 +583,13 @@ DOMAIN INTEGRITY & DEPENDENCY RULES:
      * Synchronize `business_profile.currency` to the standard ISO 3-letter currency code (e.g., "INR", "USD", "EUR", "GBP").
      * Synchronize each modified service's `price.currency` to match.
 3. EMERGENCY & HANDOFF GUARDRAILS:
-   - If `guardrails.triage_emergency.enabled` is True and `notify_front_desk` is True: `front_desk_contact` MUST NOT be empty. If missing, ask the user.
    - If `guardrails.human_handoff.enabled` is True: `reception_contact` and `handoff_message` MUST NOT be empty. If missing, ask the user.
 4. HEALTHCARE / HIPAA COMPLIANCE:
    - If `compliance.hipaa_mode` is True: ensure `guardrails.phi_scrubbing.enabled` is True and `compliance.zero_hallucination_mode` is True.
 5. SERVICES & RESOURCES:
    - AT LEAST ONE RESOURCE IS MANDATORY: `resources[]` MUST contain at least one bookable resource (a staff member or a physical asset like a room, chair, or bay). If `resources[]` is empty, you CANNOT finalize; you MUST choose 'ask_user' and ask who or what delivers their service.
    - Any IDs in `services[].eligible_resource_ids` must correspond to actual resources in `resources[]`. Always link services to eligible resources.
+   - For services, specify `booking_mode`: "time_slot" for services booked at clock hours/minutes (appointments, consultations), or "date_range" for multi-day bookings (rentals, stays). Default: "time_slot".
    - For `time_slot` services, `duration_minutes` must be > 0.
 6. AVOID REPEATED QUESTIONS:
    - Do NOT re-ask questions that the user already answered or declined in recent conversation.
@@ -573,23 +599,26 @@ CRITICAL: When generating JSON patches, you MUST use ONLY these exact fields:
 - business_profile.contact: support_email, public_phone, escalation_phone
 - business_profile.terminology: customer_singular, customer_plural, primary_metric, action_metric
 - business_profile.brand: primary_color, logo_url
-- services[]: service_id, name, category, description, duration_minutes, buffer_minutes, allocation_model, eligible_resource_ids, required_asset_ids, recall_interval_days
-- services[].price: type (fixed|variable|free), amount, currency
-- services[].deposit: required, amount, processor (upi_direct|stripe|bank_transfer|cash_on_arrival), upi_id, qr_code_url, confirmation_method, payment_instructions
-- resources[]: resource_id, resource_type, name, title, category, description, is_bookable, dispatch_status, custom_shift_overrides
+- services[]: service_id, name, category, description, duration_minutes, buffer_minutes, booking_mode (time_slot|date_range), allocation_model (single_resource|multi_resource|pooled|asset_only), eligible_resource_ids, required_asset_ids, recall_interval_days
+- services[].price: type (fixed|starting_at|hourly|free|custom), amount, currency
+- services[].deposit: required, amount, processor, upi_id, qr_code_url, confirmation_method, payment_instructions
+- resources[]: resource_id, resource_type (staff|room|chair|bay|equipment|asset|vehicle), name, title, category, description, is_bookable, dispatch_status (active|on_leave|maintenance|retired|inactive), custom_shift_overrides
 - operating_hours: monday, tuesday, wednesday, thursday, friday, saturday, sunday (each is list of {{start: "HH:MM", end: "HH:MM"}}), blackout_dates (list of {{date: "YYYY-MM-DD", reason, is_closed}})
 - scheduling_engine: allocation_model(date_range or time_slot), default_lead_time_hours, max_advance_booking_days, cancellation_window_hours
 - widget_config: agent_name, avatar_url, initial_greeting, fallback_message, position, launcher_style, sound_on_load, auto_expand_delay_seconds, platform_sources, whitelisted_domains
 - compliance: hipaa_mode, phi_scrubbing, data_retention_policy, zero_hallucination_mode, audit_trail_enabled
 - guardrails.phi_scrubbing: enabled, policy, description, hipaa_compliant
-- guardrails.triage_emergency: enabled, rule_id, trigger_type, keywords, action, agent_locked_on_trigger, response_override, notify_front_desk, front_desk_contact
-- guardrails.human_handoff: enabled, trigger_topics, action, target_action, reception_contact, lock_agent_on_handoff, handoff_message
-- guardrails.off_hours_policy: action, response
-- guardrails.no_diagnosis_policy: enabled, response_override
+- guardrails.triage_emergency: enabled, keywords, response_override
+- guardrails.human_handoff: enabled, trigger_topics, reception_contact, handoff_message
 - supervisor_prompt: (string)
 
-Current Draft:
-{json.dumps(state['draft'])}
+Current Draft (Token-Optimized TOON Notation):
+{_format_draft_toon(state['draft'])}
+
+NOTE ON TOON NOTATION:
+The draft above is formatted in TOON (Token-Oriented Object Notation) for optimal token efficiency.
+- Arrays (e.g. `services[N]`, `resources[N]`) declare keys in `{...}` headers followed by compact data rows, or YAML lists with `-`.
+- Array rows correspond to 0-indexed elements (row 1 is index 0, row 2 is index 1, etc.) for your RFC 6902 patch paths (e.g. `/services/0/price/amount`).
 
 Recent Conversation:
 {history}
@@ -608,9 +637,9 @@ Decide your next action:
         print(f"[Semantic Agent Error] {e}", flush=True)
         return {"decision": "finalize", "pending_patches": None, "semantic_note": None}
 
-    # Guard against infinite patch loops without user interaction
+    
     if just_applied_patches and resp.action == "update_schema":
-        print("[Semantic Agent Brain] Prevented consecutive patch loop without human input. Forcing ask_user or finalize.", flush=True)
+        print("[Semantic Agent Brain]  Forcing ask_user or finalize.", flush=True)
         if resp.question:
             return {
                 "decision": "ask_user",
@@ -677,9 +706,42 @@ class StrictBusinessProfileSchema(BaseModel):
     terminology: Optional[StrictTerminologySchema] = None
     brand: Optional[StrictBrandSchema] = None
 
+class ServiceAllocationModel(str, Enum):
+    SINGLE_RESOURCE = "single_resource"
+    MULTI_RESOURCE = "multi_resource"
+    POOLED = "pooled"
+    ASSET_ONLY = "asset_only"
+
+class BookingMode(str, Enum):
+    TIME_SLOT = "time_slot"
+    DATE_RANGE = "date_range"
+
+class ResourceType(str, Enum):
+    STAFF = "staff"
+    ROOM = "room"
+    CHAIR = "chair"
+    BAY = "bay"
+    EQUIPMENT = "equipment"
+    ASSET = "asset"
+    VEHICLE = "vehicle"
+
+class DispatchStatus(str, Enum):
+    ACTIVE = "active"
+    ON_LEAVE = "on_leave"
+    MAINTENANCE = "maintenance"
+    RETIRED = "retired"
+    INACTIVE = "inactive"
+
+class PriceType(str, Enum):
+    FIXED = "fixed"
+    STARTING_AT = "starting_at"
+    HOURLY = "hourly"
+    FREE = "free"
+    CUSTOM = "custom"
+
 class StrictPriceSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    type: Optional[str] = None
+    type: Optional[PriceType] = None
     amount: Optional[float] = None
     currency: Optional[str] = None
 
@@ -692,6 +754,7 @@ class StrictDepositSchema(BaseModel):
     qr_code_url: Optional[str] = None
     confirmation_method: Optional[str] = None
     payment_instructions: Optional[str] = None
+
 class AllocationModel(str, Enum):
     TIME_SLOT = "time_slot"
     DATE_RANGE = "date_range"
@@ -705,7 +768,8 @@ class StrictServiceSchema(BaseModel):
     description: Optional[str] = None
     duration_minutes: Optional[int] = None
     buffer_minutes: Optional[int] = None
-    allocation_model: Optional[AllocationModel] = None
+    allocation_model: Optional[ServiceAllocationModel] = None
+    booking_mode: Optional[BookingMode] = None
     price: Optional[StrictPriceSchema] = None
     deposit: Optional[StrictDepositSchema] = None
     eligible_resource_ids: Optional[list[str]] = None
@@ -715,13 +779,13 @@ class StrictServiceSchema(BaseModel):
 class StrictResourceSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     resource_id: Optional[str] = None
-    resource_type: Optional[str] = None
+    resource_type: Optional[ResourceType] = None
     name: Optional[str] = None
     title: Optional[str] = None
     category: Optional[str] = None
     description: Optional[str] = None
     is_bookable: Optional[bool] = None
-    dispatch_status: Optional[str] = None
+    dispatch_status: Optional[DispatchStatus] = None
     custom_shift_overrides: Optional[dict] = None
 
 class StrictTimeSlotSchema(BaseModel):
@@ -784,42 +848,21 @@ class StrictPhiScrubSchema(BaseModel):
 class StrictTriageEmergencySchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     enabled: Optional[bool] = None
-    rule_id: Optional[str] = None
-    trigger_type: Optional[str] = None
     keywords: Optional[list[str]] = None
-    action: Optional[str] = None
-    agent_locked_on_trigger: Optional[bool] = None
     response_override: Optional[str] = None
-    notify_front_desk: Optional[bool] = None
-    front_desk_contact: Optional[str] = None
 
 class StrictHumanHandoffSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     enabled: Optional[bool] = None
     trigger_topics: Optional[list[str]] = None
-    action: Optional[str] = None
-    target_action: Optional[str] = None
     reception_contact: Optional[str] = None
-    lock_agent_on_handoff: Optional[bool] = None
     handoff_message: Optional[str] = None
-
-class StrictOffHoursPolicySchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    action: Optional[str] = None
-    response: Optional[str] = None
-
-class StrictNoDiagnosisPolicySchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    enabled: Optional[bool] = None
-    response_override: Optional[str] = None
 
 class StrictGuardrailsSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     phi_scrubbing: Optional[StrictPhiScrubSchema] = None
     triage_emergency: Optional[StrictTriageEmergencySchema] = None
     human_handoff: Optional[StrictHumanHandoffSchema] = None
-    off_hours_policy: Optional[StrictOffHoursPolicySchema] = None
-    no_diagnosis_policy: Optional[StrictNoDiagnosisPolicySchema] = None
 
 class StrictDraftPatchValidator(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -839,6 +882,7 @@ async def node_apply_json_patches(state: GraphState) -> dict:
     """
     Execution / Tool Node: Applies RFC 6902 JSON patches to the draft.
     Keeps mutation and side-effects strictly separate from LLM decision making.
+    Writes the patched draft directly to Redis cache and keeps state in LangGraph memory (0 MongoDB hits).
     """
     patches = state.get("pending_patches") or []
     if not patches:
@@ -848,17 +892,27 @@ async def node_apply_json_patches(state: GraphState) -> dict:
         patcher = jsonpatch.JsonPatch(patches)
         updated_draft = patcher.apply(copy.deepcopy(state["draft"]))
         
-       
         StrictDraftPatchValidator.model_validate(updated_draft)
         
-        print(f"[Patch Node] Applied {len(patches)} patches to draft and passed schema validation.", flush=True)
+        tenant_id = state.get("tenant_id", "")
+        agent_id = state.get("agent_id") or updated_draft.get("agent_id", "")
+
+       
+        if tenant_id and agent_id:
+            try:
+                from agent_orchestrator.redis_client import set_cached_draft
+                await set_cached_draft(tenant_id, agent_id, updated_draft)
+            except Exception as re:
+                print(f"[Patch Node] Redis cache write warning: {re}", flush=True)
+
+        print(f"[Patch Node] Applied {len(patches)} patches to draft and passed schema validation (cached in Redis).", flush=True)
         return {
             "draft": updated_draft,
             "decision": None,
             "pending_patches": None,
             "messages": [SystemMessage(content=f"Successfully applied {len(patches)} JSON patches. The schema is now updated. Analyze the new draft and decide your next move. DO NOT repeat these exact patches.")],
         }
-    except Exception as e:
+    except Exception as e: 
         print(f"[Patch Node Error] Failed applying patches (or validation): {e}", flush=True)
         return {
             "decision": None,
@@ -871,8 +925,39 @@ async def node_ask_human_semantic(state: GraphState) -> dict:
     """
     Interrupts the graph to ask the human the semantic agent's question.
     Records the Q&A in the conversation history and loops back to the agent.
+    Defers writing the consolidated MongoDB AgentDraft checkpoint to here (once per conversational turn).
     """
+    tenant_id = state.get("tenant_id", "")
+    agent_id = state.get("agent_id") or state.get("draft", {}).get("agent_id", "")
+    current_draft = state.get("draft", {})
     question = state.get("semantic_note") or "Do you have any more changes?"
+
+   
+    if tenant_id and agent_id and current_draft:
+        try:
+            from agent_orchestrator.models import AgentDraft, init_db
+            import secrets
+            await init_db()
+            agent_draft = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
+            if agent_draft:
+                last_msgs = state.get("messages", [])
+                last_user_prompt = ""
+                for m in reversed(last_msgs):
+                    if isinstance(m, HumanMessage):
+                        last_user_prompt = str(m.content)
+                        break
+
+                agent_draft.add_checkpoint(
+                    checkpoint_id=f"cp_{secrets.token_hex(4)}",
+                    message_id=f"msg_{secrets.token_hex(4)}",
+                    draft_snapshot=current_draft,
+                    user_prompt=last_user_prompt[:200] if last_user_prompt else "",
+                    summary=state.get("semantic_note") or "Updated schema draft",
+                )
+                await agent_draft.save()
+                print(f"[Ask Human Node] Persisted turn checkpoint to AgentDraft ({tenant_id}/{agent_id})", flush=True)
+        except Exception as e:
+            print(f"[Ask Human Node Warning] Failed to persist AgentDraft turn checkpoint: {e}", flush=True)
 
     user_answer: str = interrupt({
         "type":     "semantic_review",
@@ -904,10 +989,6 @@ async def node_finalize_and_save(state: GraphState) -> dict:
         ContactEmbed,
         OperatingHoursEmbed,
         BlackoutDateEmbed,
-        ServiceEmbed,
-        PriceEmbed,
-        DepositEmbed,
-        ResourceEmbed,
         SchedulingEngineEmbed,
         init_db,
     )
@@ -916,6 +997,19 @@ async def node_finalize_and_save(state: GraphState) -> dict:
 
     draft     = state["draft"]
     tenant_id = state["tenant_id"]
+    agent_id  = draft.get("agent_id") or state.get("agent_id") or f"agent_{tenant_id}_v1"
+
+    sync_result: dict = {}
+    try:
+        from agent_orchestrator.scheduling_client import sync_agent_inventory
+        sync_result = await sync_agent_inventory(tenant_id, agent_id, draft)
+        if sync_result.get("success"):
+            draft = sync_result["draft"]
+            print(f"[TenantAgent] Inventory sync succeeded ({sync_result.get('resources_synced')} resources, {sync_result.get('services_synced')} services)", flush=True)
+        else:
+            print(f"[TenantAgent Warning] Inventory sync warning: {sync_result.get('error')}", flush=True)
+    except Exception as se:
+        print(f"[TenantAgent Warning] Unexpected exception during inventory sync: {se}", flush=True)
 
     bp   = draft.get("business_profile", {})
     ct   = bp.get("contact", {})
@@ -957,89 +1051,58 @@ async def node_finalize_and_save(state: GraphState) -> dict:
         hold_duration_minutes     = int(os.environ.get("HOLD_DURATION_MINUTES", 10)),
     )
 
-    resources_list = []
-    for res in draft.get("resources", []):
-        res_name = res.get("name", "unnamed")
-        resources_list.append(ResourceEmbed(
-            resource_id            = res.get("resource_id") or f"res_{res_name.lower().replace(' ', '_')[:24]}",
-            resource_type          = res.get("resource_type", "staff"),
-            name                   = res_name,
-            title                  = res.get("title"),
-            category               = res.get("category"),
-            description            = res.get("description"),
-            is_bookable            = res.get("is_bookable", True),
-            dispatch_status        = res.get("dispatch_status", "active"),
-            custom_shift_overrides = res.get("custom_shift_overrides", {}),
-        ))
+    agent_id = draft.get("agent_id") or state.get("agent_id") or f"agent_{tenant_id}_v1"
 
-    services = []
-    for svc in draft.get("services", []):
-        price_d   = svc.get("price", {}) or {}
-        deposit_d = svc.get("deposit", {}) or {}
-        svc_name  = svc.get("name", "unnamed")
-        services.append(ServiceEmbed(
-            service_id            = svc.get("service_id") or f"srv_{svc_name.lower().replace(' ','_')[:24]}",
-            name                  = svc_name,
-            category              = svc.get("category"),
-            description           = svc.get("description"),
-            duration_minutes      = int(svc.get("duration_minutes") or 30),
-            buffer_minutes        = int(svc.get("buffer_minutes") or 0),
-            allocation_model      = svc.get("allocation_model", "time_slot"),
-            price = PriceEmbed(
-                type     = price_d.get("type", "fixed"),
-                amount   = float(price_d.get("amount", 0)),
-                currency = price_d.get("currency", "USD"),
-            ) if price_d else None,
-            deposit = DepositEmbed(
-                required             = deposit_d.get("required", False),
-                amount               = float(deposit_d.get("amount", 0)),
-                processor            = deposit_d.get("processor"),
-                upi_id               = deposit_d.get("upi_id"),
-                qr_code_url          = deposit_d.get("qr_code_url"),
-                confirmation_method  = deposit_d.get("confirmation_method"),
-                payment_instructions = deposit_d.get("payment_instructions"),
-            ) if deposit_d else None,
-            eligible_resource_ids = svc.get("eligible_resource_ids", []),
-            required_asset_ids    = svc.get("required_asset_ids", []),
-            recall_interval_days  = svc.get("recall_interval_days"),
-        ))
-   
-    agent_id = draft.get("agent_id") or f"agent_{tenant_id}_v1"
-
-    existing_config = await AgentRuntimeConfig.find_one({"tenant_id": tenant_id})
-    if existing_config:
-        existing_config.agent_id = agent_id
-        existing_config.schema_version = "2.4"
-        existing_config.status = "live"
-        existing_config.compiled_at = datetime.now(timezone.utc)
-        existing_config.business_profile = business_profile
-        existing_config.operating_hours = operating_hours
-        existing_config.scheduling_engine = scheduling_engine
-        existing_config.services = services
-        existing_config.resources = resources_list
-        existing_config.supervisor_prompt = draft.get("supervisor_prompt")
-        await existing_config.save()
-        config_doc = existing_config
-    else:
-        config_doc = AgentRuntimeConfig(
+    existing_config = await AgentRuntimeConfig.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
+    if not existing_config:
+        existing_config = AgentRuntimeConfig(
             tenant_id=tenant_id,
             agent_id=agent_id,
-            schema_version="2.4",
-            status="live",
-            compiled_at=datetime.now(timezone.utc),
-            business_profile=business_profile,
-            operating_hours=operating_hours,
-            scheduling_engine=scheduling_engine,
-            services=services,
-            resources=resources_list,
-            supervisor_prompt=draft.get("supervisor_prompt"),
         )
-        await config_doc.save()
 
-    print(f"[TenantAgent] Saved config for tenant {tenant_id} — id: {config_doc.id}", flush=True)
+    existing_config.schema_version = "2.4"
+    existing_config.status = "live"
+    existing_config.compiled_at = datetime.now(timezone.utc)
+    existing_config.business_profile = business_profile
+    existing_config.operating_hours = operating_hours
+    existing_config.scheduling_engine = scheduling_engine
+    existing_config.services = sync_result.get("services", [])
+    existing_config.resources = sync_result.get("resources", [])
+    existing_config.supervisor_prompt = draft.get("supervisor_prompt")
+    await existing_config.save()
+    config_doc = existing_config
+
+    print(f"[TenantAgent] Saved config for tenant {tenant_id}, agent {agent_id} — id: {config_doc.id}", flush=True)
+
+  
+    try:
+        from agent_orchestrator.models import AgentDraft
+        import secrets
+        agent_draft = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
+        if agent_draft:
+            agent_draft.add_checkpoint(
+                checkpoint_id=f"cp_{secrets.token_hex(4)}",
+                message_id="finalized",
+                draft_snapshot=draft,
+                summary="Finalized and deployed to live",
+            )
+            agent_draft.current_draft = draft
+            agent_draft.status = "created"
+            agent_draft.updated_at = datetime.utcnow()
+            await agent_draft.save()
+    except Exception as ade:
+        print(f"[TenantAgent Warning] Failed to update AgentDraft on finalize: {ade}", flush=True)
+
+   
+    try:
+        from agent_orchestrator.redis_client import set_cached_draft
+        await set_cached_draft(tenant_id, agent_id, draft)
+    except Exception as re:
+        print(f"[TenantAgent Warning] Failed to update Redis cache on finalize: {re}", flush=True)
 
     return {
         "status":   "draft",
+        "draft":    draft,
     }
 
 
@@ -1120,13 +1183,14 @@ _graph = build_tenant_onboarding_graph()
 
 
 
-async def start_onboarding_session(tenant_id: str, draft: dict) -> dict:
+async def start_onboarding_session(tenant_id: str, draft: dict, agent_id: str = "") -> dict:
     """
-    Starts (or restarts) an onboarding session for a tenant.
+    Starts (or restarts) an onboarding session for a tenant agent.
 
     Args:
-        tenant_id: Schedulux tenant ID — used as LangGraph thread_id
+        tenant_id: Schedulux tenant ID
         draft:     Pre-populated dict from web crawl OR empty {} for template path
+        agent_id:  Optional agent ID — used together with tenant_id for thread_id
 
     Returns:
         {
@@ -1136,9 +1200,14 @@ async def start_onboarding_session(tenant_id: str, draft: dict) -> dict:
           "type":     "structural_gap" | "semantic_review" | None,
         }
     """
-    config = {"configurable": {"thread_id": tenant_id}}
+    target_agent_id = agent_id or draft.get("agent_id") or f"agent_{tenant_id}_v1"
+    draft["agent_id"] = target_agent_id
+
+    thread_id = f"{tenant_id}:{target_agent_id}" if target_agent_id else tenant_id
+    config = {"configurable": {"thread_id": thread_id}}
     initial: GraphState = {
         "tenant_id":       tenant_id,
+        "agent_id":        target_agent_id,
         "draft":           draft,
         "messages":        [],
         "structural_gaps": [],
@@ -1149,36 +1218,55 @@ async def start_onboarding_session(tenant_id: str, draft: dict) -> dict:
         "status":          "onboarding",
     }
 
+   
+    try:
+        from agent_orchestrator.redis_client import set_cached_draft
+        await set_cached_draft(tenant_id, target_agent_id, draft)
+    except Exception as e:
+        print(f"[Start Session Warning] Failed to prime Redis cache: {e}", flush=True)
+
     async for _ in _graph.astream(initial, config=config, stream_mode="values"):
         pass  
 
     return _extract_payload(await _graph.aget_state(config))
 
 
-async def resume_onboarding_session(tenant_id: str, user_answer: str) -> dict:
+async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: str = "") -> dict:
     """
     Resumes a paused session with the tenant's answer.
 
     Args:
         tenant_id:   Schedulux tenant ID
         user_answer: Free-text answer to the interrupted question
+        agent_id:    Optional agent ID to resume specific agent thread
 
     Returns: Same shape as start_onboarding_session.
     """
     from langgraph.types import Command
 
-    config = {"configurable": {"thread_id": tenant_id}}
+    thread_id = f"{tenant_id}:{agent_id}" if agent_id else tenant_id
+    config = {"configurable": {"thread_id": thread_id}}
     async for _ in _graph.astream(Command(resume=user_answer), config=config, stream_mode="values"):
         pass
 
     return _extract_payload(await _graph.aget_state(config))
 
 
-async def get_current_draft(tenant_id: str) -> dict:
-    """Returns the current in-progress draft dict for a tenant."""
-    config = {"configurable": {"thread_id": tenant_id}}
+async def get_current_draft(tenant_id: str, agent_id: str = "") -> dict:
+    """Returns the current in-progress draft dict for a tenant agent, checking LangGraph state then Redis."""
+    thread_id = f"{tenant_id}:{agent_id}" if agent_id else tenant_id
+    config = {"configurable": {"thread_id": thread_id}}
     snap = await _graph.aget_state(config)
-    return getattr(snap, "values", {}).get("draft", {})
+    draft = getattr(snap, "values", {}).get("draft", {})
+    if not draft and agent_id:
+        try:
+            from agent_orchestrator.redis_client import get_cached_draft
+            cached = await get_cached_draft(tenant_id, agent_id)
+            if cached:
+                return cached
+        except Exception:
+            pass
+    return draft
 
 
 def _extract_payload(snapshot) -> dict:

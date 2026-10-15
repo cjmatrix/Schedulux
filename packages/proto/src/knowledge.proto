@@ -50,6 +50,7 @@ message StartOnboardingRequest {
 message ResumeOnboardingRequest {
   string tenant_id = 1;
   string user_answer = 2;
+  string agent_id = 3;
 }
 
 message OnboardingResponse {

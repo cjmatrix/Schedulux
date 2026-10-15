@@ -16,6 +16,9 @@ service SchedulingInventoryService {
   rpc ListResources (ListResourcesRequest) returns (ListResourcesResponse);
   rpc UpdateResource (UpdateResourceRequest) returns (ResourceResponse);
   rpc DeleteResource (DeleteResourceRequest) returns (DeleteResourceResponse);
+
+  // Batch / Bulk Operations
+  rpc BatchSyncInventory (BatchSyncInventoryRequest) returns (BatchSyncInventoryResponse);
 }
 
 message PriceInfo {
@@ -50,6 +53,8 @@ message ServiceInfo {
   int32 recall_interval_days = 13;
   string created_at = 14;
   string updated_at = 15;
+  string booking_mode = 16;
+  string agent_id = 17;
 }
 
 message CreateServiceRequest {
@@ -65,6 +70,9 @@ message CreateServiceRequest {
   repeated string eligible_resource_ids = 10;
   repeated string required_asset_ids = 11;
   int32 recall_interval_days = 12;
+  optional string booking_mode = 13;
+  optional string agent_id = 14;
+  optional string service_id = 15;
 }
 
 message GetServiceRequest {
@@ -77,6 +85,7 @@ message ListServicesRequest {
   int32 page = 2;
   int32 limit = 3;
   string category = 4;
+  optional string agent_id = 5;
 }
 
 message ListServicesResponse {
@@ -100,6 +109,8 @@ message UpdateServiceRequest {
   repeated string eligible_resource_ids = 11;
   repeated string required_asset_ids = 12;
   optional int32 recall_interval_days = 13;
+  optional string booking_mode = 14;
+  optional string agent_id = 15;
 }
 
 message DeleteServiceRequest {
@@ -130,6 +141,7 @@ message ResourceInfo {
   string custom_shift_overrides_json = 10;
   string created_at = 11;
   string updated_at = 12;
+  string agent_id = 13;
 }
 
 message CreateResourceRequest {
@@ -142,6 +154,8 @@ message CreateResourceRequest {
   bool is_bookable = 7;
   string dispatch_status = 8;
   string custom_shift_overrides_json = 9;
+  optional string agent_id = 10;
+  optional string resource_id = 11;
 }
 
 message GetResourceRequest {
@@ -155,6 +169,7 @@ message ListResourcesRequest {
   int32 limit = 3;
   string resource_type = 4;
   string dispatch_status = 5;
+  optional string agent_id = 6;
 }
 
 message ListResourcesResponse {
@@ -175,6 +190,7 @@ message UpdateResourceRequest {
   optional bool is_bookable = 8;
   optional string dispatch_status = 9;
   optional string custom_shift_overrides_json = 10;
+  optional string agent_id = 11;
 }
 
 message DeleteResourceRequest {
@@ -191,3 +207,18 @@ message ResourceResponse {
   ResourceInfo resource = 1;
   string message = 2;
 }
+
+message BatchSyncInventoryRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+  repeated CreateResourceRequest resources = 3;
+  repeated CreateServiceRequest services = 4;
+}
+
+message BatchSyncInventoryResponse {
+  repeated ResourceInfo resources = 1;
+  repeated ServiceInfo services = 2;
+  bool success = 3;
+  string message = 4;
+}
+

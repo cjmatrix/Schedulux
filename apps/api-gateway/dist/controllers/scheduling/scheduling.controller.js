@@ -45,12 +45,14 @@ let SchedulingController = class SchedulingController {
         const tenantId = this.getTenantId(req);
         const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.createService({
             tenant_id: tenantId,
+            agent_id: body.agent_id,
             name: body.name,
             category: body.category,
             description: body.description,
             duration_minutes: body.duration_minutes,
             buffer_minutes: body.buffer_minutes,
             allocation_model: body.allocation_model,
+            booking_mode: body.booking_mode,
             price: body.price,
             deposit: body.deposit,
             eligible_resource_ids: body.eligible_resource_ids,
@@ -69,6 +71,7 @@ let SchedulingController = class SchedulingController {
             page: query.page,
             limit: query.limit,
             category: query.category || '',
+            agent_id: query.agent_id,
         }));
         return {
             message: 'Services retrieved successfully',
@@ -102,6 +105,7 @@ let SchedulingController = class SchedulingController {
             duration_minutes: body.duration_minutes,
             buffer_minutes: body.buffer_minutes,
             allocation_model: body.allocation_model,
+            booking_mode: body.booking_mode,
             price: body.price,
             deposit: body.deposit,
             eligible_resource_ids: body.eligible_resource_ids ?? [],
@@ -131,6 +135,7 @@ let SchedulingController = class SchedulingController {
         const tenantId = this.getTenantId(req);
         const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.createResource({
             tenant_id: tenantId,
+            agent_id: body.agent_id,
             resource_type: body.resource_type,
             name: body.name,
             title: body.title,
@@ -153,6 +158,7 @@ let SchedulingController = class SchedulingController {
             limit: query.limit,
             resource_type: query.resource_type || '',
             dispatch_status: query.dispatch_status || '',
+            agent_id: query.agent_id,
         }));
         return {
             message: 'Resources retrieved successfully',

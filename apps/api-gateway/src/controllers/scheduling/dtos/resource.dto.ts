@@ -2,6 +2,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 export const CreateResourceDtoSchema = z.object({
+  agent_id: z.string().min(1, 'agent_id is required'),
   resource_type: z.enum(['staff', 'room', 'chair', 'bay', 'equipment', 'asset', 'vehicle']).default('staff'),
   name: z.string().min(1, 'Resource name is required').trim(),
   title: z.string().optional().default(''),
@@ -15,6 +16,7 @@ export const CreateResourceDtoSchema = z.object({
 export class CreateResourceDto extends createZodDto(CreateResourceDtoSchema) {}
 
 export const UpdateResourceDtoSchema = z.object({
+  agent_id: z.string().optional(),
   resource_type: z.enum(['staff', 'room', 'chair', 'bay', 'equipment', 'asset', 'vehicle']).optional(),
   name: z.string().min(1).trim().optional(),
   title: z.string().optional(),
@@ -32,6 +34,7 @@ export const ListResourcesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   resource_type: z.string().optional(),
   dispatch_status: z.string().optional(),
+  agent_id: z.string().optional(),
 });
 
 export class ListResourcesQueryDto extends createZodDto(ListResourcesQuerySchema) {}

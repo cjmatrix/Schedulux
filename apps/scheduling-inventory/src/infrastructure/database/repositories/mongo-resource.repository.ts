@@ -13,7 +13,11 @@ export class MongoResourceRepository implements IResourceRepository {
   }
 
   async findById(tenantId: string, resourceId: string): Promise<ResourceEntity | null> {
-    const doc = await ResourceModel.findOne({ _id: resourceId, tenant_id: tenantId }).exec();
+    const doc = await ResourceModel.findOne({
+      _id: resourceId,
+      tenant_id: tenantId,
+      is_deleted: { $ne: true },
+    }).exec();
     if (!doc) return null;
     return ResourceMapper.toDomain(doc);
   }
@@ -22,12 +26,18 @@ export class MongoResourceRepository implements IResourceRepository {
     tenantId: string,
     filter: FindResourcesFilter,
   ): Promise<{ resources: ResourceEntity[]; total: number }> {
-    const query: Record<string, any> = { tenant_id: tenantId };
+    const query: Record<string, any> = {
+      tenant_id: tenantId,
+      is_deleted: { $ne: true },
+    };
     if (filter.resourceType) {
       query.resource_type = filter.resourceType;
     }
     if (filter.dispatchStatus) {
       query.dispatch_status = filter.dispatchStatus;
+    }
+    if (filter.agentId) {
+      query.agent_id = filter.agentId;
     }
 
     const page = Math.max(1, filter.page || 1);
@@ -52,7 +62,7 @@ export class MongoResourceRepository implements IResourceRepository {
   async update(resource: ResourceEntity): Promise<ResourceEntity | null> {
     const persistenceData = ResourceMapper.toPersistence(resource);
     const updated = await ResourceModel.findOneAndUpdate(
-      { _id: resource.id, tenant_id: resource.tenantId },
+      { _id: resource.id, tenant_id: resource.tenantId, is_deleted: { $ne: true } },
       { $set: persistenceData },
       { new: true },
     ).exec();
@@ -62,7 +72,38 @@ export class MongoResourceRepository implements IResourceRepository {
   }
 
   async delete(tenantId: string, resourceId: string): Promise<boolean> {
-    const result = await ResourceModel.deleteOne({ _id: resourceId, tenant_id: tenantId }).exec();
-    return (result.deletedCount ?? 0) > 0;
+    const result = await ResourceModel.updateOne(
+      { _id: resourceId, tenant_id: tenantId, is_deleted: { $ne: true } },
+      { $set: { is_deleted: true, deleted_at: new Date() } },
+    ).exec();
+    return (result.modifiedCount ?? 0) > 0;
+  }
+
+  async bulkUpsert(resources: ResourceEntity[]): Promise<ResourceEntity[]> {
+    if (!resources.length) return [];
+    const ops = resources.map((r) => {
+      const data = ResourceMapper.toPersistence(r);
+      return {
+        updateOne: {
+          filter: { _id: r.id, tenant_id: r.tenantId },
+          update: { $set: data },
+          upsert: true,
+        },
+      };
+    });
+    await ResourceModel.bulkWrite(ops);
+    return resources;
+  }
+
+  async findByTenant(tenantId: string, agentId?: string): Promise<ResourceEntity[]> {
+    const query: Record<string, any> = {
+      tenant_id: tenantId,
+      is_deleted: { $ne: true },
+    };
+    if (agentId) {
+      query.agent_id = agentId;
+    }
+    const docs = await ResourceModel.find(query).exec();
+    return docs.map((doc) => ResourceMapper.toDomain(doc));
   }
 }

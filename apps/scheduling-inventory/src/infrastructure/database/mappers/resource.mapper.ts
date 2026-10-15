@@ -7,6 +7,7 @@ export class ResourceMapper {
     return new ResourceEntity({
       id: doc._id,
       tenantId: doc.tenant_id,
+      agentId: doc.agent_id,
       resourceType: doc.resource_type as ResourceType,
       name: doc.name,
       title: doc.title,
@@ -15,6 +16,8 @@ export class ResourceMapper {
       isBookable: doc.is_bookable,
       dispatchStatus: doc.dispatch_status as DispatchStatus,
       customShiftOverridesJson: doc.custom_shift_overrides_json ?? '{}',
+      isDeleted: doc.is_deleted ?? false,
+      deletedAt: doc.deleted_at ?? null,
       createdAt: doc.created_at,
       updatedAt: doc.updated_at,
     });
@@ -24,6 +27,7 @@ export class ResourceMapper {
     return {
       _id: entity.id,
       tenant_id: entity.tenantId,
+      agent_id: entity.agentId,
       resource_type: entity.resourceType,
       name: entity.name,
       title: entity.title,
@@ -32,6 +36,8 @@ export class ResourceMapper {
       is_bookable: entity.isBookable,
       dispatch_status: entity.dispatchStatus,
       custom_shift_overrides_json: entity.customShiftOverridesJson,
+      is_deleted: entity.isDeleted,
+      deleted_at: entity.deletedAt,
     };
   }
 
@@ -39,6 +45,7 @@ export class ResourceMapper {
     return {
       resource_id: entity.id,
       tenant_id: entity.tenantId,
+      agent_id: entity.agentId,
       resource_type: entity.resourceType,
       name: entity.name,
       title: entity.title,

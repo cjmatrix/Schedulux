@@ -20,6 +20,7 @@ export class ListServicesUseCase implements IListServicesUseCase {
       page,
       limit,
       category: dto.category || undefined,
+      agentId: dto.agent_id || undefined,
     });
 
     return { services, total, page, limit };

@@ -31,7 +31,10 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   console.log('Connecting MongoDB for Scheduling & Inventory...');
-  const mongoUri = configService.get<string>('MONGO_URI') || 'mongodb://localhost:27017/schedulux';
+  const mongoUri = configService.get<string>('MONGO_URI');
+  if (!mongoUri) {
+    throw new Error('MONGO_URI is missing in scheduling-inventory configuration');
+  }
   await mongoose.connect(mongoUri);
   console.log('MongoDB connected for Scheduling & Inventory.');
 

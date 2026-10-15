@@ -17,8 +17,14 @@ import {
   ResourceResponse,
   ListResourcesResponse,
   DeleteResourceResponse,
+  BatchSyncInventoryRequest,
+  BatchSyncInventoryResponse,
   SCHEDULING_INVENTORY_SERVICE_NAME,
 } from '@repo/proto/scheduling';
+import {
+  IBatchSyncInventoryUseCase,
+  BATCH_SYNC_INVENTORY_USE_CASE,
+} from '../../application/interfaces/batch-sync-use-case.interface.js';
 import {
   ICreateServiceUseCase,
   IGetServiceUseCase,
@@ -69,6 +75,8 @@ export class SchedulingInventoryGrpcController {
     private readonly updateResourceUseCase: IUpdateResourceUseCase,
     @Inject(DELETE_RESOURCE_USE_CASE)
     private readonly deleteResourceUseCase: IDeleteResourceUseCase,
+    @Inject(BATCH_SYNC_INVENTORY_USE_CASE)
+    private readonly batchSyncInventoryUseCase: IBatchSyncInventoryUseCase,
   ) {}
 
   @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'CreateService')
@@ -163,5 +171,10 @@ export class SchedulingInventoryGrpcController {
       success,
       message: 'Resource deleted successfully',
     };
+  }
+
+  @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'BatchSyncInventory')
+  async batchSyncInventory(request: BatchSyncInventoryRequest): Promise<BatchSyncInventoryResponse> {
+    return this.batchSyncInventoryUseCase.execute(request);
   }
 }

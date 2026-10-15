@@ -49,6 +49,7 @@ export interface StartOnboardingRequest {
 export interface ResumeOnboardingRequest {
   tenant_id: string;
   user_answer: string;
+  agent_id: string;
 }
 
 export interface OnboardingResponse {

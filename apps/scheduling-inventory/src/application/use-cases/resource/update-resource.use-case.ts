@@ -3,6 +3,7 @@ import { RESOURCE_REPOSITORY } from '../../../domain/tokens.js';
 import { IResourceRepository } from '../../../domain/repositories/resource.repository.interface.js';
 import { ResourceEntity, ResourceType, DispatchStatus } from '../../../domain/entities/resource.entity.js';
 import { IUpdateResourceUseCase } from '../../interfaces/resource-use-cases.interface.js';
+import { SchedulingEventsProducer } from '../../../infrastructure/messaging/scheduling-events.producer.js';
 import { UpdateResourceRequest } from '@repo/proto/scheduling';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class UpdateResourceUseCase implements IUpdateResourceUseCase {
   constructor(
     @Inject(RESOURCE_REPOSITORY)
     private readonly resourceRepository: IResourceRepository,
+    private readonly eventsProducer: SchedulingEventsProducer,
   ) {}
 
   async execute(dto: UpdateResourceRequest): Promise<ResourceEntity> {
@@ -33,6 +35,10 @@ export class UpdateResourceUseCase implements IUpdateResourceUseCase {
     if (!updated) {
       throw new NotFoundException(`Failed to update resource ${dto.resource_id}`);
     }
+
+    // CQRS: fire-and-forget event for AI-orchestration consumer
+    await this.eventsProducer.emitResourceUpdated(updated);
+
     return updated;
   }
 }

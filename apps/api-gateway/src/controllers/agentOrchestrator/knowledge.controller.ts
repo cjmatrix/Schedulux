@@ -142,6 +142,7 @@ export class KnowledgeController implements OnModuleInit {
       this.knowledgeService.resumeOnboardingSession({
         tenant_id: body.tenant_id,
         user_answer: body.user_answer,
+        agent_id: body.agent_id || "",
       })
     );
     return {

@@ -4,6 +4,7 @@ export interface FindServicesFilter {
   page: number;
   limit: number;
   category?: string;
+  agentId?: string;
 }
 
 export interface IServiceRepository {
@@ -12,4 +13,6 @@ export interface IServiceRepository {
   findAll(tenantId: string, filter: FindServicesFilter): Promise<{ services: ServiceEntity[]; total: number }>;
   update(service: ServiceEntity): Promise<ServiceEntity | null>;
   delete(tenantId: string, serviceId: string): Promise<boolean>;
+  bulkUpsert(services: ServiceEntity[]): Promise<ServiceEntity[]>;
+  findByTenant(tenantId: string, agentId?: string): Promise<ServiceEntity[]>;
 }

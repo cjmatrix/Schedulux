@@ -3,12 +3,14 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IServiceDoc extends Document<string> {
   _id: string;
   tenant_id: string;
+  agent_id: string;
   name: string;
   category: string;
   description: string;
   duration_minutes: number;
   buffer_minutes: number;
   allocation_model: string;
+  booking_mode: string;
   price: {
     type: string;
     amount: number;
@@ -26,6 +28,8 @@ export interface IServiceDoc extends Document<string> {
   eligible_resource_ids: string[];
   required_asset_ids: string[];
   recall_interval_days: number;
+  is_deleted: boolean;
+  deleted_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -34,6 +38,7 @@ export const ServiceMongooseSchema = new Schema<IServiceDoc>(
   {
     _id: { type: String, required: true },
     tenant_id: { type: String, required: true, index: true },
+    agent_id: { type: String, required: true, index: true },
     name: { type: String, required: true, trim: true },
     category: { type: String, default: 'General', trim: true, index: true },
     description: { type: String, default: '', trim: true },
@@ -43,6 +48,11 @@ export const ServiceMongooseSchema = new Schema<IServiceDoc>(
       type: String,
       enum: ['single_resource', 'multi_resource', 'pooled', 'asset_only'],
       default: 'single_resource',
+    },
+    booking_mode: {
+      type: String,
+      enum: ['time_slot', 'date_range'],
+      default: 'time_slot',
     },
     price: {
       type: {
@@ -65,6 +75,8 @@ export const ServiceMongooseSchema = new Schema<IServiceDoc>(
     eligible_resource_ids: { type: [String], default: [] },
     required_asset_ids: { type: [String], default: [] },
     recall_interval_days: { type: Number, default: 0 },
+    is_deleted: { type: Boolean, default: false, index: true },
+    deleted_at: { type: Date, default: null },
   },
   {
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
@@ -72,7 +84,11 @@ export const ServiceMongooseSchema = new Schema<IServiceDoc>(
   },
 );
 
-ServiceMongooseSchema.index({ tenant_id: 1, name: 1 }, { unique: true });
-ServiceMongooseSchema.index({ tenant_id: 1, category: 1 });
+ServiceMongooseSchema.index(
+  { tenant_id: 1, agent_id: 1, name: 1 },
+  { unique: true, partialFilterExpression: { is_deleted: { $eq: false } } },
+);
+ServiceMongooseSchema.index({ tenant_id: 1, agent_id: 1, category: 1, is_deleted: 1 });
+ServiceMongooseSchema.index({ agent_id: 1, category: 1, is_deleted: 1 });
 
 export const ServiceModel = mongoose.model<IServiceDoc>('Service', ServiceMongooseSchema);

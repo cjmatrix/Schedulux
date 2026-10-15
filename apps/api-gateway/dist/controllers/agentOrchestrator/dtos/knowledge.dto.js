@@ -27,6 +27,7 @@ class StartOnboardingDto extends (0, nestjs_zod_1.createZodDto)(exports.StartOnb
 exports.StartOnboardingDto = StartOnboardingDto;
 exports.ResumeOnboardingSchema = zod_1.z.object({
     tenant_id: zod_1.z.string().min(1, 'Tenant ID is required'),
+    agent_id: zod_1.z.string().optional(),
     user_answer: zod_1.z.string().min(1, 'User answer is required'),
 });
 class ResumeOnboardingDto extends (0, nestjs_zod_1.createZodDto)(exports.ResumeOnboardingSchema) {

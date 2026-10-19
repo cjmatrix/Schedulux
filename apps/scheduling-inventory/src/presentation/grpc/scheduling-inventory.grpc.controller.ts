@@ -105,6 +105,14 @@ export class SchedulingInventoryGrpcController {
       total: result.total,
       page: result.page,
       limit: result.limit,
+      summary: result.summary
+        ? {
+            total_count: result.summary.totalCount,
+            avg_price: result.summary.avgPrice,
+            deposit_count: result.summary.depositCount,
+            categories: result.summary.categories,
+          }
+        : undefined,
     };
   }
 
@@ -152,6 +160,14 @@ export class SchedulingInventoryGrpcController {
       total: result.total,
       page: result.page,
       limit: result.limit,
+      summary: result.summary
+        ? {
+            total_count: result.summary.totalCount,
+            active_count: result.summary.activeCount,
+            staff_count: result.summary.staffCount,
+            physical_count: result.summary.physicalCount,
+          }
+        : undefined,
     };
   }
 

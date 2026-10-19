@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { IResourceRepository, FindResourcesFilter } from '../../../domain/repositories/resource.repository.interface.js';
+import { IResourceRepository, FindResourcesFilter, ResourceSummary } from '../../../domain/repositories/resource.repository.interface.js';
 import { ResourceEntity } from '../../../domain/entities/resource.entity.js';
 import { ResourceModel, IResourceDoc } from '../schemas/resource.schema.js';
 import { ResourceMapper } from '../mappers/resource.mapper.js';
@@ -25,37 +25,80 @@ export class MongoResourceRepository implements IResourceRepository {
   async findAll(
     tenantId: string,
     filter: FindResourcesFilter,
-  ): Promise<{ resources: ResourceEntity[]; total: number }> {
-    const query: Record<string, any> = {
+  ): Promise<{ resources: ResourceEntity[]; total: number; summary?: ResourceSummary }> {
+    const baseMatch: Record<string, any> = {
       tenant_id: tenantId,
       is_deleted: { $ne: true },
     };
+    if (filter.agentId) {
+      baseMatch.agent_id = filter.agentId;
+    }
+
+    const query: Record<string, any> = { ...baseMatch };
     if (filter.resourceType) {
       query.resource_type = filter.resourceType;
     }
     if (filter.dispatchStatus) {
       query.dispatch_status = filter.dispatchStatus;
     }
-    if (filter.agentId) {
-      query.agent_id = filter.agentId;
+    if (filter.category) {
+      query.category = filter.category;
+    }
+    if (filter.search?.trim()) {
+      const searchRegex = new RegExp(filter.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      query.$or = [
+        { name: searchRegex },
+        { title: searchRegex },
+        { category: searchRegex },
+        { resource_type: searchRegex },
+        { description: searchRegex },
+        { _id: searchRegex },
+      ];
     }
 
     const page = Math.max(1, filter.page || 1);
     const limit = Math.max(1, Math.min(100, filter.limit || 20));
     const skip = (page - 1) * limit;
 
-    const [docs, total] = await Promise.all([
+    const [docs, total, statsResult] = await Promise.all([
       ResourceModel.find(query)
         .sort({ created_at: -1 })
         .skip(skip)
         .limit(limit)
         .exec(),
       ResourceModel.countDocuments(query).exec(),
+      ResourceModel.aggregate([
+        { $match: baseMatch },
+        {
+          $group: {
+            _id: null,
+            totalCount: { $sum: 1 },
+            activeCount: {
+              $sum: { $cond: [{ $eq: ['$dispatch_status', 'active'] }, 1, 0] },
+            },
+            staffCount: {
+              $sum: { $cond: [{ $eq: ['$resource_type', 'staff'] }, 1, 0] },
+            },
+            physicalCount: {
+              $sum: { $cond: [{ $ne: ['$resource_type', 'staff'] }, 1, 0] },
+            },
+          },
+        },
+      ]).exec(),
     ]);
+
+    const stat = statsResult[0] || {};
+    const summary: ResourceSummary = {
+      totalCount: stat.totalCount ?? 0,
+      activeCount: stat.activeCount ?? 0,
+      staffCount: stat.staffCount ?? 0,
+      physicalCount: stat.physicalCount ?? 0,
+    };
 
     return {
       resources: docs.map((doc) => ResourceMapper.toDomain(doc)),
       total,
+      summary,
     };
   }
 

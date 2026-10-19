@@ -200,10 +200,10 @@ class DepositEmbed(BaseModel):
 
     required: bool = False
     amount: float = 0.0
-    processor: str = ""
+    processor: str = "upi_direct"
     upi_id: str = ""
     qr_code_url: str = ""
-    confirmation_method: str = "automatic"
+    confirmation_method: str = "utr_reference"
     payment_instructions: str = ""
 
 
@@ -272,6 +272,7 @@ class HumanHandoffEmbed(BaseModel):
 class GuardrailsEmbed(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
+    verification_policy: VerificationPolicyEmbed | None = None
     phi_scrubbing: PhiScrubEmbed | None = None
     triage_emergency: TriageEmergencyEmbed | None = None
     human_handoff: HumanHandoffEmbed | None = None
@@ -310,12 +311,12 @@ class UpiConfigEmbed(BaseModel):
 class PaymentGatewayEmbed(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    model: str | None = None
-    supported_processors: list[str] = Field(default_factory=list)
-    active_processor: str | None = None
+    model: str | None = "pass_through"
+    supported_processors: list[str] = Field(default_factory=lambda: ["upi_direct"])
+    active_processor: str | None = "upi_direct"
     upi_config: UpiConfigEmbed | None = None
-    confirmation_method: str | None = None
-    refund_policy: str | None = None
+    confirmation_method: str | None = "utr_reference"
+    refund_policy: str | None = "tenant_managed"
 
 
 class IntegrationsEmbed(BaseModel):
@@ -326,35 +327,11 @@ class IntegrationsEmbed(BaseModel):
     twilio: dict[str, Any] = Field(default_factory=dict)
 
 
-class ComplianceEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    hipaa_mode: bool = False
-    phi_scrubbing: bool = False
-    data_retention_policy: str | None = None
-    zero_hallucination_mode: bool = True
-    audit_trail_enabled: bool = True
-
-
 class SubscriptionEmbed(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     tier: str | None = "starter"
     tokens_used_this_month: int = 0
-
-
-class RuntimeMetaEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    template_id: str | None = None
-    template_name: str | None = None
-    agent_version: str | None = None
-    last_published_at: datetime | None = None
-    last_compiled_by: str | None = None
-    compiler_mode: str | None = None
-    deterministic_conflict_check: bool = True
-    live_preview_lag_ms: int = 0
-    inferred_fields: list[str] = Field(default_factory=list)
 
 
 class AgentRuntimeConfig(Document):
@@ -369,6 +346,7 @@ class AgentRuntimeConfig(Document):
     status: str = "draft"
     tenant_id: str
     agent_id: str | None = None
+    creation_source: str = "custom"
 
     compiled_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -387,10 +365,7 @@ class AgentRuntimeConfig(Document):
     sub_agents: list[SubAgentEmbed] = Field(default_factory=list)
 
     integrations: IntegrationsEmbed | None = None
-    compliance: ComplianceEmbed | None = None
     subscription: SubscriptionEmbed | None = None
-
-    runtime_meta: RuntimeMetaEmbed | None = None
 
     class Settings:
         name = "agent_runtime_configs"
@@ -399,6 +374,85 @@ class AgentRuntimeConfig(Document):
             IndexModel([("agent_id", 1)], unique=True, sparse=True, name="idx_agent_id"),
             IndexModel([("tenant_id", 1), ("status", 1), ("compiled_at", -1)], name="idx_tenant_latest"),
         ]
+
+
+def canonicalize_agent_schema(data: dict[str, Any], status: str = "draft") -> dict[str, Any]:
+    """
+    Normalizes any agent configuration dictionary (draft or runtime) into the
+    exact canonical structure and default values of AgentRuntimeConfig.
+    """
+    if not data:
+        return {}
+
+    clean_data = copy.deepcopy(data)
+    clean_data["status"] = status
+    if "tenant_id" not in clean_data:
+        clean_data["tenant_id"] = ""
+    if "agent_id" not in clean_data:
+        clean_data["agent_id"] = ""
+
+    if not clean_data.get("scheduling_engine"):
+        clean_data["scheduling_engine"] = SchedulingEngineEmbed().model_dump()
+
+    if not clean_data.get("operating_hours"):
+        clean_data["operating_hours"] = OperatingHoursEmbed().model_dump()
+
+    try:
+        cfg = AgentRuntimeConfig(**clean_data)
+        res: dict[str, Any] = {
+            "schema_version": cfg.schema_version,
+            "status": status,
+            "tenant_id": cfg.tenant_id,
+            "agent_id": cfg.agent_id,
+            "creation_source": cfg.creation_source,
+            "business_profile": cfg.business_profile.model_dump() if cfg.business_profile else BusinessProfileEmbed().model_dump(),
+            "operating_hours": cfg.operating_hours.model_dump() if cfg.operating_hours else OperatingHoursEmbed().model_dump(),
+            "scheduling_engine": cfg.scheduling_engine.model_dump() if cfg.scheduling_engine else SchedulingEngineEmbed().model_dump(),
+            "services": [s.model_dump() for s in cfg.services],
+            "resources": [r.model_dump() for r in cfg.resources],
+            "guardrails": cfg.guardrails.model_dump() if cfg.guardrails else GuardrailsEmbed().model_dump(),
+            "widget_config": cfg.widget_config.model_dump() if cfg.widget_config else WidgetConfigEmbed().model_dump(),
+            "llm_engine": cfg.llm_engine.model_dump() if cfg.llm_engine else LlmEngineEmbed().model_dump(),
+            "knowledge_base": cfg.knowledge_base.model_dump() if cfg.knowledge_base else KnowledgeBaseEmbed().model_dump(),
+            "sub_agents": [sa.model_dump() for sa in cfg.sub_agents],
+            "integrations": cfg.integrations.model_dump() if cfg.integrations else IntegrationsEmbed().model_dump(),
+            "subscription": cfg.subscription.model_dump() if cfg.subscription else SubscriptionEmbed().model_dump(),
+        }
+        if cfg.supervisor_prompt:
+            res["supervisor_prompt"] = cfg.supervisor_prompt
+        return res
+    except Exception:
+        bp_raw = clean_data.get("business_profile")
+        oh_raw = clean_data.get("operating_hours")
+        se_raw = clean_data.get("scheduling_engine")
+        gr_raw = clean_data.get("guardrails")
+        wc_raw = clean_data.get("widget_config")
+        llm_raw = clean_data.get("llm_engine")
+        kb_raw = clean_data.get("knowledge_base")
+        int_raw = clean_data.get("integrations")
+        sub_raw = clean_data.get("subscription")
+
+        res_fallback: dict[str, Any] = {
+            "schema_version": clean_data.get("schema_version", "2.4"),
+            "status": status,
+            "tenant_id": clean_data.get("tenant_id", ""),
+            "agent_id": clean_data.get("agent_id", ""),
+            "business_profile": BusinessProfileEmbed(**bp_raw).model_dump() if isinstance(bp_raw, dict) else BusinessProfileEmbed().model_dump(),
+            "operating_hours": OperatingHoursEmbed(**oh_raw).model_dump() if isinstance(oh_raw, dict) else OperatingHoursEmbed().model_dump(),
+            "scheduling_engine": SchedulingEngineEmbed(**se_raw).model_dump() if isinstance(se_raw, dict) else SchedulingEngineEmbed().model_dump(),
+            "services": [ServiceEmbed(**s).model_dump() for s in clean_data.get("services", []) if isinstance(s, dict)],
+            "resources": [ResourceEmbed(**r).model_dump() for r in clean_data.get("resources", []) if isinstance(r, dict)],
+            "guardrails": GuardrailsEmbed(**gr_raw).model_dump() if isinstance(gr_raw, dict) else GuardrailsEmbed().model_dump(),
+            "widget_config": WidgetConfigEmbed(**wc_raw).model_dump() if isinstance(wc_raw, dict) else WidgetConfigEmbed().model_dump(),
+            "llm_engine": LlmEngineEmbed(**llm_raw).model_dump() if isinstance(llm_raw, dict) else LlmEngineEmbed().model_dump(),
+            "knowledge_base": KnowledgeBaseEmbed(**kb_raw).model_dump() if isinstance(kb_raw, dict) else KnowledgeBaseEmbed().model_dump(),
+            "sub_agents": [SubAgentEmbed(**sa).model_dump() for sa in clean_data.get("sub_agents", []) if isinstance(sa, dict)],
+            "integrations": IntegrationsEmbed(**int_raw).model_dump() if isinstance(int_raw, dict) else IntegrationsEmbed().model_dump(),
+            "subscription": SubscriptionEmbed(**sub_raw).model_dump() if isinstance(sub_raw, dict) else SubscriptionEmbed().model_dump(),
+        }
+        if clean_data.get("supervisor_prompt"):
+            res_fallback["supervisor_prompt"] = clean_data["supervisor_prompt"]
+        return res_fallback
 
 
 class DraftCheckpointEmbed(BaseModel):
@@ -429,6 +483,9 @@ class AgentDraft(Document):
 
     current_draft: dict[str, Any] = Field(default_factory=dict)
     active_message_id: str | None = None
+
+    conversation_summary: str = ""
+    last_summarized_seq: int = 0
 
     checkpoints: list[DraftCheckpointEmbed] = Field(default_factory=list)
 
@@ -494,6 +551,34 @@ class AgentDraft(Document):
         return target_cp
 
 
+class AgentMessage(Document):
+    """
+    Dedicated persistent chat log document for conversations between the
+    service owner (tenant) and the AI onboarding agent.
+    Optimized for high-performance cursor pagination in the frontend UI.
+    """
+    model_config = ConfigDict(extra="ignore")
+
+    tenant_id: str
+    agent_id: str
+    role: str  # "agent" or "tenant"
+    content: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "agent_messages"
+        indexes = [
+            IndexModel(
+                [("tenant_id", 1), ("agent_id", 1), ("created_at", -1)],
+                name="idx_tenant_agent_created_desc",
+            ),
+            IndexModel(
+                [("tenant_id", 1), ("agent_id", 1)],
+                name="idx_tenant_agent",
+            ),
+        ]   
+
+
 _client: AsyncMongoClient | None = None
 _db_initialized = False
 
@@ -520,6 +605,6 @@ async def init_db(mongo_uri: str | None = None):
     db = _client[db_name]
     await init_beanie(
         database=db,
-        document_models=[AgentDraft, AgentRuntimeConfig],
+        document_models=[AgentDraft, AgentRuntimeConfig, AgentMessage],
     )
     _db_initialized = True

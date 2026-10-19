@@ -234,7 +234,7 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
     });
   };
 
-  // Add split shift
+ 
   const handleAddSplitShift = (dayKey: string) => {
     setSchedule((prev) => {
       const current = prev[dayKey] || { enabled: true, shifts: [] };
@@ -333,7 +333,7 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
     }
   };
 
-  // Delete handler
+  
   const handleDelete = async () => {
     if (!resourceIdFromParams) return;
     try {
@@ -460,9 +460,7 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
 
       {/* Main Content Form */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-6">
-        {/* ======================================================== */}
-        {/* SECTION 1: General Information                           */}
-        {/* ======================================================== */}
+      
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-2xs space-y-6">
           {/* Section Header */}
           <div>
@@ -667,9 +665,9 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
           </div>
         </div>
 
-        {/* ======================================================== */}
+     
         {/* SECTION 2: Custom Working Hours                          */}
-        {/* ======================================================== */}
+       
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-2xs space-y-6">
           {/* Section Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">

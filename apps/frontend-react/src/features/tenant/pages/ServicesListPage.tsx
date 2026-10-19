@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import {
   Tag,
@@ -19,6 +19,7 @@ import {
 import { useServicesList, useDeleteService } from '../hooks/useServices';
 import type { ServiceInfo } from '@repo/proto/scheduling';
 import useDebounceHook from '../../../shared/hooks/useDebounceHook';
+import { Pagination } from '../../../components/Pagination';
 
 export default function ServicesListPage() {
   const navigate = useNavigate();
@@ -27,50 +28,39 @@ export default function ServicesListPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [serviceToDelete, setServiceToDelete] = useState<ServiceInfo | null>(null);
 
+  const [page, setPage] = useState(1);
+  const limit = 9;
+
   const [debouncedSearch] = useDebounceHook(searchTerm);
 
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, selectedCategory]);
+
+
   const { data: servicesResponse, isLoading, refetch, isRefetching } = useServicesList({
-    limit: 100,
+    page,
+    limit,
     category: selectedCategory === 'all' ? undefined : selectedCategory,
     agent_id: agentId,
+    search: debouncedSearch.trim() || undefined,
   });
 
   const deleteServiceMutation = useDeleteService();
 
-  const services = servicesResponse?.data || [];
+  const filteredServices = servicesResponse?.data || [];
+  const summary = servicesResponse?.summary;
 
-  // Filtered by search term
-  const filteredServices = useMemo(() => {
-    return services.filter((s) => {
-      const matchesSearch =
-        s.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-        s.category.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-        s.service_id.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-        (s.description || '').toLowerCase().includes(debouncedSearch.toLowerCase());
+  const total = servicesResponse?.pagination?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
 
-      const matchesCategory =
-        selectedCategory === 'all' || s.category.toLowerCase() === selectedCategory.toLowerCase();
 
-      return matchesSearch && matchesCategory;
-    });
-  }, [services, debouncedSearch, selectedCategory]);
+  const categories = summary?.categories || [];
 
-  // Unique categories
-  const categories = useMemo(() => {
-    const set = new Set<string>();
-    services.forEach((s) => {
-      if (s.category) set.add(s.category);
-    });
-    return Array.from(set);
-  }, [services]);
-
-  // Summary Metrics
-  const totalCount = services.length;
-  const depositCount = services.filter((s) => s.deposit?.required).length;
-  const avgPrice =
-    totalCount > 0
-      ? (services.reduce((acc, s) => acc + (s.price?.amount || 0), 0) / totalCount).toFixed(2)
-      : '0.00';
+  
+  const totalCount = summary?.total_count ?? total;
+  const depositCount = summary?.deposit_count ?? 0;
+  const avgPrice = summary?.avg_price !== undefined ? summary.avg_price.toFixed(2) : '0.00';
 
   const handleDeleteConfirm = async () => {
     if (!serviceToDelete) return;
@@ -346,6 +336,18 @@ export default function ServicesListPage() {
           })}
         </div>
       )}
+
+      {/* Reusable Pagination Component */}
+      <Pagination
+        currentPage={page}
+        totalPages={totalPages}
+        totalCount={total}
+        pageSize={limit}
+        onPageChange={setPage}
+        isLoading={isLoading}
+        entityName="services"
+        variant="standalone"
+      />
 
       {/* Delete Confirmation Modal */}
       {serviceToDelete && (

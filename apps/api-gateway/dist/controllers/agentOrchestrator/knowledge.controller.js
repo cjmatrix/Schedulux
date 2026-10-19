@@ -93,7 +93,8 @@ let KnowledgeController = class KnowledgeController {
                 question: response.question,
                 field: response.field,
                 type: response.type,
-                draft_schema: JSON.parse(response.draft_schema_json || '{}')
+                draft_schema: JSON.parse(response.draft_schema_json || '{}'),
+                live_schema: JSON.parse(response.live_schema_json || '{}'),
             }
         };
     }
@@ -110,7 +111,8 @@ let KnowledgeController = class KnowledgeController {
                 question: response.question,
                 field: response.field,
                 type: response.type,
-                draft_schema: JSON.parse(response.draft_schema_json || '{}')
+                draft_schema: JSON.parse(response.draft_schema_json || '{}'),
+                live_schema: JSON.parse(response.live_schema_json || '{}'),
             }
         };
     }
@@ -144,6 +146,51 @@ let KnowledgeController = class KnowledgeController {
         return {
             message: "Agents retrieved successfully",
             data: response.agents || [],
+        };
+    }
+    async getAgentMessages(req, agentId, limitStr, before) {
+        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException("Tenant ID is required");
+        }
+        const limit = limitStr ? parseInt(limitStr, 10) : 20;
+        const response = await (0, rxjs_1.lastValueFrom)(this.knowledgeService.getAgentMessages({
+            tenant_id: tenantId,
+            agent_id: agentId,
+            limit,
+            before,
+        }));
+        return {
+            message: "Messages retrieved successfully",
+            data: {
+                messages: response.messages || [],
+                next_cursor: response.next_cursor || null,
+                has_more: response.has_more ?? false,
+            },
+        };
+    }
+    async getOnboardingMessages(req, agentIdQuery, limitStr, before) {
+        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException("Tenant ID is required");
+        }
+        if (!agentIdQuery) {
+            throw new common_1.BadRequestException("Agent ID is required");
+        }
+        const limit = limitStr ? parseInt(limitStr, 10) : 50;
+        const response = await (0, rxjs_1.lastValueFrom)(this.knowledgeService.getAgentMessages({
+            tenant_id: tenantId,
+            agent_id: agentIdQuery,
+            limit,
+            before,
+        }));
+        return {
+            message: "Messages retrieved successfully",
+            data: {
+                messages: response.messages || [],
+                next_cursor: response.next_cursor || null,
+                has_more: response.has_more ?? false,
+            },
         };
     }
 };
@@ -208,6 +255,26 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "listAgents", null);
+__decorate([
+    (0, common_1.Get)("agents/:agentId/messages"),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)("agentId")),
+    __param(2, (0, common_1.Query)("limit")),
+    __param(3, (0, common_1.Query)("before")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String, String]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "getAgentMessages", null);
+__decorate([
+    (0, common_1.Get)("onboarding/messages"),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)("agent_id")),
+    __param(2, (0, common_1.Query)("limit")),
+    __param(3, (0, common_1.Query)("before")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String, String]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "getOnboardingMessages", null);
 exports.KnowledgeController = KnowledgeController = __decorate([
     (0, common_1.Controller)("api/v1/tenant/knowledge"),
     (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),

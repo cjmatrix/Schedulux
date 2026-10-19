@@ -184,8 +184,15 @@ class StrictHumanHandoffSchema(BaseModel):
     reception_contact: Optional[str] = None
     handoff_message: Optional[str] = None
 
+class StrictVerificationPolicySchema(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    require_otp_for_new_booking: Optional[bool] = None
+    require_otp_for_reschedule: Optional[bool] = None
+    require_otp_for_cancel: Optional[bool] = None
+
 class StrictGuardrailsSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
+    verification_policy: Optional[StrictVerificationPolicySchema] = None
     phi_scrubbing: Optional[StrictPhiScrubSchema] = None
     triage_emergency: Optional[StrictTriageEmergencySchema] = None
     human_handoff: Optional[StrictHumanHandoffSchema] = None

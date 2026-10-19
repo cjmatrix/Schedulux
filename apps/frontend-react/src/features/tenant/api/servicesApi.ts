@@ -13,6 +13,14 @@ export interface ListServicesParams {
   limit?: number;
   category?: string;
   agent_id?: string;
+  search?: string;
+}
+
+export interface ServiceSummaryData {
+  total_count: number;
+  avg_price: number;
+  deposit_count: number;
+  categories: string[];
 }
 
 export interface ListServicesResponseData {
@@ -23,6 +31,7 @@ export interface ListServicesResponseData {
     page: number;
     limit: number;
   };
+  summary?: ServiceSummaryData;
 }
 
 export interface CreateServicePayload {
@@ -60,7 +69,16 @@ export interface ListResourcesParams {
   limit?: number;
   resource_type?: string;
   dispatch_status?: string;
+  category?: string;
   agent_id?: string;
+  search?: string;
+}
+
+export interface ResourceSummaryData {
+  total_count: number;
+  active_count: number;
+  staff_count: number;
+  physical_count: number;
 }
 
 export interface ListResourcesResponseData {
@@ -71,6 +89,7 @@ export interface ListResourcesResponseData {
     page: number;
     limit: number;
   };
+  summary?: ResourceSummaryData;
 }
 
 export interface CreateResourcePayload {

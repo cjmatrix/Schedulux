@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { IServiceRepository, FindServicesFilter } from '../../../domain/repositories/service.repository.interface.js';
+import { IServiceRepository, FindServicesFilter, ServiceSummary } from '../../../domain/repositories/service.repository.interface.js';
 import { ServiceEntity } from '../../../domain/entities/service.entity.js';
 import { ServiceModel, IServiceDoc } from '../schemas/service.schema.js';
 import { ServiceMapper } from '../mappers/service.mapper.js';
@@ -25,34 +25,68 @@ export class MongoServiceRepository implements IServiceRepository {
   async findAll(
     tenantId: string,
     filter: FindServicesFilter,
-  ): Promise<{ services: ServiceEntity[]; total: number }> {
-    const query: Record<string, any> = {
+  ): Promise<{ services: ServiceEntity[]; total: number; summary?: ServiceSummary }> {
+    const baseMatch: Record<string, any> = {
       tenant_id: tenantId,
       is_deleted: { $ne: true },
     };
+    if (filter.agentId) {
+      baseMatch.agent_id = filter.agentId;
+    }
+
+    const query: Record<string, any> = { ...baseMatch };
     if (filter.category) {
       query.category = filter.category;
     }
-    if (filter.agentId) {
-      query.agent_id = filter.agentId;
+    if (filter.search?.trim()) {
+      const searchRegex = new RegExp(filter.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      query.$or = [
+        { name: searchRegex },
+        { category: searchRegex },
+        { description: searchRegex },
+        { _id: searchRegex },
+      ];
     }
 
     const page = Math.max(1, filter.page || 1);
     const limit = Math.max(1, Math.min(100, filter.limit || 20));
     const skip = (page - 1) * limit;
 
-    const [docs, total] = await Promise.all([
+    const [docs, total, statsResult] = await Promise.all([
       ServiceModel.find(query)
         .sort({ created_at: -1 })
         .skip(skip)
         .limit(limit)
         .exec(),
       ServiceModel.countDocuments(query).exec(),
+      ServiceModel.aggregate([
+        { $match: baseMatch },
+        {
+          $group: {
+            _id: null,
+            totalCount: { $sum: 1 },
+            avgPrice: { $avg: '$price.amount' },
+            depositCount: {
+              $sum: { $cond: [{ $eq: ['$deposit.required', true] }, 1, 0] },
+            },
+            categories: { $addToSet: '$category' },
+          },
+        },
+      ]).exec(),
     ]);
+
+    const stat = statsResult[0] || {};
+    const summary: ServiceSummary = {
+      totalCount: stat.totalCount ?? 0,
+      avgPrice: stat.avgPrice ? Number(stat.avgPrice.toFixed(2)) : 0,
+      depositCount: stat.depositCount ?? 0,
+      categories: (stat.categories ?? []).filter((c: any) => typeof c === 'string' && c.trim().length > 0),
+    };
 
     return {
       services: docs.map((doc) => ServiceMapper.toDomain(doc)),
       total,
+      summary,
     };
   }
 

@@ -41,6 +41,7 @@ export interface OnboardingResponse {
     field: string;
     type: string;
     draft_schema_json: string;
+    live_schema_json: string;
 }
 export interface SaveInitialAgentDraftRequest {
     tenant_id: string;
@@ -69,6 +70,26 @@ export interface AgentSummaryInfo {
 export interface ListTenantAgentsResponse {
     agents: AgentSummaryInfo[];
 }
+export interface ChatMessageInfo {
+    id: string;
+    tenant_id: string;
+    agent_id: string;
+    /** "agent" or "tenant" */
+    role: string;
+    content: string;
+    created_at: string;
+}
+export interface GetAgentMessagesRequest {
+    tenant_id: string;
+    agent_id: string;
+    limit: number;
+    before?: string | undefined;
+}
+export interface GetAgentMessagesResponse {
+    messages: ChatMessageInfo[];
+    next_cursor?: string | undefined;
+    has_more: boolean;
+}
 export declare const KNOWLEDGE_PACKAGE_NAME = "knowledge";
 export interface KnowledgeServiceClient {
     crawlSite(request: CrawlSiteRequest): Observable<CrawlSiteResponse>;
@@ -77,6 +98,7 @@ export interface KnowledgeServiceClient {
     resumeOnboardingSession(request: ResumeOnboardingRequest): Observable<OnboardingResponse>;
     saveInitialAgentDraft(request: SaveInitialAgentDraftRequest): Observable<SaveInitialAgentDraftResponse>;
     listTenantAgents(request: ListTenantAgentsRequest): Observable<ListTenantAgentsResponse>;
+    getAgentMessages(request: GetAgentMessagesRequest): Observable<GetAgentMessagesResponse>;
 }
 export interface KnowledgeServiceController {
     crawlSite(request: CrawlSiteRequest): Promise<CrawlSiteResponse> | Observable<CrawlSiteResponse> | CrawlSiteResponse;
@@ -85,6 +107,7 @@ export interface KnowledgeServiceController {
     resumeOnboardingSession(request: ResumeOnboardingRequest): Promise<OnboardingResponse> | Observable<OnboardingResponse> | OnboardingResponse;
     saveInitialAgentDraft(request: SaveInitialAgentDraftRequest): Promise<SaveInitialAgentDraftResponse> | Observable<SaveInitialAgentDraftResponse> | SaveInitialAgentDraftResponse;
     listTenantAgents(request: ListTenantAgentsRequest): Promise<ListTenantAgentsResponse> | Observable<ListTenantAgentsResponse> | ListTenantAgentsResponse;
+    getAgentMessages(request: GetAgentMessagesRequest): Promise<GetAgentMessagesResponse> | Observable<GetAgentMessagesResponse> | GetAgentMessagesResponse;
 }
 export declare function KnowledgeServiceControllerMethods(): (constructor: Function) => void;
 export declare const KNOWLEDGE_SERVICE_NAME = "KnowledgeService";

@@ -6,17 +6,18 @@ import { ICacheRepository } from '../interfaces/ICacheRepository.js';
 import { IPasswordHasher } from '../interfaces/IPasswordHasher.js';
 import { IJwtService } from '../interfaces/IJwtService.js';
 import { IEmailProducer } from '../interfaces/IEmailProducer.js';
+import { IDashboardUserService } from '../interfaces/IDashboardUserService.js';
 import { DashboardUserLoginRequest, DashboardUserLoginResponse, DashboardUserProfileRequest, DashboardUserProfileResponse, DashboardUserRefreshTokenRequest, DashboardUserRefreshTokenResponse } from '@repo/proto/dashboard';
 import crypto from 'crypto';
-
-const ACCESS_TOKEN_EXPIRY = '15m';
-const REFRESH_TOKEN_EXPIRY = '7d';
-const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+import type { SignOptions } from 'jsonwebtoken';
 
 @Injectable()
-export class DashboardUserService {
+export class DashboardUserService implements IDashboardUserService {
   private readonly jwtSecret: string;
   private readonly jwtRefreshSecret: string;
+  private readonly accessTokenExpiry: SignOptions['expiresIn'];
+  private readonly refreshTokenExpiry: SignOptions['expiresIn'];
+  private readonly refreshTokenTtlSeconds: number;
 
   constructor(
     @Inject('IDashboardUserRepository') private dashboardUserRepo: IDashboardUserRepository,
@@ -28,6 +29,9 @@ export class DashboardUserService {
   ) {
     this.jwtSecret = this.configService.get<string>('JWT_SECRET') || 'dev-secret-change-in-prod';
     this.jwtRefreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET') || this.jwtSecret;
+    this.accessTokenExpiry = (this.configService.get<string>('ACCESS_TOKEN_EXPIRY') || '15m') as SignOptions['expiresIn'];
+    this.refreshTokenExpiry = (this.configService.get<string>('REFRESH_TOKEN_EXPIRY') || '7d') as SignOptions['expiresIn'];
+    this.refreshTokenTtlSeconds = parseInt(this.configService.get<string>('REFRESH_TOKEN_TTL_SECONDS') || '', 10) || 7 * 24 * 60 * 60;
   }
 
   async login(data: DashboardUserLoginRequest): Promise<DashboardUserLoginResponse> {
@@ -54,7 +58,7 @@ export class DashboardUserService {
         role: user.system_role,
       },
       this.jwtSecret,
-      { expiresIn: ACCESS_TOKEN_EXPIRY }
+      { expiresIn: this.accessTokenExpiry }
     );
 
     const tokenId = nanoid(16);
@@ -66,13 +70,13 @@ export class DashboardUserService {
         type: 'dashboard_refresh',
       },
       this.jwtRefreshSecret,
-      { expiresIn: REFRESH_TOKEN_EXPIRY }
+      { expiresIn: this.refreshTokenExpiry }
     );
 
     await this.cacheRepo.set(
       `dashboard_refreshToken:${user._id.toString()}:${tokenId}`,
       refreshToken,
-      { EX: REFRESH_TOKEN_TTL_SECONDS }
+      { EX: this.refreshTokenTtlSeconds }
     );
 
     return {
@@ -152,7 +156,7 @@ export class DashboardUserService {
         role: user.system_role,
       },
       this.jwtSecret,
-      { expiresIn: ACCESS_TOKEN_EXPIRY }
+      { expiresIn: this.accessTokenExpiry }
     );
 
     const newTokenId = nanoid(16);
@@ -164,14 +168,14 @@ export class DashboardUserService {
         type: 'dashboard_refresh',
       },
       this.jwtRefreshSecret,
-      { expiresIn: REFRESH_TOKEN_EXPIRY }
+      { expiresIn: this.refreshTokenExpiry }
     );
 
     await this.cacheRepo.delete(`dashboard_refreshToken:${userId}:${tokenId}`);
     await this.cacheRepo.set(
       `dashboard_refreshToken:${userId}:${newTokenId}`,
       newRefreshToken,
-      { EX: REFRESH_TOKEN_TTL_SECONDS }
+      { EX: this.refreshTokenTtlSeconds }
     );
 
     return {

@@ -15,9 +15,6 @@ import { ConfigService } from '@nestjs/config';
 import crypto from 'crypto';
 import { nanoid } from 'nanoid';
 import { OAuth2Client } from 'google-auth-library';
-const ACCESS_TOKEN_EXPIRY = '15m';
-const REFRESH_TOKEN_EXPIRY = '7d';
-const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 let TenantService = class TenantService {
     tenantRepo;
     dashboardUserRepo;
@@ -29,6 +26,9 @@ let TenantService = class TenantService {
     jwtSecret;
     jwtRefreshSecret;
     googleClient;
+    accessTokenExpiry;
+    refreshTokenExpiry;
+    refreshTokenTtlSeconds;
     constructor(tenantRepo, dashboardUserRepo, cacheRepo, passwordHasher, jwtService, configService, emailProducer) {
         this.tenantRepo = tenantRepo;
         this.dashboardUserRepo = dashboardUserRepo;
@@ -40,6 +40,9 @@ let TenantService = class TenantService {
         this.jwtSecret = this.configService.get('JWT_SECRET') || 'dev-secret-change-in-prod';
         this.jwtRefreshSecret = this.configService.get('JWT_REFRESH_SECRET') || this.jwtSecret;
         this.googleClient = new OAuth2Client(this.configService.get('GOOGLE_CLIENT_ID'));
+        this.accessTokenExpiry = (this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m');
+        this.refreshTokenExpiry = (this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d');
+        this.refreshTokenTtlSeconds = parseInt(this.configService.get('REFRESH_TOKEN_TTL_SECONDS') || '', 10) || 7 * 24 * 60 * 60;
     }
     async register(data) {
         let tenantId = `tnt_${nanoid(21)}`;
@@ -118,13 +121,13 @@ let TenantService = class TenantService {
             tenant_id: tenant._id,
             email: tenant.contact_email,
             role: 'tenant_owner'
-        }, this.jwtSecret, { expiresIn: ACCESS_TOKEN_EXPIRY });
+        }, this.jwtSecret, { expiresIn: this.accessTokenExpiry });
         const tokenId = nanoid(16);
         const refreshToken = this.jwtService.sign({
             tenant_id: tenant._id,
             token_id: tokenId
-        }, this.jwtRefreshSecret, { expiresIn: REFRESH_TOKEN_EXPIRY });
-        await this.cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, { EX: REFRESH_TOKEN_TTL_SECONDS });
+        }, this.jwtRefreshSecret, { expiresIn: this.refreshTokenExpiry });
+        await this.cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, { EX: this.refreshTokenTtlSeconds });
         return {
             accessToken,
             refreshToken,
@@ -188,13 +191,13 @@ let TenantService = class TenantService {
             tenant_id: tenant._id,
             email: tenant.contact_email,
             role: 'tenant_owner',
-        }, this.jwtSecret, { expiresIn: ACCESS_TOKEN_EXPIRY });
+        }, this.jwtSecret, { expiresIn: this.accessTokenExpiry });
         const tokenId = nanoid(16);
         const refreshToken = this.jwtService.sign({
             tenant_id: tenant._id,
             token_id: tokenId,
-        }, this.jwtRefreshSecret, { expiresIn: REFRESH_TOKEN_EXPIRY });
-        await this.cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, { EX: REFRESH_TOKEN_TTL_SECONDS });
+        }, this.jwtRefreshSecret, { expiresIn: this.refreshTokenExpiry });
+        await this.cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, { EX: this.refreshTokenTtlSeconds });
         return {
             accessToken,
             refreshToken,
@@ -253,13 +256,13 @@ let TenantService = class TenantService {
             tenant_id: tenant._id,
             email: tenant.contact_email,
             role: 'tenant_owner'
-        }, this.jwtSecret, { expiresIn: ACCESS_TOKEN_EXPIRY });
+        }, this.jwtSecret, { expiresIn: this.accessTokenExpiry });
         const newTokenId = nanoid(16);
         const newRefreshToken = this.jwtService.sign({
             tenant_id: tenant._id,
             token_id: newTokenId
-        }, this.jwtRefreshSecret, { expiresIn: REFRESH_TOKEN_EXPIRY });
-        await this.cacheRepo.set(`tenant_refresh_token:${tenant._id}:${newTokenId}`, newRefreshToken, { EX: REFRESH_TOKEN_TTL_SECONDS });
+        }, this.jwtRefreshSecret, { expiresIn: this.refreshTokenExpiry });
+        await this.cacheRepo.set(`tenant_refresh_token:${tenant._id}:${newTokenId}`, newRefreshToken, { EX: this.refreshTokenTtlSeconds });
         return {
             accessToken: newAccessToken,
             refreshToken: newRefreshToken,

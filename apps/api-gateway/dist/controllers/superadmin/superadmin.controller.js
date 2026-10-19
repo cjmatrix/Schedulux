@@ -18,6 +18,7 @@ const rxjs_1 = require("rxjs");
 const nestjs_zod_1 = require("nestjs-zod");
 const superadmin_auth_guard_js_1 = require("../../guards/superadmin-auth.guard.js");
 const superAdmin_dto_js_1 = require("./dtos/superAdmin.dto.js");
+const cookie_util_js_1 = require("../../utils/cookie.util.js");
 let SuperAdminController = class SuperAdminController {
     client;
     superAdminAuthService;
@@ -30,18 +31,8 @@ let SuperAdminController = class SuperAdminController {
     async login(body, res) {
         const response = await (0, rxjs_1.lastValueFrom)(this.superAdminAuthService.login(body));
         const isProduction = process.env.NODE_ENV === "production";
-        res.cookie("superadmin_access_token", response.access_token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? "none" : "lax",
-            maxAge: 15 * 60 * 1000,
-        });
-        res.cookie("superadmin_refresh_token", response.refresh_token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? "none" : "lax",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        res.cookie("superadmin_access_token", response.access_token, (0, cookie_util_js_1.getAccessTokenCookieOptions)());
+        res.cookie("superadmin_refresh_token", response.refresh_token, (0, cookie_util_js_1.getRefreshTokenCookieOptions)());
         return {
             message: response.message,
             data: response.superAdmin,
@@ -50,19 +41,8 @@ let SuperAdminController = class SuperAdminController {
     async refreshToken(req, body, res) {
         const token = req.cookies?.superadmin_refresh_token || body?.refresh_token || "";
         const response = await (0, rxjs_1.lastValueFrom)(this.superAdminAuthService.refreshToken({ refresh_token: token }));
-        const isProduction = process.env.NODE_ENV === "production";
-        res.cookie("superadmin_access_token", response.access_token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? "none" : "lax",
-            maxAge: 15 * 60 * 1000,
-        });
-        res.cookie("superadmin_refresh_token", response.refresh_token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? "none" : "lax",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        res.cookie("superadmin_access_token", response.access_token, (0, cookie_util_js_1.getAccessTokenCookieOptions)());
+        res.cookie("superadmin_refresh_token", response.refresh_token, (0, cookie_util_js_1.getRefreshTokenCookieOptions)());
         return {
             message: response.message,
             data: null,

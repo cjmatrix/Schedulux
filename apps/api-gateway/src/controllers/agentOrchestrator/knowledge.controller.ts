@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Param,
   Body,
   Query,
   Req,
@@ -12,6 +13,7 @@ import {
   HttpStatus,
   UseGuards,
   UnauthorizedException,
+  BadRequestException,
 } from "@nestjs/common";
 import { ClientGrpc } from "@nestjs/microservices";
 import { lastValueFrom } from "rxjs";
@@ -129,7 +131,8 @@ export class KnowledgeController implements OnModuleInit {
         question: response.question,
         field: response.field,
         type: response.type,
-        draft_schema: JSON.parse(response.draft_schema_json || '{}')
+        draft_schema: JSON.parse(response.draft_schema_json || '{}'),
+        live_schema: JSON.parse(response.live_schema_json || '{}'),
       }
     };
   }
@@ -152,7 +155,8 @@ export class KnowledgeController implements OnModuleInit {
         question: response.question,
         field: response.field,
         type: response.type,
-        draft_schema: JSON.parse(response.draft_schema_json || '{}')
+        draft_schema: JSON.parse(response.draft_schema_json || '{}'),
+        live_schema: JSON.parse(response.live_schema_json || '{}'),
       }
     };
   }
@@ -205,4 +209,73 @@ export class KnowledgeController implements OnModuleInit {
       data: response.agents || [],
     };
   }
+
+  @Get("agents/:agentId/messages")
+  async getAgentMessages(
+    @Req() req: AuthenticatedTenantRequest,
+    @Param("agentId") agentId: string,
+    @Query("limit") limitStr?: string,
+    @Query("before") before?: string,
+  ) {
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException("Tenant ID is required");
+    }
+
+    const limit = limitStr ? parseInt(limitStr, 10) : 20;
+    const response = await lastValueFrom(
+      this.knowledgeService.getAgentMessages({
+        tenant_id: tenantId,
+        agent_id: agentId,
+        limit,
+        before,
+      })
+    );
+
+    return {
+      message: "Messages retrieved successfully",
+      data: {
+        messages: response.messages || [],
+        next_cursor: response.next_cursor || null,
+        has_more: response.has_more ?? false,
+      },
+    };
+  }
+
+  @Get("onboarding/messages")
+  async getOnboardingMessages(
+    @Req() req: AuthenticatedTenantRequest,
+    @Query("agent_id") agentIdQuery?: string,
+    @Query("limit") limitStr?: string,
+    @Query("before") before?: string,
+  ) {
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException("Tenant ID is required");
+    }
+
+    if (!agentIdQuery) {
+      throw new BadRequestException("Agent ID is required");
+    }
+
+    const limit = limitStr ? parseInt(limitStr, 10) : 50;
+    const response = await lastValueFrom(
+      this.knowledgeService.getAgentMessages({
+        tenant_id: tenantId,
+        agent_id: agentIdQuery,
+        limit,
+        before,
+      })
+    );
+
+    return {
+      message: "Messages retrieved successfully",
+      data: {
+        messages: response.messages || [],
+        next_cursor: response.next_cursor || null,
+        has_more: response.has_more ?? false,
+      },
+    };
+  }
 }
+

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import {
   Package,
@@ -18,6 +18,7 @@ import {
 import { useResourcesList, useDeleteResource } from '../hooks/useResources';
 import type { ResourceInfo } from '@repo/proto/scheduling';
 import useDebounceHook from '../../../shared/hooks/useDebounceHook';
+import { Pagination } from '../../../components/Pagination';
 
 export default function ResourcesListPage() {
   const navigate = useNavigate();
@@ -27,53 +28,45 @@ export default function ResourcesListPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [resourceToDelete, setResourceToDelete] = useState<ResourceInfo | null>(null);
 
+  const [page, setPage] = useState(1);
+  const limit = 9;
+
   const [debouncedSearch] = useDebounceHook(searchTerm);
 
+  // Reset to page 1 whenever search, type, or status filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, selectedType, selectedStatus]);
+
+  // Single backend-searched, backend-filtered, and paginated query enriched with summary
   const {
     data: resourcesResponse,
     isLoading,
     refetch,
     isRefetching,
   } = useResourcesList({
+    page,
+    limit,
     resource_type: selectedType === 'all' ? undefined : selectedType,
     dispatch_status: selectedStatus === 'all' ? undefined : selectedStatus,
     agent_id: agentId,
+    search: debouncedSearch.trim() || undefined,
   });
 
   const deleteResourceMutation = useDeleteResource();
 
-  const allResources: ResourceInfo[] = useMemo(() => {
-    return resourcesResponse?.data || [];
-  }, [resourcesResponse]);
+  const filteredResources: ResourceInfo[] = resourcesResponse?.data || [];
+  const summary = resourcesResponse?.summary;
 
+  const total = resourcesResponse?.pagination?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
 
-  const filteredResources = useMemo(() => {
-    return allResources.filter((res) => {
-      if (!debouncedSearch) return true;
-      const q = debouncedSearch.toLowerCase();
-      const matchName = res.name?.toLowerCase().includes(q);
-      const matchTitle = res.title?.toLowerCase().includes(q);
-      const matchCat = res.category?.toLowerCase().includes(q);
-      const matchType = res.resource_type?.toLowerCase().includes(q);
-      const matchDesc = res.description?.toLowerCase().includes(q);
-      return matchName || matchTitle || matchCat || matchType || matchDesc;
-    });
-  }, [allResources, debouncedSearch]);
-
-
-  const stats = useMemo(() => {
-    const total = allResources.length;
-    const active = allResources.filter((r) => r.dispatch_status === 'active').length;
-    const staffCount = allResources.filter((r) => r.resource_type === 'staff').length;
-    const physicalCount = allResources.filter((r) => r.resource_type !== 'staff').length;
-
-    return {
-      total,
-      active,
-      staffCount,
-      physicalCount,
-    };
-  }, [allResources]);
+  const stats = {
+    total: summary?.total_count ?? total,
+    active: summary?.active_count ?? 0,
+    staffCount: summary?.staff_count ?? 0,
+    physicalCount: summary?.physical_count ?? 0,
+  };
 
   const handleDeleteConfirm = async () => {
     if (!resourceToDelete) return;
@@ -454,6 +447,18 @@ export default function ResourcesListPage() {
             })}
           </div>
         )}
+
+        {/* Reusable Pagination Component */}
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          totalCount={total}
+          pageSize={limit}
+          onPageChange={setPage}
+          isLoading={isLoading}
+          entityName="resources"
+          variant="standalone"
+        />
       </div>
 
       {/* Delete Confirmation Modal */}

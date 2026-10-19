@@ -61,9 +61,6 @@ export class SchedulingController implements OnModuleInit {
     return tenantId;
   }
 
-  // ==========================================
-  // SERVICES ENDPOINTS
-  // ==========================================
 
   @Post('services')
   @HttpCode(HttpStatus.CREATED)
@@ -112,6 +109,7 @@ export class SchedulingController implements OnModuleInit {
         limit: query.limit,
         category: query.category || '',
         agent_id: query.agent_id,
+        search: query.search || undefined,
       }),
     );
 
@@ -123,6 +121,7 @@ export class SchedulingController implements OnModuleInit {
         page: response.page,
         limit: response.limit,
       },
+      summary: response.summary,
     };
   }
 
@@ -197,9 +196,7 @@ export class SchedulingController implements OnModuleInit {
     };
   }
 
-  // ==========================================
-  // RESOURCES ENDPOINTS
-  // ==========================================
+ 
 
   @Post('resources')
   @HttpCode(HttpStatus.CREATED)
@@ -244,7 +241,9 @@ export class SchedulingController implements OnModuleInit {
         limit: query.limit,
         resource_type: query.resource_type || '',
         dispatch_status: query.dispatch_status || '',
+        category: query.category || undefined,
         agent_id: query.agent_id,
+        search: query.search || undefined,
       }),
     );
 
@@ -256,6 +255,7 @@ export class SchedulingController implements OnModuleInit {
         page: response.page,
         limit: response.limit,
       },
+      summary: response.summary,
     };
   }
 

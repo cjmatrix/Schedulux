@@ -1,6 +1,6 @@
 import { Controller, UseFilters, Inject } from "@nestjs/common";
 import { GrpcMethod } from "@nestjs/microservices";
-import { SuperAdminService } from "../services/superAdminService.js";
+import type { ISuperAdminService } from "../interfaces/ISuperAdminService.js";
 import { AllExceptionsFilter } from "./rpcExpetionFilter.js";
 import { ListTenantsRequest, ListTenantsResponse, SuspendTenantRequest } from "@repo/proto/tenant";
 import { SuperAdminProto } from "@repo/proto";
@@ -9,8 +9,8 @@ import { SuperAdminProto } from "@repo/proto";
 @UseFilters(new AllExceptionsFilter())
 export class SuperAdminAuthController {
   constructor(
-    @Inject(SuperAdminService)
-    private readonly superAdminService: SuperAdminService,
+    @Inject('ISuperAdminService')
+    private readonly superAdminService: ISuperAdminService,
   ) {}
 
   @GrpcMethod("SuperAdminAuthService", "Login")

@@ -56,7 +56,7 @@ export class CreateServiceUseCase implements ICreateServiceUseCase {
 
     const created = await this.serviceRepository.create(service);
 
-    // CQRS: fire-and-forget event for AI-orchestration consumer
+   
     await this.eventsProducer.emitServiceCreated(created);
 
     return created;

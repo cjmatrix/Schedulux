@@ -14,9 +14,6 @@ import { Injectable, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { nanoid } from 'nanoid';
 import crypto from 'crypto';
-const ACCESS_TOKEN_EXPIRY = '15m';
-const REFRESH_TOKEN_EXPIRY = '7d';
-const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 let DashboardUserService = class DashboardUserService {
     dashboardUserRepo;
     cacheRepo;
@@ -26,6 +23,9 @@ let DashboardUserService = class DashboardUserService {
     emailProducer;
     jwtSecret;
     jwtRefreshSecret;
+    accessTokenExpiry;
+    refreshTokenExpiry;
+    refreshTokenTtlSeconds;
     constructor(dashboardUserRepo, cacheRepo, passwordHasher, jwtService, configService, emailProducer) {
         this.dashboardUserRepo = dashboardUserRepo;
         this.cacheRepo = cacheRepo;
@@ -35,6 +35,9 @@ let DashboardUserService = class DashboardUserService {
         this.emailProducer = emailProducer;
         this.jwtSecret = this.configService.get('JWT_SECRET') || 'dev-secret-change-in-prod';
         this.jwtRefreshSecret = this.configService.get('JWT_REFRESH_SECRET') || this.jwtSecret;
+        this.accessTokenExpiry = (this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m');
+        this.refreshTokenExpiry = (this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d');
+        this.refreshTokenTtlSeconds = parseInt(this.configService.get('REFRESH_TOKEN_TTL_SECONDS') || '', 10) || 7 * 24 * 60 * 60;
     }
     async login(data) {
         if (!data.email || !data.password) {
@@ -54,15 +57,15 @@ let DashboardUserService = class DashboardUserService {
             email: user.email,
             system_role: user.system_role,
             role: user.system_role,
-        }, this.jwtSecret, { expiresIn: ACCESS_TOKEN_EXPIRY });
+        }, this.jwtSecret, { expiresIn: this.accessTokenExpiry });
         const tokenId = nanoid(16);
         const refreshToken = this.jwtService.sign({
             user_id: user._id.toString(),
             tenant_id: user.tenant_id,
             tokenId,
             type: 'dashboard_refresh',
-        }, this.jwtRefreshSecret, { expiresIn: REFRESH_TOKEN_EXPIRY });
-        await this.cacheRepo.set(`dashboard_refreshToken:${user._id.toString()}:${tokenId}`, refreshToken, { EX: REFRESH_TOKEN_TTL_SECONDS });
+        }, this.jwtRefreshSecret, { expiresIn: this.refreshTokenExpiry });
+        await this.cacheRepo.set(`dashboard_refreshToken:${user._id.toString()}:${tokenId}`, refreshToken, { EX: this.refreshTokenTtlSeconds });
         return {
             message: 'Dashboard user login successful',
             user: {
@@ -127,16 +130,16 @@ let DashboardUserService = class DashboardUserService {
             email: user.email,
             system_role: user.system_role,
             role: user.system_role,
-        }, this.jwtSecret, { expiresIn: ACCESS_TOKEN_EXPIRY });
+        }, this.jwtSecret, { expiresIn: this.accessTokenExpiry });
         const newTokenId = nanoid(16);
         const newRefreshToken = this.jwtService.sign({
             user_id: user._id.toString(),
             tenant_id: user.tenant_id,
             tokenId: newTokenId,
             type: 'dashboard_refresh',
-        }, this.jwtRefreshSecret, { expiresIn: REFRESH_TOKEN_EXPIRY });
+        }, this.jwtRefreshSecret, { expiresIn: this.refreshTokenExpiry });
         await this.cacheRepo.delete(`dashboard_refreshToken:${userId}:${tokenId}`);
-        await this.cacheRepo.set(`dashboard_refreshToken:${userId}:${newTokenId}`, newRefreshToken, { EX: REFRESH_TOKEN_TTL_SECONDS });
+        await this.cacheRepo.set(`dashboard_refreshToken:${userId}:${newTokenId}`, newRefreshToken, { EX: this.refreshTokenTtlSeconds });
         return {
             message: 'Token refreshed successfully',
             access_token: newAccessToken,

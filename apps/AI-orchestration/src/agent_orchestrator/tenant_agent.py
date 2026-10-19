@@ -1,24 +1,4 @@
-"""
-tenant_agent.py — Schedulux Tenant Onboarding Agent (LangGraph)
 
-Graph Flow:
-  start
-    └→ load_draft
-         └→ validate_structural_gaps
-              ├→ [gaps found]  → ask_human_structural  (interrupt)
-              │                     └→ patch_draft → validate_structural_gaps (loop)
-              └→ [no gaps]    → llm_semantic_review
-                                   ├→ [incomplete] → ask_human_semantic  (interrupt)
-                                   │                     └→ patch_draft → validate_structural_gaps
-                                   └→ [complete]  → finalize_and_save → END
-
-Design principles:
-  - Python structural validator: 0 LLM tokens (free gap detection)
-  - LLM receives only a compact summary dict (~300-500 tokens, not the full schema)
-  - LangGraph interrupt() for human-in-the-loop (WebSocket/gRPC resumable)
-  - MemorySaver checkpoint: sessions survive reconnects (swap for Redis in prod)
-  - Thread ID = tenant_id (isolated state per tenant)
-"""
 
 from __future__ import annotations
 
@@ -32,7 +12,13 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, Field, ConfigDict
 from enum import Enum
 from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.language_models.chat_models import BaseChatModel
+try:
+    from langchain_groq import ChatGroq
+except ImportError:
+    ChatGroq = None
+from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
@@ -40,10 +26,12 @@ from langgraph.graph.message import add_messages
 from langgraph.types import interrupt
 from typing_extensions import TypedDict
 
-# ── env ───────────────────────────────────────────────────────────────────────
+
 _env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 load_dotenv(_env_path)
 
+_GROQ_API_KEY   = os.environ.get("GROQ_API_KEY")
+_GROQ_MODEL     = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 _GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY", "")
 _GEMINI_MODEL   = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
 
@@ -54,12 +42,12 @@ class GraphState(TypedDict):
     agent_id:        Optional[str]
     draft:           dict[str, Any]        
     messages:        Annotated[list, add_messages]  
-    structural_gaps: list[dict]            # [{field, question, type, ...}]
+    structural_gaps: list[dict]            
     pending_field:   str | None
     semantic_note:   str | None          
-    decision:        str | None            # "update_schema" | "ask_user" | "finalize"
-    pending_patches: list[dict] | None     # RFC 6902 JSON Patches
-    status:          str                   # "onboarding" | "complete" | "error"
+    decision:        str | None          
+    pending_patches: list[dict] | None    
+    status:          str                
 
 
 
@@ -161,12 +149,38 @@ def _set_nested(d: dict, path: str, value: Any) -> None:
 
 
 
-def _get_llm() -> ChatGoogleGenerativeAI:
-    return ChatGoogleGenerativeAI(
-        model=_GEMINI_MODEL,
-        google_api_key=_GEMINI_API_KEY,
-        temperature=0.2,
-    )
+def _get_llm(temperature: float = 0.2) -> BaseChatModel:
+ 
+    groq_api_key = os.environ.get("GROQ_API_KEY") or _GROQ_API_KEY
+    gemini_api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or _GEMINI_API_KEY
+
+    if groq_api_key:
+        groq_model = os.environ.get("GROQ_MODEL") or _GROQ_MODEL or "openai/gpt-oss-120b"
+        if ChatGroq is not None:
+            print(f"[Tenant Agent] Initializing ChatGroq with model '{groq_model}'.", flush=True)
+            return ChatGroq(
+                model_name=groq_model,
+                groq_api_key=groq_api_key,
+                temperature=temperature,
+            )
+        else:
+            print(f"[Tenant Agent] Initializing ChatOpenAI (Groq endpoint) with model '{groq_model}'.", flush=True)
+            return ChatOpenAI(
+                model=groq_model,
+                api_key=groq_api_key,
+                base_url="https://api.groq.com/openai/v1",
+                temperature=temperature,
+            )
+    else:
+        model_name = os.environ.get("GEMINI_MODEL") or _GEMINI_MODEL or "gemini-1.5-flash"
+        if "gemma" in model_name.lower():
+            model_name = "gemini-1.5-flash"
+        print(f"[Tenant Agent] Initializing ChatGoogleGenerativeAI with model '{model_name}'.", flush=True)
+        return ChatGoogleGenerativeAI(
+            model=model_name,
+            google_api_key=gemini_api_key,
+            temperature=temperature,
+        )
 
 
 
@@ -189,7 +203,7 @@ class OperatingHours(BaseModel):
     saturday: List[TimeSlot] = Field(default_factory=list)
     sunday: List[TimeSlot] = Field(default_factory=list)
 
-async def _parse_operating_hours_with_llm(raw_text: str, llm: ChatGoogleGenerativeAI) -> dict:
+async def _parse_operating_hours_with_llm(raw_text: str, llm: BaseChatModel) -> dict:
     """Converts free-form hours description → {monday: [{start,end}], ...}"""
     structured_llm = llm.with_structured_output(OperatingHours)
     prompt = f"Convert this business hours description into structured data:\n{raw_text}"
@@ -211,7 +225,7 @@ class ServiceDetails(BaseModel):
 
 
 
-async def _parse_service_with_llm(raw_text: str, llm: ChatGoogleGenerativeAI) -> dict | None:
+async def _parse_service_with_llm(raw_text: str, llm: BaseChatModel) -> dict | None:
     """Parses a free-form service description → structured service dict."""
     structured_llm = llm.with_structured_output(ServiceDetails)
     prompt = f"Extract service details from this input:\n{raw_text}"
@@ -244,7 +258,7 @@ class PartialServiceUpdate(BaseModel):
     name: str | None = Field(default=None, description="Name of the service, if mentioned")
     description: str | None = Field(default=None, description="Description of the service, if mentioned")
 
-async def _parse_partial_service_update(raw_text: str, current_service: dict, llm: ChatGoogleGenerativeAI) -> dict:
+async def _parse_partial_service_update(raw_text: str, current_service: dict, llm: BaseChatModel) -> dict:
     structured_llm = llm.with_structured_output(PartialServiceUpdate)
     prompt = (
         f"The user is updating a service. Current details: {json.dumps(current_service)}.\n"
@@ -268,7 +282,7 @@ class ResourceDetails(BaseModel):
     description: str | None = Field(default=None, description="Brief description")
 
 
-async def _parse_resource_with_llm(raw_text: str, llm: ChatGoogleGenerativeAI) -> dict | None:
+async def _parse_resource_with_llm(raw_text: str, llm: BaseChatModel) -> dict | None:
     """Parses a free-form resource description → structured resource dict."""
     structured_llm = llm.with_structured_output(ResourceDetails)
     prompt = f"Extract resource details from this input:\n{raw_text}"
@@ -348,7 +362,7 @@ def _compute_structural_gaps(draft: dict) -> list[dict]:
 
 
 
-async def _apply_patch(draft: dict, gap: dict, answer: str, llm: ChatGoogleGenerativeAI) -> dict:
+async def _apply_patch(draft: dict, gap: dict, answer: str, llm: BaseChatModel) -> dict:
     draft = copy.deepcopy(draft)
     
 
@@ -471,8 +485,9 @@ def _format_draft_toon(draft: dict) -> str:
 async def node_load_draft(state: GraphState) -> dict:
     """Entry point. Ensures baseline dict structure."""
     draft = copy.deepcopy(state.get("draft", {}))
-    agent_id = state.get("agent_id") or draft.get("agent_id") or f"agent_{state['tenant_id']}_v1"
-    draft.setdefault("tenant_id",        state["tenant_id"])
+    tenant_id = state.get("tenant_id") or draft.get("tenant_id", "")
+    agent_id = state.get("agent_id") or draft.get("agent_id") or f"agent_{tenant_id}_v1"
+    draft.setdefault("tenant_id",        tenant_id)
     draft.setdefault("agent_id",         agent_id)
     draft.setdefault("status",           "draft")
     draft.setdefault("schema_version",   "2.4")
@@ -481,7 +496,7 @@ async def node_load_draft(state: GraphState) -> dict:
     draft.setdefault("services",         [])
     draft.setdefault("resources",        [])
     return {
-        "tenant_id":       state["tenant_id"],
+        "tenant_id":       tenant_id,
         "agent_id":        agent_id,
         "draft":           draft,
         "status":          "onboarding",
@@ -519,6 +534,35 @@ async def node_ask_human_structural(state: GraphState) -> dict:
  
     llm = _get_llm()
     updated_draft = await _apply_patch(state["draft"], gap, user_answer, llm)
+
+    tenant_id = state.get("tenant_id", "")
+    agent_id = state.get("agent_id") or updated_draft.get("agent_id", "")
+    if tenant_id and agent_id:
+        try:
+            from agent_orchestrator.redis_client import set_cached_draft
+            await set_cached_draft(tenant_id, agent_id, updated_draft)
+            print(f"[Structural Node] Updated draft cached in Redis for tenant {tenant_id}, agent {agent_id}", flush=True)
+        except Exception as re:
+            print(f"[Structural Node] Redis cache write warning: {re}", flush=True)
+
+        try:
+            from agent_orchestrator.models import AgentDraft, init_db
+            import secrets
+            await init_db()
+            agent_draft = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
+            if agent_draft:
+                agent_draft.add_checkpoint(
+                    checkpoint_id=f"cp_{secrets.token_hex(4)}",
+                    message_id=f"msg_{secrets.token_hex(4)}",
+                    draft_snapshot=updated_draft,
+                    user_prompt=str(user_answer)[:200],
+                    summary=f"Set {gap.get('field', 'field')}",
+                )
+                await agent_draft.save()
+                print(f"[Structural Node] Persisted turn checkpoint to AgentDraft ({tenant_id}/{agent_id})", flush=True)
+        except Exception as de:
+            print(f"[Structural Node Warning] Failed to persist AgentDraft turn checkpoint: {de}", flush=True)
+
     return {
         "draft":         updated_draft,
         "pending_field": gap["field"],
@@ -555,28 +599,55 @@ async def node_llm_semantic_review(state: GraphState) -> dict:
 *** ATTENTION: YOU JUST APPLIED JSON PATCHES IN THE IMMEDIATE PRECEDING STEP ***
 - You CANNOT choose 'update_schema' again in this step.
 - Review the updated draft below:
-  * If any mandatory dependent fields are missing (e.g., active deposit missing payment processor or UPI ID, or emergency triage missing contact), you MUST choose 'ask_user' and ask for that specific detail.
-  * If the draft is completely valid, functional, and has no missing dependent fields, you MUST choose 'finalize'.
+  * If any mandatory dependent fields are missing (e.g., active deposit missing UPI ID or QR code URL, or emergency triage missing contact), you MUST choose 'ask_user' and ask for that specific detail.
+  * If the draft is valid and all dependent fields are sound, you MUST choose 'ask_user'. Inform the user of the exact changes applied, and ask if they would like to make any other adjustments or if they are ready to save their changes.
+  * You must NEVER choose 'finalize' unless the user EXPLICITLY commanded to save/deploy in their recent message (e.g. "save", "save changes", "deploy now", "finalize").
 """
+
+    summary_block = ""
+    tenant_id = state.get("tenant_id")
+    agent_id = state.get("agent_id")
+    if agent_id:
+        try:
+            from agent_orchestrator.models import AgentDraft
+            ad = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
+            if ad and ad.conversation_summary:
+                summary_block = f"\nROLLING SUMMARY OF PAST CONVERSATION:\n{ad.conversation_summary}\n"
+        except Exception:
+            pass
+
+    facts_block = ""
+    if agent_id and history_msgs:
+        try:
+            from agent_orchestrator.utils.qdrant_util import get_qdrant_store
+            from agent_orchestrator.utils.embedding_util import embed_query
+            last_text = str(history_msgs[-1].content)
+            q_vec = await embed_query(last_text)
+            facts = await get_qdrant_store().search_relevant_facts(q_vec, tenant_id, agent_id, limit=3)
+            if facts:
+                facts_block = "\nRELEVANT BUSINESS RULES & FACTS RETRIEVED FROM LONG-TERM MEMORY:\n" + "\n".join([f"- {f}" for f in facts]) + "\n"
+        except Exception:
+            pass
 
     prompt = f"""You are the Schedulux AI Configuration Agent.
 Your job is to review the JSON draft, apply user changes, and converse with the user to ensure the configuration is logically sound, functional, and complete.
+{summary_block}{facts_block}
 
 CRITICAL RULES FOR REASONING & ACTIONS:
 1. GRAMMAR & CASING: Automatically correct spelling, casing, and grammar from user messages before generating patches (e.g., "tier punchuree repai" -> "Tire Puncture Repair").
 2. SINGLE-TURN PATCHES: If the user provides multiple updates, generate ALL required JSON patches in a SINGLE turn. Do not break them down into multiple turns.
 3. ANTI-HALLUCINATION / NEVER GUESS DETAILS:
-   - NEVER assume, default, or invent technical details or configuration values that the user did not provide.
-   - Specifically, NEVER guess payment processors (e.g., upi_direct, stripe), payment IDs (upi_id), phone numbers, email addresses, or business verticals.
+   - NEVER assume, default, or invent external user details that the user did not provide (specifically: UPI IDs (upi_id), QR code URLs, phone numbers, email addresses, or business verticals).
+   - Internal system slugs ('resource_id', 'service_id') are NOT user details—always auto-generate them from the name (e.g. "Dr. Shijisha" -> "res_shijisha"). NEVER ask the user for an ID!
 
 DOMAIN INTEGRITY & DEPENDENCY RULES:
-1. DEPOSITS & PAYMENTS:
+1. DEPOSITS & PAYMENTS (UPI ONLY):
+   - Schedulux ONLY supports direct UPI deposit payments (through UPI ID or QR Code URL). No Stripe, no bank transfer, and no cash on arrival are supported for service deposits.
    - When configuring a deposit (deposit.required is True or deposit.amount > 0):
-     * A payment method (`processor`) is MANDATORY (one of: 'upi_direct', 'stripe', 'bank_transfer', 'cash_on_arrival').
-     * If the user did NOT specify a processor, DO NOT guess one! Apply the deposit amount patch, and then you MUST ASK the user which processor they want to use.
-     * If `processor == "upi_direct"`: `upi_id` is MANDATORY. If missing, you MUST ask the user for their UPI ID before finalizing.
-     * If `processor == "bank_transfer"`: `payment_instructions` is MANDATORY. If missing, ask the user for account / payment instructions.
-     * `deposit.amount` cannot exceed `price.amount` (unless `price.type` is "variable").
+     * Set `deposit.processor` to "upi_direct" and `deposit.confirmation_method` to "utr_reference".
+     * Either `deposit.upi_id` (e.g., clinic@okhdfcbank) or `deposit.qr_code_url` is MANDATORY for collecting deposits.
+     * If the user enables a deposit without providing their UPI ID or QR code, apply the deposit amount patch and ASK the user for their clinic's UPI ID or QR code so patients can pay their deposit.
+     * `deposit.amount` cannot exceed `price.amount` (unless `price.type` is "variable" or "starting_at").
      * If `price.type == "free"`, deposit cannot be required (`deposit.required` must be False).
 2. CURRENCY SYNCHRONIZATION:
    - If the user specifies prices or deposits in a specific currency (e.g., rupees / INR / ₹, dollars / USD / $, euros / EUR / €, pounds / GBP / £):
@@ -586,7 +657,16 @@ DOMAIN INTEGRITY & DEPENDENCY RULES:
    - If `guardrails.human_handoff.enabled` is True: `reception_contact` and `handoff_message` MUST NOT be empty. If missing, ask the user.
 4. HEALTHCARE / HIPAA COMPLIANCE:
    - If `compliance.hipaa_mode` is True: ensure `guardrails.phi_scrubbing.enabled` is True and `compliance.zero_hallucination_mode` is True.
-5. SERVICES & RESOURCES:
+5. SERVICES & RESOURCES (AUTOMATIC SYSTEM ID CREATION):
+   - NEVER ASK THE USER FOR A `resource_id` OR `service_id`: End-users speak naturally (e.g. "Add Dr. Shijisha", "she is a staff add her", "Add Deep Cleaning"). Internal technical slugs like `res_...` and `srv_...` are system-managed.
+   - ALWAYS automatically derive IDs yourself from entity names:
+     * For resources: "res_" + sanitized name (e.g., "Dr. Shijisha" -> `res_shijisha`, "Nurse Bob" -> `res_nurse_bob`, "Chair 1" -> `res_chair_1`).
+     * For services: "srv_" + sanitized name (e.g., "Deep Cleaning" -> `srv_deep_cleaning`).
+   - WHEN THE USER SAYS TO ADD A RESOURCE (e.g. "Add Dr. Shijisha", "she is a staff add her", "Add Room 2"):
+     * Choose 'update_schema' IMMEDIATELY.
+     * Generate an 'add' JSON patch appending to `/resources/-` with:
+       {{"resource_id": "res_<sanitized_name>", "resource_type": "staff" (or "room" / "chair" / "bay" / "equipment" if physical), "name": "<Resource Name>", "title": "Specialist", "category": "General", "description": "", "is_bookable": true, "dispatch_status": "active", "custom_shift_overrides": {{}}}}
+     * DO NOT ask the user for `resource_id`, title, or category as a blocker. Add the resource to the canvas first, and let the user refine optional details later if they want.
    - AT LEAST ONE RESOURCE IS MANDATORY: `resources[]` MUST contain at least one bookable resource (a staff member or a physical asset like a room, chair, or bay). If `resources[]` is empty, you CANNOT finalize; you MUST choose 'ask_user' and ask who or what delivers their service.
    - Any IDs in `services[].eligible_resource_ids` must correspond to actual resources in `resources[]`. Always link services to eligible resources.
    - For services, specify `booking_mode`: "time_slot" for services booked at clock hours/minutes (appointments, consultations), or "date_range" for multi-day bookings (rentals, stays). Default: "time_slot".
@@ -601,12 +681,13 @@ CRITICAL: When generating JSON patches, you MUST use ONLY these exact fields:
 - business_profile.brand: primary_color, logo_url
 - services[]: service_id, name, category, description, duration_minutes, buffer_minutes, booking_mode (time_slot|date_range), allocation_model (single_resource|multi_resource|pooled|asset_only), eligible_resource_ids, required_asset_ids, recall_interval_days
 - services[].price: type (fixed|starting_at|hourly|free|custom), amount, currency
-- services[].deposit: required, amount, processor, upi_id, qr_code_url, confirmation_method, payment_instructions
+- services[].deposit: required, amount, processor ("upi_direct"), upi_id, qr_code_url, confirmation_method ("utr_reference"), payment_instructions
 - resources[]: resource_id, resource_type (staff|room|chair|bay|equipment|asset|vehicle), name, title, category, description, is_bookable, dispatch_status (active|on_leave|maintenance|retired|inactive), custom_shift_overrides
 - operating_hours: monday, tuesday, wednesday, thursday, friday, saturday, sunday (each is list of {{start: "HH:MM", end: "HH:MM"}}), blackout_dates (list of {{date: "YYYY-MM-DD", reason, is_closed}})
 - scheduling_engine: allocation_model(date_range or time_slot), default_lead_time_hours, max_advance_booking_days, cancellation_window_hours
 - widget_config: agent_name, avatar_url, initial_greeting, fallback_message, position, launcher_style, sound_on_load, auto_expand_delay_seconds, platform_sources, whitelisted_domains
 - compliance: hipaa_mode, phi_scrubbing, data_retention_policy, zero_hallucination_mode, audit_trail_enabled
+- guardrails.verification_policy: require_otp_for_new_booking, require_otp_for_reschedule, require_otp_for_cancel
 - guardrails.phi_scrubbing: enabled, policy, description, hipaa_compliant
 - guardrails.triage_emergency: enabled, keywords, response_override
 - guardrails.human_handoff: enabled, trigger_topics, reception_contact, handoff_message
@@ -625,8 +706,8 @@ Recent Conversation:
 
 Decide your next action:
 1. 'update_schema': The user requested a configuration change. Generate the JSON patches (e.g. op: replace/add/remove). Only populate fields explicitly mentioned. Do NOT invent missing details.
-2. 'ask_user': A mandatory dependent field is missing (such as payment processor or UPI ID for an active deposit, or emergency contact for active triage), or the schema has a direct logical contradiction, or the user asked a question you must answer.
-3. 'finalize': All user-requested changes are applied AND all dependent mandatory fields are complete. Generate a welcoming confirmation message acknowledging the setup and suggesting 1 or 2 specific advanced features relevant to their industry.
+2. 'ask_user': A mandatory dependent field is missing, or changes were just applied and you are confirming with the user, or the user asked a question.
+3. 'finalize': ONLY choose this if the user EXPLICITLY requested to save, finalize, or deploy the agent (e.g. "save changes", "looks good, save it", "deploy now") AND all mandatory dependent fields are complete. Never finalize on a routine modification without explicit user confirmation.
 """
 
     try:
@@ -635,23 +716,15 @@ Decide your next action:
         print("End streaming", flush=True)
     except Exception as e:
         print(f"[Semantic Agent Error] {e}", flush=True)
-        return {"decision": "finalize", "pending_patches": None, "semantic_note": None}
+        return {"decision": "ask_user", "pending_patches": None, "semantic_note": "I encountered an error processing that update. Would you like to try again?"}
 
-    
     if just_applied_patches and resp.action == "update_schema":
-        print("[Semantic Agent Brain]  Forcing ask_user or finalize.", flush=True)
-        if resp.question:
-            return {
-                "decision": "ask_user",
-                "pending_patches": None,
-                "semantic_note": resp.question,
-            }
-        else:
-            return {
-                "decision": "finalize",
-                "pending_patches": None,
-                "semantic_note": "Configuration updated. What would you like to configure next?",
-            }
+        print("[Semantic Agent Brain] Forcing ask_user after patch application.", flush=True)
+        return {
+            "decision": "ask_user",
+            "pending_patches": None,
+            "semantic_note": resp.question or "I've applied your changes. Would you like to adjust anything else or are you ready to save?",
+        }
 
     if resp.action == "update_schema" and resp.patches:
         print(f"[Semantic Agent Brain] Decided to update schema with {len(resp.patches)} patches.", flush=True)
@@ -667,12 +740,18 @@ Decide your next action:
             "pending_patches": None,
             "semantic_note": resp.question,
         }
-    else:
-        print(f"[Semantic Agent Brain] Finalizing setup.", flush=True)
+    elif resp.action == "finalize":
+        print("[Semantic Agent Brain] Finalizing setup.", flush=True)
         return {
             "decision": "finalize",
             "pending_patches": None,
-            "semantic_note": resp.question or "✅ Your agent configuration is saved and live! What would you like to configure next?",
+            "semantic_note": resp.question or "✅ Your agent configuration has been saved and deployed live!",
+        }
+    else:
+        return {
+            "decision": "ask_user",
+            "pending_patches": None,
+            "semantic_note": resp.question or "Configuration updated. What would you like to configure next?",
         }
 
 
@@ -749,7 +828,7 @@ class StrictDepositSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     required: Optional[bool] = None
     amount: Optional[float] = None
-    processor: Optional[str] = None
+    processor: Optional[Literal["upi_direct"]] = None
     upi_id: Optional[str] = None
     qr_code_url: Optional[str] = None
     confirmation_method: Optional[str] = None
@@ -858,8 +937,15 @@ class StrictHumanHandoffSchema(BaseModel):
     reception_contact: Optional[str] = None
     handoff_message: Optional[str] = None
 
+class StrictVerificationPolicySchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    require_otp_for_new_booking: Optional[bool] = None
+    require_otp_for_reschedule: Optional[bool] = None
+    require_otp_for_cancel: Optional[bool] = None
+
 class StrictGuardrailsSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    verification_policy: Optional[StrictVerificationPolicySchema] = None
     phi_scrubbing: Optional[StrictPhiScrubSchema] = None
     triage_emergency: Optional[StrictTriageEmergencySchema] = None
     human_handoff: Optional[StrictHumanHandoffSchema] = None
@@ -995,8 +1081,8 @@ async def node_finalize_and_save(state: GraphState) -> dict:
 
     await init_db()
 
-    draft     = state["draft"]
-    tenant_id = state["tenant_id"]
+    draft     = state.get("draft") or {}
+    tenant_id = state.get("tenant_id") or draft.get("tenant_id", "")
     agent_id  = draft.get("agent_id") or state.get("agent_id") or f"agent_{tenant_id}_v1"
 
     sync_result: dict = {}
@@ -1053,6 +1139,17 @@ async def node_finalize_and_save(state: GraphState) -> dict:
 
     agent_id = draft.get("agent_id") or state.get("agent_id") or f"agent_{tenant_id}_v1"
 
+    from agent_orchestrator.models import AgentDraft, canonicalize_agent_schema
+    import secrets
+
+    agent_draft = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
+    draft_source = (
+        (agent_draft.creation_source if agent_draft and agent_draft.creation_source else None)
+        or draft.get("creation_source")
+        or draft.get("business_profile", {}).get("vertical")
+        or "custom"
+    )
+
     existing_config = await AgentRuntimeConfig.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
     if not existing_config:
         existing_config = AgentRuntimeConfig(
@@ -1062,6 +1159,7 @@ async def node_finalize_and_save(state: GraphState) -> dict:
 
     existing_config.schema_version = "2.4"
     existing_config.status = "live"
+    existing_config.creation_source = draft_source
     existing_config.compiled_at = datetime.now(timezone.utc)
     existing_config.business_profile = business_profile
     existing_config.operating_hours = operating_hours
@@ -1072,21 +1170,19 @@ async def node_finalize_and_save(state: GraphState) -> dict:
     await existing_config.save()
     config_doc = existing_config
 
-    print(f"[TenantAgent] Saved config for tenant {tenant_id}, agent {agent_id} — id: {config_doc.id}", flush=True)
+    print(f"[TenantAgent] Saved config for tenant {tenant_id}, agent {agent_id} (source: {draft_source}) — id: {config_doc.id}", flush=True)
 
-  
+    canonical_draft = canonicalize_agent_schema(draft, status="live")
+
     try:
-        from agent_orchestrator.models import AgentDraft
-        import secrets
-        agent_draft = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
         if agent_draft:
             agent_draft.add_checkpoint(
                 checkpoint_id=f"cp_{secrets.token_hex(4)}",
                 message_id="finalized",
-                draft_snapshot=draft,
+                draft_snapshot=canonical_draft,
                 summary="Finalized and deployed to live",
             )
-            agent_draft.current_draft = draft
+            agent_draft.current_draft = canonical_draft
             agent_draft.status = "created"
             agent_draft.updated_at = datetime.utcnow()
             await agent_draft.save()
@@ -1096,13 +1192,13 @@ async def node_finalize_and_save(state: GraphState) -> dict:
    
     try:
         from agent_orchestrator.redis_client import set_cached_draft
-        await set_cached_draft(tenant_id, agent_id, draft)
+        await set_cached_draft(tenant_id, agent_id, canonical_draft)
     except Exception as re:
         print(f"[TenantAgent Warning] Failed to update Redis cache on finalize: {re}", flush=True)
 
     return {
         "status":   "draft",
-        "draft":    draft,
+        "draft":    canonical_draft,
     }
 
 
@@ -1132,7 +1228,7 @@ def route_semantic(state: GraphState) -> str:
 
 def build_tenant_onboarding_graph():
     """Compiles and returns the LangGraph StateGraph with MemorySaver checkpoint."""
-    checkpointer = MemorySaver()  # swap for AsyncRedisSaver in production
+    checkpointer = MemorySaver()  
 
     builder = StateGraph(GraphState)
 
@@ -1232,41 +1328,119 @@ async def start_onboarding_session(tenant_id: str, draft: dict, agent_id: str = 
 
 
 async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: str = "") -> dict:
-    """
-    Resumes a paused session with the tenant's answer.
-
-    Args:
-        tenant_id:   Schedulux tenant ID
-        user_answer: Free-text answer to the interrupted question
-        agent_id:    Optional agent ID to resume specific agent thread
-
-    Returns: Same shape as start_onboarding_session.
-    """
     from langgraph.types import Command
+    from langchain_core.messages import HumanMessage
 
     thread_id = f"{tenant_id}:{agent_id}" if agent_id else tenant_id
     config = {"configurable": {"thread_id": thread_id}}
-    async for _ in _graph.astream(Command(resume=user_answer), config=config, stream_mode="values"):
+    snap = await _graph.aget_state(config)
+
+    has_interrupt = False
+    for task in getattr(snap, "tasks", []):
+        if getattr(task, "interrupts", []):
+            has_interrupt = True
+            break
+
+    if has_interrupt:
+        async for _ in _graph.astream(Command(resume=user_answer), config=config, stream_mode="values"):
+            pass
+        return _extract_payload(await _graph.aget_state(config))
+
+   
+    from agent_orchestrator.redis_client import get_cached_draft
+    draft = await get_cached_draft(tenant_id, agent_id)
+    if not draft and agent_id:
+        try:
+            from agent_orchestrator.models import AgentDraft, AgentRuntimeConfig
+            ad = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
+            if ad and ad.current_draft:
+                draft = ad.current_draft
+            else:
+                cfg = await AgentRuntimeConfig.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
+                if cfg:
+                    draft = {
+                        "tenant_id": tenant_id,
+                        "agent_id": agent_id,
+                        "business_profile": cfg.business_profile.model_dump() if cfg.business_profile else {},
+                        "operating_hours": cfg.operating_hours.model_dump() if cfg.operating_hours else {},
+                        "scheduling_engine": cfg.scheduling_engine.model_dump() if cfg.scheduling_engine else {},
+                        "services": [s.model_dump() for s in cfg.services] if cfg.services else [],
+                        "resources": [r.model_dump() for r in cfg.resources] if cfg.resources else [],
+                        "supervisor_prompt": cfg.supervisor_prompt,
+                    }
+        except Exception:
+            pass
+
+    if not draft:
+        draft = {"tenant_id": tenant_id, "agent_id": agent_id}
+
+    target_agent_id = agent_id or draft.get("agent_id") or f"agent_{tenant_id}_v1"
+
+    recent_history = []
+    if target_agent_id:
+        try:
+            from agent_orchestrator.models import AgentDraft, AgentMessage
+            from agent_orchestrator.config import MEMORY_WINDOW_LIMIT
+
+            agent_draft_doc = await AgentDraft.find_one(
+                {"tenant_id": tenant_id, "agent_id": target_agent_id}
+            )
+            last_summarized = agent_draft_doc.last_summarized_seq if agent_draft_doc else 0
+
+         
+            all_db_msgs = await AgentMessage.find(
+                {"tenant_id": tenant_id, "agent_id": target_agent_id}
+            ).sort("created_at").to_list()
+
+            active_msgs = all_db_msgs[last_summarized:]
+
+        
+            if len(active_msgs) > MEMORY_WINDOW_LIMIT:
+                active_msgs = active_msgs[-MEMORY_WINDOW_LIMIT:]
+
+            for m in active_msgs:
+                if m.role in ("tenant", "user"):
+                    recent_history.append(HumanMessage(content=m.content))
+                else:
+                    recent_history.append(AIMessage(content=m.content))
+        except Exception as rhe:
+            print(f"[TenantAgent Warning] Could not rehydrate recent history: {rhe}", flush=True)
+
+    recent_history.append(HumanMessage(content=f"User: {user_answer}"))
+
+    initial: GraphState = {
+        "tenant_id":       tenant_id,
+        "agent_id":        target_agent_id,
+        "draft":           draft,
+        "messages":        recent_history,
+        "structural_gaps": [],
+        "pending_field":   None,
+        "semantic_note":   f"User requested change: {user_answer}",
+        "decision":        None,
+        "pending_patches": None,
+        "status":          "onboarding",
+    }
+    async for _ in _graph.astream(initial, config=config, stream_mode="values"):
         pass
 
     return _extract_payload(await _graph.aget_state(config))
 
 
 async def get_current_draft(tenant_id: str, agent_id: str = "") -> dict:
-    """Returns the current in-progress draft dict for a tenant agent, checking LangGraph state then Redis."""
-    thread_id = f"{tenant_id}:{agent_id}" if agent_id else tenant_id
-    config = {"configurable": {"thread_id": thread_id}}
-    snap = await _graph.aget_state(config)
-    draft = getattr(snap, "values", {}).get("draft", {})
-    if not draft and agent_id:
+    if agent_id:
         try:
             from agent_orchestrator.redis_client import get_cached_draft
             cached = await get_cached_draft(tenant_id, agent_id)
             if cached:
-                return cached
+                from agent_orchestrator.models import canonicalize_agent_schema
+                return canonicalize_agent_schema(cached, status="draft")
         except Exception:
             pass
-    return draft
+
+    return {}
+
+    
+
 
 
 def _extract_payload(snapshot) -> dict:

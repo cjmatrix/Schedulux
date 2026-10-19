@@ -60,12 +60,20 @@ export interface ListServicesRequest {
     limit: number;
     category: string;
     agent_id?: string | undefined;
+    search?: string | undefined;
+}
+export interface ServiceSummaryInfo {
+    total_count: number;
+    avg_price: number;
+    deposit_count: number;
+    categories: string[];
 }
 export interface ListServicesResponse {
     services: ServiceInfo[];
     total: number;
     page: number;
     limit: number;
+    summary?: ServiceSummaryInfo | undefined;
 }
 export interface UpdateServiceRequest {
     tenant_id: string;
@@ -135,12 +143,21 @@ export interface ListResourcesRequest {
     resource_type: string;
     dispatch_status: string;
     agent_id?: string | undefined;
+    search?: string | undefined;
+    category?: string | undefined;
+}
+export interface ResourceSummaryInfo {
+    total_count: number;
+    active_count: number;
+    staff_count: number;
+    physical_count: number;
 }
 export interface ListResourcesResponse {
     resources: ResourceInfo[];
     total: number;
     page: number;
     limit: number;
+    summary?: ResourceSummaryInfo | undefined;
 }
 export interface UpdateResourceRequest {
     tenant_id: string;

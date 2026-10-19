@@ -13,9 +13,6 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 import { Injectable, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { nanoid } from 'nanoid';
-const ACCESS_TOKEN_EXPIRY = '15m';
-const REFRESH_TOKEN_EXPIRY = '7d';
-const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days in seconds
 let SuperAdminService = class SuperAdminService {
     superAdminRepo;
     cacheRepo;
@@ -25,6 +22,9 @@ let SuperAdminService = class SuperAdminService {
     configService;
     jwtSecret;
     jwtRefreshSecret;
+    accessTokenExpiry;
+    refreshTokenExpiry;
+    refreshTokenTtlSeconds;
     constructor(superAdminRepo, cacheRepo, tenantRepo, passwordHasher, jwtService, configService) {
         this.superAdminRepo = superAdminRepo;
         this.cacheRepo = cacheRepo;
@@ -38,6 +38,9 @@ let SuperAdminService = class SuperAdminService {
             (globalSecret ? `${globalSecret}_superadmin` : 'superadmin_access_secret_2025');
         this.jwtRefreshSecret = this.configService.get('SUPERADMIN_JWT_REFRESH_SECRET') ||
             (globalRefreshSecret ? `${globalRefreshSecret}_superadmin` : 'superadmin_refresh_secret_2025');
+        this.accessTokenExpiry = (this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m');
+        this.refreshTokenExpiry = (this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d');
+        this.refreshTokenTtlSeconds = parseInt(this.configService.get('REFRESH_TOKEN_TTL_SECONDS') || '', 10) || 7 * 24 * 60 * 60;
     }
     async login(email, password) {
         const admin = await this.superAdminRepo.findByEmail(email.toLowerCase().trim());
@@ -55,13 +58,13 @@ let SuperAdminService = class SuperAdminService {
             email: admin.email,
             name: admin.name,
             role: admin.role,
-        }, this.jwtSecret, { expiresIn: ACCESS_TOKEN_EXPIRY });
+        }, this.jwtSecret, { expiresIn: this.accessTokenExpiry });
         const refreshToken = this.jwtService.sign({
             super_admin_id: adminId,
             token_id: tokenId,
             role: admin.role,
-        }, this.jwtRefreshSecret, { expiresIn: REFRESH_TOKEN_EXPIRY });
-        await this.cacheRepo.set(`superadmin_refresh_token:${adminId}:${tokenId}`, refreshToken, { EX: REFRESH_TOKEN_TTL_SECONDS });
+        }, this.jwtRefreshSecret, { expiresIn: this.refreshTokenExpiry });
+        await this.cacheRepo.set(`superadmin_refresh_token:${adminId}:${tokenId}`, refreshToken, { EX: this.refreshTokenTtlSeconds });
         return {
             accessToken,
             refreshToken,
@@ -105,13 +108,13 @@ let SuperAdminService = class SuperAdminService {
             email: admin.email,
             name: admin.name,
             role: admin.role,
-        }, this.jwtSecret, { expiresIn: ACCESS_TOKEN_EXPIRY });
+        }, this.jwtSecret, { expiresIn: this.accessTokenExpiry });
         const newRefreshToken = this.jwtService.sign({
             super_admin_id: adminId,
             token_id: nextTokenId,
             role: admin.role,
-        }, this.jwtRefreshSecret, { expiresIn: REFRESH_TOKEN_EXPIRY });
-        await this.cacheRepo.set(`superadmin_refresh_token:${adminId}:${nextTokenId}`, newRefreshToken, { EX: REFRESH_TOKEN_TTL_SECONDS });
+        }, this.jwtRefreshSecret, { expiresIn: this.refreshTokenExpiry });
+        await this.cacheRepo.set(`superadmin_refresh_token:${adminId}:${nextTokenId}`, newRefreshToken, { EX: this.refreshTokenTtlSeconds });
         return {
             accessToken: newAccessToken,
             refreshToken: newRefreshToken,

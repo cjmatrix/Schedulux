@@ -7,15 +7,16 @@ import { ListTenantsRequest } from "@repo/proto/tenant";
 import { ITenantRepository } from '../interfaces/ITenantRepository.js';
 import { IPasswordHasher } from '../interfaces/IPasswordHasher.js';
 import { IJwtService } from '../interfaces/IJwtService.js';
-
-const ACCESS_TOKEN_EXPIRY = '15m';
-const REFRESH_TOKEN_EXPIRY = '7d';
-const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days in seconds
+import type { SignOptions } from 'jsonwebtoken';
+import { ISuperAdminService } from '../interfaces/ISuperAdminService.js';
 
 @Injectable()
-export class SuperAdminService {
+export class SuperAdminService implements ISuperAdminService {
   private readonly jwtSecret: string;
   private readonly jwtRefreshSecret: string;
+  private readonly accessTokenExpiry: SignOptions['expiresIn'];
+  private readonly refreshTokenExpiry: SignOptions['expiresIn'];
+  private readonly refreshTokenTtlSeconds: number;
 
   constructor(
     @Inject('ISuperAdminRepository') private superAdminRepo: ISuperAdminRepository,
@@ -25,6 +26,7 @@ export class SuperAdminService {
     @Inject('IJwtService') private jwtService: IJwtService,
     @Inject(ConfigService) private configService: ConfigService
   ) {
+    
     const globalSecret = this.configService.get<string>('JWT_SECRET');
     const globalRefreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
 
@@ -33,6 +35,10 @@ export class SuperAdminService {
 
     this.jwtRefreshSecret = this.configService.get<string>('SUPERADMIN_JWT_REFRESH_SECRET') ||
       (globalRefreshSecret ? `${globalRefreshSecret}_superadmin` : 'superadmin_refresh_secret_2025');
+
+    this.accessTokenExpiry = (this.configService.get<string>('ACCESS_TOKEN_EXPIRY') || '15m') as SignOptions['expiresIn'];
+    this.refreshTokenExpiry = (this.configService.get<string>('REFRESH_TOKEN_EXPIRY') || '7d') as SignOptions['expiresIn'];
+    this.refreshTokenTtlSeconds = parseInt(this.configService.get<string>('REFRESH_TOKEN_TTL_SECONDS') || '', 10) || 7 * 24 * 60 * 60;
   }
 
   async login(email: string, password: string) {
@@ -58,7 +64,7 @@ export class SuperAdminService {
         role: admin.role,
       },
       this.jwtSecret,
-      { expiresIn: ACCESS_TOKEN_EXPIRY }
+      { expiresIn: this.accessTokenExpiry }
     );
 
   
@@ -69,14 +75,14 @@ export class SuperAdminService {
         role: admin.role,
       },
       this.jwtRefreshSecret,
-      { expiresIn: REFRESH_TOKEN_EXPIRY }
+      { expiresIn: this.refreshTokenExpiry }
     );
 
  
     await this.cacheRepo.set(
       `superadmin_refresh_token:${adminId}:${tokenId}`,
       refreshToken,
-      { EX: REFRESH_TOKEN_TTL_SECONDS }
+      { EX: this.refreshTokenTtlSeconds }
     );
 
     return {
@@ -137,7 +143,7 @@ export class SuperAdminService {
         role: admin.role,
       },
       this.jwtSecret,
-      { expiresIn: ACCESS_TOKEN_EXPIRY }
+      { expiresIn: this.accessTokenExpiry }
     );
 
     const newRefreshToken = this.jwtService.sign(
@@ -147,13 +153,13 @@ export class SuperAdminService {
         role: admin.role,
       },
       this.jwtRefreshSecret,
-      { expiresIn: REFRESH_TOKEN_EXPIRY }
+      { expiresIn: this.refreshTokenExpiry }
     );
 
     await this.cacheRepo.set(
       `superadmin_refresh_token:${adminId}:${nextTokenId}`,
       newRefreshToken,
-      { EX: REFRESH_TOKEN_TTL_SECONDS }
+      { EX: this.refreshTokenTtlSeconds }
     );
 
     return {

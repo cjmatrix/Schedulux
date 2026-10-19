@@ -8,11 +8,14 @@ import {
   DeleteServiceRequest,
 } from '@repo/proto/scheduling';
 
+import { ServiceSummary } from '../../domain/repositories/service.repository.interface.js';
+
 export interface ListServicesOutput {
   services: ServiceEntity[];
   total: number;
   page: number;
   limit: number;
+  summary?: ServiceSummary;
 }
 
 export interface ICreateServiceUseCase extends IUseCase<CreateServiceRequest, ServiceEntity> {}

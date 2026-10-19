@@ -20,6 +20,7 @@ function KnowledgeServiceControllerMethods() {
             "resumeOnboardingSession",
             "saveInitialAgentDraft",
             "listTenantAgents",
+            "getAgentMessages",
         ];
         for (const method of grpcMethods) {
             const descriptor = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

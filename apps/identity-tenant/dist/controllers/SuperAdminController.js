@@ -12,7 +12,6 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 import { Controller, UseFilters, Inject } from "@nestjs/common";
 import { GrpcMethod } from "@nestjs/microservices";
-import { SuperAdminService } from "../services/superAdminService.js";
 import { AllExceptionsFilter } from "./rpcExpetionFilter.js";
 import { SuperAdminProto } from "@repo/proto";
 let SuperAdminAuthController = class SuperAdminAuthController {
@@ -118,7 +117,7 @@ __decorate([
 SuperAdminAuthController = __decorate([
     Controller(),
     UseFilters(new AllExceptionsFilter()),
-    __param(0, Inject(SuperAdminService)),
-    __metadata("design:paramtypes", [SuperAdminService])
+    __param(0, Inject('ISuperAdminService')),
+    __metadata("design:paramtypes", [Object])
 ], SuperAdminAuthController);
 export { SuperAdminAuthController };

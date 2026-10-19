@@ -36,7 +36,7 @@ export class UpdateResourceUseCase implements IUpdateResourceUseCase {
       throw new NotFoundException(`Failed to update resource ${dto.resource_id}`);
     }
 
-    // CQRS: fire-and-forget event for AI-orchestration consumer
+    
     await this.eventsProducer.emitResourceUpdated(updated);
 
     return updated;

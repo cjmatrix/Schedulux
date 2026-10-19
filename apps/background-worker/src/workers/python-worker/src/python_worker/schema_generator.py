@@ -76,10 +76,10 @@ async def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) ->
                     "deposit": {
                         "required": False,
                         "amount": 0.0,
-                        "processor": "",
+                        "processor": "upi_direct",
                         "upi_id": "",
                         "qr_code_url": "",
-                        "confirmation_method": "automatic",
+                        "confirmation_method": "utr_reference",
                         "payment_instructions": ""
                     },
                     "eligible_resource_ids": ["res_staff_default"],
@@ -154,7 +154,7 @@ CRITICAL DOMAIN INSTRUCTIONS:
      * "booking_mode": "time_slot" or "date_range"
      * "allocation_model": "single_resource", "multi_resource", "pooled", or "asset_only"
      * "price": {{"type": "fixed"|"starting_at"|"hourly"|"free"|"custom", "amount": float, "currency": "USD"}}
-     * "deposit": {{"required": bool, "amount": float, "processor": str, "upi_id": str, "qr_code_url": str, "confirmation_method": str, "payment_instructions": str}}
+     * "deposit": {{"required": bool, "amount": float, "processor": "upi_direct", "upi_id": str, "qr_code_url": str, "confirmation_method": "utr_reference", "payment_instructions": str}} (Schedulux only supports direct UPI deposits via upi_id or qr_code_url)
      * "eligible_resource_ids": list of resource_id strings that can perform this service
      * "required_asset_ids": list of asset resource_id strings required
      * "recall_interval_days": days until next recall/follow-up (default 0)

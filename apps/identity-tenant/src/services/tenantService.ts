@@ -3,23 +3,23 @@ import { ConfigService } from '@nestjs/config';
 import crypto from 'crypto';
 import { nanoid } from 'nanoid';
 import { OAuth2Client } from 'google-auth-library';
+import type { SignOptions } from 'jsonwebtoken';
 import { ITenantRepository } from '../interfaces/ITenantRepository.js';
 import { IDashboardUserRepository } from '../interfaces/IDashboardUserRepository.js';
 import { ICacheRepository } from '../interfaces/ICacheRepository.js';
 import { IEmailProducer } from '../interfaces/IEmailProducer.js';
 import { IPasswordHasher } from '../interfaces/IPasswordHasher.js';
 import { IJwtService } from '../interfaces/IJwtService.js';
-
-
-const ACCESS_TOKEN_EXPIRY = '15m';
-const REFRESH_TOKEN_EXPIRY = '7d';
-const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+import { ITenantService } from '../interfaces/ITenantService.js';
 
 @Injectable()
-export class TenantService {
+export class TenantService implements ITenantService {
   private readonly jwtSecret: string;
   private readonly jwtRefreshSecret: string;
   private readonly googleClient: OAuth2Client;
+  private readonly accessTokenExpiry: SignOptions['expiresIn'];
+  private readonly refreshTokenExpiry: SignOptions['expiresIn'];
+  private readonly refreshTokenTtlSeconds: number;
 
   constructor(
     @Inject('ITenantRepository') private tenantRepo: ITenantRepository,
@@ -33,6 +33,9 @@ export class TenantService {
     this.jwtSecret = this.configService.get<string>('JWT_SECRET') || 'dev-secret-change-in-prod';
     this.jwtRefreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET') || this.jwtSecret;
     this.googleClient = new OAuth2Client(this.configService.get<string>('GOOGLE_CLIENT_ID'));
+    this.accessTokenExpiry = (this.configService.get<string>('ACCESS_TOKEN_EXPIRY') || '15m') as SignOptions['expiresIn'];
+    this.refreshTokenExpiry = (this.configService.get<string>('REFRESH_TOKEN_EXPIRY') || '7d') as SignOptions['expiresIn'];
+    this.refreshTokenTtlSeconds = parseInt(this.configService.get<string>('REFRESH_TOKEN_TTL_SECONDS') || '', 10) || 7 * 24 * 60 * 60;
   }
 
   async register(data: {
@@ -132,7 +135,7 @@ export class TenantService {
         role: 'tenant_owner'
       },
       this.jwtSecret,
-      { expiresIn: ACCESS_TOKEN_EXPIRY }
+      { expiresIn: this.accessTokenExpiry }
     );
 
     const tokenId = nanoid(16);
@@ -142,13 +145,13 @@ export class TenantService {
         token_id: tokenId
       },
       this.jwtRefreshSecret,
-      { expiresIn: REFRESH_TOKEN_EXPIRY }
+      { expiresIn: this.refreshTokenExpiry }
     );
 
     await this.cacheRepo.set(
       `tenant_refresh_token:${tenant._id}:${tokenId}`,
       refreshToken,
-      { EX: REFRESH_TOKEN_TTL_SECONDS }
+      { EX: this.refreshTokenTtlSeconds }
     );
 
     return {
@@ -221,7 +224,7 @@ export class TenantService {
         role: 'tenant_owner',
       },
       this.jwtSecret,
-      { expiresIn: ACCESS_TOKEN_EXPIRY }
+      { expiresIn: this.accessTokenExpiry }
     );
 
     const tokenId = nanoid(16);
@@ -231,13 +234,13 @@ export class TenantService {
         token_id: tokenId,
       },
       this.jwtRefreshSecret,
-      { expiresIn: REFRESH_TOKEN_EXPIRY }
+      { expiresIn: this.refreshTokenExpiry }
     );
 
     await this.cacheRepo.set(
       `tenant_refresh_token:${tenant._id}:${tokenId}`,
       refreshToken,
-      { EX: REFRESH_TOKEN_TTL_SECONDS }
+      { EX: this.refreshTokenTtlSeconds }
     );
 
     return {
@@ -312,7 +315,7 @@ export class TenantService {
         role: 'tenant_owner'
       },
       this.jwtSecret,
-      { expiresIn: ACCESS_TOKEN_EXPIRY }
+      { expiresIn: this.accessTokenExpiry }
     );
 
     const newTokenId = nanoid(16);
@@ -322,13 +325,13 @@ export class TenantService {
         token_id: newTokenId
       },
       this.jwtRefreshSecret,
-      { expiresIn: REFRESH_TOKEN_EXPIRY }
+      { expiresIn: this.refreshTokenExpiry }
     );
  
     await this.cacheRepo.set(
       `tenant_refresh_token:${tenant._id}:${newTokenId}`,
       newRefreshToken,
-      { EX: REFRESH_TOKEN_TTL_SECONDS }
+      { EX: this.refreshTokenTtlSeconds }
     );
 
     return {

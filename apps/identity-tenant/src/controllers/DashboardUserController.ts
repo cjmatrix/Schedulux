@@ -1,7 +1,7 @@
 import { Controller, UseFilters, Inject } from "@nestjs/common";
 import { GrpcMethod } from "@nestjs/microservices";
-import { DashboardUserService } from "../services/dashboardUserService.js";
-import { TenantService } from "../services/tenantService.js";
+import type { IDashboardUserService } from "../interfaces/IDashboardUserService.js";
+import type { ITenantService } from "../interfaces/ITenantService.js";
 import { AllExceptionsFilter } from "./rpcExpetionFilter.js";
 import {
   DashboardUserLoginRequest,
@@ -24,8 +24,8 @@ import {
 @UseFilters(new AllExceptionsFilter())
 export class DashboardUserController {
   constructor(
-    @Inject(DashboardUserService) private readonly dashboardUserService: DashboardUserService,
-    @Inject(TenantService) private readonly tenantService: TenantService,
+    @Inject('IDashboardUserService') private readonly dashboardUserService: IDashboardUserService,
+    @Inject('ITenantService') private readonly tenantService: ITenantService,
   ) {}
 
   @GrpcMethod("DashboardAuthService", "Login")

@@ -34,7 +34,9 @@ export const ListResourcesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   resource_type: z.string().optional(),
   dispatch_status: z.string().optional(),
+  category: z.string().optional(),
   agent_id: z.string().optional(),
+  search: z.string().optional(),
 });
 
 export class ListResourcesQueryDto extends createZodDto(ListResourcesQuerySchema) {}

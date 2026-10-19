@@ -59,6 +59,8 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
   const [description, setDescription] = useState('');
   const [requireDeposit, setRequireDeposit] = useState(false);
   const [depositAmount, setDepositAmount] = useState<number>(50);
+  const [upiId, setUpiId] = useState('');
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [durationMinutes, setDurationMinutes] = useState<number>(60);
   const [bufferMinutes, setBufferMinutes] = useState<number>(20);
   const [recallIntervalDays, setRecallIntervalDays] = useState<number>(0);
@@ -96,6 +98,8 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
       setDescription(s.description || '');
       setRequireDeposit(s.deposit?.required ?? false);
       setDepositAmount(s.deposit?.amount ?? 0);
+      setUpiId(s.deposit?.upi_id || '');
+      setQrCodeUrl(s.deposit?.qr_code_url || '');
       setDurationMinutes(s.duration_minutes || 30);
       setBufferMinutes(s.buffer_minutes ?? 0);
       setRecallIntervalDays(s.recall_interval_days ?? 0);
@@ -171,8 +175,10 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
       deposit: {
         required: requireDeposit,
         amount: requireDeposit ? Number(depositAmount) || 0 : 0,
-        processor: 'platform_managed',
-        confirmation_method: 'automatic',
+        processor: 'upi_direct',
+        upi_id: upiId.trim(),
+        qr_code_url: qrCodeUrl.trim(),
+        confirmation_method: 'utr_reference',
       },
       eligible_resource_ids: eligibleResourceIds,
       required_asset_ids: requiredAssetIds,
@@ -409,9 +415,9 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
         </div>
 
         <form onSubmit={handleSave} className="flex flex-col gap-6">
-          {/* ========================================================= */}
+          
           {/* MODULE 01: General Details */}
-          {/* ========================================================= */}
+          
           <div className="bg-white rounded-3xl p-7 lg:p-8 border border-slate-200/80 shadow-2xs flex flex-col gap-6">
             <div className="flex items-start justify-between">
               <div>
@@ -509,29 +515,59 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
               </label>
 
               {requireDeposit && (
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xs font-semibold text-slate-500">Hold Amount:</span>
-                  <div className="relative w-32">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
-                      $
-                    </span>
+                <div className="flex flex-col gap-3 pt-2 border-t border-slate-100">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-500">Hold Amount:</span>
+                      <div className="relative w-28">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                          $
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={depositAmount}
+                          onChange={(e) => setDepositAmount(parseFloat(e.target.value) || 0)}
+                          className="w-full pl-7 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 transition"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                      <span className="text-xs font-semibold text-slate-500">UPI ID:</span>
+                      <input
+                        type="text"
+                        placeholder="e.g. clinic@okhdfcbank"
+                        value={upiId}
+                        onChange={(e) => setUpiId(e.target.value)}
+                        className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 transition"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-500">QR Code URL (optional):</span>
                     <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={depositAmount}
-                      onChange={(e) => setDepositAmount(parseFloat(e.target.value) || 0)}
-                      className="w-full pl-7 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 transition"
+                      type="url"
+                      placeholder="https://cdn.example.com/upi_qr.png"
+                      value={qrCodeUrl}
+                      onChange={(e) => setQrCodeUrl(e.target.value)}
+                      className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 transition"
                     />
                   </div>
+
+                  <p className="text-[11px] text-slate-400">
+                    Direct UPI Payments: Patients pay via UPI ID or QR code and provide a UTR reference number. Money goes directly to the tenant with zero platform fee.
+                  </p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* ========================================================= */}
+          
           {/* MODULE 02: Duration & Rules */}
-          {/* ========================================================= */}
+        
           <div className="bg-white rounded-3xl p-7 lg:p-8 border border-slate-200/80 shadow-2xs flex flex-col gap-6">
             <div className="flex items-start justify-between">
               <div>
@@ -686,9 +722,9 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
             </div>
           </div>
 
-          {/* ========================================================= */}
+         
           {/* MODULE 03: Required Resources */}
-          {/* ========================================================= */}
+      
           <div className="bg-white rounded-3xl p-7 lg:p-8 border border-slate-200/80 shadow-2xs flex flex-col gap-6">
             <div className="flex items-start justify-between">
               <div>

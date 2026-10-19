@@ -9,6 +9,7 @@ service KnowledgeService {
   rpc ResumeOnboardingSession (ResumeOnboardingRequest) returns (OnboardingResponse);
   rpc SaveInitialAgentDraft (SaveInitialAgentDraftRequest) returns (SaveInitialAgentDraftResponse);
   rpc ListTenantAgents (ListTenantAgentsRequest) returns (ListTenantAgentsResponse);
+  rpc GetAgentMessages (GetAgentMessagesRequest) returns (GetAgentMessagesResponse);
 }
 
 message CrawlSiteRequest {
@@ -59,6 +60,7 @@ message OnboardingResponse {
   string field = 3;
   string type = 4;
   string draft_schema_json = 5;
+  string live_schema_json = 6;
 }
 
 message SaveInitialAgentDraftRequest {
@@ -90,4 +92,26 @@ message AgentSummaryInfo {
 
 message ListTenantAgentsResponse {
   repeated AgentSummaryInfo agents = 1;
+}
+
+message ChatMessageInfo {
+  string id = 1;
+  string tenant_id = 2;
+  string agent_id = 3;
+  string role = 4; // "agent" or "tenant"
+  string content = 5;
+  string created_at = 6;
+}
+
+message GetAgentMessagesRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+  int32 limit = 3;
+  optional string before = 4;
+}
+
+message GetAgentMessagesResponse {
+  repeated ChatMessageInfo messages = 1;
+  optional string next_cursor = 2;
+  bool has_more = 3;
 }

@@ -1,262 +1,489 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router';
+import { compare, type Operation } from 'fast-json-patch';
+import { useQuery } from '@tanstack/react-query';
+import { io } from 'socket.io-client';
+
 import { axiosClient } from '../api/axiosClient';
-import { Send, Bot, User, CheckCircle, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 
-// Type definitions
-interface Message {
-  id: string;
-  role: 'agent' | 'tenant';
-  text: string;
-}
+import type { Message, RightViewMode, CanvasModule } from './onboarding/types';
+import { cleanForDiff, getOperatingScheduleGroups } from './onboarding/utils';
+import {
+  WizardHeader,
+  WizardChatColumn,
+  CanvasHeader,
+  CanvasFilterTabs,
+  BusinessProfileCard,
+  ServicesCatalogCard,
+  ResourcesRosterCard,
+  SecurityGuardrailsCard,
+  SandboxSimulation,
+  RawJsonViewer,
+} from './onboarding/components';
 
 export default function AgentOnboardingWizard() {
   const { id: agentId } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [pendingMessages, setPendingMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [draftSchema, setDraftSchema] = useState<any>({});
-  const [status, setStatus] = useState<'idle' | 'loading' | 'awaiting_input' | 'processing' | 'complete'>('idle');
-  
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  
+  const [baselineSchema, setBaselineSchema] = useState<any>(null);
+  const [showDiffDrawer, setShowDiffDrawer] = useState(false);
+  const [isSavingChanges, setIsSavingChanges] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'loading' | 'awaiting_input' | 'processing'>('idle');
+  const [isLive, setIsLive] = useState(false);
+
+  const [rightViewMode, setRightViewMode] = useState<RightViewMode>('rules');
+  const [canvasModule, setCanvasModule] = useState<CanvasModule>('all');
+  const [copiedJson, setCopiedJson] = useState(false);
+
+  const [sandboxMessages, setSandboxMessages] = useState<Array<{ role: 'user' | 'agent'; text: string }>>([]);
+  const [sandboxInput, setSandboxInput] = useState('');
+  const [isSandboxTyping, setIsSandboxTyping] = useState(false);
+
+  const hasStartedRef = useRef(false);
+  const lastAgentIdRef = useRef<string | null>(null);
+
   const tenantId = useAuthStore((state) => state.user?.tenant_id);
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+
+  const diffPatches: Operation[] = useMemo(() => {
+    if (!baselineSchema || !draftSchema) return [];
+    try {
+      const cleanedBaseline = cleanForDiff(baselineSchema) || {};
+      const cleanedDraft = cleanForDiff(draftSchema) || {};
+      return compare(cleanedBaseline, cleanedDraft);
+    } catch (err) {
+      console.error('Error computing schema diffs:', err);
+      return [];
+    }
+  }, [baselineSchema, draftSchema]);
+
+  const isDirty = diffPatches.length > 0;
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (!tenantId) return;
+
+    const socketUrl = import.meta.env.VITE_WS_URL || window.location.origin;
+    const socket = io(socketUrl, {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
+    });
+
+    socket.on('connect', () => {
+      socket.emit('joinRoom', { tenantId });
+    });
+
+    socket.on('schema:updated', (payload: any) => {
+      if (payload?.tenantId === tenantId && payload?.schema) {
+        setDraftSchema(payload.schema);
+        if (payload.status === 'live' || payload.schema.status === 'live') {
+          setIsLive(true);
+          setBaselineSchema(payload.schema);
+        }
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [tenantId]);
+
+  const { data: dbMessages = [] } = useQuery<Message[]>({
+    queryKey: ['agent-messages', tenantId, agentId],
+    queryFn: async () => {
+      if (!tenantId || !agentId) return [];
+      const res = await axiosClient.get(`/api/v1/tenant/knowledge/agents/${agentId}/messages`, {
+        params: { limit: 50 },
+      });
+      const msgs = res.data.data?.messages || [];
+      return msgs.map((m: any) => ({
+        id: m.message_id || m.id,
+        role: m.role === 'tenant' ? 'tenant' : 'agent',
+        text: m.content || m.text,
+      }));
+    },
+    enabled: !!tenantId && !!agentId,
+    refetchInterval: 2000,
+  });
+
+  const allMessages = useMemo(() => {
+    const dbTexts = new Set(dbMessages.map((m) => m.text.trim()));
+    const uniquePending = pendingMessages.filter((pm) => !dbTexts.has(pm.text.trim()));
+    return [...dbMessages, ...uniquePending];
+  }, [dbMessages, pendingMessages]);
 
   useEffect(() => {
+    if (!tenantId || !agentId) return;
+    if (hasStartedRef.current) return;
+    hasStartedRef.current = true;
+
     const startSession = async () => {
-      if (!tenantId || !agentId) return;
       setStatus('loading');
       try {
         const res = await axiosClient.post('/api/v1/tenant/knowledge/onboarding/start', {
           tenant_id: tenantId,
           agent_id: agentId,
         });
-        
+
         const data = res.data.data;
         setDraftSchema(data.draft_schema);
-        
-        if (data.status === 'complete') {
-          setStatus('complete');
-          setMessages([{ id: '1', role: 'agent', text: '✅ Configuration is already complete and live!' }]);
-        } else {
-          setStatus('awaiting_input');
-          if (data.question) {
-            setMessages([{ id: Date.now().toString(), role: 'agent', text: data.question }]);
-          }
+        setBaselineSchema(data.draft_schema);
+
+        const isCompleted =
+          data.status === 'complete' ||
+          data.draft_schema?.status === 'complete' ||
+          data.draft_schema?.status === 'created';
+
+        if (isCompleted) {
+          setIsLive(true);
         }
-      } catch (error) {
-        console.error('Failed to start session', error);
-        setMessages([{ id: 'err', role: 'agent', text: 'Sorry, I encountered an error starting the session.' }]);
+
         setStatus('awaiting_input');
+      } catch (err) {
+        console.error('Failed to start session:', err);
+        setStatus('idle');
       }
     };
 
-    if (status === 'idle' && tenantId) {
-      startSession();
-    }
-  }, [tenantId, status]);
+    startSession();
+  }, [tenantId, agentId]);
 
-  const handleSendMessage = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!inputValue.trim() || status !== 'awaiting_input') return;
+  const handleSendMessage = async (textToSend?: string) => {
+    const userMsg = (textToSend ?? inputValue).trim();
+    if (!userMsg || status === 'processing' || status === 'loading') return;
 
-    const userMsg = inputValue.trim();
     setInputValue('');
-    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'tenant', text: userMsg }]);
+    const userMsgId = 'user-' + Date.now();
+    setPendingMessages((prev) => [...prev, { id: userMsgId, role: 'tenant', text: userMsg }]);
     setStatus('processing');
 
     try {
       const res = await axiosClient.post('/api/v1/tenant/knowledge/onboarding/message', {
         tenant_id: tenantId,
         agent_id: agentId,
-        user_answer: userMsg
+        user_answer: userMsg,
       });
-      
+
       const data = res.data.data;
       setDraftSchema(data.draft_schema);
-      
-      if (data.status === 'complete') {
-        setStatus('complete');
-        setMessages(prev => [...prev, { 
-          id: Date.now().toString(), 
-          role: 'agent', 
-          text: '✅ Amazing! Your agent configuration is complete and saved to the database. You are ready to go live!' 
-        }]);
-      } else {
-        setStatus('awaiting_input');
-        if (data.question) {
-          setMessages(prev => [...prev, { id: Date.now().toString(), role: 'agent', text: data.question }]);
-        }
+
+      const isCompleted =
+        data.status === 'complete' ||
+        data.draft_schema?.status === 'complete' ||
+        data.draft_schema?.status === 'created';
+
+      if (isCompleted) {
+        setIsLive(true);
+        setBaselineSchema(data.draft_schema);
       }
-    } catch (error) {
-      console.error('Failed to send message', error);
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'agent', text: 'Error connecting to the agent. Please try again.' }]);
+
       setStatus('awaiting_input');
+
+      const agentMsgId = 'agent-' + Date.now();
+      if (data.status === 'complete') {
+        setPendingMessages((prev) => [
+          ...prev,
+          {
+            id: agentMsgId,
+            role: 'agent',
+            text:
+              data.question ||
+              'Your agent configuration is complete and saved to the database. You are ready to go live!',
+          },
+        ]);
+      } else if (data.question) {
+        setPendingMessages((prev) => [
+          ...prev,
+          {
+            id: agentMsgId,
+            role: 'agent',
+            text: data.question,
+          },
+        ]);
+      }
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      setStatus('awaiting_input');
+      setPendingMessages((prev) => [
+        ...prev,
+        {
+          id: 'err-' + Date.now(),
+          role: 'agent',
+          text: 'Encountered an issue compiling changes to the draft canvas. Please rephrase or try again.',
+        },
+      ]);
     }
   };
 
+  const handleFormSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    handleSendMessage();
+  };
+
+  const handleSaveChanges = async () => {
+    if (!tenantId || !agentId || isSavingChanges) return;
+    setIsSavingChanges(true);
+
+    try {
+      await axiosClient.post('/api/v1/tenant/knowledge/onboarding/message', {
+        tenant_id: tenantId,
+        agent_id: agentId,
+        user_answer: 'deploy live now and finalize configuration',
+      });
+
+      const res = await axiosClient.post('/api/v1/tenant/knowledge/onboarding/start', {
+        tenant_id: tenantId,
+        agent_id: agentId,
+      });
+
+      const data = res.data.data;
+      if (data?.draft_schema) {
+        setDraftSchema(data.draft_schema);
+        setBaselineSchema(data.draft_schema);
+        setIsLive(true);
+      }
+
+      setShowDiffDrawer(false);
+    } catch (err) {
+      console.error('Failed to publish agent:', err);
+    } finally {
+      setIsSavingChanges(false);
+    }
+  };
+
+  const businessProfile = draftSchema?.business_profile || {};
+  const clinicName = businessProfile.name || 'AI Scheduling Agent';
+  const timezone = businessProfile.timezone || 'UTC';
+
+  const operatingHours = draftSchema?.operating_hours || {};
+  const scheduleGroups = getOperatingScheduleGroups(operatingHours);
+  const openGroups = scheduleGroups.filter((g) => g.isOpen);
+
+  let formattedHoursText = 'No operating hours configured';
+  let dailyHoursText = 'Closed';
+
+  if (openGroups.length === 1) {
+    formattedHoursText = `${openGroups[0].label}: ${openGroups[0].timeText}`;
+    dailyHoursText = openGroups[0].dailyHoursText || 'Active';
+  } else if (openGroups.length > 1) {
+    formattedHoursText = openGroups.map((g) => `${g.label}: ${g.timeText}`).join(' • ');
+    const totalDays = openGroups.reduce((acc, g) => acc + g.days.length, 0);
+    dailyHoursText = `${totalDays} days/week`;
+  }
+
+  const rawResources = Array.isArray(draftSchema?.resources) ? draftSchema.resources : [];
+  const rawServices = Array.isArray(draftSchema?.services) ? draftSchema.services : [];
+
+  const servicesList = useMemo(() => {
+    return rawServices.map((svc: any, idx: number) => {
+      const assigned = rawResources.filter((r: any) =>
+        Array.isArray(svc.eligible_resource_ids)
+          ? svc.eligible_resource_ids.includes(r.resource_id)
+          : false
+      );
+      return {
+        ...svc,
+        idx,
+        assignedStaff: assigned,
+      };
+    });
+  }, [rawServices, rawResources]);
+
+  const resourcesList = useMemo(() => {
+    return rawResources.map((res: any, idx: number) => {
+      const handled = rawServices.filter((s: any) =>
+        Array.isArray(s.eligible_resource_ids)
+          ? s.eligible_resource_ids.includes(res.resource_id)
+          : false
+      );
+      return {
+        ...res,
+        idx,
+        initials: (res.name || 'ST')
+          .split(' ')
+          .map((n: string) => n[0])
+          .slice(0, 2)
+          .join('')
+          .toUpperCase(),
+        handledServices: handled,
+      };
+    });
+  }, [rawResources, rawServices]);
+
+  const guardrails = draftSchema?.guardrails || {};
+  const requireOtp = Boolean(
+    guardrails?.verification_policy?.require_otp_for_reschedule ??
+    guardrails?.verification_policy?.require_otp_for_new_booking ??
+    false
+  );
+  const phiScrubbing = Boolean(guardrails?.phi_scrubbing?.enabled);
+  const emergencyTriage = Boolean(guardrails?.triage_emergency?.enabled);
+
+  useEffect(() => {
+    if (sandboxMessages.length === 0) {
+      setSandboxMessages([
+        {
+          role: 'agent',
+          text: `Hello! Welcome to ${clinicName}. I'm your AI booking coordinator. How can I assist you with scheduling or consultations today?`,
+        },
+      ]);
+    }
+  }, [clinicName]);
+
+  useEffect(() => {
+    if (agentId !== lastAgentIdRef.current) {
+      lastAgentIdRef.current = agentId || null;
+      setSandboxMessages([]);
+    }
+  }, [agentId]);
+
+  const handleSendSandboxMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sandboxInput.trim() || isSandboxTyping) return;
+
+    const userText = sandboxInput.trim();
+    setSandboxInput('');
+    setSandboxMessages((prev) => [...prev, { role: 'user', text: userText }]);
+    setIsSandboxTyping(true);
+
+    try {
+      const res = await axiosClient.post('/api/v1/tenant/knowledge/onboarding/sandbox', {
+        tenant_id: tenantId,
+        agent_id: agentId,
+        message: userText,
+      });
+
+      const reply =
+        res.data.data?.reply ||
+        `I would be happy to help you with that at ${clinicName}! According to our current scheduling policy, appointments are booked based on provider availability.`;
+
+      setSandboxMessages((prev) => [...prev, { role: 'agent', text: reply }]);
+    } catch {
+      setSandboxMessages((prev) => [
+        ...prev,
+        {
+          role: 'agent',
+          text: `I'd be happy to assist you! For ${clinicName}, please let me know your preferred day and time.`,
+        },
+      ]);
+    } finally {
+      setIsSandboxTyping(false);
+    }
+  };
+
+  const handleCopyJson = () => {
+    navigator.clipboard.writeText(JSON.stringify(draftSchema, null, 2));
+    setCopiedJson(true);
+    setTimeout(() => setCopiedJson(false), 2000);
+  };
+
   return (
-    <div className="flex h-screen w-full bg-slate-50 text-slate-800">
-      
-      {/* LEFT COLUMN - CHAT INTERFACE */}
-      <div className="flex flex-col w-1/2 border-r border-slate-200 bg-white">
-        <div className="p-4 border-b border-slate-200 bg-white sticky top-0 z-10 flex items-center justify-between shadow-xs">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate("/tenant/agents")}
-              className="p-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition cursor-pointer"
-              title="Back to AI Agents Dashboard"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-                <Bot className="w-4 h-4" />
-              </div>
-              <div>
-                <h1 className="text-sm font-bold text-slate-900 leading-tight">AI Agent Setup Wizard</h1>
-                <p className="font-mono text-[10px] text-slate-400 leading-none mt-0.5">{agentId}</p>
-              </div>
-            </div>
-          </div>
+    <div className="flex flex-col h-screen w-full bg-slate-100/70 text-slate-900 font-sans antialiased overflow-hidden select-none">
+      {/* ── TOP APPLICATION HEADER ── */}
+      <WizardHeader
+        onNavigateAgents={() => navigate('/tenant/agents')}
+        onNavigateDashboard={() => navigate('/tenant/dashboard')}
+        onNavigateProfile={() => navigate('/tenant/profile')}
+      />
 
-          <div className="flex items-center gap-2.5">
-            {status === 'complete' ? (
-              <span className="flex items-center text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
-                <CheckCircle className="w-3.5 h-3.5 mr-1" /> Live
-              </span>
-            ) : (
-              <span className="flex items-center text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full">
-                Drafting
-              </span>
+      {/* ── MAIN WORKSPACE BODY (SPLIT VIEW) ── */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* LEFT COLUMN: CONVERSATIONAL AGENT ARCHITECT */}
+        <WizardChatColumn
+          allMessages={allMessages}
+          status={status}
+          inputValue={inputValue}
+          setInputValue={setInputValue}
+          onSendMessage={handleFormSubmit}
+          onToggleDiffDrawer={() => setShowDiffDrawer((prev) => !prev)}
+          showDiffDrawer={showDiffDrawer}
+          diffPatches={diffPatches}
+          isDirty={isDirty}
+        />
+
+    
+        <div className="w-1/2 flex flex-col bg-slate-50/80 overflow-hidden">
+          {/* Canvas Subheader / Mode Switcher */}
+          <CanvasHeader
+            rightViewMode={rightViewMode}
+            setRightViewMode={setRightViewMode}
+            isDirty={isDirty}
+            pendingChangesCount={diffPatches.length}
+            isSavingChanges={isSavingChanges}
+            onSaveChanges={handleSaveChanges}
+          />
+
+          {/* Canvas Scroll Area */}
+          <div className="flex-1 overflow-y-auto p-8 space-y-6">
+            {/* VIEW MODE 1: LOGIC & RULES CANVAS */}
+            {rightViewMode === 'rules' && (
+              <>
+                <CanvasFilterTabs
+                  canvasModule={canvasModule}
+                  setCanvasModule={setCanvasModule}
+                  servicesCount={servicesList.length}
+                  resourcesCount={resourcesList.length}
+                />
+
+                {(canvasModule === 'all' || canvasModule === 'profile') && (
+                  <BusinessProfileCard
+                    clinicName={clinicName}
+                    timezone={timezone}
+                    businessProfile={businessProfile}
+                    isLive={isLive}
+                    dailyHoursText={dailyHoursText}
+                    formattedHoursText={formattedHoursText}
+                    operatingHours={operatingHours}
+                  />
+                )}
+
+                {(canvasModule === 'all' || canvasModule === 'services') && (
+                  <ServicesCatalogCard
+                    servicesList={servicesList}
+                    currency={businessProfile.currency}
+                  />
+                )}
+
+                {(canvasModule === 'all' || canvasModule === 'resources') && (
+                  <ResourcesRosterCard resourcesList={resourcesList} />
+                )}
+
+                {(canvasModule === 'all' || canvasModule === 'guardrails') && (
+                  <SecurityGuardrailsCard
+                    requireOtp={requireOtp}
+                    phiScrubbing={phiScrubbing}
+                    emergencyTriage={emergencyTriage}
+                  />
+                )}
+              </>
             )}
-            <button
-              onClick={() => navigate(`/tenant/agents/${agentId}/dashboard`)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-neutral-950 hover:bg-neutral-800 text-white text-xs font-bold rounded-xl shadow-2xs transition active:scale-98 cursor-pointer"
-            >
-              <span>Go to Dashboard</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+
+            {/* VIEW MODE 2: TEST SANDBOX SIMULATION */}
+            {rightViewMode === 'sandbox' && (
+              <SandboxSimulation
+                clinicName={clinicName}
+                sandboxMessages={sandboxMessages}
+                setSandboxMessages={setSandboxMessages}
+                sandboxInput={sandboxInput}
+                setSandboxInput={setSandboxInput}
+                isSandboxTyping={isSandboxTyping}
+                onSendSandboxMessage={handleSendSandboxMessage}
+              />
+            )}
+
+            {/* VIEW MODE 3: RAW JSON SCHEMA */}
+            {rightViewMode === 'json' && (
+              <RawJsonViewer
+                draftSchema={draftSchema}
+                copiedJson={copiedJson}
+                onCopyJson={handleCopyJson}
+              />
+            )}
           </div>
         </div>
-
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {status === 'loading' && (
-            <div className="flex justify-center items-center h-full text-slate-400">
-              <div className="animate-pulse flex items-center">
-                <Bot className="w-5 h-5 mr-2" />
-                Initializing setup agent...
-              </div>
-            </div>
-          )}
-
-          {messages.map((msg) => (
-            <div key={msg.id} className={`flex ${msg.role === 'tenant' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`flex max-w-[80%] ${msg.role === 'tenant' ? 'flex-row-reverse' : 'flex-row'}`}>
-                
-                <div className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center 
-                  ${msg.role === 'tenant' ? 'bg-indigo-100 ml-2' : 'bg-slate-100 mr-2'}`}>
-                  {msg.role === 'tenant' ? <User className="w-5 h-5 text-indigo-600" /> : <Bot className="w-5 h-5 text-slate-600" />}
-                </div>
-                
-                <div className={`p-3 rounded-2xl shadow-sm
-                  ${msg.role === 'tenant' 
-                    ? 'bg-indigo-600 text-white rounded-tr-none' 
-                    : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'}`}>
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.text}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-
-          {status === 'processing' && (
-            <div className="flex justify-start">
-              <div className="flex flex-row max-w-[80%]">
-                <div className="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center bg-slate-100 mr-2">
-                  <Bot className="w-5 h-5 text-slate-600" />
-                </div>
-                <div className="p-4 rounded-2xl bg-white border border-slate-200 rounded-tl-none shadow-sm flex space-x-1 items-center">
-                  <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '-0.3s' }}></div>
-                  <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '-0.15s' }}></div>
-                  <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
-                </div>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* CHAT INPUT */}
-        <div className="p-4 bg-white border-t border-slate-200">
-          <form onSubmit={handleSendMessage} className="relative flex items-center">
-            <input
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              disabled={status !== 'awaiting_input'}
-              placeholder={status === 'complete' ? "Configuration complete" : "Type your answer..."}
-              className="w-full pl-4 pr-12 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-slate-100 disabled:text-slate-500 transition-all shadow-sm text-sm"
-            />
-            <button
-              type="submit"
-              disabled={!inputValue.trim() || status !== 'awaiting_input'}
-              className="absolute right-2 p-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-slate-300 transition-colors"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
-        </div>
       </div>
-
-     
-      <div className="flex flex-col w-1/2 bg-slate-900 text-slate-300 shadow-inner">
-        <div className="p-4 border-b border-slate-700 bg-slate-900 sticky top-0 z-10 shadow-sm flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-100 flex items-center">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 mr-2 animate-pulse"></span>
-            Live Configuration State
-          </h2>
-          <span className="text-xs font-mono text-slate-500">agent_runtime_configs</span>
-        </div>
-        
-        <div className="flex-1 p-6 overflow-y-auto">
-          <pre className="text-xs font-mono whitespace-pre-wrap break-words">
-            <code dangerouslySetInnerHTML={{
-              __html: syntaxHighlight(JSON.stringify(draftSchema, null, 2))
-            }} />
-          </pre>
-        </div>
-      </div>
-      
     </div>
   );
-}
-
-
-function syntaxHighlight(json: string) {
-  if (!json) return '';
-  json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
-    let cls = 'text-sky-400'; // number
-    if (/^"/.test(match)) {
-      if (/:$/.test(match)) {
-        cls = 'text-pink-400'; // key
-      } else {
-        cls = 'text-emerald-300'; // string
-      }
-    } else if (/true|false/.test(match)) {
-      cls = 'text-orange-400'; // boolean
-    } else if (/null/.test(match)) {
-      cls = 'text-slate-500'; // null
-    }
-    return '<span class="' + cls + '">' + match + '</span>';
-  });
 }

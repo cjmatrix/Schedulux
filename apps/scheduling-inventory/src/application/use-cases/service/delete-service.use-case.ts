@@ -14,7 +14,7 @@ export class DeleteServiceUseCase implements IDeleteServiceUseCase {
   ) {}
 
   async execute(dto: DeleteServiceRequest): Promise<boolean> {
-    // Fetch first to capture agent_id for the CQRS event
+  
     const existing = await this.serviceRepository.findById(dto.tenant_id, dto.service_id);
     if (!existing) {
       throw new NotFoundException(`Service ${dto.service_id} not found for tenant ${dto.tenant_id}`);
@@ -25,7 +25,7 @@ export class DeleteServiceUseCase implements IDeleteServiceUseCase {
       throw new NotFoundException(`Service ${dto.service_id} not found for tenant ${dto.tenant_id}`);
     }
 
-    // CQRS: fire-and-forget delete event for AI-orchestration consumer
+    
     await this.eventsProducer.emitServiceDeleted(existing.tenantId, existing.agentId, existing.id);
 
     return true;

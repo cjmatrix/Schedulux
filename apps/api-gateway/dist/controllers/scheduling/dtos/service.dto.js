@@ -58,6 +58,7 @@ exports.ListServicesQuerySchema = zod_1.z.object({
     limit: zod_1.z.coerce.number().int().min(1).max(100).default(20),
     category: zod_1.z.string().optional(),
     agent_id: zod_1.z.string().optional(),
+    search: zod_1.z.string().optional(),
 });
 class ListServicesQueryDto extends (0, nestjs_zod_1.createZodDto)(exports.ListServicesQuerySchema) {
 }

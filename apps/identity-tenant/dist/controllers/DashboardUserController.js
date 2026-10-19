@@ -12,8 +12,6 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 import { Controller, UseFilters, Inject } from "@nestjs/common";
 import { GrpcMethod } from "@nestjs/microservices";
-import { DashboardUserService } from "../services/dashboardUserService.js";
-import { TenantService } from "../services/tenantService.js";
 import { AllExceptionsFilter } from "./rpcExpetionFilter.js";
 let DashboardUserController = class DashboardUserController {
     dashboardUserService;
@@ -107,9 +105,8 @@ __decorate([
 DashboardUserController = __decorate([
     Controller(),
     UseFilters(new AllExceptionsFilter()),
-    __param(0, Inject(DashboardUserService)),
-    __param(1, Inject(TenantService)),
-    __metadata("design:paramtypes", [DashboardUserService,
-        TenantService])
+    __param(0, Inject('IDashboardUserService')),
+    __param(1, Inject('ITenantService')),
+    __metadata("design:paramtypes", [Object, Object])
 ], DashboardUserController);
 export { DashboardUserController };

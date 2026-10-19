@@ -8,11 +8,14 @@ import {
   DeleteResourceRequest,
 } from '@repo/proto/scheduling';
 
+import { ResourceSummary } from '../../domain/repositories/resource.repository.interface.js';
+
 export interface ListResourcesOutput {
   resources: ResourceEntity[];
   total: number;
   page: number;
   limit: number;
+  summary?: ResourceSummary;
 }
 
 export interface ICreateResourceUseCase extends IUseCase<CreateResourceRequest, ResourceEntity> {}

@@ -96,7 +96,7 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
       const existing = (s.service_id && existingSvcById.get(s.service_id)) || existingSvcByName.get(nameKey);
       const serviceId = existing ? existing.id : generateSemanticId('srv', s.name);
 
-      // Remap eligible resource IDs
+    
       const canonicalEligible: string[] = [];
       for (const rawRid of s.eligible_resource_ids || []) {
         const mapped = resourceIdMap.get(rawRid) || resourceIdMap.get(rawRid.trim().toLowerCase()) || rawRid;

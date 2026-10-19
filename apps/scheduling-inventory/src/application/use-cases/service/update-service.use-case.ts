@@ -58,7 +58,7 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
       throw new NotFoundException(`Failed to update service ${dto.service_id}`);
     }
 
-    // CQRS: fire-and-forget event for AI-orchestration consumer
+   
     await this.eventsProducer.emitServiceUpdated(updated);
 
     return updated;

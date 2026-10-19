@@ -25,6 +25,7 @@ import {
   SuperAdminLogoutDto,
 } from "./dtos/superAdmin.dto.js";
 import { SuperAdminAuthServiceClient } from "@repo/proto/superadmin";
+import { getAccessTokenCookieOptions, getRefreshTokenCookieOptions } from "../../utils/cookie.util.js";
 
 @Controller("api/v1/superadmin/auth")
 export class SuperAdminController implements OnModuleInit {
@@ -49,19 +50,8 @@ export class SuperAdminController implements OnModuleInit {
     );
     const isProduction = process.env.NODE_ENV === "production";
 
-    res.cookie("superadmin_access_token", response.access_token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "none" : "lax",
-      maxAge: 15 * 60 * 1000,
-    });
-
-    res.cookie("superadmin_refresh_token", response.refresh_token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "none" : "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie("superadmin_access_token", response.access_token, getAccessTokenCookieOptions());
+    res.cookie("superadmin_refresh_token", response.refresh_token, getRefreshTokenCookieOptions());
 
     return {
       message: response.message,
@@ -81,21 +71,9 @@ export class SuperAdminController implements OnModuleInit {
     const response = await lastValueFrom(
       this.superAdminAuthService.refreshToken({ refresh_token: token }),
     );
-    const isProduction = process.env.NODE_ENV === "production";
 
-    res.cookie("superadmin_access_token", response.access_token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "none" : "lax",
-      maxAge: 15 * 60 * 1000,
-    });
-
-    res.cookie("superadmin_refresh_token", response.refresh_token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "none" : "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie("superadmin_access_token", response.access_token, getAccessTokenCookieOptions());
+    res.cookie("superadmin_refresh_token", response.refresh_token, getRefreshTokenCookieOptions());
 
     return {
       message: response.message,

@@ -38,9 +38,6 @@ let SchedulingController = class SchedulingController {
         }
         return tenantId;
     }
-    // ==========================================
-    // SERVICES ENDPOINTS
-    // ==========================================
     async createService(req, body) {
         const tenantId = this.getTenantId(req);
         const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.createService({
@@ -72,6 +69,7 @@ let SchedulingController = class SchedulingController {
             limit: query.limit,
             category: query.category || '',
             agent_id: query.agent_id,
+            search: query.search || undefined,
         }));
         return {
             message: 'Services retrieved successfully',
@@ -81,6 +79,7 @@ let SchedulingController = class SchedulingController {
                 page: response.page,
                 limit: response.limit,
             },
+            summary: response.summary,
         };
     }
     async getService(req, serviceId) {
@@ -128,9 +127,6 @@ let SchedulingController = class SchedulingController {
             success: response.success,
         };
     }
-    // ==========================================
-    // RESOURCES ENDPOINTS
-    // ==========================================
     async createResource(req, body) {
         const tenantId = this.getTenantId(req);
         const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.createResource({
@@ -158,7 +154,9 @@ let SchedulingController = class SchedulingController {
             limit: query.limit,
             resource_type: query.resource_type || '',
             dispatch_status: query.dispatch_status || '',
+            category: query.category || undefined,
             agent_id: query.agent_id,
+            search: query.search || undefined,
         }));
         return {
             message: 'Resources retrieved successfully',
@@ -168,6 +166,7 @@ let SchedulingController = class SchedulingController {
                 page: response.page,
                 limit: response.limit,
             },
+            summary: response.summary,
         };
     }
     async getResource(req, resourceId) {

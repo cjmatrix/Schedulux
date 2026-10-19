@@ -18,6 +18,7 @@ const rxjs_1 = require("rxjs");
 const nestjs_zod_1 = require("nestjs-zod");
 const dashboard_user_dto_js_1 = require("./dtos/dashboard-user.dto.js");
 const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
+const cookie_util_js_1 = require("../../utils/cookie.util.js");
 let DashboardUserAuthController = class DashboardUserAuthController {
     client;
     dashboardUserAuthClient;
@@ -29,19 +30,8 @@ let DashboardUserAuthController = class DashboardUserAuthController {
     }
     async Login(data, res) {
         const response = await (0, rxjs_1.lastValueFrom)(this.dashboardUserAuthClient.login(data));
-        const isProduction = process.env.NODE_ENV === "production";
-        res.cookie("dashboarduser_access_token", response.access_token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? "none" : "lax",
-            maxAge: 15 * 60 * 1000,
-        });
-        res.cookie("dashboarduser_refresh_token", response.refresh_token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? "none" : "lax",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        res.cookie("dashboarduser_access_token", response.access_token, (0, cookie_util_js_1.getAccessTokenCookieOptions)());
+        res.cookie("dashboarduser_refresh_token", response.refresh_token, (0, cookie_util_js_1.getRefreshTokenCookieOptions)());
         return {
             message: response.message || "Dashboard user logged in successfully",
             data: response.user,
@@ -53,19 +43,8 @@ let DashboardUserAuthController = class DashboardUserAuthController {
             throw new Error("No refresh token provided");
         }
         const response = await (0, rxjs_1.lastValueFrom)(this.dashboardUserAuthClient.refreshToken({ refresh_token: token }));
-        const isProduction = process.env.NODE_ENV === "production";
-        res.cookie("dashboarduser_access_token", response.access_token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? "none" : "lax",
-            maxAge: 15 * 60 * 1000,
-        });
-        res.cookie("dashboarduser_refresh_token", response.refresh_token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? "none" : "lax",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        res.cookie("dashboarduser_access_token", response.access_token, (0, cookie_util_js_1.getAccessTokenCookieOptions)());
+        res.cookie("dashboarduser_refresh_token", response.refresh_token, (0, cookie_util_js_1.getRefreshTokenCookieOptions)());
         return {
             message: response.message,
             data: null,

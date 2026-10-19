@@ -86,6 +86,14 @@ message ListServicesRequest {
   int32 limit = 3;
   string category = 4;
   optional string agent_id = 5;
+  optional string search = 6;
+}
+
+message ServiceSummaryInfo {
+  int32 total_count = 1;
+  double avg_price = 2;
+  int32 deposit_count = 3;
+  repeated string categories = 4;
 }
 
 message ListServicesResponse {
@@ -93,6 +101,7 @@ message ListServicesResponse {
   int32 total = 2;
   int32 page = 3;
   int32 limit = 4;
+  optional ServiceSummaryInfo summary = 5;
 }
 
 message UpdateServiceRequest {
@@ -170,6 +179,15 @@ message ListResourcesRequest {
   string resource_type = 4;
   string dispatch_status = 5;
   optional string agent_id = 6;
+  optional string search = 7;
+  optional string category = 8;
+}
+
+message ResourceSummaryInfo {
+  int32 total_count = 1;
+  int32 active_count = 2;
+  int32 staff_count = 3;
+  int32 physical_count = 4;
 }
 
 message ListResourcesResponse {
@@ -177,6 +195,7 @@ message ListResourcesResponse {
   int32 total = 2;
   int32 page = 3;
   int32 limit = 4;
+  optional ResourceSummaryInfo summary = 5;
 }
 
 message UpdateResourceRequest {

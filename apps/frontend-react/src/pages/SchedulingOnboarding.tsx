@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useAgentSchemaGeneration } from "../hooks/useAgentSchemaGeneration.js";
 import { knowledgeApi } from "../api/knowledgeApi.js";
+import { getOperatingScheduleGroups } from "./onboarding/utils";
 
 type ServiceType = {
   id: string;
@@ -61,6 +62,8 @@ const services: ServiceType[] = [
 
 export default function SchedulingOnboarding() {
   const [selected, setSelected] = useState("web_crawl");
+
+  console.log(selected)
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [showJsonRaw, setShowJsonRaw] = useState(false);
   const navigate = useNavigate();
@@ -92,12 +95,17 @@ export default function SchedulingOnboarding() {
     try {
       setIsSavingDraft(true);
       setSaveDraftError(null);
-      await knowledgeApi.saveInitialAgentDraft({
+      const res = await knowledgeApi.saveInitialAgentDraft({
         name: schema?.business_profile?.name || "AI Scheduling Agent",
         creation_source: source,
       });
 
-      navigate("/tenant/agents");
+      const newAgentId = res?.data?.agent_id;
+      if (newAgentId) {
+        navigate(`/tenant/agent-setup/${newAgentId}`);
+      } else {
+        navigate("/tenant/agents");
+      }
     } catch (err: any) {
       console.error("Failed to save initial agent draft:", err);
       setSaveDraftError(err?.response?.data?.message || err?.message || "Failed to save agent draft");
@@ -350,15 +358,21 @@ export default function SchedulingOnboarding() {
                     <Clock className="w-3 h-3" /> Operating Hours
                   </span>
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    {schema?.operating_hours?.monday?.[0] ? (
-                      <span className="rounded-md bg-neutral-100 px-2 py-1 text-[11px] font-medium text-neutral-700">
-                        Mon-Fri: {schema.operating_hours.monday[0].start} - {schema.operating_hours.monday[0].end}
-                      </span>
-                    ) : (
-                      <span className="rounded-md bg-neutral-100 px-2 py-1 text-[11px] font-medium text-neutral-700">
-                        Standard 08:00 - 17:00
-                      </span>
-                    )}
+                    {(() => {
+                      const groups = getOperatingScheduleGroups(schema?.operating_hours).filter((g) => g.isOpen);
+                      if (groups.length > 0) {
+                        return groups.map((g, idx) => (
+                          <span key={idx} className="rounded-md bg-neutral-100 px-2 py-1 text-[11px] font-medium text-neutral-700">
+                            {g.label}: {g.timeText}
+                          </span>
+                        ));
+                      }
+                      return (
+                        <span className="rounded-md bg-neutral-100 px-2 py-1 text-[11px] font-medium text-neutral-700">
+                          Standard 08:00 - 17:00
+                        </span>
+                      );
+                    })()}
                     <span className="rounded-md bg-amber-50 border border-amber-200 px-2 py-1 text-[10px] font-semibold text-amber-700">
                       Inferred default
                     </span>

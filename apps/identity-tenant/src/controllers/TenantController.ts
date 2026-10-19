@@ -1,6 +1,6 @@
 import { Controller, UseFilters, Inject } from "@nestjs/common";
 import { GrpcMethod } from "@nestjs/microservices";
-import { TenantService } from "../services/tenantService.js";
+import type { ITenantService } from "../interfaces/ITenantService.js";
 import { AllExceptionsFilter } from "./rpcExpetionFilter.js";
 import {
   RegisterRequest,
@@ -22,7 +22,7 @@ import {
 @UseFilters(new AllExceptionsFilter())
 export class TenantAuthController {
   constructor(
-    @Inject(TenantService) private readonly tenantService: TenantService,
+    @Inject('ITenantService') private readonly tenantService: ITenantService,
   ) {}
 
   @GrpcMethod("TenantAuthService", "Register")

@@ -58,6 +58,7 @@ export const ListServicesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   category: z.string().optional(),
   agent_id: z.string().optional(),
+  search: z.string().optional(),
 });
 
 export class ListServicesQueryDto extends createZodDto(ListServicesQuerySchema) {}

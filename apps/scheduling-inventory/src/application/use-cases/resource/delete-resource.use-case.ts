@@ -25,7 +25,7 @@ export class DeleteResourceUseCase implements IDeleteResourceUseCase {
       throw new NotFoundException(`Resource ${dto.resource_id} not found for tenant ${dto.tenant_id}`);
     }
 
-    // CQRS: fire-and-forget delete event for AI-orchestration consumer
+   
     await this.eventsProducer.emitResourceDeleted(existing.tenantId, existing.agentId, existing.id);
 
     return true;

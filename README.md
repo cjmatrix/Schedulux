@@ -44,7 +44,8 @@ Schedulux utilizes a **decoupled, polyglot microservices architecture** organize
 
 ### 🖼️ Architecture Diagram (Placeholder)
 
-<img width="2522" height="1772" alt="SSv3" src="https://github.com/user-attachments/assets/d5c4efe7-c0dd-4757-aee6-9e01412caf9c" />
+<img width="9519" height="5175" alt="ssv8" src="https://github.com/user-attachments/assets/911c5232-30b4-49bc-b1a7-6216e8c14a25" />
+
 
 
 ---

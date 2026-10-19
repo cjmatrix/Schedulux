@@ -44,20 +44,8 @@ Schedulux utilizes a **decoupled, polyglot microservices architecture** organize
 
 ### 🖼️ Architecture Diagram (Placeholder)
 
-```
-+---------------------------------------------------------------------------------------------------------+
-|                                                                                                         |
-|                                       [ SYSTEM ARCHITECTURE DIAGRAM ]                                   |
-|                                                                                                         |
-|   ┌─────────────────────────────────────────────────────────────────────────────────────────────────┐   |
-|   │ Place your visual architecture diagram image here:                                              │   |
-|   │ docs/assets/schedulux-architecture-overview.png                                                 │   |
-|   └─────────────────────────────────────────────────────────────────────────────────────────────────┘   |
-|                                                                                                         |
-+---------------------------------------------------------------------------------------------------------+
-```
+<img width="2522" height="1772" alt="SSv3" src="https://github.com/user-attachments/assets/d5c4efe7-c0dd-4757-aee6-9e01412caf9c" />
 
-*(Visual architectural diagram asset: `docs/assets/schedulux-architecture-overview.png` — placeholder)*
 
 ---
 

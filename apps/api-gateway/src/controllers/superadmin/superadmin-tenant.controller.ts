@@ -1,30 +1,30 @@
 import {
   Controller,
-  Patch,
   Get,
-  Query,
-  Param,
   Inject,
   OnModuleInit,
-  UsePipes,
+  Param,
+  Patch,
+  Query,
   UseGuards,
-} from "@nestjs/common";
-import { ClientGrpc } from "@nestjs/microservices";
-import { lastValueFrom } from "rxjs";
-import { ZodValidationPipe } from "nestjs-zod";
-import { SuperAdminAuthGuard } from "../../guards/superadmin-auth.guard.js";
-import { TenantServiceClient } from "@repo/proto/tenant";
-import { ListTenantsDto, SuspendTenantParamDto } from "./dtos/superAdmin.dto.js";
+  UsePipes,
+} from '@nestjs/common';
+import { ClientGrpc } from '@nestjs/microservices';
+import { TenantServiceClient } from '@repo/proto/tenant';
+import { ZodValidationPipe } from 'nestjs-zod';
+import { lastValueFrom } from 'rxjs';
+import { SuperAdminAuthGuard } from '../../guards/superadmin-auth.guard.js';
+import { ListTenantsDto, SuspendTenantParamDto } from './dtos/superAdmin.dto.js';
 
 @Controller(`api/v1/admin/tenants`)
 @UseGuards(SuperAdminAuthGuard)
 export class SuperAdminTenantController implements OnModuleInit {
   private superAdminTenantClient!: TenantServiceClient;
 
-  constructor(@Inject("TENANT_PACKAGE") private client: ClientGrpc) {}
+  constructor(@Inject('TENANT_PACKAGE') private client: ClientGrpc) {}
 
   onModuleInit() {
-    this.superAdminTenantClient = this.client.getService("TenantService");
+    this.superAdminTenantClient = this.client.getService('TenantService');
   }
 
   @Get()
@@ -41,12 +41,12 @@ export class SuperAdminTenantController implements OnModuleInit {
     );
 
     return {
-      message: "successfull",
+      message: 'successfull',
       data: lists,
     };
   }
 
-  @Patch(":id/suspend")
+  @Patch(':id/suspend')
   @UsePipes(ZodValidationPipe)
   async SuspendTenant(@Param() params: SuspendTenantParamDto) {
     const result = await lastValueFrom(
@@ -54,7 +54,7 @@ export class SuperAdminTenantController implements OnModuleInit {
     );
 
     return {
-      message: "Tenant suspended successfully",
+      message: 'Tenant suspended successfully',
       data: result,
     };
   }

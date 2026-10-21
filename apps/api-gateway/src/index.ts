@@ -1,6 +1,7 @@
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module.js';
 import cookieParser from 'cookie-parser';
+import { AppModule } from './app.module.js';
 import { GlobalExceptionFilter } from './utils/global-error.js';
 
 async function bootstrap() {
@@ -21,7 +22,7 @@ async function bootstrap() {
   console.log(`[API-GATEWAY] routing traffic live on http://localhost:${PORT}`);
 }
 
-bootstrap().catch(err => {
-  console.error("Gateway startup failed:", err);
+bootstrap().catch((err) => {
+  console.error('Gateway startup failed:', err);
   process.exit(1);
 });

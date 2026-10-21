@@ -1,5 +1,6 @@
-import { ITenant } from '../model/Tenent.js'
 import { ListTenantsRequest, ListTenantsResponse } from '@repo/proto/tenant';
+import { UpdateQuery } from 'mongoose';
+import { ITenant } from '../model/Tenent.js';
 
 interface InputData {
   _id?: string;
@@ -13,13 +14,13 @@ interface InputData {
 }
 
 export interface ITenantRepository {
-  create(data: InputData): Promise<ITenant>
-  findById(id: string): Promise<ITenant | null>
-  findByTenantId(tenantId: string): Promise<ITenant | null>
-  findByEmail(email: string): Promise<ITenant | null>
-  update(id: string, data: any): Promise<ITenant | null>
-  updateStatus(tenantId: string, status: string): Promise<ITenant | null>
-  listTenants(data: ListTenantsRequest): Promise<ListTenantsResponse>
+  create(data: InputData): Promise<ITenant>;
+  findById(id: string): Promise<ITenant | null>;
+  findByTenantId(tenantId: string): Promise<ITenant | null>;
+  findByEmail(email: string): Promise<ITenant | null>;
+  update(id: string, data: UpdateQuery<ITenant>): Promise<ITenant | null>;
+  updateStatus(tenantId: string, status: string): Promise<ITenant | null>;
+  listTenants(data: ListTenantsRequest): Promise<ListTenantsResponse>;
 }
 
 export type { ListTenantsRequest, ListTenantsResponse };

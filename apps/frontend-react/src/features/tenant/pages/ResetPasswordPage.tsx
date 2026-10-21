@@ -1,14 +1,14 @@
-import { useState, useEffect } from 'react';
+import { Calendar, CheckCircle2, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { Calendar, Loader2, CheckCircle2 } from 'lucide-react';
-import { authApi } from '../api/authApi';
 import { dashboardUserAuthApi } from '../../dashboard-user/api/authApi';
+import { authApi } from '../api/authApi';
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
   const role = searchParams.get('role'); // 'tenant' or 'dashboard_user'
-  
+
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -24,7 +24,7 @@ export default function ResetPasswordPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
-    
+
     if (newPassword !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -34,10 +34,10 @@ export default function ResetPasswordPage() {
       setError('Password must be at least 6 characters');
       return;
     }
-    
+
     setIsLoading(true);
     setError('');
-    
+
     try {
       if (role === 'dashboard_user') {
         await dashboardUserAuthApi.resetPassword({ token, new_password: newPassword });
@@ -45,8 +45,10 @@ export default function ResetPasswordPage() {
         await authApi.resetPassword({ token, new_password: newPassword });
       }
       setIsSuccess(true);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to reset password. The link might be expired.');
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to reset password. The link might be expired.',
+      );
     } finally {
       setIsLoading(false);
     }
@@ -61,10 +63,11 @@ export default function ResetPasswordPage() {
           </div>
           <h2 className="text-2xl font-bold text-slate-900 mb-3 tracking-tight">Password reset!</h2>
           <p className="text-slate-500 text-sm mb-8 leading-relaxed">
-            Your password has been successfully updated. You can now use your new password to log in.
+            Your password has been successfully updated. You can now use your new password to log
+            in.
           </p>
           <Link
-            to={role === 'dashboard_user' ? "/dashboarduser/login" : "/login"}
+            to={role === 'dashboard_user' ? '/dashboarduser/login' : '/login'}
             className="block w-full py-3.5 px-4 bg-slate-950 hover:bg-black text-white text-sm font-semibold rounded-2xl transition-all shadow-md active:scale-[0.98]"
           >
             Go to login
@@ -101,7 +104,10 @@ export default function ResetPasswordPage() {
               )}
 
               <div>
-                <label htmlFor="new_password" className="block text-xs font-semibold text-slate-700 mb-2 uppercase tracking-wide">
+                <label
+                  htmlFor="new_password"
+                  className="block text-xs font-semibold text-slate-700 mb-2 uppercase tracking-wide"
+                >
                   New Password
                 </label>
                 <input
@@ -117,7 +123,10 @@ export default function ResetPasswordPage() {
               </div>
 
               <div>
-                <label htmlFor="confirm_password" className="block text-xs font-semibold text-slate-700 mb-2 uppercase tracking-wide">
+                <label
+                  htmlFor="confirm_password"
+                  className="block text-xs font-semibold text-slate-700 mb-2 uppercase tracking-wide"
+                >
                   Confirm Password
                 </label>
                 <input
@@ -137,11 +146,7 @@ export default function ResetPasswordPage() {
                 disabled={isLoading || !token}
                 className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-2xl text-sm font-semibold text-white bg-slate-950 hover:bg-black focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-all shadow-md active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  'Reset password'
-                )}
+                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Reset password'}
               </button>
             </form>
           </div>

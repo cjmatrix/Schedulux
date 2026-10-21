@@ -1,25 +1,25 @@
-import { useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
+  Calendar,
   Eye,
   EyeOff,
-  ShieldCheck,
-  Calendar,
   Loader2,
+  ShieldCheck,
   Users,
-} from "lucide-react";
-import { useAuthStore } from "../../store/useAuthStore";
-import { useDashboardLogin, useDashboardProfile } from "../tenant/hooks/useAuth";
-import { Navigate, useNavigate, Link } from "react-router";
+} from 'lucide-react';
+import { useState } from 'react';
+import { Link, Navigate, useNavigate } from 'react-router';
+import { useAuthStore } from '../../store/useAuthStore';
+import { useDashboardLogin, useDashboardProfile } from '../tenant/hooks/useAuth';
 
 export default function DashboardUserLoginPage() {
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState('');
 
   const { login, isAuthenticated } = useAuthStore();
   const dashboardLoginMutation = useDashboardLogin();
@@ -39,10 +39,10 @@ export default function DashboardUserLoginPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage("");
+    setErrorMessage('');
 
     if (!email.trim() || !password) {
-      setErrorMessage("Please enter your workspace email and password.");
+      setErrorMessage('Please enter your workspace email and password.');
       return;
     }
 
@@ -51,13 +51,11 @@ export default function DashboardUserLoginPage() {
       {
         onSuccess: (res) => {
           login(res.data);
-          navigate("/dashboarduser/tenant/bookings");
+          navigate('/dashboarduser/tenant/bookings');
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
           setErrorMessage(
-            error.response?.data?.message ||
-              error.message ||
-              "An error occurred during login.",
+            error instanceof Error ? error.message : 'An error occurred during login.',
           );
         },
       },
@@ -92,9 +90,7 @@ export default function DashboardUserLoginPage() {
               <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-sm">
                 <Users className="w-4 h-4" />
               </div>
-              <span className="font-bold text-gray-900 text-sm">
-                Dashboard Member Portal
-              </span>
+              <span className="font-bold text-gray-900 text-sm">Dashboard Member Portal</span>
             </div>
 
             {/* Title & Subtitle */}
@@ -147,7 +143,7 @@ export default function DashboardUserLoginPage() {
                 </div>
                 <div className="relative flex items-center bg-[#f3f4f6] rounded-xl px-3.5 py-3 border border-transparent focus-within:border-gray-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-black/5 transition-all">
                   <input
-                    type={showPassword ? "text" : "password"}
+                    type={showPassword ? 'text' : 'password'}
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -159,11 +155,7 @@ export default function DashboardUserLoginPage() {
                     onClick={() => setShowPassword(!showPassword)}
                     className="text-gray-400 hover:text-gray-600 focus:outline-none ml-2 cursor-pointer"
                   >
-                    {showPassword ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>

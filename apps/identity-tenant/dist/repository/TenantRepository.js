@@ -7,9 +7,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-import { Injectable } from "@nestjs/common";
-import { BaseRepository } from "./BaseRepository.js";
-import { Tenent } from "../model/Tenent.js";
+import { Injectable } from '@nestjs/common';
+import { Tenent } from '../model/Tenent.js';
+import { BaseRepository } from './BaseRepository.js';
 let TenantRepository = class TenantRepository extends BaseRepository {
     constructor() {
         super(Tenent);
@@ -27,6 +27,12 @@ let TenantRepository = class TenantRepository extends BaseRepository {
         tenant.status = status;
         return tenant.save();
     }
+    async ListUserByDate(date) {
+        const tenants = await this.find({
+            createdAt: { $eq: `${date}` },
+        });
+        return tenants;
+    }
     async listTenants(data) {
         const page = Math.max(1, data.page);
         const limit = Math.max(1, Math.min(data.limit, 100));
@@ -39,23 +45,19 @@ let TenantRepository = class TenantRepository extends BaseRepository {
             query.tier = data.tier.toLowerCase();
         }
         if (data.search) {
+            const searchRegex = new RegExp(data.search, 'i');
             query.$or = [
-                { business_name: { $regex: data.search, $options: 'i' } },
-                { contact_email: { $regex: data.search, $options: 'i' } },
-                { tenant_id: { $regex: data.search, $options: 'i' } },
+                { business_name: searchRegex },
+                { contact_email: searchRegex },
+                { _id: searchRegex },
             ];
         }
         const [docs, totalCount] = await Promise.all([
-            this.model
-                .find(query)
-                .skip(skip)
-                .limit(limit)
-                .select("-password_hash")
-                .exec(),
+            this.model.find(query).skip(skip).limit(limit).select('-password_hash').exec(),
             this.model.countDocuments(query).exec(),
         ]);
         const tenants = docs.map((t) => ({
-            tenant_id: (t.tenant_id || t._id).toString(),
+            tenant_id: t._id.toString(),
             business_name: t.business_name,
             contact_email: t.contact_email,
             tier: t.tier,

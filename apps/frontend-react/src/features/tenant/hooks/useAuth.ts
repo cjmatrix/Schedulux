@@ -1,24 +1,17 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { authApi } from "../api/authApi";
-import { useAuthStore } from "../../../store/useAuthStore";
-import {
-  dashboardUserAuthApi,
-  type DashboardUserInfo,
-} from "../../dashboard-user/api/authApi";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ApiResponse } from '../../../api/axiosClient';
+import { useAuthStore } from '../../../store/useAuthStore';
+import { type DashboardUserInfo, dashboardUserAuthApi } from '../../dashboard-user/api/authApi';
 import type {
-  RegisterTenantPayload,
-  RegisterTenantData,
   LoginTenantPayload,
+  RegisterTenantData,
+  RegisterTenantPayload,
   TenantInfo,
-} from "../api/authApi";
-import type { ApiResponse } from "../../../api/axiosClient";
+} from '../api/authApi';
+import { authApi } from '../api/authApi';
 
 export function useRegister() {
-  return useMutation<
-    ApiResponse<RegisterTenantData>,
-    Error,
-    RegisterTenantPayload
-  >({
+  return useMutation<ApiResponse<RegisterTenantData>, Error, RegisterTenantPayload>({
     mutationFn: (payload: RegisterTenantPayload) => authApi.register(payload),
   });
 }
@@ -30,7 +23,7 @@ export function useLogin() {
   return useMutation<ApiResponse<TenantInfo>, Error, LoginTenantPayload>({
     mutationFn: (payload: LoginTenantPayload) => authApi.login(payload),
     onSuccess: (res) => {
-      queryClient.setQueryData(["currentTenant"], res);
+      queryClient.setQueryData(['currentTenant'], res);
       if (res?.data) {
         authLogin(res.data);
       }
@@ -45,7 +38,7 @@ export function useGoogleLoginTenant() {
   return useMutation<ApiResponse<TenantInfo>, Error, { id_token: string }>({
     mutationFn: (payload: { id_token: string }) => authApi.googleLogin(payload),
     onSuccess: (res) => {
-      queryClient.setQueryData(["currentTenant"], res);
+      queryClient.setQueryData(['currentTenant'], res);
       if (res?.data) {
         authLogin(res.data);
       }
@@ -57,7 +50,7 @@ export function useTenantProfile(enabled: boolean = true) {
   const authLogin = useAuthStore((state) => state.login);
 
   return useQuery<ApiResponse<TenantInfo>, Error>({
-    queryKey: ["currentTenant"],
+    queryKey: ['currentTenant'],
     queryFn: async () => {
       const res = await authApi.getProfile();
       if (res?.data) {
@@ -75,25 +68,22 @@ export function useDashboardLogin() {
   const queryClient = useQueryClient();
   const authLogin = useAuthStore((state) => state.login);
 
-  return useMutation<ApiResponse<DashboardUserInfo>, Error, LoginTenantPayload>(
-    {
-      mutationFn: (payload: LoginTenantPayload) =>
-        dashboardUserAuthApi.login(payload),
-      onSuccess: (res) => {
-        queryClient.setQueryData(["currentDashboardUser"], res.data);
-        if (res?.data) {
-          authLogin(res.data);
-        }
-      },
+  return useMutation<ApiResponse<DashboardUserInfo>, Error, LoginTenantPayload>({
+    mutationFn: (payload: LoginTenantPayload) => dashboardUserAuthApi.login(payload),
+    onSuccess: (res) => {
+      queryClient.setQueryData(['currentDashboardUser'], res.data);
+      if (res?.data) {
+        authLogin(res.data);
+      }
     },
-  );
+  });
 }
 
 export function useDashboardProfile(enabled: boolean = true) {
   const authLogin = useAuthStore((state) => state.login);
 
   return useQuery<ApiResponse<DashboardUserInfo>, Error>({
-    queryKey: ["currentDashboardUser"],
+    queryKey: ['currentDashboardUser'],
     queryFn: async () => {
       const res = await dashboardUserAuthApi.getProfile();
       if (res?.data) {
@@ -113,7 +103,7 @@ export function useVerifyEmail() {
   return useMutation<ApiResponse<{ tenant_id: string }>, Error, string>({
     mutationFn: (token: string) => authApi.verifyEmail(token),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["currentTenant"] });
+      queryClient.invalidateQueries({ queryKey: ['currentTenant'] });
     },
   });
 }

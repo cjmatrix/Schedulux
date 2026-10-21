@@ -1,14 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { tenantApi } from '../api/tenantApi';
-import type { InviteUserRequest, InviteUserResponse, ListWorkspaceUsersResponse } from '../api/tenantApi';
 import type { ApiResponse } from '../../../api/axiosClient';
+import type {
+  InviteUserRequest,
+  InviteUserResponse,
+  ListWorkspaceUsersResponse,
+} from '../api/tenantApi';
+import { tenantApi } from '../api/tenantApi';
 
 export function useWorkspaceUsers(
   tenantId: string,
   page?: number,
   limit?: number,
   search?: string,
-  role?: string
+  role?: string,
 ) {
   return useQuery<ApiResponse<ListWorkspaceUsersResponse>, Error>({
     queryKey: ['workspaceUsers', tenantId, page, limit, search, role],

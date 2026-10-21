@@ -1,5 +1,5 @@
+import { ArrowRight, Calendar, Loader2, Shield, X } from 'lucide-react';
 import { useState } from 'react';
-import { X, Calendar, Shield, Loader2, ArrowRight } from 'lucide-react';
 import { useInviteUser } from '../hooks/useTenant';
 
 interface InviteUserModalProps {
@@ -41,16 +41,16 @@ export function InviteUserModal({ isOpen, onClose, tenantId }: InviteUserModalPr
           setSystemRole('manager');
           onClose();
         },
-        onError: (err: any) => {
-          setErrorMsg(err?.response?.data?.error || err.message || 'Failed to send invitation.');
+        onError: (err: unknown) => {
+          setErrorMsg(err instanceof Error ? err.message : 'Failed to send invitation.');
         },
-      }
+      },
     );
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div 
+      <div
         className="bg-white rounded-2xl max-w-lg w-full p-7 shadow-2xl border border-slate-100 flex flex-col relative"
         onClick={(e) => e.stopPropagation()}
       >
@@ -64,7 +64,9 @@ export function InviteUserModal({ isOpen, onClose, tenantId }: InviteUserModalPr
 
         {/* Title Header */}
         <div className="mb-6">
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight mb-1">Invite to Workspace</h2>
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight mb-1">
+            Invite to Workspace
+          </h2>
           <p className="text-xs text-slate-500 leading-relaxed max-w-md">
             Send an email invitation to a new team member and set their access level.
           </p>
@@ -124,10 +126,16 @@ export function InviteUserModal({ isOpen, onClose, tenantId }: InviteUserModalPr
                 }`}
               >
                 <div className="mt-0.5">
-                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
-                    systemRole === 'manager' ? 'border-slate-900 bg-slate-900' : 'border-slate-300 bg-white'
-                  }`}>
-                    {systemRole === 'manager' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  <div
+                    className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                      systemRole === 'manager'
+                        ? 'border-slate-900 bg-slate-900'
+                        : 'border-slate-300 bg-white'
+                    }`}
+                  >
+                    {systemRole === 'manager' && (
+                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                    )}
                   </div>
                 </div>
 
@@ -137,7 +145,8 @@ export function InviteUserModal({ isOpen, onClose, tenantId }: InviteUserModalPr
                     <span>Manager (Front Desk / Operations)</span>
                   </div>
                   <p className="text-[11px] text-slate-500 leading-normal">
-                    Can manage the calendar, view customer data, and take over live AI chats. Cannot change billing or edit the AI Agent.
+                    Can manage the calendar, view customer data, and take over live AI chats. Cannot
+                    change billing or edit the AI Agent.
                   </p>
                 </div>
               </div>
@@ -152,9 +161,13 @@ export function InviteUserModal({ isOpen, onClose, tenantId }: InviteUserModalPr
                 }`}
               >
                 <div className="mt-0.5">
-                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
-                    systemRole === 'root' ? 'border-slate-900 bg-slate-900' : 'border-slate-300 bg-white'
-                  }`}>
+                  <div
+                    className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                      systemRole === 'root'
+                        ? 'border-slate-900 bg-slate-900'
+                        : 'border-slate-300 bg-white'
+                    }`}
+                  >
                     {systemRole === 'root' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                   </div>
                 </div>
@@ -165,7 +178,8 @@ export function InviteUserModal({ isOpen, onClose, tenantId }: InviteUserModalPr
                     <span>Owner (Full Admin Access)</span>
                   </div>
                   <p className="text-[11px] text-slate-500 leading-normal">
-                    Has absolute control. Can configure the AI Agent Studio, edit Stripe billing, and delete the workspace.
+                    Has absolute control. Can configure the AI Agent Studio, edit Stripe billing,
+                    and delete the workspace.
                   </p>
                 </div>
               </div>

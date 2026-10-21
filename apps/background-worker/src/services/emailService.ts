@@ -47,13 +47,17 @@ export class EmailService {
       });
       console.log(' [EmailService] Configured with SMTP host:', host);
     } else {
-      console.log('ℹ [EmailService] No SMTP credentials provided. Running in DEV mode (emails logged to terminal).');
+      console.log(
+        'ℹ [EmailService] No SMTP credentials provided. Running in DEV mode (emails logged to terminal).',
+      );
     }
   }
 
   async sendTenantVerificationEmail(data: TenantVerificationEmailData): Promise<void> {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const verifyUrl = data.verification_url || `${frontendUrl}/verify-email?token=${encodeURIComponent(data.verification_token)}`;
+    const verifyUrl =
+      data.verification_url ||
+      `${frontendUrl}/verify-email?token=${encodeURIComponent(data.verification_token)}`;
     const fromAddress = process.env.FROM_EMAIL || '"Schedulux AI" <no-reply@schedulux.ai>';
 
     const htmlContent = `
@@ -223,7 +227,7 @@ export class EmailService {
 
   async sendForgotPasswordEmail(data: ForgotPasswordEmailData): Promise<void> {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    
+
     // We can direct them to a unified reset password page, or separate ones. Let's use a unified one and pass role as param, or let frontend figure it out
     const resetUrl = `${frontendUrl}/reset-password?token=${encodeURIComponent(data.reset_token)}&role=${data.role}`;
     const fromAddress = process.env.FROM_EMAIL || '"Schedulux AI" <no-reply@schedulux.ai>';

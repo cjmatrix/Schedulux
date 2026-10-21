@@ -13,7 +13,7 @@ const tenantSchema = new mongoose.Schema({
     stripe_customer_id: { type: String, default: null },
     status: { type: String, default: 'active' },
     monthly_token_limit: { type: Number, default: null },
-    created_at: { type: Date, default: Date.now }
+    created_at: { type: Date, default: Date.now },
 }, {
     timestamps: { createdAt: 'created_at', updatedAt: false },
     versionKey: false,

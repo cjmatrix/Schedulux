@@ -1,12 +1,41 @@
-import { Controller, Post, Get, Body, Query, Req, Res, Inject, OnModuleInit, UsePipes, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Inject,
+  OnModuleInit,
+  Post,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+  UsePipes,
+} from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
-import { Request, Response } from 'express';
-import { Observable, lastValueFrom } from 'rxjs';
-import { ZodValidationPipe } from 'nestjs-zod';
-import { TenantRegisterDto, TenantLoginDto, TenantGoogleLoginDto, InviteUserDto, VerifyEmailDto, RefreshTokenDto, LogoutDto, ListWorkspaceUsersDto, ForgotPasswordDto, ResetPasswordDto } from './dtos/tenant.dto.js';
-import { TenantAuthServiceClient, TenantServiceClient } from '@repo/proto/tenant';
 import { DashboardUserServiceClient } from '@repo/proto/dashboard';
-import { TenantAuthGuard, AuthenticatedTenantRequest } from '../../guards/tenant-auth.guard.js';
+import { TenantAuthServiceClient, TenantServiceClient } from '@repo/proto/tenant';
+import { Request, Response } from 'express';
+import { ZodValidationPipe } from 'nestjs-zod';
+import { lastValueFrom, Observable } from 'rxjs';
+import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
+import {
+  getAccessTokenCookieOptions,
+  getRefreshTokenCookieOptions,
+} from '../../utils/cookie.util.js';
+import {
+  ForgotPasswordDto,
+  InviteUserDto,
+  ListWorkspaceUsersDto,
+  LogoutDto,
+  RefreshTokenDto,
+  ResetPasswordDto,
+  TenantGoogleLoginDto,
+  TenantLoginDto,
+  TenantRegisterDto,
+  VerifyEmailDto,
+} from './dtos/tenant.dto.js';
 
 @Controller('api/v1/tenant/auth')
 export class TenantController implements OnModuleInit {
@@ -22,14 +51,17 @@ export class TenantController implements OnModuleInit {
   onModuleInit() {
     this.tenantAuthService = this.client.getService<TenantAuthServiceClient>('TenantAuthService');
     this.tenantServiceClient = this.client.getService<TenantServiceClient>('TenantService');
-    this.dashboardUserServiceClient = this.dashboardClient.getService<DashboardUserServiceClient>('DashboardUserService');
+    this.dashboardUserServiceClient =
+      this.dashboardClient.getService<DashboardUserServiceClient>('DashboardUserService');
   }
 
   @Get('me')
   @UseGuards(TenantAuthGuard)
   async getProfile(@Req() req: AuthenticatedTenantRequest) {
     const tenantId = req.tenant?.tenant_id || '';
-    const response = await lastValueFrom(this.tenantAuthService.getProfile({ tenant_id: tenantId }));
+    const response = await lastValueFrom(
+      this.tenantAuthService.getProfile({ tenant_id: tenantId }),
+    );
     return {
       message: 'Profile retrieved successfully',
       data: response.tenant,
@@ -54,21 +86,9 @@ export class TenantController implements OnModuleInit {
   @UsePipes(ZodValidationPipe)
   async login(@Body() body: TenantLoginDto, @Res({ passthrough: true }) res: Response) {
     const response = await lastValueFrom(this.tenantAuthService.login(body));
-    const isProduction = process.env.NODE_ENV === 'production';
 
-    res.cookie('access_token', response.access_token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax',
-      maxAge: 15 * 60 * 1000,
-    });
-
-    res.cookie('refresh_token', response.refresh_token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie('access_token', response.access_token, getAccessTokenCookieOptions());
+    res.cookie('refresh_token', response.refresh_token, getRefreshTokenCookieOptions());
 
     return {
       message: response.message,
@@ -79,22 +99,12 @@ export class TenantController implements OnModuleInit {
   @Post('google')
   @UsePipes(ZodValidationPipe)
   async googleLogin(@Body() body: TenantGoogleLoginDto, @Res({ passthrough: true }) res: Response) {
-    const response = await lastValueFrom(this.tenantAuthService.googleLogin({ id_token: body.id_token }));
-    const isProduction = process.env.NODE_ENV === 'production';
+    const response = await lastValueFrom(
+      this.tenantAuthService.googleLogin({ id_token: body.id_token }),
+    );
 
-    res.cookie('access_token', response.access_token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax',
-      maxAge: 15 * 60 * 1000,
-    });
-
-    res.cookie('refresh_token', response.refresh_token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie('access_token', response.access_token, getAccessTokenCookieOptions());
+    res.cookie('refresh_token', response.refresh_token, getRefreshTokenCookieOptions());
 
     return {
       message: response.message,
@@ -105,7 +115,9 @@ export class TenantController implements OnModuleInit {
   @Get('verify-email')
   @UsePipes(ZodValidationPipe)
   async verifyEmail(@Query() query: VerifyEmailDto) {
-    const response = await lastValueFrom(this.tenantAuthService.verifyEmail({ token: query.token }));
+    const response = await lastValueFrom(
+      this.tenantAuthService.verifyEmail({ token: query.token }),
+    );
     return {
       message: response.message,
       data: { tenant_id: response.tenant_id },
@@ -120,22 +132,12 @@ export class TenantController implements OnModuleInit {
     @Res({ passthrough: true }) res: Response,
   ) {
     const token = req.cookies?.refresh_token || body?.refresh_token || '';
-    const response = await lastValueFrom(this.tenantAuthService.refreshToken({ refresh_token: token }));
-    const isProduction = process.env.NODE_ENV === 'production';
+    const response = await lastValueFrom(
+      this.tenantAuthService.refreshToken({ refresh_token: token }),
+    );
 
-    res.cookie('access_token', response.access_token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax',
-      maxAge: 15 * 60 * 1000,
-    });
-
-    res.cookie('refresh_token', response.refresh_token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie('access_token', response.access_token, getAccessTokenCookieOptions());
+    res.cookie('refresh_token', response.refresh_token, getRefreshTokenCookieOptions());
 
     return {
       message: response.message,
@@ -177,10 +179,12 @@ export class TenantController implements OnModuleInit {
   @Post('reset-password')
   @UsePipes(ZodValidationPipe)
   async resetPassword(@Body() body: ResetPasswordDto) {
-    const response = await lastValueFrom(this.tenantAuthService.resetPassword({
-      token: body.token,
-      new_password: body.new_password
-    }));
+    const response = await lastValueFrom(
+      this.tenantAuthService.resetPassword({
+        token: body.token,
+        new_password: body.new_password,
+      }),
+    );
     return {
       message: response.message,
       data: null,
@@ -213,7 +217,7 @@ export class TenantController implements OnModuleInit {
         limit: query.limit,
         search: query.search,
         role: query.role,
-      })
+      }),
     );
     return {
       message: 'Workspace users retrieved successfully',

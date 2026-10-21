@@ -14,10 +14,11 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TenantController = void 0;
 const common_1 = require("@nestjs/common");
-const rxjs_1 = require("rxjs");
 const nestjs_zod_1 = require("nestjs-zod");
-const tenant_dto_js_1 = require("./dtos/tenant.dto.js");
+const rxjs_1 = require("rxjs");
 const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
+const cookie_util_js_1 = require("../../utils/cookie.util.js");
+const tenant_dto_js_1 = require("./dtos/tenant.dto.js");
 let TenantController = class TenantController {
     client;
     dashboardClient;
@@ -31,7 +32,8 @@ let TenantController = class TenantController {
     onModuleInit() {
         this.tenantAuthService = this.client.getService('TenantAuthService');
         this.tenantServiceClient = this.client.getService('TenantService');
-        this.dashboardUserServiceClient = this.dashboardClient.getService('DashboardUserService');
+        this.dashboardUserServiceClient =
+            this.dashboardClient.getService('DashboardUserService');
     }
     async getProfile(req) {
         const tenantId = req.tenant?.tenant_id || '';
@@ -53,19 +55,8 @@ let TenantController = class TenantController {
     }
     async login(body, res) {
         const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.login(body));
-        const isProduction = process.env.NODE_ENV === 'production';
-        res.cookie('access_token', response.access_token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? 'none' : 'lax',
-            maxAge: 15 * 60 * 1000,
-        });
-        res.cookie('refresh_token', response.refresh_token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? 'none' : 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        res.cookie('access_token', response.access_token, (0, cookie_util_js_1.getAccessTokenCookieOptions)());
+        res.cookie('refresh_token', response.refresh_token, (0, cookie_util_js_1.getRefreshTokenCookieOptions)());
         return {
             message: response.message,
             data: response.tenant,
@@ -73,19 +64,8 @@ let TenantController = class TenantController {
     }
     async googleLogin(body, res) {
         const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.googleLogin({ id_token: body.id_token }));
-        const isProduction = process.env.NODE_ENV === 'production';
-        res.cookie('access_token', response.access_token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? 'none' : 'lax',
-            maxAge: 15 * 60 * 1000,
-        });
-        res.cookie('refresh_token', response.refresh_token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? 'none' : 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        res.cookie('access_token', response.access_token, (0, cookie_util_js_1.getAccessTokenCookieOptions)());
+        res.cookie('refresh_token', response.refresh_token, (0, cookie_util_js_1.getRefreshTokenCookieOptions)());
         return {
             message: response.message,
             data: response.tenant,
@@ -101,19 +81,8 @@ let TenantController = class TenantController {
     async refreshToken(req, body, res) {
         const token = req.cookies?.refresh_token || body?.refresh_token || '';
         const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.refreshToken({ refresh_token: token }));
-        const isProduction = process.env.NODE_ENV === 'production';
-        res.cookie('access_token', response.access_token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? 'none' : 'lax',
-            maxAge: 15 * 60 * 1000,
-        });
-        res.cookie('refresh_token', response.refresh_token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? 'none' : 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        res.cookie('access_token', response.access_token, (0, cookie_util_js_1.getAccessTokenCookieOptions)());
+        res.cookie('refresh_token', response.refresh_token, (0, cookie_util_js_1.getRefreshTokenCookieOptions)());
         return {
             message: response.message,
             data: null,
@@ -143,7 +112,7 @@ let TenantController = class TenantController {
     async resetPassword(body) {
         const response = await (0, rxjs_1.lastValueFrom)(this.tenantAuthService.resetPassword({
             token: body.token,
-            new_password: body.new_password
+            new_password: body.new_password,
         }));
         return {
             message: response.message,

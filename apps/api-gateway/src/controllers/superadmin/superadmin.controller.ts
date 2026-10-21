@@ -1,67 +1,54 @@
 import {
-  Controller,
-  Post,
-  Get,
   Body,
-  Req,
-  Res,
+  Controller,
+  Get,
   Inject,
   OnModuleInit,
-  UsePipes,
-  UseGuards,
+  Post,
+  Req,
+  Res,
   UnauthorizedException,
-} from "@nestjs/common";
-import { ClientGrpc } from "@nestjs/microservices";
-import { Request, Response } from "express";
-import { Observable, lastValueFrom } from "rxjs";
-import { ZodValidationPipe } from "nestjs-zod";
+  UseGuards,
+  UsePipes,
+} from '@nestjs/common';
+import { ClientGrpc } from '@nestjs/microservices';
+import { SuperAdminAuthServiceClient } from '@repo/proto/superadmin';
+import { Request, Response } from 'express';
+import { ZodValidationPipe } from 'nestjs-zod';
+import { lastValueFrom, Observable } from 'rxjs';
 import {
-  SuperAdminAuthGuard,
   AuthenticatedSuperAdminRequest,
-} from "../../guards/superadmin-auth.guard.js";
+  SuperAdminAuthGuard,
+} from '../../guards/superadmin-auth.guard.js';
+import {
+  getAccessTokenCookieOptions,
+  getRefreshTokenCookieOptions,
+} from '../../utils/cookie.util.js';
 import {
   SuperAdminLoginDto,
-  SuperAdminRefreshTokenDto,
   SuperAdminLogoutDto,
-} from "./dtos/superAdmin.dto.js";
-import { SuperAdminAuthServiceClient } from "@repo/proto/superadmin";
+  SuperAdminRefreshTokenDto,
+} from './dtos/superAdmin.dto.js';
 
-@Controller("api/v1/superadmin/auth")
+@Controller('api/v1/superadmin/auth')
 export class SuperAdminController implements OnModuleInit {
   private superAdminAuthService!: SuperAdminAuthServiceClient;
 
-  constructor(@Inject("SUPERADMIN_PACKAGE") private client: ClientGrpc) {}
+  constructor(@Inject('SUPERADMIN_PACKAGE') private client: ClientGrpc) {}
 
   onModuleInit() {
-    this.superAdminAuthService = this.client.getService<SuperAdminAuthServiceClient>(
-      "SuperAdminAuthService",
-    );
+    this.superAdminAuthService =
+      this.client.getService<SuperAdminAuthServiceClient>('SuperAdminAuthService');
   }
 
-  @Post("login")
+  @Post('login')
   @UsePipes(ZodValidationPipe)
-  async login(
-    @Body() body: SuperAdminLoginDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const response = await lastValueFrom(
-      this.superAdminAuthService.login(body),
-    );
-    const isProduction = process.env.NODE_ENV === "production";
+  async login(@Body() body: SuperAdminLoginDto, @Res({ passthrough: true }) res: Response) {
+    const response = await lastValueFrom(this.superAdminAuthService.login(body));
+    const isProduction = process.env.NODE_ENV === 'production';
 
-    res.cookie("superadmin_access_token", response.access_token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "none" : "lax",
-      maxAge: 15 * 60 * 1000,
-    });
-
-    res.cookie("superadmin_refresh_token", response.refresh_token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "none" : "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie('superadmin_access_token', response.access_token, getAccessTokenCookieOptions());
+    res.cookie('superadmin_refresh_token', response.refresh_token, getRefreshTokenCookieOptions());
 
     return {
       message: response.message,
@@ -69,33 +56,20 @@ export class SuperAdminController implements OnModuleInit {
     };
   }
 
-  @Post("refresh-token")
+  @Post('refresh-token')
   @UsePipes(ZodValidationPipe)
   async refreshToken(
     @Req() req: Request,
     @Body() body: SuperAdminRefreshTokenDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const token =
-      req.cookies?.superadmin_refresh_token || body?.refresh_token || "";
+    const token = req.cookies?.superadmin_refresh_token || body?.refresh_token || '';
     const response = await lastValueFrom(
       this.superAdminAuthService.refreshToken({ refresh_token: token }),
     );
-    const isProduction = process.env.NODE_ENV === "production";
 
-    res.cookie("superadmin_access_token", response.access_token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "none" : "lax",
-      maxAge: 15 * 60 * 1000,
-    });
-
-    res.cookie("superadmin_refresh_token", response.refresh_token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "none" : "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie('superadmin_access_token', response.access_token, getAccessTokenCookieOptions());
+    res.cookie('superadmin_refresh_token', response.refresh_token, getRefreshTokenCookieOptions());
 
     return {
       message: response.message,
@@ -103,39 +77,38 @@ export class SuperAdminController implements OnModuleInit {
     };
   }
 
-  @Post("logout")
+  @Post('logout')
   @UsePipes(ZodValidationPipe)
   async logout(
     @Req() req: Request,
     @Body() body: SuperAdminLogoutDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const token =
-      req.cookies?.superadmin_refresh_token || body?.refresh_token || "";
+    const token = req.cookies?.superadmin_refresh_token || body?.refresh_token || '';
     const response = await lastValueFrom(
       this.superAdminAuthService.logout({ refresh_token: token }),
     );
-    res.clearCookie("superadmin_access_token");
-    res.clearCookie("superadmin_refresh_token");
+    res.clearCookie('superadmin_access_token');
+    res.clearCookie('superadmin_refresh_token');
     return {
-      message: response.message || "Logged out successfully",
+      message: response.message || 'Logged out successfully',
       data: null,
     };
   }
 
-  @Get("me")
+  @Get('me')
   @UseGuards(SuperAdminAuthGuard)
   async me(@Req() req: AuthenticatedSuperAdminRequest) {
     const superAdminId = req.superAdmin?.super_admin_id;
     if (!superAdminId) {
-      throw new UnauthorizedException("Unauthorized");
+      throw new UnauthorizedException('Unauthorized');
     }
 
     const response = await lastValueFrom(
       this.superAdminAuthService.getProfile({ superadmin_id: superAdminId }),
     );
     return {
-      message: "Profile retrieved successfully",
+      message: 'Profile retrieved successfully',
       data: response.superAdmin,
     };
   }

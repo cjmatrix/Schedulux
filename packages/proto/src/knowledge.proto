@@ -5,6 +5,11 @@ package knowledge;
 service KnowledgeService {
   rpc CrawlSite (CrawlSiteRequest) returns (CrawlSiteResponse);
   rpc GetCrawlStatus (GetCrawlStatusRequest) returns (GetCrawlStatusResponse);
+  rpc StartOnboardingSession (StartOnboardingRequest) returns (OnboardingResponse);
+  rpc ResumeOnboardingSession (ResumeOnboardingRequest) returns (OnboardingResponse);
+  rpc SaveInitialAgentDraft (SaveInitialAgentDraftRequest) returns (SaveInitialAgentDraftResponse);
+  rpc ListTenantAgents (ListTenantAgentsRequest) returns (ListTenantAgentsResponse);
+  rpc GetAgentMessages (GetAgentMessagesRequest) returns (GetAgentMessagesResponse);
 }
 
 message CrawlSiteRequest {
@@ -35,4 +40,78 @@ message GetCrawlStatusResponse {
   string status = 2;
   int32 pages_crawled = 3;
   repeated CrawlPageResult pages = 4;
+}
+
+message StartOnboardingRequest {
+  string tenant_id = 1;
+  string initial_draft_json = 2;
+  string agent_id = 3;
+}
+
+message ResumeOnboardingRequest {
+  string tenant_id = 1;
+  string user_answer = 2;
+  string agent_id = 3;
+}
+
+message OnboardingResponse {
+  string status = 1;
+  string question = 2;
+  string field = 3;
+  string type = 4;
+  string draft_schema_json = 5;
+  string live_schema_json = 6;
+}
+
+message SaveInitialAgentDraftRequest {
+  string tenant_id = 1;
+  string draft_json = 2;
+  string creation_source = 3;
+  string name = 4;
+}
+
+message SaveInitialAgentDraftResponse {
+  string message = 1;
+  string agent_id = 2;
+  string status = 3;
+}
+
+message ListTenantAgentsRequest {
+  string tenant_id = 1;
+}
+
+message AgentSummaryInfo {
+  string agent_id = 1;
+  string name = 2;
+  string status = 3; // "pending" or "created"
+  string creation_source = 4;
+  int32 services_count = 5;
+  string updated_at = 6;
+  string created_at = 7;
+}
+
+message ListTenantAgentsResponse {
+  repeated AgentSummaryInfo agents = 1;
+}
+
+message ChatMessageInfo {
+  string id = 1;
+  string tenant_id = 2;
+  string agent_id = 3;
+  string role = 4; // "agent" or "tenant"
+  string content = 5;
+  string created_at = 6;
+}
+
+message GetAgentMessagesRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+  int32 limit = 3;
+  optional string before = 4;
+}
+
+message GetAgentMessagesResponse {
+  repeated ChatMessageInfo messages = 1;
+  optional string next_cursor = 2;
+  bool has_more = 3;
 }

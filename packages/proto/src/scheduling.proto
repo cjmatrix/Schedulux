@@ -1,0 +1,250 @@
+syntax = "proto3";
+
+package scheduling;
+
+service SchedulingInventoryService {
+  // Service CRUD
+  rpc CreateService (CreateServiceRequest) returns (ServiceResponse);
+  rpc GetService (GetServiceRequest) returns (ServiceResponse);
+  rpc ListServices (ListServicesRequest) returns (ListServicesResponse);
+  rpc UpdateService (UpdateServiceRequest) returns (ServiceResponse);
+  rpc DeleteService (DeleteServiceRequest) returns (DeleteServiceResponse);
+
+  // Resource CRUD
+  rpc CreateResource (CreateResourceRequest) returns (ResourceResponse);
+  rpc GetResource (GetResourceRequest) returns (ResourceResponse);
+  rpc ListResources (ListResourcesRequest) returns (ListResourcesResponse);
+  rpc UpdateResource (UpdateResourceRequest) returns (ResourceResponse);
+  rpc DeleteResource (DeleteResourceRequest) returns (DeleteResourceResponse);
+
+  // Batch / Bulk Operations
+  rpc BatchSyncInventory (BatchSyncInventoryRequest) returns (BatchSyncInventoryResponse);
+}
+
+message PriceInfo {
+  string type = 1;
+  double amount = 2;
+  string currency = 3;
+}
+
+message DepositInfo {
+  bool required = 1;
+  double amount = 2;
+  string processor = 3;
+  string upi_id = 4;
+  string qr_code_url = 5;
+  string confirmation_method = 6;
+  string payment_instructions = 7;
+}
+
+message ServiceVerificationInfo {
+  optional bool require_otp = 1;
+}
+
+message ServiceInfo {
+  string service_id = 1;
+  string tenant_id = 2;
+  string name = 3;
+  string category = 4;
+  string description = 5;
+  int32 duration_minutes = 6;
+  int32 buffer_minutes = 7;
+  string allocation_model = 8;
+  PriceInfo price = 9;
+  DepositInfo deposit = 10;
+  repeated string eligible_resource_ids = 11;
+  repeated string required_asset_ids = 12;
+  int32 recall_interval_days = 13;
+  string created_at = 14;
+  string updated_at = 15;
+  string booking_mode = 16;
+  string agent_id = 17;
+  optional ServiceVerificationInfo verification = 18;
+}
+
+message CreateServiceRequest {
+  string tenant_id = 1;
+  string name = 2;
+  string category = 3;
+  string description = 4;
+  int32 duration_minutes = 5;
+  int32 buffer_minutes = 6;
+  string allocation_model = 7;
+  PriceInfo price = 8;
+  DepositInfo deposit = 9;
+  repeated string eligible_resource_ids = 10;
+  repeated string required_asset_ids = 11;
+  int32 recall_interval_days = 12;
+  optional string booking_mode = 13;
+  optional string agent_id = 14;
+  optional string service_id = 15;
+  optional ServiceVerificationInfo verification = 16;
+}
+
+message GetServiceRequest {
+  string tenant_id = 1;
+  string service_id = 2;
+}
+
+message ListServicesRequest {
+  string tenant_id = 1;
+  int32 page = 2;
+  int32 limit = 3;
+  string category = 4;
+  optional string agent_id = 5;
+  optional string search = 6;
+}
+
+message ServiceSummaryInfo {
+  int32 total_count = 1;
+  double avg_price = 2;
+  int32 deposit_count = 3;
+  repeated string categories = 4;
+}
+
+message ListServicesResponse {
+  repeated ServiceInfo services = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
+  optional ServiceSummaryInfo summary = 5;
+}
+
+message UpdateServiceRequest {
+  string tenant_id = 1;
+  string service_id = 2;
+  optional string name = 3;
+  optional string category = 4;
+  optional string description = 5;
+  optional int32 duration_minutes = 6;
+  optional int32 buffer_minutes = 7;
+  optional string allocation_model = 8;
+  PriceInfo price = 9;
+  DepositInfo deposit = 10;
+  repeated string eligible_resource_ids = 11;
+  repeated string required_asset_ids = 12;
+  optional int32 recall_interval_days = 13;
+  optional string booking_mode = 14;
+  optional string agent_id = 15;
+  optional ServiceVerificationInfo verification = 16;
+}
+
+message DeleteServiceRequest {
+  string tenant_id = 1;
+  string service_id = 2;
+}
+
+message DeleteServiceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ServiceResponse {
+  ServiceInfo service = 1;
+  string message = 2;
+}
+
+message ResourceInfo {
+  string resource_id = 1;
+  string tenant_id = 2;
+  string resource_type = 3;
+  string name = 4;
+  string title = 5;
+  string category = 6;
+  string description = 7;
+  bool is_bookable = 8;
+  string dispatch_status = 9;
+  string custom_shift_overrides_json = 10;
+  string created_at = 11;
+  string updated_at = 12;
+  string agent_id = 13;
+}
+
+message CreateResourceRequest {
+  string tenant_id = 1;
+  string resource_type = 2;
+  string name = 3;
+  string title = 4;
+  string category = 5;
+  string description = 6;
+  bool is_bookable = 7;
+  string dispatch_status = 8;
+  string custom_shift_overrides_json = 9;
+  optional string agent_id = 10;
+  optional string resource_id = 11;
+}
+
+message GetResourceRequest {
+  string tenant_id = 1;
+  string resource_id = 2;
+}
+
+message ListResourcesRequest {
+  string tenant_id = 1;
+  int32 page = 2;
+  int32 limit = 3;
+  string resource_type = 4;
+  string dispatch_status = 5;
+  optional string agent_id = 6;
+  optional string search = 7;
+  optional string category = 8;
+}
+
+message ResourceSummaryInfo {
+  int32 total_count = 1;
+  int32 active_count = 2;
+  int32 staff_count = 3;
+  int32 physical_count = 4;
+}
+
+message ListResourcesResponse {
+  repeated ResourceInfo resources = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
+  optional ResourceSummaryInfo summary = 5;
+}
+
+message UpdateResourceRequest {
+  string tenant_id = 1;
+  string resource_id = 2;
+  optional string resource_type = 3;
+  optional string name = 4;
+  optional string title = 5;
+  optional string category = 6;
+  optional string description = 7;
+  optional bool is_bookable = 8;
+  optional string dispatch_status = 9;
+  optional string custom_shift_overrides_json = 10;
+  optional string agent_id = 11;
+}
+
+message DeleteResourceRequest {
+  string tenant_id = 1;
+  string resource_id = 2;
+}
+
+message DeleteResourceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ResourceResponse {
+  ResourceInfo resource = 1;
+  string message = 2;
+}
+
+message BatchSyncInventoryRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+  repeated CreateResourceRequest resources = 3;
+  repeated CreateServiceRequest services = 4;
+}
+
+message BatchSyncInventoryResponse {
+  repeated ResourceInfo resources = 1;
+  repeated ServiceInfo services = 2;
+  bool success = 3;
+  string message = 4;
+}
+

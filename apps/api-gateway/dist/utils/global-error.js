@@ -37,7 +37,9 @@ let GlobalExceptionFilter = class GlobalExceptionFilter {
             status = exception.getStatus();
             message = exception.getResponse();
         }
-        else if (exception && typeof exception === 'object' && ('code' in exception || 'details' in exception)) {
+        else if (exception &&
+            typeof exception === 'object' &&
+            ('code' in exception || 'details' in exception)) {
             if (typeof exception.code === 'number' && GRPC_TO_HTTP_STATUS[exception.code]) {
                 status = GRPC_TO_HTTP_STATUS[exception.code];
             }

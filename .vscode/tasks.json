@@ -1,0 +1,139 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start All Services (Separate Terminals)",
+      "dependsOn": [
+        "RabbitMQ",
+        "API Gateway",
+        "Identity & Tenant",
+        "Scheduling & Inventory",
+        "Frontend React",
+        "Background Worker (TS)",
+        "Background Worker (Python)",
+        "AI Orchestrator (gRPC)"
+      ],
+      "dependsOrder": "parallel",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "RabbitMQ",
+      "type": "shell",
+      "command": "pnpm dev:rabbitmq",
+      "isBackground": true,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "API Gateway",
+      "type": "shell",
+      "command": "pnpm dev:gateway",
+      "isBackground": true,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Identity & Tenant",
+      "type": "shell",
+      "command": "pnpm dev:identity",
+      "isBackground": true,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Scheduling & Inventory",
+      "type": "shell",
+      "command": "pnpm dev:scheduling",
+      "isBackground": true,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Frontend React",
+      "type": "shell",
+      "command": "pnpm dev:frontend",
+      "isBackground": true,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Background Worker (TS)",
+      "type": "shell",
+      "command": "pnpm dev:worker",
+      "isBackground": true,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Background Worker (Python)",
+      "type": "shell",
+      "command": "pnpm dev:worker:python",
+      "isBackground": true,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "AI Orchestrator (gRPC)",
+      "type": "shell",
+      "command": "pnpm dev:ai:grpc",
+      "isBackground": true,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Stop RabbitMQ",
+      "type": "shell",
+      "command": "docker compose down",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

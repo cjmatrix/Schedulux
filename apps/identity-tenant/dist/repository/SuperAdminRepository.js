@@ -8,8 +8,8 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 import { Injectable } from '@nestjs/common';
-import { BaseRepository } from './BaseRepository.js';
 import { SuperAdmin } from '../model/SuperAdmin.js';
+import { BaseRepository } from './BaseRepository.js';
 let SuperAdminRepository = class SuperAdminRepository extends BaseRepository {
     constructor() {
         super(SuperAdmin);

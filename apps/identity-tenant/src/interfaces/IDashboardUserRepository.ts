@@ -1,5 +1,4 @@
-import { IDashboardUser } from "../model/DashboardUser.js";
-
+import { IDashboardUser } from '../model/DashboardUser.js';
 
 export interface FindWorkspaceUsersOptions {
   tenantId: string;
@@ -14,6 +13,8 @@ export interface IDashboardUserRepository {
   findByEmail(email: string): Promise<IDashboardUser | null>;
   findById(id: string): Promise<IDashboardUser | null>;
   findByTenantId(tenantId: string): Promise<IDashboardUser[]>;
-  findWorkspaceUsers(options: FindWorkspaceUsersOptions): Promise<{ users: IDashboardUser[]; total_count: number }>;
+  findWorkspaceUsers(
+    options: FindWorkspaceUsersOptions,
+  ): Promise<{ users: IDashboardUser[]; total_count: number }>;
   update(id: string, data: Partial<IDashboardUser>): Promise<IDashboardUser | null>;
 }

@@ -11,11 +11,10 @@ yarn-error.log
 # Build & Distribution Outputs
 # ==========================================
 # NestJS build output
-/dist/
-# React / Frontend build outputs
-/build/
-/out/
-/.next/
+dist/
+build/
+out/
+.next/
 /public/build/
 
 # ==========================================
@@ -79,3 +78,25 @@ Thumbs.db
 .eslintcache
 .turbo/
 .nx/
+
+
+.venv/
+venv/
+ENV/
+env/
+
+
+.uv/
+
+
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+*_pb2.py
+*_pb2.pyi
+*_pb2_grpc.py
+

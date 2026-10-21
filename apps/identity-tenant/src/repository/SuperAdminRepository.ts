@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { BaseRepository } from './BaseRepository.js';
 import { ISuperAdminRepository } from '../interfaces/ISuperAdminRepository.js';
 import { ISuperAdmin, SuperAdmin } from '../model/SuperAdmin.js';
+import { BaseRepository } from './BaseRepository.js';
 
 @Injectable()
 export class SuperAdminRepository

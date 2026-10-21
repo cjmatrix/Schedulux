@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document, Types } from 'mongoose';
+import mongoose, { Document, Schema, Types } from 'mongoose';
 
 export interface ISuperAdmin extends Document {
   _id: Types.ObjectId;
@@ -35,7 +35,7 @@ const superAdminSchema = new Schema<ISuperAdmin>(
   {
     timestamps: { createdAt: 'created_at', updatedAt: false },
     versionKey: false,
-  }
+  },
 );
 
 export const SuperAdmin = mongoose.model<ISuperAdmin>('SuperAdmin', superAdminSchema);

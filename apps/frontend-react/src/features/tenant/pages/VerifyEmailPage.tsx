@@ -1,47 +1,47 @@
-import { useEffect, useState } from "react";
-import { useSearchParams, useNavigate, Link } from "react-router";
 import {
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  ArrowRight,
   ArrowLeft,
-  ShieldCheck,
-  MailQuestion,
+  ArrowRight,
   Calendar,
-} from "lucide-react";
-import { useVerifyEmail } from "../hooks/useAuth";
+  CheckCircle2,
+  Loader2,
+  MailQuestion,
+  ShieldCheck,
+  XCircle,
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router';
+import { useVerifyEmail } from '../hooks/useAuth';
 
 export default function VerifyEmailPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const token = searchParams.get("token");
+  const token = searchParams.get('token');
 
-  const [status, setStatus] = useState<
-    "verifying" | "success" | "error" | "missing"
-  >(token ? "verifying" : "missing");
-  const [errorMessage, setErrorMessage] = useState("");
+  const [status, setStatus] = useState<'verifying' | 'success' | 'error' | 'missing'>(
+    token ? 'verifying' : 'missing',
+  );
+  const [errorMessage, setErrorMessage] = useState('');
 
   const verifyMutation = useVerifyEmail();
 
   useEffect(() => {
     if (!token) {
-      setStatus("missing");
+      setStatus('missing');
       return;
     }
 
-    setStatus("verifying");
+    setStatus('verifying');
     verifyMutation.mutate(token, {
       onSuccess: () => {
-        setStatus("success");
+        setStatus('success');
         const timer = setTimeout(() => {
-          navigate("/login?verified=true");
+          navigate('/login?verified=true');
         }, 2000);
         return () => clearTimeout(timer);
       },
       onError: (err) => {
-        setStatus("error");
-        setErrorMessage(err.message || "Invalid or expired verification link.");
+        setStatus('error');
+        setErrorMessage(err.message || 'Invalid or expired verification link.');
       },
     });
   }, [token]);
@@ -78,13 +78,11 @@ export default function VerifyEmailPage() {
               <div className="w-7 h-7 bg-black rounded-lg flex items-center justify-center text-white shadow-sm">
                 <ShieldCheck className="w-4 h-4" />
               </div>
-              <span className="font-bold text-gray-900 text-sm">
-                Schedulux AI
-              </span>
+              <span className="font-bold text-gray-900 text-sm">Schedulux AI</span>
             </div>
 
             {/* State: Verifying */}
-            {status === "verifying" && (
+            {status === 'verifying' && (
               <div className="py-4 flex flex-col items-center text-center">
                 <div className="w-16 h-16 rounded-full bg-gray-100 border border-gray-200/80 flex items-center justify-center mb-5">
                   <Loader2 className="w-8 h-8 text-black animate-spin" />
@@ -93,14 +91,13 @@ export default function VerifyEmailPage() {
                   Verifying Your Email
                 </h1>
                 <p className="text-xs text-gray-500 mt-2 max-w-xs">
-                  Please wait a moment while we validate your verification
-                  link...
+                  Please wait a moment while we validate your verification link...
                 </p>
               </div>
             )}
 
             {/* State: Success */}
-            {status === "success" && (
+            {status === 'success' && (
               <div className="py-4 flex flex-col items-center text-center">
                 <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-5 text-emerald-600 animate-bounce">
                   <CheckCircle2 className="w-9 h-9" />
@@ -109,11 +106,10 @@ export default function VerifyEmailPage() {
                   Email Verified!
                 </h1>
                 <p className="text-xs text-gray-500 mt-2 mb-6">
-                  Your account has been successfully verified. Redirecting you
-                  to sign in...
+                  Your account has been successfully verified. Redirecting you to sign in...
                 </p>
                 <button
-                  onClick={() => navigate("/login?verified=true")}
+                  onClick={() => navigate('/login?verified=true')}
                   className="w-full bg-black hover:bg-gray-800 active:scale-[0.99] text-white py-3.5 rounded-full text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
                 >
                   <span>Proceed to Sign In</span>
@@ -123,7 +119,7 @@ export default function VerifyEmailPage() {
             )}
 
             {/* State: Error */}
-            {status === "error" && (
+            {status === 'error' && (
               <div className="py-4 flex flex-col items-center text-center">
                 <div className="w-16 h-16 rounded-full bg-red-50 border border-red-100 flex items-center justify-center mb-5 text-red-500">
                   <XCircle className="w-9 h-9" />
@@ -145,7 +141,7 @@ export default function VerifyEmailPage() {
             )}
 
             {/* State: Missing Token */}
-            {status === "missing" && (
+            {status === 'missing' && (
               <div className="py-4 flex flex-col items-center text-center">
                 <div className="w-16 h-16 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center mb-5 text-amber-500">
                   <MailQuestion className="w-8 h-8" />
@@ -154,8 +150,8 @@ export default function VerifyEmailPage() {
                   Missing Verification Link
                 </h1>
                 <p className="text-xs text-gray-500 mt-2 mb-6 max-w-xs leading-relaxed">
-                  No verification token was detected in this link. Please check
-                  your inbox and click the link sent in your verification email.
+                  No verification token was detected in this link. Please check your inbox and click
+                  the link sent in your verification email.
                 </p>
                 <Link
                   to="/login"
@@ -172,15 +168,12 @@ export default function VerifyEmailPage() {
           <div className="mt-6 text-center space-y-2">
             <div className="inline-flex items-center gap-2 text-xs font-medium text-gray-600">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>
-                Autonomous Cluster: US-East (Virginia) • 99.99% operational
-              </span>
+              <span>Autonomous Cluster: US-East (Virginia) • 99.99% operational</span>
             </div>
             <div className="flex items-center justify-center gap-1.5 text-[11px] text-gray-400">
               <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
               <span>
-                Enterprise SAML 2.0 Ready • SOC2 Type II Certified • 256-Bit
-                Vault Storage
+                Enterprise SAML 2.0 Ready • SOC2 Type II Certified • 256-Bit Vault Storage
               </span>
             </div>
           </div>

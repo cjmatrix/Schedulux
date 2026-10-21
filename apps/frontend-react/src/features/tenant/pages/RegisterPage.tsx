@@ -1,41 +1,36 @@
-import { useState } from "react";
-import { useNavigate, Link, Navigate } from "react-router";
+import { GoogleLogin } from '@react-oauth/google';
 import {
   ArrowLeft,
   ArrowRight,
-  Store,
   AtSign,
-  Lock,
-  Shield,
+  Calendar,
   Eye,
   EyeOff,
-  ShieldCheck,
-  Calendar,
   Loader2,
+  Lock,
   Mail,
-} from "lucide-react";
-import { GoogleLogin } from "@react-oauth/google";
-import {
-  useRegister,
-  useGoogleLoginTenant,
-  useTenantProfile,
-} from "../hooks/useAuth";
-import { useAuthStore } from "../../../store/useAuthStore";
+  Shield,
+  ShieldCheck,
+  Store,
+} from 'lucide-react';
+import { useState } from 'react';
+import { Link, Navigate, useNavigate } from 'react-router';
+import { useAuthStore } from '../../../store/useAuthStore';
+import { useGoogleLoginTenant, useRegister, useTenantProfile } from '../hooks/useAuth';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
 
-  const [businessName, setBusinessName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [businessName, setBusinessName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [validationError, setValidationError] = useState("");
+  const [validationError, setValidationError] = useState('');
   const [isRegistered, setIsRegistered] = useState(false);
 
-  const { data: profileData, isLoading: isCheckingSession } =
-    useTenantProfile();
+  const { data: profileData, isLoading: isCheckingSession } = useTenantProfile();
   const registerMutation = useRegister();
   const googleLoginMutation = useGoogleLoginTenant();
   const authStoreLogin = useAuthStore((state) => state.login);
@@ -55,30 +50,25 @@ export default function RegisterPage() {
   }
 
   if (profileData?.data) {
-    return <Navigate to="/tenant/users" replace />;
+    return <Navigate to="/tenant/agents" replace />;
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setValidationError("");
+    setValidationError('');
 
-    if (
-      !businessName.trim() ||
-      !email.trim() ||
-      !password ||
-      !confirmPassword
-    ) {
-      setValidationError("Please fill in all required fields.");
+    if (!businessName.trim() || !email.trim() || !password || !confirmPassword) {
+      setValidationError('Please fill in all required fields.');
       return;
     }
 
     if (password !== confirmPassword) {
-      setValidationError("Passwords do not match.");
+      setValidationError('Passwords do not match.');
       return;
     }
 
     if (password.length < 6) {
-      setValidationError("Password must be at least 6 characters long.");
+      setValidationError('Password must be at least 6 characters long.');
       return;
     }
 
@@ -138,9 +128,9 @@ export default function RegisterPage() {
                 </h1>
 
                 <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                  We've sent a verification link to{" "}
-                  <span className="font-semibold text-gray-800">{email}</span>.
-                  Click the link in the email to activate your account.
+                  We've sent a verification link to{' '}
+                  <span className="font-semibold text-gray-800">{email}</span>. Click the link in
+                  the email to activate your account.
                 </p>
 
                 <div className="mt-8 space-y-3">
@@ -193,7 +183,7 @@ export default function RegisterPage() {
                       <GoogleLogin
                         onSuccess={(credentialResponse) => {
                           if (credentialResponse.credential) {
-                            setValidationError("");
+                            setValidationError('');
                             googleLoginMutation.mutate(
                               { id_token: credentialResponse.credential },
                               {
@@ -201,21 +191,17 @@ export default function RegisterPage() {
                                   if (res?.data) {
                                     authStoreLogin(res.data);
                                   }
-                                  navigate("/tenant/users");
+                                  navigate('/tenant/agents');
                                 },
                                 onError: (err) => {
-                                  setValidationError(
-                                    err.message || "Google sign-up failed.",
-                                  );
+                                  setValidationError(err.message || 'Google sign-up failed.');
                                 },
                               },
                             );
                           }
                         }}
                         onError={() => {
-                          setValidationError(
-                            "Google authentication was cancelled or failed.",
-                          );
+                          setValidationError('Google authentication was cancelled or failed.');
                         }}
                         theme="outline"
                         size="large"
@@ -249,9 +235,7 @@ export default function RegisterPage() {
                   {/* Username / Business Handle */}
                   <div>
                     <div className="flex justify-between items-center mb-1 text-[11px]">
-                      <label className="font-semibold text-gray-700">
-                        Username
-                      </label>
+                      <label className="font-semibold text-gray-700">Username</label>
                       <span className="text-gray-400">Business Handle</span>
                     </div>
                     <div className="relative flex items-center bg-[#f3f4f6] rounded-xl px-3.5 py-3 border border-transparent focus-within:border-gray-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-black/5 transition-all">
@@ -293,7 +277,7 @@ export default function RegisterPage() {
                     <div className="relative flex items-center bg-[#f3f4f6] rounded-xl px-3.5 py-3 border border-transparent focus-within:border-gray-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-black/5 transition-all">
                       <Lock className="w-4 h-4 text-gray-400 mr-2.5 flex-shrink-0" />
                       <input
-                        type={showPassword ? "text" : "password"}
+                        type={showPassword ? 'text' : 'password'}
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -322,7 +306,7 @@ export default function RegisterPage() {
                     <div className="relative flex items-center bg-[#f3f4f6] rounded-xl px-3.5 py-3 border border-transparent focus-within:border-gray-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-black/5 transition-all">
                       <Shield className="w-4 h-4 text-gray-400 mr-2.5 flex-shrink-0" />
                       <input
-                        type={showConfirmPassword ? "text" : "password"}
+                        type={showConfirmPassword ? 'text' : 'password'}
                         required
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
@@ -331,9 +315,7 @@ export default function RegisterPage() {
                       />
                       <button
                         type="button"
-                        onClick={() =>
-                          setShowConfirmPassword(!showConfirmPassword)
-                        }
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                         className="text-gray-400 hover:text-gray-600 focus:outline-none ml-2"
                       >
                         {showConfirmPassword ? (
@@ -367,18 +349,12 @@ export default function RegisterPage() {
 
                 {/* Terms */}
                 <p className="text-[11px] text-gray-500 text-center mt-4 leading-relaxed">
-                  By continuing, you agree to Schedulux AI{" "}
-                  <a
-                    href="#"
-                    className="font-semibold text-gray-800 hover:underline"
-                  >
+                  By continuing, you agree to Schedulux AI{' '}
+                  <a href="#" className="font-semibold text-gray-800 hover:underline">
                     Terms of Service
-                  </a>{" "}
-                  and{" "}
-                  <a
-                    href="#"
-                    className="font-semibold text-gray-800 hover:underline"
-                  >
+                  </a>{' '}
+                  and{' '}
+                  <a href="#" className="font-semibold text-gray-800 hover:underline">
                     Privacy Policy
                   </a>
                   .
@@ -386,11 +362,8 @@ export default function RegisterPage() {
 
                 {/* Already have an account */}
                 <div className="text-center mt-6 pt-5 border-t border-gray-100 text-xs text-gray-600">
-                  Already have an account?{" "}
-                  <Link
-                    to="/login"
-                    className="font-bold text-gray-900 hover:underline"
-                  >
+                  Already have an account?{' '}
+                  <Link to="/login" className="font-bold text-gray-900 hover:underline">
                     Sign in
                   </Link>
                 </div>
@@ -402,15 +375,12 @@ export default function RegisterPage() {
           <div className="mt-6 text-center space-y-2">
             <div className="inline-flex items-center gap-2 text-xs font-medium text-gray-600">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>
-                Autonomous Cluster: US-East (Virginia) • 99.99% operational
-              </span>
+              <span>Autonomous Cluster: US-East (Virginia) • 99.99% operational</span>
             </div>
             <div className="flex items-center justify-center gap-1.5 text-[11px] text-gray-400">
               <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
               <span>
-                Enterprise SAML 2.0 Ready • SOC2 Type II Certified • 256-Bit
-                Vault Storage
+                Enterprise SAML 2.0 Ready • SOC2 Type II Certified • 256-Bit Vault Storage
               </span>
             </div>
           </div>

@@ -1,25 +1,25 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router';
 import {
-  ChevronRight,
-  ChevronLeft,
-  Play,
-  Pause,
-  MessageSquare,
-  Lock,
-  UserCheck,
+  ArrowRight,
   Building2,
   Car,
-  Hotel,
-  Scissors,
-  ArrowRight,
   CheckCircle2,
-  X,
-  Volume2,
-  Sparkles,
-  PhoneCall,
+  ChevronLeft,
+  ChevronRight,
+  Hotel,
   Loader2,
+  Lock,
+  MessageSquare,
+  Pause,
+  PhoneCall,
+  Play,
+  Scissors,
+  Sparkles,
+  UserCheck,
+  Volume2,
+  X,
 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Link } from 'react-router';
 import { useAuthStore } from '../store/useAuthStore';
 
 interface VerticalData {
@@ -58,10 +58,11 @@ const VERTICALS: Record<string, VerticalData> = {
       rightNode: 'Multi-Seat',
     },
     sampleCall: {
-      caller: "Hi, I have severe molar pain that started 2 hours ago. Can I see Dr. Davis today?",
-      agent: "I understand that's very painful. Since this is acute dental pain, I'm unlocking an emergency 30-minute priority buffer at 3:15 PM today with Dr. Davis. Shall I reserve this?",
-      status: "Triage Alert: Acute Pain Level 8",
-      action: "Emergency Buffer Allocated (+15m sanitization)",
+      caller: 'Hi, I have severe molar pain that started 2 hours ago. Can I see Dr. Davis today?',
+      agent:
+        "I understand that's very painful. Since this is acute dental pain, I'm unlocking an emergency 30-minute priority buffer at 3:15 PM today with Dr. Davis. Shall I reserve this?",
+      status: 'Triage Alert: Acute Pain Level 8',
+      action: 'Emergency Buffer Allocated (+15m sanitization)',
     },
   },
   auto: {
@@ -78,10 +79,11 @@ const VERTICALS: Record<string, VerticalData> = {
       rightNode: 'Fleet Routing',
     },
     sampleCall: {
-      caller: "My BMW 3-series needs brake pad replacement and 40k mile service before Friday.",
-      agent: "Got it! I found your 2022 BMW 330i in our system. Brake pad replacement requires Lift Bay 3. I have a 9:00 AM slot this Thursday with Senior Tech Marco. Would that work?",
-      status: "Bay 3 Hoist Reserved",
-      action: "Parts Auto-Reserved in Inventory",
+      caller: 'My BMW 3-series needs brake pad replacement and 40k mile service before Friday.',
+      agent:
+        'Got it! I found your 2022 BMW 330i in our system. Brake pad replacement requires Lift Bay 3. I have a 9:00 AM slot this Thursday with Senior Tech Marco. Would that work?',
+      status: 'Bay 3 Hoist Reserved',
+      action: 'Parts Auto-Reserved in Inventory',
     },
   },
   salons: {
@@ -99,9 +101,10 @@ const VERTICALS: Record<string, VerticalData> = {
     },
     sampleCall: {
       caller: "I'd like a balayage and blowout with Elena sometime next Saturday afternoon.",
-      agent: "Elena has a balayage opening at 2:00 PM next Saturday. We factor in 90 minutes for processing plus a 45-minute finish blowout. I can lock in chair 4 for you now!",
-      status: "Color Buffer Applied (135 min)",
-      action: "Deposit Link Dispatched via SMS",
+      agent:
+        'Elena has a balayage opening at 2:00 PM next Saturday. We factor in 90 minutes for processing plus a 45-minute finish blowout. I can lock in chair 4 for you now!',
+      status: 'Color Buffer Applied (135 min)',
+      action: 'Deposit Link Dispatched via SMS',
     },
   },
 };
@@ -138,19 +141,29 @@ export default function LandingPage() {
               <span className="w-1.5 h-5 bg-neutral-950 rounded-full inline-block" />
               <span className="w-1.5 h-5 bg-neutral-950 rounded-full inline-block" />
             </div>
-            <span className="font-bold text-lg tracking-tight text-neutral-950">
-              Schedulux AI
-            </span>
+            <span className="font-bold text-lg tracking-tight text-neutral-950">Schedulux AI</span>
           </div>
 
           {/* Navigation Links */}
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-neutral-600">
-            <a href="#products" className="hover:text-neutral-950 transition-colors">Products</a>
-            <a href="#solutions" className="hover:text-neutral-950 transition-colors">Solutions</a>
-            <a href="#verticals" className="hover:text-neutral-950 transition-colors">Verticals</a>
-            <a href="#resources" className="hover:text-neutral-950 transition-colors">Resources</a>
-            <a href="#enterprise" className="hover:text-neutral-950 transition-colors">Enterprise</a>
-            <a href="#pricing" className="hover:text-neutral-950 transition-colors">Pricing</a>
+            <a href="#products" className="hover:text-neutral-950 transition-colors">
+              Products
+            </a>
+            <a href="#solutions" className="hover:text-neutral-950 transition-colors">
+              Solutions
+            </a>
+            <a href="#verticals" className="hover:text-neutral-950 transition-colors">
+              Verticals
+            </a>
+            <a href="#resources" className="hover:text-neutral-950 transition-colors">
+              Resources
+            </a>
+            <a href="#enterprise" className="hover:text-neutral-950 transition-colors">
+              Enterprise
+            </a>
+            <a href="#pricing" className="hover:text-neutral-950 transition-colors">
+              Pricing
+            </a>
           </nav>
 
           {/* Nav Actions */}
@@ -216,7 +229,9 @@ export default function LandingPage() {
 
           <div className="lg:col-span-5 lg:pt-2">
             <p className="text-neutral-500 text-base sm:text-[17px] leading-relaxed">
-              Powering the best clinics, auto centers, and service enterprises. From Schedulux Agents for dynamic patient intake, to deterministic buffer management and voice-to-calendar orchestration.
+              Powering the best clinics, auto centers, and service enterprises. From Schedulux
+              Agents for dynamic patient intake, to deterministic buffer management and
+              voice-to-calendar orchestration.
             </p>
           </div>
         </section>
@@ -395,17 +410,13 @@ export default function LandingPage() {
                   <span className="text-[10px] uppercase font-semibold text-neutral-400 block mb-1">
                     Caller Voice Stream:
                   </span>
-                  <p className="text-neutral-700 italic">
-                    "{currentVertical.sampleCall.caller}"
-                  </p>
+                  <p className="text-neutral-700 italic">"{currentVertical.sampleCall.caller}"</p>
                 </div>
                 <div className="p-3 rounded-xl bg-neutral-900 text-white border border-neutral-800">
                   <span className="text-[10px] uppercase font-semibold text-neutral-400 block mb-1">
                     Schedulux AI Agent Response:
                   </span>
-                  <p className="text-neutral-100">
-                    "{currentVertical.sampleCall.agent}"
-                  </p>
+                  <p className="text-neutral-100">"{currentVertical.sampleCall.agent}"</p>
                   <div className="mt-2 text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
                     <CheckCircle2 className="w-3 h-3" />
                     {currentVertical.sampleCall.action}
@@ -470,7 +481,9 @@ export default function LandingPage() {
                   Deterministic Slot Locking
                 </h3>
                 <p className="text-sm text-neutral-500 leading-relaxed">
-                  Eliminate double-booking forever. Schedulux locks real-time calendar availability during phone calls and web chats, instantly factoring doctor switch times, cleaning intervals, and equipment constraints.
+                  Eliminate double-booking forever. Schedulux locks real-time calendar availability
+                  during phone calls and web chats, instantly factoring doctor switch times,
+                  cleaning intervals, and equipment constraints.
                 </p>
               </div>
 
@@ -491,7 +504,9 @@ export default function LandingPage() {
                   Multi-session Client Memory
                 </h3>
                 <p className="text-sm text-neutral-500 leading-relaxed">
-                  Recognize returning callers instantly with secure SMS OTP. The agent recalls previous practitioner preferences, vehicle engine models, or salon styling history to personalize each booking conversation.
+                  Recognize returning callers instantly with secure SMS OTP. The agent recalls
+                  previous practitioner preferences, vehicle engine models, or salon styling history
+                  to personalize each booking conversation.
                 </p>
               </div>
 
@@ -521,11 +536,10 @@ export default function LandingPage() {
               <span className="text-[11px] font-semibold tracking-wider uppercase text-neutral-400 block mb-3">
                 STEP 01
               </span>
-              <h3 className="text-base font-bold text-neutral-950 mb-2">
-                Drop your Schedule
-              </h3>
+              <h3 className="text-base font-bold text-neutral-950 mb-2">Drop your Schedule</h3>
               <p className="text-sm text-neutral-500 leading-relaxed">
-                Upload CSV rosters, connect your Google/Outlook accounts, or paste service pricing. Schedulux parses service lengths, technician specialties, and breaks automatically.
+                Upload CSV rosters, connect your Google/Outlook accounts, or paste service pricing.
+                Schedulux parses service lengths, technician specialties, and breaks automatically.
               </p>
             </div>
 
@@ -534,11 +548,10 @@ export default function LandingPage() {
               <span className="text-[11px] font-semibold tracking-wider uppercase text-neutral-400 block mb-3">
                 STEP 02
               </span>
-              <h3 className="text-base font-bold text-neutral-950 mb-2">
-                Triage Guardrails
-              </h3>
+              <h3 className="text-base font-bold text-neutral-950 mb-2">Triage Guardrails</h3>
               <p className="text-sm text-neutral-500 leading-relaxed">
-                Configure boundaries. Flag acute symptoms for instant human operator transfer, enforce required deposits, and mandate custom customer intake disclosures.
+                Configure boundaries. Flag acute symptoms for instant human operator transfer,
+                enforce required deposits, and mandate custom customer intake disclosures.
               </p>
             </div>
 
@@ -547,11 +560,10 @@ export default function LandingPage() {
               <span className="text-[11px] font-semibold tracking-wider uppercase text-neutral-400 block mb-3">
                 STEP 03
               </span>
-              <h3 className="text-base font-bold text-neutral-950 mb-2">
-                Embed Anywhere
-              </h3>
+              <h3 className="text-base font-bold text-neutral-950 mb-2">Embed Anywhere</h3>
               <p className="text-sm text-neutral-500 leading-relaxed">
-                Route incoming inbound VoIP phone lines or copy a single-line script tag into your web footer. Your agent handles omni-channel bookings around the clock.
+                Route incoming inbound VoIP phone lines or copy a single-line script tag into your
+                web footer. Your agent handles omni-channel bookings around the clock.
               </p>
             </div>
           </div>
@@ -583,11 +595,10 @@ export default function LandingPage() {
               <div className="w-10 h-10 rounded-xl bg-cyan-50 border border-cyan-100 flex items-center justify-center mb-5">
                 <Building2 className="w-5 h-5 text-teal-600" />
               </div>
-              <h3 className="text-base font-bold text-neutral-950 mb-2">
-                Clinics &amp; Dental
-              </h3>
+              <h3 className="text-base font-bold text-neutral-950 mb-2">Clinics &amp; Dental</h3>
               <p className="text-xs text-neutral-500 leading-relaxed">
-                Patient intake, doctor &amp; treatment buffer calculation, and emergency clinical triage without front-desk delays.
+                Patient intake, doctor &amp; treatment buffer calculation, and emergency clinical
+                triage without front-desk delays.
               </p>
             </div>
 
@@ -596,11 +607,10 @@ export default function LandingPage() {
               <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center mb-5">
                 <Car className="w-5 h-5 text-red-500" />
               </div>
-              <h3 className="text-base font-bold text-neutral-950 mb-2">
-                Auto Service Bays
-              </h3>
+              <h3 className="text-base font-bold text-neutral-950 mb-2">Auto Service Bays</h3>
               <p className="text-xs text-neutral-500 leading-relaxed">
-                Bay allocation, lift availability, P&amp;D troupe collection, and automated mechanic shift balancing.
+                Bay allocation, lift availability, P&amp;D troupe collection, and automated mechanic
+                shift balancing.
               </p>
             </div>
 
@@ -609,11 +619,10 @@ export default function LandingPage() {
               <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center mb-5">
                 <Hotel className="w-5 h-5 text-amber-700" />
               </div>
-              <h3 className="text-base font-bold text-neutral-950 mb-2">
-                Boutique Stays
-              </h3>
+              <h3 className="text-base font-bold text-neutral-950 mb-2">Boutique Stays</h3>
               <p className="text-xs text-neutral-500 leading-relaxed">
-                Room reservations, activity dining add-ons, housekeeping turnover coordination, and guest preferences.
+                Room reservations, activity dining add-ons, housekeeping turnover coordination, and
+                guest preferences.
               </p>
             </div>
 
@@ -622,11 +631,10 @@ export default function LandingPage() {
               <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center mb-5">
                 <Scissors className="w-5 h-5 text-rose-500" />
               </div>
-              <h3 className="text-base font-bold text-neutral-950 mb-2">
-                Salons &amp; Spas
-              </h3>
+              <h3 className="text-base font-bold text-neutral-950 mb-2">Salons &amp; Spas</h3>
               <p className="text-xs text-neutral-500 leading-relaxed">
-                Chair assignments, hair processing duration buffers, recurring client sourcings, and stylist matching.
+                Chair assignments, hair processing duration buffers, recurring client sourcings, and
+                stylist matching.
               </p>
             </div>
           </div>
@@ -674,7 +682,10 @@ export default function LandingPage() {
               {generatedSuccess && (
                 <div className="mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-center gap-2 animate-in fade-in duration-200">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>Agent scaffold generated successfully for <strong>{websiteUrl}</strong>! Connecting calendar sync.</span>
+                  <span>
+                    Agent scaffold generated successfully for <strong>{websiteUrl}</strong>!
+                    Connecting calendar sync.
+                  </span>
                 </div>
               )}
             </form>
@@ -695,9 +706,7 @@ export default function LandingPage() {
               <span className="w-1.5 h-4 bg-neutral-950 rounded-full inline-block" />
               <span className="w-1.5 h-4 bg-neutral-950 rounded-full inline-block" />
             </div>
-            <span className="font-bold text-sm tracking-tight text-neutral-950">
-              Schedulux AI
-            </span>
+            <span className="font-bold text-sm tracking-tight text-neutral-950">Schedulux AI</span>
             <span className="text-neutral-400 text-xs ml-2">
               &copy; 2026 Schedulux Inc. All rights reserved.
             </span>
@@ -705,10 +714,18 @@ export default function LandingPage() {
 
           {/* Links */}
           <div className="flex flex-wrap items-center gap-6 text-xs text-neutral-500 font-medium">
-            <a href="#privacy" className="hover:text-neutral-950 transition-colors">Privacy Policy</a>
-            <a href="#terms" className="hover:text-neutral-950 transition-colors">Terms of Service</a>
-            <a href="#security" className="hover:text-neutral-950 transition-colors">Security &amp; HIPAA</a>
-            <a href="#status" className="hover:text-neutral-950 transition-colors">Status</a>
+            <a href="#privacy" className="hover:text-neutral-950 transition-colors">
+              Privacy Policy
+            </a>
+            <a href="#terms" className="hover:text-neutral-950 transition-colors">
+              Terms of Service
+            </a>
+            <a href="#security" className="hover:text-neutral-950 transition-colors">
+              Security &amp; HIPAA
+            </a>
+            <a href="#status" className="hover:text-neutral-950 transition-colors">
+              Status
+            </a>
           </div>
         </div>
       </footer>
@@ -726,12 +743,11 @@ export default function LandingPage() {
 
             <div className="flex items-center gap-2 mb-2">
               <Sparkles className="w-5 h-5 text-amber-500" />
-              <h3 className="text-xl font-bold text-neutral-950">
-                Experience Schedulux AI
-              </h3>
+              <h3 className="text-xl font-bold text-neutral-950">Experience Schedulux AI</h3>
             </div>
             <p className="text-xs text-neutral-500 mb-6">
-              Connect with our solutions team to test your phone lines or custom calendar buffer models.
+              Connect with our solutions team to test your phone lines or custom calendar buffer
+              models.
             </p>
 
             <form

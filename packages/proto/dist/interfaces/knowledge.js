@@ -13,7 +13,15 @@ exports.protobufPackage = "knowledge";
 exports.KNOWLEDGE_PACKAGE_NAME = "knowledge";
 function KnowledgeServiceControllerMethods() {
     return function (constructor) {
-        const grpcMethods = ["crawlSite", "getCrawlStatus"];
+        const grpcMethods = [
+            "crawlSite",
+            "getCrawlStatus",
+            "startOnboardingSession",
+            "resumeOnboardingSession",
+            "saveInitialAgentDraft",
+            "listTenantAgents",
+            "getAgentMessages",
+        ];
         for (const method of grpcMethods) {
             const descriptor = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
             (0, microservices_1.GrpcMethod)("KnowledgeService", method)(constructor.prototype[method], method, descriptor);

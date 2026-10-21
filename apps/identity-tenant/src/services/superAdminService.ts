@@ -1,21 +1,22 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ListTenantsRequest } from '@repo/proto/tenant';
+import type { SignOptions } from 'jsonwebtoken';
 import { nanoid } from 'nanoid';
-import { ISuperAdminRepository } from '../interfaces/ISuperAdminRepository.js';
 import { ICacheRepository } from '../interfaces/ICacheRepository.js';
-import { ListTenantsRequest } from "@repo/proto/tenant";
-import { ITenantRepository } from '../interfaces/ITenantRepository.js';
-import { IPasswordHasher } from '../interfaces/IPasswordHasher.js';
 import { IJwtService } from '../interfaces/IJwtService.js';
-
-const ACCESS_TOKEN_EXPIRY = '15m';
-const REFRESH_TOKEN_EXPIRY = '7d';
-const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days in seconds
+import { IPasswordHasher } from '../interfaces/IPasswordHasher.js';
+import { ISuperAdminRepository } from '../interfaces/ISuperAdminRepository.js';
+import { ISuperAdminService } from '../interfaces/ISuperAdminService.js';
+import { ITenantRepository } from '../interfaces/ITenantRepository.js';
 
 @Injectable()
-export class SuperAdminService {
+export class SuperAdminService implements ISuperAdminService {
   private readonly jwtSecret: string;
   private readonly jwtRefreshSecret: string;
+  private readonly accessTokenExpiry: SignOptions['expiresIn'];
+  private readonly refreshTokenExpiry: SignOptions['expiresIn'];
+  private readonly refreshTokenTtlSeconds: number;
 
   constructor(
     @Inject('ISuperAdminRepository') private superAdminRepo: ISuperAdminRepository,
@@ -23,16 +24,28 @@ export class SuperAdminService {
     @Inject('ITenantRepository') private tenantRepo: ITenantRepository,
     @Inject('IPasswordHasher') private passwordHasher: IPasswordHasher,
     @Inject('IJwtService') private jwtService: IJwtService,
-    @Inject(ConfigService) private configService: ConfigService
+    @Inject(ConfigService) private configService: ConfigService,
   ) {
     const globalSecret = this.configService.get<string>('JWT_SECRET');
     const globalRefreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
 
-    this.jwtSecret = this.configService.get<string>('SUPERADMIN_JWT_SECRET') || 
+    this.jwtSecret =
+      this.configService.get<string>('SUPERADMIN_JWT_SECRET') ||
       (globalSecret ? `${globalSecret}_superadmin` : 'superadmin_access_secret_2025');
 
-    this.jwtRefreshSecret = this.configService.get<string>('SUPERADMIN_JWT_REFRESH_SECRET') ||
-      (globalRefreshSecret ? `${globalRefreshSecret}_superadmin` : 'superadmin_refresh_secret_2025');
+    this.jwtRefreshSecret =
+      this.configService.get<string>('SUPERADMIN_JWT_REFRESH_SECRET') ||
+      (globalRefreshSecret
+        ? `${globalRefreshSecret}_superadmin`
+        : 'superadmin_refresh_secret_2025');
+
+    this.accessTokenExpiry = (this.configService.get<string>('ACCESS_TOKEN_EXPIRY') ||
+      '15m') as SignOptions['expiresIn'];
+    this.refreshTokenExpiry = (this.configService.get<string>('REFRESH_TOKEN_EXPIRY') ||
+      '7d') as SignOptions['expiresIn'];
+    this.refreshTokenTtlSeconds =
+      parseInt(this.configService.get<string>('REFRESH_TOKEN_TTL_SECONDS') || '', 10) ||
+      7 * 24 * 60 * 60;
   }
 
   async login(email: string, password: string) {
@@ -49,7 +62,6 @@ export class SuperAdminService {
     const adminId = admin._id.toString();
     const tokenId = nanoid(16);
 
-  
     const accessToken = this.jwtService.sign(
       {
         super_admin_id: adminId,
@@ -58,10 +70,9 @@ export class SuperAdminService {
         role: admin.role,
       },
       this.jwtSecret,
-      { expiresIn: ACCESS_TOKEN_EXPIRY }
+      { expiresIn: this.accessTokenExpiry },
     );
 
-  
     const refreshToken = this.jwtService.sign(
       {
         super_admin_id: adminId,
@@ -69,15 +80,12 @@ export class SuperAdminService {
         role: admin.role,
       },
       this.jwtRefreshSecret,
-      { expiresIn: REFRESH_TOKEN_EXPIRY }
+      { expiresIn: this.refreshTokenExpiry },
     );
 
- 
-    await this.cacheRepo.set(
-      `superadmin_refresh_token:${adminId}:${tokenId}`,
-      refreshToken,
-      { EX: REFRESH_TOKEN_TTL_SECONDS }
-    );
+    await this.cacheRepo.set(`superadmin_refresh_token:${adminId}:${tokenId}`, refreshToken, {
+      EX: this.refreshTokenTtlSeconds,
+    });
 
     return {
       accessToken,
@@ -113,7 +121,6 @@ export class SuperAdminService {
 
     if (!storedToken || storedToken !== incomingRefreshToken) {
       if (storedToken) {
-     
         await this.cacheRepo.delete(sessionKey);
       }
       throw new Error('INVALID_OR_REVOKED_REFRESH_TOKEN');
@@ -137,7 +144,7 @@ export class SuperAdminService {
         role: admin.role,
       },
       this.jwtSecret,
-      { expiresIn: ACCESS_TOKEN_EXPIRY }
+      { expiresIn: this.accessTokenExpiry },
     );
 
     const newRefreshToken = this.jwtService.sign(
@@ -147,13 +154,13 @@ export class SuperAdminService {
         role: admin.role,
       },
       this.jwtRefreshSecret,
-      { expiresIn: REFRESH_TOKEN_EXPIRY }
+      { expiresIn: this.refreshTokenExpiry },
     );
 
     await this.cacheRepo.set(
       `superadmin_refresh_token:${adminId}:${nextTokenId}`,
       newRefreshToken,
-      { EX: REFRESH_TOKEN_TTL_SECONDS }
+      { EX: this.refreshTokenTtlSeconds },
     );
 
     return {
@@ -179,12 +186,10 @@ export class SuperAdminService {
 
       if (payload?.super_admin_id && payload?.token_id) {
         await this.cacheRepo.delete(
-          `superadmin_refresh_token:${payload.super_admin_id}:${payload.token_id}`
+          `superadmin_refresh_token:${payload.super_admin_id}:${payload.token_id}`,
         );
       }
-    } catch {
-  
-    }
+    } catch {}
   }
 
   async createSuperAdmin(data: { email: string; password: string; name: string }) {
@@ -224,8 +229,7 @@ export class SuperAdminService {
     };
   }
 
-
-  async ListTenants(data:ListTenantsRequest){
+  async ListTenants(data: ListTenantsRequest) {
     return this.tenantRepo.listTenants(data);
   }
 

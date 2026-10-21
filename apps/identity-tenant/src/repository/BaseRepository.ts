@@ -1,24 +1,22 @@
-import { Model, Document, UpdateQuery } from 'mongoose';
+import { Model, UpdateQuery } from 'mongoose';
 
-
-export abstract class BaseRepository<T extends Document<any>> {
-
+export abstract class BaseRepository<T> {
   protected constructor(protected readonly model: Model<T>) {}
 
   async create(item: Partial<T>): Promise<T> {
     const newEntity = new this.model(item);
-    return await newEntity.save();
+    return (await newEntity.save()) as unknown as T;
   }
 
   async findById(id: string): Promise<T | null> {
     return await this.model.findById(id).exec();
   }
 
-  async findOne(filter: any): Promise<T | null> {
+  async findOne(filter: Record<string, unknown>): Promise<T | null> {
     return await this.model.findOne(filter).exec();
   }
 
-  async find(filter: any = {}): Promise<T[]> {
+  async find(filter: Record<string, unknown> = {}): Promise<T[]> {
     return await this.model.find(filter).exec();
   }
 

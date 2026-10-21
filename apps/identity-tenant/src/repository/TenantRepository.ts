@@ -1,38 +1,40 @@
-import mongoose from "mongoose";
-import { Injectable } from "@nestjs/common";
-import { BaseRepository } from "./BaseRepository.js";
+import { Injectable } from '@nestjs/common';
+import type { TenantInfo } from '@repo/proto/tenant';
 import {
   ITenantRepository,
   ListTenantsRequest,
   ListTenantsResponse,
-} from "../interfaces/ITenantRepository.js";
-import { ITenant, Tenent } from "../model/Tenent.js";
+} from '../interfaces/ITenantRepository.js';
+import { ITenant, Tenent } from '../model/Tenent.js';
+import { BaseRepository } from './BaseRepository.js';
 
 @Injectable()
-export class TenantRepository
-  extends BaseRepository<ITenant>
-  implements ITenantRepository
-{
+export class TenantRepository extends BaseRepository<ITenant> implements ITenantRepository {
   constructor() {
     super(Tenent);
   }
 
   async findByTenantId(tenantId: string): Promise<ITenant | null> {
-    return this.model.findById(tenantId) 
+    return this.model.findById(tenantId);
   }
 
   async findByEmail(email: string): Promise<ITenant | null> {
     return this.findOne({ contact_email: email });
   }
 
-  async updateStatus(
-    tenantId: string,
-    status: string,
-  ): Promise<ITenant | null> {
+  async updateStatus(tenantId: string, status: string): Promise<ITenant | null> {
     const tenant = await this.findByTenantId(tenantId);
     if (!tenant) return null;
     tenant.status = status;
     return tenant.save();
+  }
+
+  async ListUserByDate(date: string) {
+    const tenants = await this.find({
+      createdAt: { $eq: `${date}` },
+    });
+
+    return tenants;
   }
 
   async listTenants(data: ListTenantsRequest): Promise<ListTenantsResponse> {
@@ -40,7 +42,7 @@ export class TenantRepository
     const limit = Math.max(1, Math.min(data.limit, 100));
     const skip = (page - 1) * limit;
 
-    const query: any = {};
+    const query: Record<string, unknown> = {};
     if (data.status && data.status.toLowerCase() !== 'all') {
       query.status = data.status.toLowerCase();
     }
@@ -48,25 +50,21 @@ export class TenantRepository
       query.tier = data.tier.toLowerCase();
     }
     if (data.search) {
+      const searchRegex = new RegExp(data.search, 'i');
       query.$or = [
-        { business_name: { $regex: data.search, $options: 'i' } },
-        { contact_email: { $regex: data.search, $options: 'i' } },
-        { tenant_id: { $regex: data.search, $options: 'i' } },
+        { business_name: searchRegex },
+        { contact_email: searchRegex },
+        { _id: searchRegex },
       ];
     }
 
     const [docs, totalCount] = await Promise.all([
-      this.model
-        .find(query)
-        .skip(skip)
-        .limit(limit)
-        .select("-password_hash")
-        .exec(),
+      this.model.find(query).skip(skip).limit(limit).select('-password_hash').exec(),
       this.model.countDocuments(query).exec(),
     ]);
 
-    const tenants = docs.map((t: any) => ({
-      tenant_id: (t.tenant_id || t._id).toString(),
+    const tenants: TenantInfo[] = docs.map((t) => ({
+      tenant_id: t._id.toString(),
       business_name: t.business_name,
       contact_email: t.contact_email,
       tier: t.tier,

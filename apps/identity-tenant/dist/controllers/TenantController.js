@@ -10,10 +10,9 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-import { Controller, UseFilters, Inject } from "@nestjs/common";
-import { GrpcMethod } from "@nestjs/microservices";
-import { TenantService } from "../services/tenantService.js";
-import { AllExceptionsFilter } from "./rpcExpetionFilter.js";
+import { Controller, Inject, UseFilters } from '@nestjs/common';
+import { GrpcMethod } from '@nestjs/microservices';
+import { AllExceptionsFilter } from './rpcExpetionFilter.js';
 let TenantAuthController = class TenantAuthController {
     tenantService;
     constructor(tenantService) {
@@ -22,7 +21,7 @@ let TenantAuthController = class TenantAuthController {
     async register(data) {
         const { business_name, full_name, email, password } = data;
         if (!business_name || !full_name || !email || !password) {
-            throw new Error("Missing required fields");
+            throw new Error('Missing required fields');
         }
         return await this.tenantService.register({
             business_name,
@@ -34,16 +33,16 @@ let TenantAuthController = class TenantAuthController {
     async verifyEmail(data) {
         const { token } = data;
         if (!token)
-            throw new Error("Verification token is required");
+            throw new Error('Verification token is required');
         return await this.tenantService.verifyEmail(token);
     }
     async login(data) {
         const { email, password } = data;
         if (!email || !password)
-            throw new Error("Email and password are required");
+            throw new Error('Email and password are required');
         const result = await this.tenantService.login(email, password);
         return {
-            message: "Login successful",
+            message: 'Login successful',
             tenant: {
                 tenant_id: result.tenant.tenant_id,
                 business_name: result.tenant.business_name,
@@ -58,10 +57,10 @@ let TenantAuthController = class TenantAuthController {
     async googleLogin(data) {
         const { id_token } = data;
         if (!id_token)
-            throw new Error("Google ID token is required");
+            throw new Error('Google ID token is required');
         const result = await this.tenantService.googleLogin(id_token);
         return {
-            message: "Google login successful",
+            message: 'Google login successful',
             tenant: {
                 tenant_id: result.tenant.tenant_id,
                 business_name: result.tenant.business_name,
@@ -76,10 +75,10 @@ let TenantAuthController = class TenantAuthController {
     async refreshToken(data) {
         const { refresh_token } = data;
         if (!refresh_token)
-            throw new Error("Refresh token is required");
+            throw new Error('Refresh token is required');
         const result = await this.tenantService.refreshToken(refresh_token);
         return {
-            message: "Token rotated successfully",
+            message: 'Token rotated successfully',
             access_token: result.accessToken,
             refresh_token: result.refreshToken,
         };
@@ -87,77 +86,77 @@ let TenantAuthController = class TenantAuthController {
     async getProfile(data) {
         const { tenant_id } = data;
         if (!tenant_id)
-            throw new Error("Tenant ID is required");
+            throw new Error('Tenant ID is required');
         return await this.tenantService.getProfile(tenant_id);
     }
     async logout(data) {
         const { refresh_token } = data;
         await this.tenantService.logout(refresh_token);
-        return { message: "Logged out successfully" };
+        return { message: 'Logged out successfully' };
     }
     async forgotPassword(data) {
         const { email } = data;
         if (!email)
-            throw new Error("Email is required");
+            throw new Error('Email is required');
         return await this.tenantService.forgotPassword(email);
     }
     async resetPassword(data) {
         const { token, new_password } = data;
         if (!token || !new_password)
-            throw new Error("Token and new password are required");
+            throw new Error('Token and new password are required');
         return await this.tenantService.resetPassword(token, new_password);
     }
 };
 __decorate([
-    GrpcMethod("TenantAuthService", "Register"),
+    GrpcMethod('TenantAuthService', 'Register'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], TenantAuthController.prototype, "register", null);
 __decorate([
-    GrpcMethod("TenantAuthService", "VerifyEmail"),
+    GrpcMethod('TenantAuthService', 'VerifyEmail'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], TenantAuthController.prototype, "verifyEmail", null);
 __decorate([
-    GrpcMethod("TenantAuthService", "Login"),
+    GrpcMethod('TenantAuthService', 'Login'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], TenantAuthController.prototype, "login", null);
 __decorate([
-    GrpcMethod("TenantAuthService", "GoogleLogin"),
+    GrpcMethod('TenantAuthService', 'GoogleLogin'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], TenantAuthController.prototype, "googleLogin", null);
 __decorate([
-    GrpcMethod("TenantAuthService", "RefreshToken"),
+    GrpcMethod('TenantAuthService', 'RefreshToken'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], TenantAuthController.prototype, "refreshToken", null);
 __decorate([
-    GrpcMethod("TenantAuthService", "GetProfile"),
+    GrpcMethod('TenantAuthService', 'GetProfile'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], TenantAuthController.prototype, "getProfile", null);
 __decorate([
-    GrpcMethod("TenantAuthService", "Logout"),
+    GrpcMethod('TenantAuthService', 'Logout'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], TenantAuthController.prototype, "logout", null);
 __decorate([
-    GrpcMethod("TenantAuthService", "ForgotPassword"),
+    GrpcMethod('TenantAuthService', 'ForgotPassword'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], TenantAuthController.prototype, "forgotPassword", null);
 __decorate([
-    GrpcMethod("TenantAuthService", "ResetPassword"),
+    GrpcMethod('TenantAuthService', 'ResetPassword'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
@@ -165,7 +164,7 @@ __decorate([
 TenantAuthController = __decorate([
     Controller(),
     UseFilters(new AllExceptionsFilter()),
-    __param(0, Inject(TenantService)),
-    __metadata("design:paramtypes", [TenantService])
+    __param(0, Inject('ITenantService')),
+    __metadata("design:paramtypes", [Object])
 ], TenantAuthController);
 export { TenantAuthController };

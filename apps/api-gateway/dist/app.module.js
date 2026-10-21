@@ -10,11 +10,16 @@ exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const microservices_1 = require("@nestjs/microservices");
-const tenant_controller_js_1 = require("./controllers/tenant/tenant.controller.js");
+const knowledge_controller_js_1 = require("./controllers/agentOrchestrator/knowledge.controller.js");
+const dashboard_user_auth_controller_js_1 = require("./controllers/dashboarduser/dashboard-user-auth.controller.js");
+const scheduling_controller_js_1 = require("./controllers/scheduling/scheduling.controller.js");
 const superadmin_controller_js_1 = require("./controllers/superadmin/superadmin.controller.js");
 const superadmin_tenant_controller_js_1 = require("./controllers/superadmin/superadmin-tenant.controller.js");
-const dashboard_user_auth_controller_js_1 = require("./controllers/dashboarduser/dashboard-user-auth.controller.js");
-const knowledge_controller_js_1 = require("./controllers/knowledge/knowledge.controller.js");
+const tenant_controller_js_1 = require("./controllers/tenant/tenant.controller.js");
+const roles_guard_js_1 = require("./guards/roles.guard.js");
+const tenant_auth_guard_js_1 = require("./guards/tenant-auth.guard.js");
+const redis_service_js_1 = require("./services/redis.service.js");
+const schema_gateway_js_1 = require("./websockets/schema.gateway.js");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -26,12 +31,12 @@ exports.AppModule = AppModule = __decorate([
             }),
             microservices_1.ClientsModule.register([
                 {
-                    name: "TENANT_PACKAGE",
+                    name: 'TENANT_PACKAGE',
                     transport: microservices_1.Transport.GRPC,
                     options: {
-                        url: "localhost:50051",
-                        package: "tenant",
-                        protoPath: require.resolve("@repo/proto/tenant.proto"),
+                        url: 'localhost:50051',
+                        package: 'tenant',
+                        protoPath: require.resolve('@repo/proto/tenant.proto'),
                         loader: {
                             keepCase: true,
                             longs: String,
@@ -42,12 +47,12 @@ exports.AppModule = AppModule = __decorate([
                     },
                 },
                 {
-                    name: "DASHBOARD_PACKAGE",
+                    name: 'DASHBOARD_PACKAGE',
                     transport: microservices_1.Transport.GRPC,
                     options: {
-                        url: "localhost:50051",
-                        package: "dashboard",
-                        protoPath: require.resolve("@repo/proto/dashboard.proto"),
+                        url: 'localhost:50051',
+                        package: 'dashboard',
+                        protoPath: require.resolve('@repo/proto/dashboard.proto'),
                         loader: {
                             keepCase: true,
                             longs: String,
@@ -58,12 +63,12 @@ exports.AppModule = AppModule = __decorate([
                     },
                 },
                 {
-                    name: "SUPERADMIN_PACKAGE",
+                    name: 'SUPERADMIN_PACKAGE',
                     transport: microservices_1.Transport.GRPC,
                     options: {
-                        url: "localhost:50051",
-                        package: "superadmin",
-                        protoPath: require.resolve("@repo/proto/superadmin.proto"),
+                        url: 'localhost:50051',
+                        package: 'superadmin',
+                        protoPath: require.resolve('@repo/proto/superadmin.proto'),
                         loader: {
                             keepCase: true,
                             longs: String,
@@ -74,12 +79,28 @@ exports.AppModule = AppModule = __decorate([
                     },
                 },
                 {
-                    name: "KNOWLEDGE_PACKAGE",
+                    name: 'KNOWLEDGE_PACKAGE',
                     transport: microservices_1.Transport.GRPC,
                     options: {
-                        url: "localhost:50051",
-                        package: "knowledge",
-                        protoPath: require.resolve("@repo/proto/knowledge.proto"),
+                        url: 'localhost:50052',
+                        package: 'knowledge',
+                        protoPath: require.resolve('@repo/proto/knowledge.proto'),
+                        loader: {
+                            keepCase: true,
+                            longs: String,
+                            enums: String,
+                            defaults: true,
+                            oneofs: true,
+                        },
+                    },
+                },
+                {
+                    name: 'SCHEDULING_PACKAGE',
+                    transport: microservices_1.Transport.GRPC,
+                    options: {
+                        url: 'localhost:50053',
+                        package: 'scheduling',
+                        protoPath: require.resolve('@repo/proto/scheduling.proto'),
                         loader: {
                             keepCase: true,
                             longs: String,
@@ -97,7 +118,21 @@ exports.AppModule = AppModule = __decorate([
             superadmin_tenant_controller_js_1.SuperAdminTenantController,
             dashboard_user_auth_controller_js_1.DashboardUserAuthController,
             knowledge_controller_js_1.KnowledgeController,
+            scheduling_controller_js_1.SchedulingController,
         ],
-        providers: [],
+        providers: [
+            redis_service_js_1.RedisService,
+            {
+                provide: 'ISchemaEventSubscriber',
+                useExisting: redis_service_js_1.RedisService,
+            },
+            {
+                provide: 'ISchemaCacheService',
+                useExisting: redis_service_js_1.RedisService,
+            },
+            schema_gateway_js_1.SchemaGateway,
+            roles_guard_js_1.RolesGuard,
+            tenant_auth_guard_js_1.TenantAuthGuard,
+        ],
     })
 ], AppModule);

@@ -16,8 +16,5 @@
     }
   },
   "include": ["src/**/*"],
-  "references": [
-    { "path": "../../packages/proto" }
-  ]
+  "references": [{ "path": "../../packages/proto" }]
 }
-

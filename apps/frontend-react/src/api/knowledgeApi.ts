@@ -1,4 +1,5 @@
-import { axiosClient, type ApiResponse } from './axiosClient.js';
+import type { AgentDraftSchema } from '../pages/onboarding/types.js';
+import { type ApiResponse, axiosClient } from './axiosClient.js';
 
 export interface CrawlSiteRequest {
   tenant_id: string;
@@ -24,7 +25,7 @@ export interface GetCrawlStatusResponse {
 
 export interface GetDraftSchemaResponse {
   status: 'pending' | 'completed';
-  schema: any | null;
+  schema: AgentDraftSchema | null;
 }
 
 export interface SaveInitialAgentDraftRequest {
@@ -52,19 +53,25 @@ export const knowledgeApi = {
   crawlSite: async (payload: CrawlSiteRequest): Promise<ApiResponse<CrawlSiteResponse>> => {
     const response = await axiosClient.post<ApiResponse<CrawlSiteResponse>>(
       '/api/v1/tenant/knowledge/crawl',
-      payload
+      payload,
     );
     return response.data;
   },
 
-  getCrawlStatus: async (tenantId: string, jobId: string): Promise<ApiResponse<GetCrawlStatusResponse>> => {
+  getCrawlStatus: async (
+    tenantId: string,
+    jobId: string,
+  ): Promise<ApiResponse<GetCrawlStatusResponse>> => {
     const response = await axiosClient.get<ApiResponse<GetCrawlStatusResponse>>(
-      `/api/v1/tenant/knowledge/crawl/status?tenant_id=${encodeURIComponent(tenantId)}&job_id=${encodeURIComponent(jobId)}`
+      `/api/v1/tenant/knowledge/crawl/status?tenant_id=${encodeURIComponent(tenantId)}&job_id=${encodeURIComponent(jobId)}`,
     );
     return response.data;
   },
 
-  getDraftSchema: async (tenantId: string, jobId?: string): Promise<ApiResponse<GetDraftSchemaResponse>> => {
+  getDraftSchema: async (
+    tenantId: string,
+    jobId?: string,
+  ): Promise<ApiResponse<GetDraftSchemaResponse>> => {
     let url = `/api/v1/tenant/knowledge/schema?tenant_id=${encodeURIComponent(tenantId)}`;
     if (jobId) {
       url += `&job_id=${encodeURIComponent(jobId)}`;
@@ -74,19 +81,22 @@ export const knowledgeApi = {
   },
 
   saveInitialAgentDraft: async (
-    payload: SaveInitialAgentDraftRequest
+    payload: SaveInitialAgentDraftRequest,
   ): Promise<ApiResponse<SaveInitialAgentDraftResponse>> => {
     const response = await axiosClient.post<ApiResponse<SaveInitialAgentDraftResponse>>(
       '/api/v1/tenant/knowledge/agents/draft',
-      payload
+      payload,
     );
     return response.data;
   },
 
   listTenantAgents: async (): Promise<ApiResponse<AgentSummaryInfo[]>> => {
     const response = await axiosClient.get<ApiResponse<AgentSummaryInfo[]>>(
-      '/api/v1/tenant/knowledge/agents'
+      '/api/v1/tenant/knowledge/agents',
     );
     return response.data;
   },
 };
+
+export type * from './onboardingApi.js';
+export { onboardingApi } from './onboardingApi.js';

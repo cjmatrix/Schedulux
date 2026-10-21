@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Optional, Dict, Any
+
+from typing import Any
 
 VERTICAL_DISPLAY_NAMES = {
     "medical": "Medical & Dental Clinics",
@@ -13,8 +14,8 @@ def build_default_agent_template(
     tenant_id: str,
     agent_id: str,
     vertical: str,
-    name: Optional[str] = None,
-) -> Dict[str, Any]:
+    name: str | None = None,
+) -> dict[str, Any]:
     clean_vertical = (vertical or "custom").strip().lower()
     default_name = VERTICAL_DISPLAY_NAMES.get(clean_vertical, "Primary Assistant")
     final_name = (name or "").strip() or default_name

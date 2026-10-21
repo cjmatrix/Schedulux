@@ -1,14 +1,13 @@
-import { IUseCase } from './use-case.interface.js';
-import { ServiceEntity } from '../../domain/entities/service.entity.js';
 import {
   CreateServiceRequest,
+  DeleteServiceRequest,
   GetServiceRequest,
   ListServicesRequest,
   UpdateServiceRequest,
-  DeleteServiceRequest,
 } from '@repo/proto/scheduling';
-
+import { ServiceEntity } from '../../domain/entities/service.entity.js';
 import { ServiceSummary } from '../../domain/repositories/service.repository.interface.js';
+import { IUseCase } from './use-case.interface.js';
 
 export interface ListServicesOutput {
   services: ServiceEntity[];

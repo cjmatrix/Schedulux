@@ -1,8 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { IServiceRepository, FindServicesFilter, ServiceSummary } from '../../../domain/repositories/service.repository.interface.js';
 import { ServiceEntity } from '../../../domain/entities/service.entity.js';
-import { ServiceModel, IServiceDoc } from '../schemas/service.schema.js';
+import {
+  FindServicesFilter,
+  IServiceRepository,
+  ServiceSummary,
+} from '../../../domain/repositories/service.repository.interface.js';
 import { ServiceMapper } from '../mappers/service.mapper.js';
+import { ServiceModel } from '../schemas/service.schema.js';
 
 @Injectable()
 export class MongoServiceRepository implements IServiceRepository {
@@ -26,7 +30,7 @@ export class MongoServiceRepository implements IServiceRepository {
     tenantId: string,
     filter: FindServicesFilter,
   ): Promise<{ services: ServiceEntity[]; total: number; summary?: ServiceSummary }> {
-    const baseMatch: Record<string, any> = {
+    const baseMatch: Record<string, unknown> = {
       tenant_id: tenantId,
       is_deleted: { $ne: true },
     };
@@ -34,12 +38,15 @@ export class MongoServiceRepository implements IServiceRepository {
       baseMatch.agent_id = filter.agentId;
     }
 
-    const query: Record<string, any> = { ...baseMatch };
+    const query: Record<string, unknown> = { ...baseMatch };
     if (filter.category) {
       query.category = filter.category;
     }
     if (filter.search?.trim()) {
-      const searchRegex = new RegExp(filter.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const searchRegex = new RegExp(
+        filter.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+        'i',
+      );
       query.$or = [
         { name: searchRegex },
         { category: searchRegex },
@@ -53,11 +60,7 @@ export class MongoServiceRepository implements IServiceRepository {
     const skip = (page - 1) * limit;
 
     const [docs, total, statsResult] = await Promise.all([
-      ServiceModel.find(query)
-        .sort({ created_at: -1 })
-        .skip(skip)
-        .limit(limit)
-        .exec(),
+      ServiceModel.find(query).sort({ created_at: -1 }).skip(skip).limit(limit).exec(),
       ServiceModel.countDocuments(query).exec(),
       ServiceModel.aggregate([
         { $match: baseMatch },
@@ -75,12 +78,20 @@ export class MongoServiceRepository implements IServiceRepository {
       ]).exec(),
     ]);
 
-    const stat = statsResult[0] || {};
+    const stat =
+      (statsResult[0] as {
+        totalCount?: number;
+        avgPrice?: number;
+        depositCount?: number;
+        categories?: unknown[];
+      }) || {};
     const summary: ServiceSummary = {
       totalCount: stat.totalCount ?? 0,
       avgPrice: stat.avgPrice ? Number(stat.avgPrice.toFixed(2)) : 0,
       depositCount: stat.depositCount ?? 0,
-      categories: (stat.categories ?? []).filter((c: any) => typeof c === 'string' && c.trim().length > 0),
+      categories: (stat.categories ?? []).filter(
+        (c: unknown): c is string => typeof c === 'string' && c.trim().length > 0,
+      ),
     };
 
     return {
@@ -127,7 +138,7 @@ export class MongoServiceRepository implements IServiceRepository {
   }
 
   async findByTenant(tenantId: string, agentId?: string): Promise<ServiceEntity[]> {
-    const query: Record<string, any> = {
+    const query: Record<string, unknown> = {
       tenant_id: tenantId,
       is_deleted: { $ne: true },
     };

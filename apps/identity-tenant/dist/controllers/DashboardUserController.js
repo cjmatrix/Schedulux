@@ -10,9 +10,9 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-import { Controller, UseFilters, Inject } from "@nestjs/common";
-import { GrpcMethod } from "@nestjs/microservices";
-import { AllExceptionsFilter } from "./rpcExpetionFilter.js";
+import { Controller, Inject, UseFilters } from '@nestjs/common';
+import { GrpcMethod } from '@nestjs/microservices';
+import { AllExceptionsFilter } from './rpcExpetionFilter.js';
 let DashboardUserController = class DashboardUserController {
     dashboardUserService;
     tenantService;
@@ -22,7 +22,7 @@ let DashboardUserController = class DashboardUserController {
     }
     async login(data) {
         if (!data.email || !data.password) {
-            throw new Error("Email and password are required");
+            throw new Error('Email and password are required');
         }
         return await this.dashboardUserService.login(data);
     }
@@ -34,18 +34,18 @@ let DashboardUserController = class DashboardUserController {
     }
     async forgotPassword(data) {
         if (!data.email)
-            throw new Error("Email is required");
+            throw new Error('Email is required');
         return await this.dashboardUserService.forgotPassword(data.email);
     }
     async resetPassword(data) {
         if (!data.token || !data.new_password)
-            throw new Error("Token and new password are required");
+            throw new Error('Token and new password are required');
         return await this.dashboardUserService.resetPassword(data.token, data.new_password);
     }
     async inviteUser(data) {
         const { tenant_id, email, name, system_role } = data;
         if (!tenant_id || !email || !name) {
-            throw new Error("Missing required fields");
+            throw new Error('Missing required fields');
         }
         return await this.tenantService.inviteUser({
             tenant_id,
@@ -56,48 +56,48 @@ let DashboardUserController = class DashboardUserController {
     }
     async listWorkspaceUsers(data) {
         if (!data.tenant_id)
-            throw new Error("Tenant ID is required");
+            throw new Error('Tenant ID is required');
         return await this.tenantService.listWorkspaceUsers(data);
     }
 };
 __decorate([
-    GrpcMethod("DashboardAuthService", "Login"),
+    GrpcMethod('DashboardAuthService', 'Login'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], DashboardUserController.prototype, "login", null);
 __decorate([
-    GrpcMethod("DashboardAuthService", "GetProfile"),
+    GrpcMethod('DashboardAuthService', 'GetProfile'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], DashboardUserController.prototype, "getProfile", null);
 __decorate([
-    GrpcMethod("DashboardAuthService", "RefreshToken"),
+    GrpcMethod('DashboardAuthService', 'RefreshToken'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], DashboardUserController.prototype, "refreshToken", null);
 __decorate([
-    GrpcMethod("DashboardAuthService", "ForgotPassword"),
+    GrpcMethod('DashboardAuthService', 'ForgotPassword'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], DashboardUserController.prototype, "forgotPassword", null);
 __decorate([
-    GrpcMethod("DashboardAuthService", "ResetPassword"),
+    GrpcMethod('DashboardAuthService', 'ResetPassword'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], DashboardUserController.prototype, "resetPassword", null);
 __decorate([
-    GrpcMethod("DashboardUserService", "InviteUser"),
+    GrpcMethod('DashboardUserService', 'InviteUser'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], DashboardUserController.prototype, "inviteUser", null);
 __decorate([
-    GrpcMethod("DashboardUserService", "ListWorkspaceUsers"),
+    GrpcMethod('DashboardUserService', 'ListWorkspaceUsers'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)

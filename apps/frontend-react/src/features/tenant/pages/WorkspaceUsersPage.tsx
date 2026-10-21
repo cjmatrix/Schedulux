@@ -1,20 +1,20 @@
-import { useState, useMemo } from "react";
-import { Plus, Search, Filter, Shield, ShieldCheck } from "lucide-react";
-import { useWorkspaceUsers } from "../hooks/useTenant";
-import { useTenantProfile } from "../hooks/useAuth";
-import { InviteUserModal } from "../components/InviteUserModal";
-import { WorkspaceUsersTable } from "../components/WorkspaceUsersTable";
-import type { WorkspaceUserInfo } from "@repo/proto/dashboard";
-import useDebounceHook from "../../../shared/hooks/useDebounceHook";
+import type { WorkspaceUserInfo } from '@repo/proto/dashboard';
+import { Filter, Plus, Search, Shield, ShieldCheck } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import useDebounceHook from '../../../shared/hooks/useDebounceHook';
+import { InviteUserModal } from '../components/InviteUserModal';
+import { WorkspaceUsersTable } from '../components/WorkspaceUsersTable';
+import { useTenantProfile } from '../hooks/useAuth';
+import { useWorkspaceUsers } from '../hooks/useTenant';
 
 export default function WorkspaceUsersPage() {
   const [page, setPage] = useState(1);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string>('all');
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
 
   const { data: profileData } = useTenantProfile();
-  const tenantId = profileData?.data?.tenant_id || "";
+  const tenantId = profileData?.data?.tenant_id || '';
 
   const [finalInput] = useDebounceHook(searchTerm);
 
@@ -23,7 +23,7 @@ export default function WorkspaceUsersPage() {
     page,
     5,
     finalInput || undefined,
-    roleFilter === "all" ? undefined : roleFilter,
+    roleFilter === 'all' ? undefined : roleFilter,
   );
 
   const userList = useMemo(() => {
@@ -33,11 +33,9 @@ export default function WorkspaceUsersPage() {
         user_id: u.user_id,
         name: u.name,
         email: u.email,
-        system_role: u.system_role as "root" | "manager",
-        status: "active" as const,
-        last_active: u.created_at
-          ? new Date(u.created_at).toLocaleDateString()
-          : "Recently",
+        system_role: u.system_role as 'root' | 'manager',
+        status: 'active' as const,
+        last_active: u.created_at ? new Date(u.created_at).toLocaleDateString() : 'Recently',
       }));
     }
     return [];
@@ -59,11 +57,9 @@ export default function WorkspaceUsersPage() {
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
               Workspace Users
             </h1>
-            
           </div>
           <p className="text-xs text-slate-500 font-medium">
-            Manage who has access to the Schedulux dashboard and their
-            permissions.
+            Manage who has access to the Schedulux dashboard and their permissions.
           </p>
         </div>
 
@@ -129,13 +125,10 @@ export default function WorkspaceUsersPage() {
               </span>
               <Shield className="w-4 h-4 text-slate-700" />
             </div>
-            <h3 className="text-base font-bold text-slate-900 mb-1">
-              Role Capabilities
-            </h3>
+            <h3 className="text-base font-bold text-slate-900 mb-1">Role Capabilities</h3>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Managers handle direct care scheduling and AI monitoring. Clinical
-              Directors and Owners retain full control over autonomous
-              parameters and financial tools.
+              Managers handle direct care scheduling and AI monitoring. Clinical Directors and
+              Owners retain full control over autonomous parameters and financial tools.
             </p>
           </div>
 
@@ -144,17 +137,11 @@ export default function WorkspaceUsersPage() {
               <span className="block text-xl font-extrabold text-slate-900 leading-tight">
                 99.4%
               </span>
-              <span className="text-[10px] font-semibold text-slate-400">
-                Audit Compliance
-              </span>
+              <span className="text-[10px] font-semibold text-slate-400">Audit Compliance</span>
             </div>
             <div>
-              <span className="block text-xl font-extrabold text-slate-900 leading-tight">
-                2FA
-              </span>
-              <span className="text-[10px] font-semibold text-slate-400">
-                Enforced Globally
-              </span>
+              <span className="block text-xl font-extrabold text-slate-900 leading-tight">2FA</span>
+              <span className="text-[10px] font-semibold text-slate-400">Enforced Globally</span>
             </div>
           </div>
         </div>
@@ -167,21 +154,15 @@ export default function WorkspaceUsersPage() {
               </span>
               <ShieldCheck className="w-4 h-4 text-slate-700" />
             </div>
-            <h3 className="text-base font-bold text-slate-900 mb-1">
-              Session Activity
-            </h3>
+            <h3 className="text-base font-bold text-slate-900 mb-1">Session Activity</h3>
             <p className="text-xs text-slate-500 leading-relaxed">
-              All access modifications, AI prompt updates, and medical record
-              access logs are timestamped and exportable for HIPAA compliance
-              reporting.
+              All access modifications, AI prompt updates, and medical record access logs are
+              timestamped and exportable for HIPAA compliance reporting.
             </p>
           </div>
 
           <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
-            <span className="text-slate-400 font-medium">
-              Last access log updated 8 mins ago
-            </span>
-           
+            <span className="text-slate-400 font-medium">Last access log updated 8 mins ago</span>
           </div>
         </div>
       </div>

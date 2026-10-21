@@ -1,56 +1,56 @@
 import { Controller, Inject } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import {
-  CreateServiceRequest,
-  GetServiceRequest,
-  ListServicesRequest,
-  UpdateServiceRequest,
-  DeleteServiceRequest,
-  ServiceResponse,
-  ListServicesResponse,
-  DeleteServiceResponse,
-  CreateResourceRequest,
-  GetResourceRequest,
-  ListResourcesRequest,
-  UpdateResourceRequest,
-  DeleteResourceRequest,
-  ResourceResponse,
-  ListResourcesResponse,
-  DeleteResourceResponse,
   BatchSyncInventoryRequest,
   BatchSyncInventoryResponse,
+  CreateResourceRequest,
+  CreateServiceRequest,
+  DeleteResourceRequest,
+  DeleteResourceResponse,
+  DeleteServiceRequest,
+  DeleteServiceResponse,
+  GetResourceRequest,
+  GetServiceRequest,
+  ListResourcesRequest,
+  ListResourcesResponse,
+  ListServicesRequest,
+  ListServicesResponse,
+  ResourceResponse,
   SCHEDULING_INVENTORY_SERVICE_NAME,
+  ServiceResponse,
+  UpdateResourceRequest,
+  UpdateServiceRequest,
 } from '@repo/proto/scheduling';
 import {
-  IBatchSyncInventoryUseCase,
   BATCH_SYNC_INVENTORY_USE_CASE,
+  IBatchSyncInventoryUseCase,
 } from '../../application/interfaces/batch-sync-use-case.interface.js';
 import {
-  ICreateServiceUseCase,
-  IGetServiceUseCase,
-  IListServicesUseCase,
-  IUpdateServiceUseCase,
-  IDeleteServiceUseCase,
-  CREATE_SERVICE_USE_CASE,
-  GET_SERVICE_USE_CASE,
-  LIST_SERVICES_USE_CASE,
-  UPDATE_SERVICE_USE_CASE,
-  DELETE_SERVICE_USE_CASE,
-} from '../../application/interfaces/service-use-cases.interface.js';
-import {
+  CREATE_RESOURCE_USE_CASE,
+  DELETE_RESOURCE_USE_CASE,
+  GET_RESOURCE_USE_CASE,
   ICreateResourceUseCase,
+  IDeleteResourceUseCase,
   IGetResourceUseCase,
   IListResourcesUseCase,
   IUpdateResourceUseCase,
-  IDeleteResourceUseCase,
-  CREATE_RESOURCE_USE_CASE,
-  GET_RESOURCE_USE_CASE,
   LIST_RESOURCES_USE_CASE,
   UPDATE_RESOURCE_USE_CASE,
-  DELETE_RESOURCE_USE_CASE,
 } from '../../application/interfaces/resource-use-cases.interface.js';
-import { ServiceMapper } from '../../infrastructure/database/mappers/service.mapper.js';
+import {
+  CREATE_SERVICE_USE_CASE,
+  DELETE_SERVICE_USE_CASE,
+  GET_SERVICE_USE_CASE,
+  ICreateServiceUseCase,
+  IDeleteServiceUseCase,
+  IGetServiceUseCase,
+  IListServicesUseCase,
+  IUpdateServiceUseCase,
+  LIST_SERVICES_USE_CASE,
+  UPDATE_SERVICE_USE_CASE,
+} from '../../application/interfaces/service-use-cases.interface.js';
 import { ResourceMapper } from '../../infrastructure/database/mappers/resource.mapper.js';
+import { ServiceMapper } from '../../infrastructure/database/mappers/service.mapper.js';
 
 @Controller()
 export class SchedulingInventoryGrpcController {
@@ -190,7 +190,9 @@ export class SchedulingInventoryGrpcController {
   }
 
   @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'BatchSyncInventory')
-  async batchSyncInventory(request: BatchSyncInventoryRequest): Promise<BatchSyncInventoryResponse> {
+  async batchSyncInventory(
+    request: BatchSyncInventoryRequest,
+  ): Promise<BatchSyncInventoryResponse> {
     return this.batchSyncInventoryUseCase.execute(request);
   }
 }

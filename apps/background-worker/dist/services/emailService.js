@@ -24,7 +24,8 @@ export class EmailService {
     }
     async sendTenantVerificationEmail(data) {
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-        const verifyUrl = data.verification_url || `${frontendUrl}/verify-email?token=${encodeURIComponent(data.verification_token)}`;
+        const verifyUrl = data.verification_url ||
+            `${frontendUrl}/verify-email?token=${encodeURIComponent(data.verification_token)}`;
         const fromAddress = process.env.FROM_EMAIL || '"Schedulux AI" <no-reply@schedulux.ai>';
         const htmlContent = `
       <!DOCTYPE html>

@@ -1,15 +1,28 @@
-import { Injectable, Inject } from '@nestjs/common';
+import crypto from 'node:crypto';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { nanoid } from 'nanoid';
-import { IDashboardUserRepository } from '../interfaces/IDashboardUserRepository.js';
-import { ICacheRepository } from '../interfaces/ICacheRepository.js';
-import { IPasswordHasher } from '../interfaces/IPasswordHasher.js';
-import { IJwtService } from '../interfaces/IJwtService.js';
-import { IEmailProducer } from '../interfaces/IEmailProducer.js';
-import { IDashboardUserService } from '../interfaces/IDashboardUserService.js';
-import { DashboardUserLoginRequest, DashboardUserLoginResponse, DashboardUserProfileRequest, DashboardUserProfileResponse, DashboardUserRefreshTokenRequest, DashboardUserRefreshTokenResponse } from '@repo/proto/dashboard';
-import crypto from 'crypto';
+import {
+  DashboardUserLoginRequest,
+  DashboardUserLoginResponse,
+  DashboardUserProfileRequest,
+  DashboardUserProfileResponse,
+  DashboardUserRefreshTokenRequest,
+  DashboardUserRefreshTokenResponse,
+} from '@repo/proto/dashboard';
 import type { SignOptions } from 'jsonwebtoken';
+import { nanoid } from 'nanoid';
+import { ICacheRepository } from '../interfaces/ICacheRepository.js';
+import { IDashboardUserRepository } from '../interfaces/IDashboardUserRepository.js';
+import { IDashboardUserService } from '../interfaces/IDashboardUserService.js';
+import { IEmailProducer } from '../interfaces/IEmailProducer.js';
+import { IJwtService } from '../interfaces/IJwtService.js';
+import { IPasswordHasher } from '../interfaces/IPasswordHasher.js';
+
+interface DashboardUserRefreshTokenPayload {
+  user_id?: string;
+  tokenId?: string;
+  type?: string;
+}
 
 @Injectable()
 export class DashboardUserService implements IDashboardUserService {
@@ -25,13 +38,17 @@ export class DashboardUserService implements IDashboardUserService {
     @Inject('IPasswordHasher') private passwordHasher: IPasswordHasher,
     @Inject('IJwtService') private jwtService: IJwtService,
     @Inject(ConfigService) private configService: ConfigService,
-    @Inject('IEmailProducer') private emailProducer?: IEmailProducer
+    @Inject('IEmailProducer') private emailProducer?: IEmailProducer,
   ) {
     this.jwtSecret = this.configService.get<string>('JWT_SECRET') || 'dev-secret-change-in-prod';
     this.jwtRefreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET') || this.jwtSecret;
-    this.accessTokenExpiry = (this.configService.get<string>('ACCESS_TOKEN_EXPIRY') || '15m') as SignOptions['expiresIn'];
-    this.refreshTokenExpiry = (this.configService.get<string>('REFRESH_TOKEN_EXPIRY') || '7d') as SignOptions['expiresIn'];
-    this.refreshTokenTtlSeconds = parseInt(this.configService.get<string>('REFRESH_TOKEN_TTL_SECONDS') || '', 10) || 7 * 24 * 60 * 60;
+    this.accessTokenExpiry = (this.configService.get<string>('ACCESS_TOKEN_EXPIRY') ||
+      '15m') as SignOptions['expiresIn'];
+    this.refreshTokenExpiry = (this.configService.get<string>('REFRESH_TOKEN_EXPIRY') ||
+      '7d') as SignOptions['expiresIn'];
+    this.refreshTokenTtlSeconds =
+      parseInt(this.configService.get<string>('REFRESH_TOKEN_TTL_SECONDS') || '', 10) ||
+      7 * 24 * 60 * 60;
   }
 
   async login(data: DashboardUserLoginRequest): Promise<DashboardUserLoginResponse> {
@@ -58,7 +75,7 @@ export class DashboardUserService implements IDashboardUserService {
         role: user.system_role,
       },
       this.jwtSecret,
-      { expiresIn: this.accessTokenExpiry }
+      { expiresIn: this.accessTokenExpiry },
     );
 
     const tokenId = nanoid(16);
@@ -70,13 +87,13 @@ export class DashboardUserService implements IDashboardUserService {
         type: 'dashboard_refresh',
       },
       this.jwtRefreshSecret,
-      { expiresIn: this.refreshTokenExpiry }
+      { expiresIn: this.refreshTokenExpiry },
     );
 
     await this.cacheRepo.set(
       `dashboard_refreshToken:${user._id.toString()}:${tokenId}`,
       refreshToken,
-      { EX: this.refreshTokenTtlSeconds }
+      { EX: this.refreshTokenTtlSeconds },
     );
 
     return {
@@ -116,15 +133,20 @@ export class DashboardUserService implements IDashboardUserService {
     };
   }
 
-  async refreshToken(data: DashboardUserRefreshTokenRequest): Promise<DashboardUserRefreshTokenResponse> {
+  async refreshToken(
+    data: DashboardUserRefreshTokenRequest,
+  ): Promise<DashboardUserRefreshTokenResponse> {
     if (!data.refresh_token) {
       throw new Error('REFRESH_TOKEN_REQUIRED');
     }
 
-    let decoded: any;
+    let decoded: DashboardUserRefreshTokenPayload;
     try {
-      decoded = this.jwtService.verify(data.refresh_token, this.jwtRefreshSecret);
-    } catch (err) {
+      decoded = this.jwtService.verify<DashboardUserRefreshTokenPayload>(
+        data.refresh_token,
+        this.jwtRefreshSecret,
+      );
+    } catch {
       throw new Error('INVALID_REFRESH_TOKEN');
     }
 
@@ -137,7 +159,6 @@ export class DashboardUserService implements IDashboardUserService {
 
     const cachedToken = await this.cacheRepo.get(`dashboard_refreshToken:${userId}:${tokenId}`);
     if (cachedToken !== data.refresh_token) {
-     
       await this.cacheRepo.delete(`dashboard_refreshToken:${userId}:${tokenId}`);
       throw new Error('INVALID_REFRESH_TOKEN');
     }
@@ -156,7 +177,7 @@ export class DashboardUserService implements IDashboardUserService {
         role: user.system_role,
       },
       this.jwtSecret,
-      { expiresIn: this.accessTokenExpiry }
+      { expiresIn: this.accessTokenExpiry },
     );
 
     const newTokenId = nanoid(16);
@@ -168,15 +189,13 @@ export class DashboardUserService implements IDashboardUserService {
         type: 'dashboard_refresh',
       },
       this.jwtRefreshSecret,
-      { expiresIn: this.refreshTokenExpiry }
+      { expiresIn: this.refreshTokenExpiry },
     );
 
     await this.cacheRepo.delete(`dashboard_refreshToken:${userId}:${tokenId}`);
-    await this.cacheRepo.set(
-      `dashboard_refreshToken:${userId}:${newTokenId}`,
-      newRefreshToken,
-      { EX: this.refreshTokenTtlSeconds }
-    );
+    await this.cacheRepo.set(`dashboard_refreshToken:${userId}:${newTokenId}`, newRefreshToken, {
+      EX: this.refreshTokenTtlSeconds,
+    });
 
     return {
       message: 'Token refreshed successfully',
@@ -188,34 +207,36 @@ export class DashboardUserService implements IDashboardUserService {
   async forgotPassword(email: string) {
     const user = await this.dashboardUserRepo.findByEmail(email.toLowerCase().trim());
     if (!user) {
-      return { message: "If that email exists, a password reset link has been sent." };
+      return { message: 'If that email exists, a password reset link has been sent.' };
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
-    await this.cacheRepo.set(`dashboard_password_reset:${resetToken}`, user._id.toString(), { EX: 900 });
+    await this.cacheRepo.set(`dashboard_password_reset:${resetToken}`, user._id.toString(), {
+      EX: 900,
+    });
 
     if (this.emailProducer) {
       await this.emailProducer.sendForgotPasswordEmail({
         to: user.email,
         name: user.name,
         reset_token: resetToken,
-        role: 'dashboard_user'
+        role: 'dashboard_user',
       });
     }
 
-    return { message: "If that email exists, a password reset link has been sent." };
+    return { message: 'If that email exists, a password reset link has been sent.' };
   }
 
   async resetPassword(token: string, new_password: string) {
     const userId = await this.cacheRepo.get(`dashboard_password_reset:${token}`);
     if (!userId) {
-      throw new Error("INVALID_OR_EXPIRED_TOKEN");
+      throw new Error('INVALID_OR_EXPIRED_TOKEN');
     }
 
     const password_hash = await this.passwordHasher.hash(new_password, 10);
     await this.dashboardUserRepo.update(userId, { password_hash });
     await this.cacheRepo.delete(`dashboard_password_reset:${token}`);
 
-    return { message: "Password has been successfully reset. You can now log in." };
+    return { message: 'Password has been successfully reset. You can now log in.' };
   }
 }

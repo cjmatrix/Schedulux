@@ -1,25 +1,25 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router';
-import {
-  Tag,
-  Plus,
-  Search,
-  Clock,
-  Shield,
-  Trash2,
-  Edit,
-  DollarSign,
-  Users,
-  Building2,
-  RefreshCw,
-  Loader2,
-  ArrowLeft,
-  ChevronRight,
-} from 'lucide-react';
-import { useServicesList, useDeleteService } from '../hooks/useServices';
 import type { ServiceInfo } from '@repo/proto/scheduling';
-import useDebounceHook from '../../../shared/hooks/useDebounceHook';
+import {
+  ArrowLeft,
+  Building2,
+  ChevronRight,
+  Clock,
+  DollarSign,
+  Edit,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Search,
+  Shield,
+  Tag,
+  Trash2,
+  Users,
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
 import { Pagination } from '../../../components/Pagination';
+import useDebounceHook from '../../../shared/hooks/useDebounceHook';
+import { useDeleteService, useServicesList } from '../hooks/useServices';
 
 export default function ServicesListPage() {
   const navigate = useNavigate();
@@ -37,8 +37,12 @@ export default function ServicesListPage() {
     setPage(1);
   }, [debouncedSearch, selectedCategory]);
 
-
-  const { data: servicesResponse, isLoading, refetch, isRefetching } = useServicesList({
+  const {
+    data: servicesResponse,
+    isLoading,
+    refetch,
+    isRefetching,
+  } = useServicesList({
     page,
     limit,
     category: selectedCategory === 'all' ? undefined : selectedCategory,
@@ -54,10 +58,8 @@ export default function ServicesListPage() {
   const total = servicesResponse?.pagination?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
-
   const categories = summary?.categories || [];
 
-  
   const totalCount = summary?.total_count ?? total;
   const depositCount = summary?.deposit_count ?? 0;
   const avgPrice = summary?.avg_price !== undefined ? summary.avg_price.toFixed(2) : '0.00';
@@ -67,8 +69,8 @@ export default function ServicesListPage() {
     try {
       await deleteServiceMutation.mutateAsync(serviceToDelete.service_id);
       setServiceToDelete(null);
-    } catch (err: any) {
-      alert(err?.response?.data?.message || 'Failed to delete service');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to delete service');
     }
   };
 
@@ -133,7 +135,9 @@ export default function ServicesListPage() {
             <RefreshCw className={`w-4 h-4 ${isRefetching ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={() => navigate(agentId ? `/tenant/agents/${agentId}/services/new` : '/tenant/services/new')}
+            onClick={() =>
+              navigate(agentId ? `/tenant/agents/${agentId}/services/new` : '/tenant/services/new')
+            }
             className="flex items-center gap-2 bg-slate-950 hover:bg-black text-white px-5 py-2.5 rounded-xl font-semibold text-xs shadow-xs transition active:scale-98 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
@@ -146,7 +150,9 @@ export default function ServicesListPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Services</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              Active Services
+            </p>
             <p className="text-2xl font-extrabold text-slate-900 mt-1">{totalCount}</p>
             <p className="text-[11px] text-slate-500 mt-0.5">Automated triage enabled</p>
           </div>
@@ -168,7 +174,9 @@ export default function ServicesListPage() {
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Deposit Enforced</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              Deposit Enforced
+            </p>
             <p className="text-2xl font-extrabold text-slate-900 mt-1">{depositCount}</p>
             <p className="text-[11px] text-slate-500 mt-0.5">Requires upfront booking hold</p>
           </div>
@@ -287,7 +295,9 @@ export default function ServicesListPage() {
                   <div className="flex items-center justify-between text-xs text-slate-600">
                     <span className="flex items-center gap-1.5 font-medium">
                       <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      {service.booking_mode === 'date_range' ? 'Daily / Date Range' : `${service.duration_minutes} min slot`}
+                      {service.booking_mode === 'date_range'
+                        ? 'Daily / Date Range'
+                        : `${service.duration_minutes} min slot`}
                       {service.buffer_minutes ? ` (+${service.buffer_minutes}m buffer)` : ''}
                     </span>
 
@@ -316,7 +326,13 @@ export default function ServicesListPage() {
                 {/* Card Actions */}
                 <div className="flex items-center gap-2 pt-2">
                   <button
-                    onClick={() => navigate(agentId ? `/tenant/agents/${agentId}/services/${service.service_id}` : `/tenant/services/${service.service_id}`)}
+                    onClick={() =>
+                      navigate(
+                        agentId
+                          ? `/tenant/agents/${agentId}/services/${service.service_id}`
+                          : `/tenant/services/${service.service_id}`,
+                      )
+                    }
                     className="flex-1 py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-800 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 border border-slate-200 transition cursor-pointer"
                   >
                     <Edit className="w-3.5 h-3.5 text-slate-600" />
@@ -359,8 +375,9 @@ export default function ServicesListPage() {
             <div>
               <h3 className="text-base font-bold text-slate-900">Delete Service?</h3>
               <p className="text-xs text-slate-500 mt-1">
-                Are you sure you want to delete <strong className="text-slate-800">{serviceToDelete.name}</strong>?
-                This action cannot be undone.
+                Are you sure you want to delete{' '}
+                <strong className="text-slate-800">{serviceToDelete.name}</strong>? This action
+                cannot be undone.
               </p>
             </div>
             <div className="flex items-center gap-3 mt-2">

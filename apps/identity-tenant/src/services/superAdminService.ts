@@ -1,14 +1,14 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { nanoid } from 'nanoid';
-import { ISuperAdminRepository } from '../interfaces/ISuperAdminRepository.js';
-import { ICacheRepository } from '../interfaces/ICacheRepository.js';
-import { ListTenantsRequest } from "@repo/proto/tenant";
-import { ITenantRepository } from '../interfaces/ITenantRepository.js';
-import { IPasswordHasher } from '../interfaces/IPasswordHasher.js';
-import { IJwtService } from '../interfaces/IJwtService.js';
+import { ListTenantsRequest } from '@repo/proto/tenant';
 import type { SignOptions } from 'jsonwebtoken';
+import { nanoid } from 'nanoid';
+import { ICacheRepository } from '../interfaces/ICacheRepository.js';
+import { IJwtService } from '../interfaces/IJwtService.js';
+import { IPasswordHasher } from '../interfaces/IPasswordHasher.js';
+import { ISuperAdminRepository } from '../interfaces/ISuperAdminRepository.js';
 import { ISuperAdminService } from '../interfaces/ISuperAdminService.js';
+import { ITenantRepository } from '../interfaces/ITenantRepository.js';
 
 @Injectable()
 export class SuperAdminService implements ISuperAdminService {
@@ -24,21 +24,28 @@ export class SuperAdminService implements ISuperAdminService {
     @Inject('ITenantRepository') private tenantRepo: ITenantRepository,
     @Inject('IPasswordHasher') private passwordHasher: IPasswordHasher,
     @Inject('IJwtService') private jwtService: IJwtService,
-    @Inject(ConfigService) private configService: ConfigService
+    @Inject(ConfigService) private configService: ConfigService,
   ) {
-    
     const globalSecret = this.configService.get<string>('JWT_SECRET');
     const globalRefreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
 
-    this.jwtSecret = this.configService.get<string>('SUPERADMIN_JWT_SECRET') || 
+    this.jwtSecret =
+      this.configService.get<string>('SUPERADMIN_JWT_SECRET') ||
       (globalSecret ? `${globalSecret}_superadmin` : 'superadmin_access_secret_2025');
 
-    this.jwtRefreshSecret = this.configService.get<string>('SUPERADMIN_JWT_REFRESH_SECRET') ||
-      (globalRefreshSecret ? `${globalRefreshSecret}_superadmin` : 'superadmin_refresh_secret_2025');
+    this.jwtRefreshSecret =
+      this.configService.get<string>('SUPERADMIN_JWT_REFRESH_SECRET') ||
+      (globalRefreshSecret
+        ? `${globalRefreshSecret}_superadmin`
+        : 'superadmin_refresh_secret_2025');
 
-    this.accessTokenExpiry = (this.configService.get<string>('ACCESS_TOKEN_EXPIRY') || '15m') as SignOptions['expiresIn'];
-    this.refreshTokenExpiry = (this.configService.get<string>('REFRESH_TOKEN_EXPIRY') || '7d') as SignOptions['expiresIn'];
-    this.refreshTokenTtlSeconds = parseInt(this.configService.get<string>('REFRESH_TOKEN_TTL_SECONDS') || '', 10) || 7 * 24 * 60 * 60;
+    this.accessTokenExpiry = (this.configService.get<string>('ACCESS_TOKEN_EXPIRY') ||
+      '15m') as SignOptions['expiresIn'];
+    this.refreshTokenExpiry = (this.configService.get<string>('REFRESH_TOKEN_EXPIRY') ||
+      '7d') as SignOptions['expiresIn'];
+    this.refreshTokenTtlSeconds =
+      parseInt(this.configService.get<string>('REFRESH_TOKEN_TTL_SECONDS') || '', 10) ||
+      7 * 24 * 60 * 60;
   }
 
   async login(email: string, password: string) {
@@ -55,7 +62,6 @@ export class SuperAdminService implements ISuperAdminService {
     const adminId = admin._id.toString();
     const tokenId = nanoid(16);
 
-  
     const accessToken = this.jwtService.sign(
       {
         super_admin_id: adminId,
@@ -64,10 +70,9 @@ export class SuperAdminService implements ISuperAdminService {
         role: admin.role,
       },
       this.jwtSecret,
-      { expiresIn: this.accessTokenExpiry }
+      { expiresIn: this.accessTokenExpiry },
     );
 
-  
     const refreshToken = this.jwtService.sign(
       {
         super_admin_id: adminId,
@@ -75,15 +80,12 @@ export class SuperAdminService implements ISuperAdminService {
         role: admin.role,
       },
       this.jwtRefreshSecret,
-      { expiresIn: this.refreshTokenExpiry }
+      { expiresIn: this.refreshTokenExpiry },
     );
 
- 
-    await this.cacheRepo.set(
-      `superadmin_refresh_token:${adminId}:${tokenId}`,
-      refreshToken,
-      { EX: this.refreshTokenTtlSeconds }
-    );
+    await this.cacheRepo.set(`superadmin_refresh_token:${adminId}:${tokenId}`, refreshToken, {
+      EX: this.refreshTokenTtlSeconds,
+    });
 
     return {
       accessToken,
@@ -119,7 +121,6 @@ export class SuperAdminService implements ISuperAdminService {
 
     if (!storedToken || storedToken !== incomingRefreshToken) {
       if (storedToken) {
-     
         await this.cacheRepo.delete(sessionKey);
       }
       throw new Error('INVALID_OR_REVOKED_REFRESH_TOKEN');
@@ -143,7 +144,7 @@ export class SuperAdminService implements ISuperAdminService {
         role: admin.role,
       },
       this.jwtSecret,
-      { expiresIn: this.accessTokenExpiry }
+      { expiresIn: this.accessTokenExpiry },
     );
 
     const newRefreshToken = this.jwtService.sign(
@@ -153,13 +154,13 @@ export class SuperAdminService implements ISuperAdminService {
         role: admin.role,
       },
       this.jwtRefreshSecret,
-      { expiresIn: this.refreshTokenExpiry }
+      { expiresIn: this.refreshTokenExpiry },
     );
 
     await this.cacheRepo.set(
       `superadmin_refresh_token:${adminId}:${nextTokenId}`,
       newRefreshToken,
-      { EX: this.refreshTokenTtlSeconds }
+      { EX: this.refreshTokenTtlSeconds },
     );
 
     return {
@@ -185,12 +186,10 @@ export class SuperAdminService implements ISuperAdminService {
 
       if (payload?.super_admin_id && payload?.token_id) {
         await this.cacheRepo.delete(
-          `superadmin_refresh_token:${payload.super_admin_id}:${payload.token_id}`
+          `superadmin_refresh_token:${payload.super_admin_id}:${payload.token_id}`,
         );
       }
-    } catch {
-  
-    }
+    } catch {}
   }
 
   async createSuperAdmin(data: { email: string; password: string; name: string }) {
@@ -230,8 +229,7 @@ export class SuperAdminService implements ISuperAdminService {
     };
   }
 
-
-  async ListTenants(data:ListTenantsRequest){
+  async ListTenants(data: ListTenantsRequest) {
     return this.tenantRepo.listTenants(data);
   }
 

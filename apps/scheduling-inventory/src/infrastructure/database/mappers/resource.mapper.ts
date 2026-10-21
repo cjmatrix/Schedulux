@@ -1,6 +1,10 @@
-import { ResourceEntity, ResourceType, DispatchStatus } from '../../../domain/entities/resource.entity.js';
-import { IResourceDoc } from '../schemas/resource.schema.js';
 import { ResourceInfo } from '@repo/proto/scheduling';
+import {
+  DispatchStatus,
+  ResourceEntity,
+  ResourceType,
+} from '../../../domain/entities/resource.entity.js';
+import { IResourceDoc } from '../schemas/resource.schema.js';
 
 export class ResourceMapper {
   static toDomain(doc: IResourceDoc): ResourceEntity {

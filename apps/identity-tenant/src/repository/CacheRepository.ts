@@ -1,6 +1,6 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Redis } from 'ioredis';
-import { ICacheRepository, SetOptions } from '../interfaces/ICacheRepository.js'; 
+import { ICacheRepository, SetOptions } from '../interfaces/ICacheRepository.js';
 
 @Injectable()
 export class CacheRepository implements ICacheRepository {

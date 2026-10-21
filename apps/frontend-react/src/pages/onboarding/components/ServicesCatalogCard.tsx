@@ -1,9 +1,10 @@
+import { Clock, Layers } from 'lucide-react';
 import React from 'react';
-import { Layers, Clock } from 'lucide-react';
+import type { OnboardingServiceItem } from '../types';
 import { formatPrice, getInitials } from '../utils';
 
 interface ServicesCatalogCardProps {
-  servicesList: any[];
+  servicesList: OnboardingServiceItem[];
   currency: string;
 }
 
@@ -48,11 +49,12 @@ export const ServicesCatalogCard: React.FC<ServicesCatalogCardProps> = ({
             {servicesList.length === 0 ? (
               <tr>
                 <td colSpan={5} className="py-8 text-center text-slate-400 font-medium">
-                  No services configured yet. Tell the AI assistant what services your clinic or business offers.
+                  No services configured yet. Tell the AI assistant what services your clinic or
+                  business offers.
                 </td>
               </tr>
             ) : (
-              servicesList.map((srv: any) => (
+              servicesList.map((srv) => (
                 <tr key={srv.service_id || srv.idx} className="hover:bg-slate-50/50 transition">
                   <td className="py-3 px-4">
                     <div className="space-y-0.5">
@@ -61,7 +63,7 @@ export const ServicesCatalogCard: React.FC<ServicesCatalogCardProps> = ({
                         <span className="bg-slate-100 text-slate-600 text-[10px] font-semibold px-2 py-0.5 rounded-md">
                           {srv.category || 'General'}
                         </span>
-                        {srv.recall_interval_days > 0 && (
+                        {(srv.recall_interval_days ?? 0) > 0 && (
                           <span className="text-[10px] text-slate-400 font-mono">
                             {srv.recall_interval_days}d recall
                           </span>
@@ -86,12 +88,14 @@ export const ServicesCatalogCard: React.FC<ServicesCatalogCardProps> = ({
                         {formatPrice(
                           srv.price?.amount,
                           srv.price?.currency || currency,
-                          srv.price?.type
+                          srv.price?.type,
                         )}
                       </p>
                       {srv.deposit?.required ? (
                         <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200/70 px-2 py-0.2 rounded-full inline-block">
-                          Deposit: {formatPrice(srv.deposit.amount, srv.price?.currency || currency)} ({srv.deposit.processor === 'upi_direct' ? 'UPI' : srv.deposit.processor})
+                          Deposit:{' '}
+                          {formatPrice(srv.deposit.amount, srv.price?.currency || currency)} (
+                          {srv.deposit.processor === 'upi_direct' ? 'UPI' : srv.deposit.processor})
                         </span>
                       ) : (
                         <span className="text-[10px] text-slate-400">No deposit</span>
@@ -99,9 +103,9 @@ export const ServicesCatalogCard: React.FC<ServicesCatalogCardProps> = ({
                     </div>
                   </td>
                   <td className="py-3 px-4">
-                    {srv.assignedStaff.length > 0 ? (
+                    {srv.assignedStaff && srv.assignedStaff.length > 0 ? (
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        {srv.assignedStaff.map((staff: any) => (
+                        {srv.assignedStaff.map((staff) => (
                           <span
                             key={staff.resource_id}
                             className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-medium px-2.5 py-0.5 rounded-full transition"
@@ -115,9 +119,7 @@ export const ServicesCatalogCard: React.FC<ServicesCatalogCardProps> = ({
                         ))}
                       </div>
                     ) : (
-                      <span className="text-[11px] text-slate-400 italic">
-                        All available staff
-                      </span>
+                      <span className="text-[11px] text-slate-400 italic">All available staff</span>
                     )}
                   </td>
                   <td className="py-3 px-4 text-right">
@@ -125,6 +127,14 @@ export const ServicesCatalogCard: React.FC<ServicesCatalogCardProps> = ({
                       <span className="bg-slate-100 text-slate-700 text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded">
                         {srv.booking_mode || 'time_slot'}
                       </span>
+                      {srv.verification?.require_otp === true && (
+                        <span className="bg-indigo-50 text-indigo-700 border border-indigo-200/60 text-[9px] font-semibold px-1.5 py-0.2 rounded">
+                          OTP Required
+                        </span>
+                      )}
+                      {srv.verification?.require_otp === false && (
+                        <span className="text-[9px] text-slate-400">No OTP</span>
+                      )}
                       <span className="text-[10px] text-slate-400 font-mono">
                         {srv.allocation_model?.replace('_', ' ') || 'single resource'}
                       </span>

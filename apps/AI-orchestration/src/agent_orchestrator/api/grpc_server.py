@@ -1,43 +1,43 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
-import asyncio
+
 import grpc
 from dotenv import load_dotenv
 
-
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import agent_orchestrator.knowledge_pb2_grpc as knowledge_pb2_grpc
-from agent_orchestrator.models import init_db
-from agent_orchestrator.repositories.message_repository import MongoMessageRepository
-from agent_orchestrator.repositories.draft_repository import MongoDraftRepository
-from agent_orchestrator.repositories.runtime_config_repository import MongoRuntimeConfigRepository
-from agent_orchestrator.repositories.cache_repository import RedisCacheRepository
-from agent_orchestrator.repositories.crawler_queue import BullMQCrawlerQueue
-from agent_orchestrator.repositories.orchestrator_adapter import LangGraphAgentOrchestrator
-from agent_orchestrator.services.onboarding_service import OnboardingService
-from agent_orchestrator.services.chat_service import ChatService
-from agent_orchestrator.services.agent_service import AgentManagementService
-from agent_orchestrator.services.crawler_service import CrawlerService
+import agent_orchestrator.proto.knowledge_pb2_grpc as knowledge_pb2_grpc
+from agent_orchestrator.adapters.orchestrator_adapter import LangGraphAgentOrchestrator
 from agent_orchestrator.api.servicers.knowledge_servicer import KnowledgeServiceServicer
+from agent_orchestrator.models import init_db
+from agent_orchestrator.queues.crawler_queue import RabbitMQCrawlerQueue
+from agent_orchestrator.queues.memory_queue import RabbitMQMemoryQueue
+from agent_orchestrator.repositories.cache_repository import RedisCacheRepository
+from agent_orchestrator.repositories.draft_repository import MongoDraftRepository
+from agent_orchestrator.repositories.message_repository import MongoMessageRepository
+from agent_orchestrator.repositories.runtime_config_repository import MongoRuntimeConfigRepository
+from agent_orchestrator.services.agent_service import AgentManagementService
+from agent_orchestrator.services.chat_service import ChatService
+from agent_orchestrator.services.crawler_service import CrawlerService
+from agent_orchestrator.services.memory_service import MemoryService
+from agent_orchestrator.services.onboarding_service import OnboardingService
 
 local_env = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env"))
 load_dotenv(local_env)
 
 
-from agent_orchestrator.repositories.memory_queue import BullMQMemoryQueue
-from agent_orchestrator.services.memory_service import MemoryService
-
-
-def build_knowledge_servicer() -> tuple[KnowledgeServiceServicer, CrawlerService, BullMQMemoryQueue]:
+def build_knowledge_servicer() -> tuple[
+    KnowledgeServiceServicer, CrawlerService, RabbitMQMemoryQueue
+]:
     msg_repo = MongoMessageRepository()
     draft_repo = MongoDraftRepository()
     runtime_repo = MongoRuntimeConfigRepository()
     cache_repo = RedisCacheRepository()
-    crawler_queue = BullMQCrawlerQueue()
-    memory_queue = BullMQMemoryQueue()
+    crawler_queue = RabbitMQCrawlerQueue()
+    memory_queue = RabbitMQMemoryQueue()
     orchestrator = LangGraphAgentOrchestrator()
 
     memory_service = MemoryService(

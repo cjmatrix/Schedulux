@@ -40,7 +40,7 @@ Configuring complex appointment and scheduling rules (doctor shifts, equipment s
 
 ## 🏛️ System Architecture
 
-Schedulux utilizes a **decoupled, polyglot microservices architecture** organized within a monorepo workspace managed via `pnpm` and `Turborepo`. Inter-service communication across the internal network is powered by **gRPC (HTTP/2 Protocol Buffers)** for high-throughput and sub-20ms latency, while asynchronous mutations stream over **Apache Kafka** and **BullMQ**.
+Schedulux utilizes a **decoupled, polyglot microservices architecture** organized within a monorepo workspace managed via `pnpm` and `Turborepo`. Inter-service communication across the internal network is powered by **gRPC (HTTP/2 Protocol Buffers)** for high-throughput and sub-20ms latency, while asynchronous mutations stream over **Apache Kafka** and **RabbitMQ**.
 
 ### 🖼️ Architecture Diagram (Placeholder)
 
@@ -73,7 +73,7 @@ flowchart TB
 
     subgraph WorkersLayer["⚙️ Background Processing & Event Bus"]
         KafkaBus["Apache Kafka\n(Event Streaming)"]
-        BullMQueue["BullMQ / Redis\n(Async Job Queues)"]
+        RabbitQueue["RabbitMQ (AMQP 0-9-1)\n(Async Task Queues)"]
         PyWorker["Python Background Worker\n(Crawler & Schema Compiler)"]
         TsWorker["TypeScript Worker\n(Notifications & Email Dispatch)"]
     end
@@ -95,12 +95,12 @@ flowchart TB
     %% Microservices to Event Bus
     SchedulingService -.->|Publish Service/Resource Events| KafkaBus
     KafkaBus -.->|Consume Updates| AIOrchestrator
-    IdentityService -.->|Enqueue Transactional Emails| BullMQueue
-    AIOrchestrator -.->|Trigger Schema Generation| BullMQueue
+    IdentityService -.->|Enqueue Transactional Emails| RabbitQueue
+    AIOrchestrator -.->|Trigger Schema Generation| RabbitQueue
 
     %% Workers
-    BullMQueue --> PyWorker
-    BullMQueue --> TsWorker
+    RabbitQueue --> PyWorker
+    RabbitQueue --> TsWorker
     KafkaBus --> SchedulingService
 
     %% Persistence
@@ -202,7 +202,7 @@ stateDiagram-v2
 
 ### 4. 🔄 Event-Driven Data Synchronization
 * **Apache Kafka**: Streams domain events (e.g., `service.created`, `resource.updated`, `booking.confirmed`) to asynchronously update runtime agent configs without coupling microservices.
-* **BullMQ**: Manages resilient background queues for crawling, schema validation, and transactional emails with exponential backoff retry policies.
+* **RabbitMQ**: Manages resilient AMQP 0-9-1 task queues for website crawling, schema compilation, agent memory consolidation, and transactional emails with publisher confirms and prefetch throttling.
 
 ---
 
@@ -239,7 +239,7 @@ Schedulux/
 │   │
 │   ├── background-worker/        # Polyglot Asynchronous Task Workers
 │   │   ├── src/workers/python-worker/   # Python worker for schema generation & validation
-│   │   └── src/workers/typescript-worker/ # BullMQ email & event consumers
+│   │   └── src/workers/emailWorker.ts   # RabbitMQ email & notification consumers
 │   │
 │   └── frontend-react/           # React 19 + Vite Frontend SPA (:5173)
 │       ├── src/features/         # Modular feature slices (Tenant, Dashboard, SuperAdmin)

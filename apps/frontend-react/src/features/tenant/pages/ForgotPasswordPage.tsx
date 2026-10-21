@@ -1,13 +1,13 @@
+import { ArrowLeft, Calendar, CheckCircle2, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router';
-import { Calendar, ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react';
-import { authApi } from '../api/authApi';
 import { dashboardUserAuthApi } from '../../dashboard-user/api/authApi';
+import { authApi } from '../api/authApi';
 
 export default function ForgotPasswordPage() {
   const location = useLocation();
   const isDashboardUser = location.pathname.includes('dashboarduser');
-  
+
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -16,10 +16,10 @@ export default function ForgotPasswordPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
-    
+
     setIsLoading(true);
     setError('');
-    
+
     try {
       if (isDashboardUser) {
         await dashboardUserAuthApi.forgotPassword(email);
@@ -27,8 +27,8 @@ export default function ForgotPasswordPage() {
         await authApi.forgotPassword(email);
       }
       setIsSuccess(true);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Something went wrong. Please try again.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -41,12 +41,15 @@ export default function ForgotPasswordPage() {
           <div className="w-16 h-16 bg-green-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
             <CheckCircle2 className="w-8 h-8 text-green-500" />
           </div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-3 tracking-tight">Check your email</h2>
+          <h2 className="text-2xl font-bold text-slate-900 mb-3 tracking-tight">
+            Check your email
+          </h2>
           <p className="text-slate-500 text-sm mb-8 leading-relaxed">
-            If an account exists for <span className="font-semibold text-slate-700">{email}</span>, we've sent instructions on how to reset your password.
+            If an account exists for <span className="font-semibold text-slate-700">{email}</span>,
+            we've sent instructions on how to reset your password.
           </p>
           <Link
-            to={isDashboardUser ? "/dashboarduser/login" : "/login"}
+            to={isDashboardUser ? '/dashboarduser/login' : '/login'}
             className="block w-full py-3.5 px-4 bg-slate-950 hover:bg-black text-white text-sm font-semibold rounded-2xl transition-all shadow-md active:scale-[0.98]"
           >
             Back to login
@@ -83,7 +86,10 @@ export default function ForgotPasswordPage() {
               )}
 
               <div>
-                <label htmlFor="email" className="block text-xs font-semibold text-slate-700 mb-2 uppercase tracking-wide">
+                <label
+                  htmlFor="email"
+                  className="block text-xs font-semibold text-slate-700 mb-2 uppercase tracking-wide"
+                >
                   Email address
                 </label>
                 <input
@@ -102,16 +108,12 @@ export default function ForgotPasswordPage() {
                 disabled={isLoading}
                 className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-2xl text-sm font-semibold text-white bg-slate-950 hover:bg-black focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-all shadow-md active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  'Send reset link'
-                )}
+                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Send reset link'}
               </button>
 
               <div className="text-center mt-6">
                 <Link
-                  to={isDashboardUser ? "/dashboarduser/login" : "/login"}
+                  to={isDashboardUser ? '/dashboarduser/login' : '/login'}
                   className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4" />

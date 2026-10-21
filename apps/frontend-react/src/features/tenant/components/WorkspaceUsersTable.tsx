@@ -1,5 +1,5 @@
+import { Loader2, MoreVertical } from 'lucide-react';
 import { useState } from 'react';
-import { MoreVertical, Loader2 } from 'lucide-react';
 import { Pagination } from '../../../components/Pagination';
 
 export interface WorkspaceUser {
@@ -43,9 +43,8 @@ export function WorkspaceUsersTable({
     setInternalPage(validPage);
   }
 
- 
-  const displayUsers = users
-  
+  const displayUsers = users;
+
   const getInitials = (name: string) => {
     const parts = name.split(' ');
     if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
@@ -91,7 +90,9 @@ export function WorkspaceUsersTable({
                             {getInitials(user.name)}
                           </div>
                           <div className="flex flex-col">
-                            <span className="font-bold text-slate-900 leading-tight">{user.name}</span>
+                            <span className="font-bold text-slate-900 leading-tight">
+                              {user.name}
+                            </span>
                             <span className="text-[11px] text-slate-400">{user.email}</span>
                           </div>
                         </div>
@@ -122,9 +123,7 @@ export function WorkspaceUsersTable({
                         </div>
                       </td>
 
-                      <td className="px-6 py-4 text-slate-500 font-medium">
-                        {user.last_active}
-                      </td>
+                      <td className="px-6 py-4 text-slate-500 font-medium">{user.last_active}</td>
 
                       <td className="px-6 py-4 text-right">
                         <button

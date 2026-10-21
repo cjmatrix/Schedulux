@@ -55,7 +55,13 @@ ResourceMongooseSchema.index(
   { tenant_id: 1, agent_id: 1, name: 1 },
   { unique: true, partialFilterExpression: { is_deleted: { $eq: false } } },
 );
-ResourceMongooseSchema.index({ tenant_id: 1, agent_id: 1, resource_type: 1, is_bookable: 1, is_deleted: 1 });
+ResourceMongooseSchema.index({
+  tenant_id: 1,
+  agent_id: 1,
+  resource_type: 1,
+  is_bookable: 1,
+  is_deleted: 1,
+});
 ResourceMongooseSchema.index({ agent_id: 1, is_bookable: 1, is_deleted: 1 });
 
 export const ResourceModel = mongoose.model<IResourceDoc>('Resource', ResourceMongooseSchema);

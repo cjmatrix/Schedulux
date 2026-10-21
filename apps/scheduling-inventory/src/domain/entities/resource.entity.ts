@@ -61,21 +61,51 @@ export class ResourceEntity {
     this._updatedAt = props.updatedAt ?? new Date();
   }
 
-  get id(): string { return this._id; }
-  get tenantId(): string { return this._tenantId; }
-  get agentId(): string { return this._agentId; }
-  get resourceType(): ResourceType { return this._resourceType; }
-  get name(): string { return this._name; }
-  get title(): string { return this._title; }
-  get category(): string { return this._category; }
-  get description(): string { return this._description; }
-  get isBookable(): boolean { return this._isBookable; }
-  get dispatchStatus(): DispatchStatus { return this._dispatchStatus; }
-  get customShiftOverridesJson(): string { return this._customShiftOverridesJson; }
-  get isDeleted(): boolean { return this._isDeleted; }
-  get deletedAt(): Date | null { return this._deletedAt; }
-  get createdAt(): Date { return this._createdAt; }
-  get updatedAt(): Date { return this._updatedAt; }
+  get id(): string {
+    return this._id;
+  }
+  get tenantId(): string {
+    return this._tenantId;
+  }
+  get agentId(): string {
+    return this._agentId;
+  }
+  get resourceType(): ResourceType {
+    return this._resourceType;
+  }
+  get name(): string {
+    return this._name;
+  }
+  get title(): string {
+    return this._title;
+  }
+  get category(): string {
+    return this._category;
+  }
+  get description(): string {
+    return this._description;
+  }
+  get isBookable(): boolean {
+    return this._isBookable;
+  }
+  get dispatchStatus(): DispatchStatus {
+    return this._dispatchStatus;
+  }
+  get customShiftOverridesJson(): string {
+    return this._customShiftOverridesJson;
+  }
+  get isDeleted(): boolean {
+    return this._isDeleted;
+  }
+  get deletedAt(): Date | null {
+    return this._deletedAt;
+  }
+  get createdAt(): Date {
+    return this._createdAt;
+  }
+  get updatedAt(): Date {
+    return this._updatedAt;
+  }
 
   softDelete(): void {
     this._isDeleted = true;

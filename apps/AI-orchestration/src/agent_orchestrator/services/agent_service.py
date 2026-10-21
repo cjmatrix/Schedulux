@@ -3,14 +3,15 @@ from __future__ import annotations
 import json
 import secrets
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Any
+
+from agent_orchestrator.domain.exceptions import InvalidDraftException
 from agent_orchestrator.domain.protocols import (
+    CacheRepository,
     DraftRepository,
     RuntimeConfigRepository,
-    CacheRepository,
 )
 from agent_orchestrator.domain.templates import build_default_agent_template
-from agent_orchestrator.domain.exceptions import InvalidDraftException
 
 
 @dataclass
@@ -36,11 +37,11 @@ class AgentManagementService:
         self.cache_repo = cache_repo
 
     async def save_initial_draft(
-        self, tenant_id: str, creation_source: str, draft_json: Optional[str], name: Optional[str]
-    ) -> Tuple[str, str]:
+        self, tenant_id: str, creation_source: str, draft_json: str | None, name: str | None
+    ) -> tuple[str, str]:
         source = (creation_source or "web_crawl").strip().lower()
         agent_id = f"agent_{secrets.token_urlsafe(16)}"
-        draft_dict: Dict[str, Any] = {}
+        draft_dict: dict[str, Any] = {}
 
         if source == "web_crawl":
             redis_draft = await self.cache_repo.get_raw_crawl_draft(tenant_id)
@@ -64,10 +65,12 @@ class AgentManagementService:
         draft_dict["tenant_id"] = tenant_id
         draft_dict["agent_id"] = agent_id
         from agent_orchestrator.models import canonicalize_agent_schema
+
         draft_dict = canonicalize_agent_schema(draft_dict, status="draft")
 
-        bp = draft_dict.get("business_profile", {})
-        final_name = name or bp.get("name") or "Primary Assistant"
+        bp = draft_dict.get("business_profile")
+        bp_name = bp.get("name") if isinstance(bp, dict) else None
+        final_name = name or bp_name or "Primary Assistant"
 
         await self.draft_repo.upsert_agent_draft(
             tenant_id=tenant_id,
@@ -80,12 +83,15 @@ class AgentManagementService:
         try:
             await self.cache_repo.set_cached_draft(tenant_id, agent_id, draft_dict)
         except Exception as re:
-            print(f"[AgentManagementService] Warning: Failed to cache draft in Redis: {re}", flush=True)
+            print(
+                f"[AgentManagementService] Warning: Failed to cache draft in Redis: {re}",
+                flush=True,
+            )
 
         return agent_id, "pending"
 
-    async def list_tenant_agents(self, tenant_id: str) -> List[AgentSummaryDTO]:
-        agents_map: Dict[str, AgentSummaryDTO] = {}
+    async def list_tenant_agents(self, tenant_id: str) -> list[AgentSummaryDTO]:
+        agents_map: dict[str, AgentSummaryDTO] = {}
 
         drafts = await self.draft_repo.list_drafts(tenant_id)
         drafts_map = {d.agent_id: d for d in drafts}
@@ -96,7 +102,6 @@ class AgentManagementService:
             bp = cfg.business_profile
             name = (bp.name if bp else None) or "Active Agent"
 
-         
             source = None
             if aid in drafts_map and drafts_map[aid].creation_source:
                 source = drafts_map[aid].creation_source
@@ -122,13 +127,16 @@ class AgentManagementService:
         for d in drafts:
             if d.agent_id in agents_map:
                 continue
-            d_services = d.current_draft.get("services", []) if isinstance(d.current_draft, dict) else []
+            d_services = (
+                d.current_draft.get("services") if isinstance(d.current_draft, dict) else None
+            )
+            services_count = len(d_services) if isinstance(d_services, list) else 0
             agents_map[d.agent_id] = AgentSummaryDTO(
                 agent_id=d.agent_id,
                 name=d.name or "Draft Agent",
                 status="pending",
                 creation_source=d.creation_source or "web_crawl",
-                services_count=len(d_services),
+                services_count=services_count,
                 updated_at=d.updated_at.isoformat() if d.updated_at else "",
                 created_at=d.created_at.isoformat() if d.created_at else "",
             )

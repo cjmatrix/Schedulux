@@ -37,13 +37,7 @@ exports.SaveInitialAgentDraftSchema = zod_1.z.object({
     tenant_id: zod_1.z.string().optional(),
     draft_json: zod_1.z.string().optional(),
     creation_source: zod_1.z
-        .enum([
-        'medical',
-        'auto',
-        'hospitality',
-        'custom',
-        'web_crawl',
-    ])
+        .enum(['medical', 'auto', 'hospitality', 'custom', 'web_crawl'])
         .optional()
         .default('web_crawl'),
     name: zod_1.z.string().optional(),

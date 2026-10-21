@@ -1,21 +1,10 @@
-/**
- * SchedulingEventsProducer
- *
- * CQRS Kafka producer for scheduling-inventory service.
- * Topics:
- *   - scheduling.service.events  → service.created / service.updated / service.deleted
- *   - scheduling.resource.events → resource.created / resource.updated / resource.deleted
- *
- * The consumer in AI-orchestration will upsert / remove items from
- * the AgentRuntimeConfig.services[] and AgentRuntimeConfig.resources[] arrays.
- */
-
-import { Injectable, Inject, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
-import { ServiceEntity } from '../../domain/entities/service.entity.js';
+import type { DepositInfo, PriceInfo, ServiceVerificationInfo } from '@repo/proto/scheduling';
 import { ResourceEntity } from '../../domain/entities/resource.entity.js';
+import { ServiceEntity } from '../../domain/entities/service.entity.js';
 
-export const KAFKA_SERVICE_TOPIC_SERVICES  = 'scheduling.service.events';
+export const KAFKA_SERVICE_TOPIC_SERVICES = 'scheduling.service.events';
 export const KAFKA_SERVICE_TOPIC_RESOURCES = 'scheduling.resource.events';
 
 export type SchedulingEventType =
@@ -26,13 +15,16 @@ export type SchedulingEventType =
   | 'resource.updated'
   | 'resource.deleted';
 
-export interface ServiceEventPayload {
+export interface BaseSchedulingEventPayload {
   event_type: SchedulingEventType;
   tenant_id: string;
   agent_id: string;
-  service_id: string;
   timestamp: string;
- 
+}
+
+export interface ServiceEventPayload extends BaseSchedulingEventPayload {
+  service_id: string;
+
   data?: {
     name: string;
     category: string;
@@ -41,16 +33,9 @@ export interface ServiceEventPayload {
     buffer_minutes: number;
     allocation_model: string;
     booking_mode: string;
-    price: { type: string; amount: number; currency: string };
-    deposit: {
-      required: boolean;
-      amount: number;
-      processor: string;
-      upi_id: string;
-      qr_code_url: string;
-      confirmation_method: string;
-      payment_instructions: string;
-    };
+    price: PriceInfo;
+    deposit: DepositInfo;
+    verification?: ServiceVerificationInfo;
     eligible_resource_ids: string[];
     required_asset_ids: string[];
     recall_interval_days: number;
@@ -59,12 +44,8 @@ export interface ServiceEventPayload {
   };
 }
 
-export interface ResourceEventPayload {
-  event_type: SchedulingEventType;
-  tenant_id: string;
-  agent_id: string;
+export interface ResourceEventPayload extends BaseSchedulingEventPayload {
   resource_id: string;
-  timestamp: string;
 
   data?: {
     resource_type: string;
@@ -101,11 +82,8 @@ export class SchedulingEventsProducer implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy() {
     try {
       await this.kafkaClient.close();
-    } catch {
-    }
+    } catch {}
   }
-
-
 
   async emitServiceCreated(entity: ServiceEntity): Promise<void> {
     await this.emit<ServiceEventPayload>(KAFKA_SERVICE_TOPIC_SERVICES, {
@@ -139,8 +117,6 @@ export class SchedulingEventsProducer implements OnModuleInit, OnModuleDestroy {
     });
   }
 
- 
-
   async emitResourceCreated(entity: ResourceEntity): Promise<void> {
     await this.emit<ResourceEventPayload>(KAFKA_SERVICE_TOPIC_RESOURCES, {
       event_type: 'resource.created',
@@ -173,21 +149,21 @@ export class SchedulingEventsProducer implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-
-
-  private async emit<T>(topic: string, payload: T): Promise<void> {
+  private async emit<T extends BaseSchedulingEventPayload>(
+    topic: string,
+    payload: T,
+  ): Promise<void> {
     try {
-      
-      const key = (payload as any).agent_id || (payload as any).tenant_id;
+      const key = payload.agent_id || payload.tenant_id;
       this.kafkaClient.emit(topic, { key, value: JSON.stringify(payload) });
-      this.logger.log(`[Kafka] Emitted to ${topic}: ${(payload as any).event_type}`);
-    } catch (err) {
-      this.logger.error(`[Kafka] Failed to emit to ${topic}: ${(err as Error).message}`);
-     
+      this.logger.log(`[Kafka] Emitted to ${topic}: ${payload.event_type}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`[Kafka] Failed to emit to ${topic}: ${msg}`);
     }
   }
 
-  private buildServiceSnapshot(entity: ServiceEntity) {
+  private buildServiceSnapshot(entity: ServiceEntity): NonNullable<ServiceEventPayload['data']> {
     return {
       name: entity.name,
       category: entity.category,
@@ -210,6 +186,9 @@ export class SchedulingEventsProducer implements OnModuleInit, OnModuleDestroy {
         confirmation_method: entity.deposit.confirmationMethod,
         payment_instructions: entity.deposit.paymentInstructions,
       },
+      verification: entity.verification
+        ? { require_otp: entity.verification.require_otp ?? undefined }
+        : undefined,
       eligible_resource_ids: entity.eligibleResourceIds,
       required_asset_ids: entity.requiredAssetIds,
       recall_interval_days: entity.recallIntervalDays,
@@ -218,7 +197,7 @@ export class SchedulingEventsProducer implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  private buildResourceSnapshot(entity: ResourceEntity) {
+  private buildResourceSnapshot(entity: ResourceEntity): NonNullable<ResourceEventPayload['data']> {
     let overrides: Record<string, unknown> = {};
     try {
       overrides = JSON.parse(entity.customShiftOverridesJson || '{}');

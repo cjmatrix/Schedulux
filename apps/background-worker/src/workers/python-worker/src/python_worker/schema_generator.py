@@ -82,11 +82,21 @@ async def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) ->
                         "confirmation_method": "utr_reference",
                         "payment_instructions": ""
                     },
+                    "verification": {
+                        "require_otp": False
+                    },
                     "eligible_resource_ids": ["res_staff_default"],
                     "required_asset_ids": [],
                     "recall_interval_days": 0
                 }
             ],
+            "scheduling_engine": {
+                "allocation_model": "time_slot",
+                "default_booking_mode": "time_slot",
+                "default_lead_time_hours": 2,
+                "max_advance_booking_days": 60,
+                "cancellation_window_hours": 24
+            },
             "resources": [
                 {
                     "resource_id": "res_staff_default",
@@ -155,6 +165,7 @@ CRITICAL DOMAIN INSTRUCTIONS:
      * "allocation_model": "single_resource", "multi_resource", "pooled", or "asset_only"
      * "price": {{"type": "fixed"|"starting_at"|"hourly"|"free"|"custom", "amount": float, "currency": "USD"}}
      * "deposit": {{"required": bool, "amount": float, "processor": "upi_direct", "upi_id": str, "qr_code_url": str, "confirmation_method": "utr_reference", "payment_instructions": str}} (Schedulux only supports direct UPI deposits via upi_id or qr_code_url)
+     * "verification": {{"require_otp": bool|null}} (Optional per-service OTP verification override: true for high-value/sensitive/exclusive services or date-range stays with deposits; false for low-friction/routine services; null to inherit global verification policy)
      * "eligible_resource_ids": list of resource_id strings that can perform this service
      * "required_asset_ids": list of asset resource_id strings required
      * "recall_interval_days": days until next recall/follow-up (default 0)
@@ -172,8 +183,8 @@ CRITICAL DOMAIN INSTRUCTIONS:
      * "custom_shift_overrides": dict (default empty object)
    - Ensure every service in services[] has eligible_resource_ids pointing to these resources.
 
-3. SCHEDULING ENGINE ALLOCATION MODEL:
-   - Set scheduling_engine.allocation_model to "time_slot" for slot-based appointments (clinics, salons, etc.) or "date_range" for multi-day bookings (rentals, hotels).
+3. SCHEDULING ENGINE ALLOCATION MODEL & DEFAULT BOOKING MODE:
+   - Set scheduling_engine.allocation_model and scheduling_engine.default_booking_mode to "time_slot" for slot-based appointments (clinics, salons, etc.) or "date_range" for multi-day bookings (rentals, hotels). Individual services in services[] can override this with their own "booking_mode".
 
 4. OPERATING HOURS & SERVICE DURATIONS:
    - If operating hours or service durations are not explicitly found in the crawled data, use your parametric knowledge to make accurate industry-standard guesses based on the vertical (e.g., Dental consults are 30 min, Dental offices open Mon-Fri 08:00 to 17:00).
@@ -223,17 +234,21 @@ Crawled Data:
         raise
 
 
-async def process_schema_generation(job, token):
-    """BullMQ processor for schema-generation-queue"""
-    data = job.data
+async def process_schema_generation(job_or_data, token=None):
+    """RabbitMQ message processor for schema-generation-queue"""
+    if isinstance(job_or_data, dict):
+        data = job_or_data
+    elif hasattr(job_or_data, "data"):
+        data = job_or_data.data
+    else:
+        data = {}
+
     tenant_id = data.get("tenant_id")
     url = data.get("url")
     job_id = data.get("job_id")
     crawled_data = data.get("crawled_data", {})
 
     print(f"[Schema Worker] Processing schema generation for tenant: {tenant_id}, URL: {url}, job_id: {job_id}", flush=True)
-
-    await job.updateProgress(20)
 
     try:
         schema = await generate_agent_schema(crawled_data, tenant_id, url)
@@ -267,7 +282,6 @@ async def process_schema_generation(job, token):
         await redis.publish(pubsub_channel, json.dumps(event_payload))
         print(f"[Schema Worker] Published event to Redis channel '{pubsub_channel}' for job {job_id}", flush=True)
 
-        await job.updateProgress(100)
         print(f"[Schema Worker] Successfully compiled agent schema for tenant: {tenant_id}", flush=True)
 
         return schema

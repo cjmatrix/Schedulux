@@ -1,12 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { superAdminAuthApi } from '../api/superAdminAuthApi';
-import { superAdminApi } from '../api/superAdminApi';
-import { useSuperAdminStore } from '../store/useSuperAdminStore';
-import type {
-  LoginSuperAdminPayload,
-  SuperAdminInfo,
-} from '../api/superAdminAuthApi';
 import type { ApiResponse } from '../../../api/axiosClient';
+import { superAdminApi } from '../api/superAdminApi';
+import type { LoginSuperAdminPayload, SuperAdminInfo } from '../api/superAdminAuthApi';
+import { superAdminAuthApi } from '../api/superAdminAuthApi';
+import { useSuperAdminStore } from '../store/useSuperAdminStore';
 
 export function useSuperAdminLogin() {
   const queryClient = useQueryClient();
@@ -53,7 +50,13 @@ export function useSuperAdminProfile() {
   });
 }
 
-export function useSuperAdminTenants(page = 1, limit = 10, search?: string, tier?: string, status?: string) {
+export function useSuperAdminTenants(
+  page = 1,
+  limit = 10,
+  search?: string,
+  tier?: string,
+  status?: string,
+) {
   return useQuery({
     queryKey: ['superAdminTenants', page, limit, search, tier, status],
     queryFn: () => superAdminApi.getTenants(page, limit, search, tier, status),
@@ -64,7 +67,7 @@ export function useSuperAdminTenants(page = 1, limit = 10, search?: string, tier
 export function useSuspendTenant() {
   const queryClient = useQueryClient();
 
-  return useMutation<{ message: string; data: any }, Error, string>({
+  return useMutation<{ message: string; data: Record<string, unknown> }, Error, string>({
     mutationFn: (tenantId: string) => superAdminApi.suspendTenant(tenantId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['superAdminTenants'] });

@@ -1,5 +1,5 @@
-import { Navigate, Outlet, useLocation } from 'react-router';
 import { Loader2, Shield } from 'lucide-react';
+import { Navigate, Outlet, useLocation } from 'react-router';
 import { useSuperAdminProfile } from '../hooks/useSuperAdmin';
 
 export function SuperAdminProtectedRoute() {

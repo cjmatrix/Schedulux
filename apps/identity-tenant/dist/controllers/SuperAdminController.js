@@ -10,10 +10,10 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-import { Controller, UseFilters, Inject } from "@nestjs/common";
-import { GrpcMethod } from "@nestjs/microservices";
-import { AllExceptionsFilter } from "./rpcExpetionFilter.js";
-import { SuperAdminProto } from "@repo/proto";
+import { Controller, Inject, UseFilters } from '@nestjs/common';
+import { GrpcMethod } from '@nestjs/microservices';
+import { SuperAdminProto } from '@repo/proto';
+import { AllExceptionsFilter } from './rpcExpetionFilter.js';
 let SuperAdminAuthController = class SuperAdminAuthController {
     superAdminService;
     constructor(superAdminService) {
@@ -22,10 +22,10 @@ let SuperAdminAuthController = class SuperAdminAuthController {
     async superAdminLogin(data) {
         const { email, password } = data;
         if (!email || !password)
-            throw new Error("Email and password are required");
+            throw new Error('Email and password are required');
         const result = await this.superAdminService.login(email, password);
         return {
-            message: "SuperAdmin login successful",
+            message: 'SuperAdmin login successful',
             superAdmin: {
                 id: result.superAdmin.id,
                 email: result.superAdmin.email,
@@ -40,10 +40,10 @@ let SuperAdminAuthController = class SuperAdminAuthController {
     async superAdminRefreshToken(data) {
         const { refresh_token } = data;
         if (!refresh_token)
-            throw new Error("Refresh token is required");
+            throw new Error('Refresh token is required');
         const result = await this.superAdminService.refreshToken(refresh_token);
         return {
-            message: "Token rotated successfully",
+            message: 'Token rotated successfully',
             access_token: result.accessToken,
             refresh_token: result.refreshToken,
         };
@@ -51,12 +51,12 @@ let SuperAdminAuthController = class SuperAdminAuthController {
     async superAdminLogout(data) {
         const { refresh_token } = data;
         await this.superAdminService.logout(refresh_token);
-        return { message: "Logged out successfully" };
+        return { message: 'Logged out successfully' };
     }
     async superAdminGetProfile(data) {
         const { superadmin_id } = data;
         if (!superadmin_id)
-            throw new Error("SuperAdmin ID is required");
+            throw new Error('SuperAdmin ID is required');
         const profile = await this.superAdminService.getProfile(superadmin_id);
         return {
             superAdmin: {
@@ -74,42 +74,42 @@ let SuperAdminAuthController = class SuperAdminAuthController {
     }
     async suspendTenant(data) {
         if (!data.tenant_id)
-            throw new Error("Tenant ID is required");
+            throw new Error('Tenant ID is required');
         return this.superAdminService.suspendTenant(data.tenant_id);
     }
 };
 __decorate([
-    GrpcMethod("SuperAdminAuthService", "Login"),
+    GrpcMethod('SuperAdminAuthService', 'Login'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], SuperAdminAuthController.prototype, "superAdminLogin", null);
 __decorate([
-    GrpcMethod("SuperAdminAuthService", "RefreshToken"),
+    GrpcMethod('SuperAdminAuthService', 'RefreshToken'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], SuperAdminAuthController.prototype, "superAdminRefreshToken", null);
 __decorate([
-    GrpcMethod("SuperAdminAuthService", "Logout"),
+    GrpcMethod('SuperAdminAuthService', 'Logout'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], SuperAdminAuthController.prototype, "superAdminLogout", null);
 __decorate([
-    GrpcMethod("SuperAdminAuthService", "GetProfile"),
+    GrpcMethod('SuperAdminAuthService', 'GetProfile'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], SuperAdminAuthController.prototype, "superAdminGetProfile", null);
 __decorate([
-    GrpcMethod("TenantService", "ListTenants"),
+    GrpcMethod('TenantService', 'ListTenants'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], SuperAdminAuthController.prototype, "superAdminGetTenantList", null);
 __decorate([
-    GrpcMethod("TenantService", "SuspendTenant"),
+    GrpcMethod('TenantService', 'SuspendTenant'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)

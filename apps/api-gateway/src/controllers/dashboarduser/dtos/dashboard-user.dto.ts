@@ -1,6 +1,6 @@
+import { DashboardUserLoginRequest } from '@repo/proto/dashboard';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
-import { DashboardUserLoginRequest } from '@repo/proto/dashboard';
 
 export const DashboardUserLoginSchema: z.ZodType<DashboardUserLoginRequest> = z.object({
   email: z.string().trim().email('Please provide a valid email address'),
@@ -19,7 +19,9 @@ export const DashboardUserForgotPasswordSchema = z.object({
   email: z.string().trim().email('Please provide a valid email address'),
 });
 
-export class DashboardUserForgotPasswordDto extends createZodDto(DashboardUserForgotPasswordSchema) {}
+export class DashboardUserForgotPasswordDto extends createZodDto(
+  DashboardUserForgotPasswordSchema,
+) {}
 
 export const DashboardUserResetPasswordSchema = z.object({
   token: z.string().min(1, 'Token is required'),

@@ -14,14 +14,14 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SchedulingController = void 0;
 const common_1 = require("@nestjs/common");
-const rxjs_1 = require("rxjs");
-const nestjs_zod_1 = require("nestjs-zod");
 const scheduling_1 = require("@repo/proto/scheduling");
-const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
-const roles_guard_js_1 = require("../../guards/roles.guard.js");
+const nestjs_zod_1 = require("nestjs-zod");
+const rxjs_1 = require("rxjs");
 const roles_decorator_js_1 = require("../../decorators/roles.decorator.js");
-const service_dto_js_1 = require("./dtos/service.dto.js");
+const roles_guard_js_1 = require("../../guards/roles.guard.js");
+const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
 const resource_dto_js_1 = require("./dtos/resource.dto.js");
+const service_dto_js_1 = require("./dtos/service.dto.js");
 let SchedulingController = class SchedulingController {
     client;
     schedulingService;
@@ -52,6 +52,9 @@ let SchedulingController = class SchedulingController {
             booking_mode: body.booking_mode,
             price: body.price,
             deposit: body.deposit,
+            verification: body.verification
+                ? { require_otp: body.verification.require_otp ?? undefined }
+                : undefined,
             eligible_resource_ids: body.eligible_resource_ids,
             required_asset_ids: body.required_asset_ids,
             recall_interval_days: body.recall_interval_days,
@@ -107,6 +110,9 @@ let SchedulingController = class SchedulingController {
             booking_mode: body.booking_mode,
             price: body.price,
             deposit: body.deposit,
+            verification: body.verification
+                ? { require_otp: body.verification.require_otp ?? undefined }
+                : undefined,
             eligible_resource_ids: body.eligible_resource_ids ?? [],
             required_asset_ids: body.required_asset_ids ?? [],
             recall_interval_days: body.recall_interval_days,

@@ -1,14 +1,17 @@
 from __future__ import annotations
+
 import uuid
-import httpx
-from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
+from datetime import UTC, datetime
+from typing import Any
+
+from qdrant_client import AsyncQdrantClient, models
+
 from agent_orchestrator.config import (
-    QDRANT_URL,
     QDRANT_API_KEY,
+    QDRANT_COLLECTION_NAME,
     QDRANT_HOST,
     QDRANT_PORT,
-    QDRANT_COLLECTION_NAME,
+    QDRANT_URL,
     QDRANT_VECTOR_SIZE,
 )
 
@@ -16,8 +19,8 @@ from agent_orchestrator.config import (
 class QdrantVectorStore:
     def __init__(
         self,
-        url: Optional[str] = None,
-        api_key: Optional[str] = None,
+        url: str | None = None,
+        api_key: str | None = None,
         host: str = QDRANT_HOST,
         port: int = QDRANT_PORT,
         collection_name: str = QDRANT_COLLECTION_NAME,
@@ -25,49 +28,63 @@ class QdrantVectorStore:
     ):
         cloud_url = url or QDRANT_URL
         if cloud_url:
-            self.base_url = cloud_url.rstrip("/")
+            self.client = AsyncQdrantClient(
+                url=cloud_url.rstrip("/"),
+                api_key=api_key or QDRANT_API_KEY,
+            )
         else:
-            self.base_url = f"http://{host}:{port}"
+            self.client = AsyncQdrantClient(
+                host=host,
+                port=port,
+                api_key=api_key or QDRANT_API_KEY,
+            )
 
-        self.api_key = api_key or QDRANT_API_KEY
         self.collection_name = collection_name
         self.vector_size = vector_size
 
-    def _get_headers(self) -> Dict[str, str]:
-        headers = {"Content-Type": "application/json"}
-        if self.api_key:
-            headers["api-key"] = self.api_key
-        return headers
-
     async def ensure_collection(self) -> None:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                f"{self.base_url}/collections/{self.collection_name}",
-                headers=self._get_headers(),
-            )
-            if resp.status_code == 200:
-                return
+        try:
+            collections_resp = await self.client.get_collections()
+            existing_names = [c.name for c in collections_resp.collections]
 
-            payload = {
-                "vectors": {
-                    "size": self.vector_size,
-                    "distance": "Cosine",
-                }
-            }
-            create_resp = await client.put(
-                f"{self.base_url}/collections/{self.collection_name}",
-                headers=self._get_headers(),
-                json=payload,
-            )
-            if create_resp.status_code not in (200, 201):
-                print(f"[Qdrant Cloud Warning] Failed to create collection {self.collection_name}: {create_resp.text}", flush=True)
+            if self.collection_name not in existing_names:
+                await self.client.create_collection(
+                    collection_name=self.collection_name,
+                    vectors_config=models.VectorParams(
+                        size=self.vector_size,
+                        distance=models.Distance.COSINE,
+                    ),
+                )
+                print(f"[Qdrant Client] Created collection: {self.collection_name}", flush=True)
+
+            # Ensure payload indexes exist for strict mode filtering
+            col_info = await self.client.get_collection(self.collection_name)
+            payload_schema = col_info.payload_schema or {}
+            for field in ("tenant_id", "agent_id"):
+                if field not in payload_schema:
+                    try:
+                        await self.client.create_payload_index(
+                            collection_name=self.collection_name,
+                            field_name=field,
+                            field_schema=models.PayloadSchemaType.KEYWORD,
+                        )
+                        print(
+                            f"[Qdrant Client] Created index for payload field: {field}", flush=True
+                        )
+                    except Exception as ie:
+                        print(
+                            f"[Qdrant Client Warning] Index creation warning for {field}: {ie}",
+                            flush=True,
+                        )
+        except Exception as e:
+            print(f"[Qdrant Client Warning] Error in ensure_collection: {e}", flush=True)
 
     async def upsert_facts(
         self,
         tenant_id: str,
         agent_id: str,
-        facts: List[Dict[str, Any]],
-        vectors: List[List[float]],
+        facts: list[dict[str, Any]],
+        vectors: list[list[float]],
     ) -> None:
         if not facts or not vectors or len(facts) != len(vectors):
             return
@@ -75,72 +92,73 @@ class QdrantVectorStore:
         await self.ensure_collection()
 
         points = []
-        for fact_dict, vector in zip(facts, vectors):
-            point_id = str(uuid.uuid4())
-            points.append({
-                "id": point_id,
-                "vector": vector,
-                "payload": {
-                    "tenant_id": tenant_id,
-                    "agent_id": agent_id,
-                    "fact": fact_dict.get("fact", ""),
-                    "category": fact_dict.get("category", "general"),
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                },
-            })
-
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.put(
-                f"{self.base_url}/collections/{self.collection_name}/points",
-                headers=self._get_headers(),
-                json={"points": points},
+        for fact_dict, vector in zip(facts, vectors, strict=True):
+            points.append(
+                models.PointStruct(
+                    id=str(uuid.uuid4()),
+                    vector=vector,
+                    payload={
+                        "tenant_id": tenant_id,
+                        "agent_id": agent_id,
+                        "fact": fact_dict.get("fact", ""),
+                        "category": fact_dict.get("category", "general"),
+                        "created_at": datetime.now(UTC).isoformat(),
+                    },
+                )
             )
-            if resp.status_code not in (200, 201):
-                print(f"[Qdrant Warning] Failed to upsert facts: {resp.text}", flush=True)
+
+        try:
+            await self.client.upsert(
+                collection_name=self.collection_name,
+                points=points,
+            )
+            print(f"[Qdrant Client] Successfully upserted {len(points)} facts.", flush=True)
+        except Exception as e:
+            print(f"[Qdrant Client Warning] Failed to upsert facts: {e}", flush=True)
 
     async def search_relevant_facts(
         self,
-        query_vector: List[float],
+        query_vector: list[float],
         tenant_id: str,
-        agent_id: Optional[str] = None,
+        agent_id: str | None = None,
         limit: int = 4,
-    ) -> List[str]:
+    ) -> list[str]:
         if not query_vector:
             return []
 
-        must_filters = [{"key": "tenant_id", "match": {"value": tenant_id}}]
+        must_conditions: list[models.Condition] = [
+            models.FieldCondition(
+                key="tenant_id",
+                match=models.MatchValue(value=tenant_id),
+            )
+        ]
         if agent_id:
-            must_filters.append({"key": "agent_id", "match": {"value": agent_id}})
-
-        payload = {
-            "vector": query_vector,
-            "filter": {"must": must_filters},
-            "limit": limit,
-            "with_payload": True,
-        }
+            must_conditions.append(
+                models.FieldCondition(
+                    key="agent_id",
+                    match=models.MatchValue(value=agent_id),
+                )
+            )
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(
-                    f"{self.base_url}/collections/{self.collection_name}/points/search",
-                    headers=self._get_headers(),
-                    json=payload,
-                )
-                if resp.status_code != 200:
-                    return []
-
-                results = resp.json().get("result", [])
-                return [
-                    r["payload"]["fact"]
-                    for r in results
-                    if r.get("payload") and "fact" in r["payload"]
-                ]
+            results = await self.client.query_points(
+                collection_name=self.collection_name,
+                query=query_vector,
+                query_filter=models.Filter(must=must_conditions),
+                limit=limit,
+                with_payload=True,
+            )
+            return [p.payload["fact"] for p in results.points if p.payload and "fact" in p.payload]
         except Exception as e:
-            print(f"[Qdrant Search Warning]: {e}", flush=True)
+            print(f"[Qdrant Client Search Warning]: {e}", flush=True)
             return []
 
+    async def close(self) -> None:
+        if self.client:
+            await self.client.close()
 
-_default_qdrant: Optional[QdrantVectorStore] = None
+
+_default_qdrant: QdrantVectorStore | None = None
 
 
 def get_qdrant_store() -> QdrantVectorStore:

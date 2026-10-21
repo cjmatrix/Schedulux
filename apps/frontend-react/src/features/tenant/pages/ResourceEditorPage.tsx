@@ -1,35 +1,35 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router';
 import {
+  AlertCircle,
+  Armchair,
   ArrowLeft,
+  Building2,
+  Car,
+  Check,
+  CheckCircle2,
   Clock,
+  Copy,
+  Loader2,
+  Plus,
+  RotateCcw,
   Shield,
   Trash2,
-  Loader2,
-  CheckCircle2,
-  Building2,
-  AlertCircle,
-  Copy,
-  Check,
-  RotateCcw,
-  Plus,
-  X,
   Wrench,
-  Armchair,
-  Car,
+  X,
 } from 'lucide-react';
-import {
-  useResource,
-  useCreateResource,
-  useUpdateResource,
-  useDeleteResource,
-} from '../hooks/useResources';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
 import type {
   CreateResourcePayload,
+  DaySchedule,
   UpdateResourcePayload,
   WeeklySchedule,
-  DaySchedule,
 } from '../api/resourcesApi';
+import {
+  useCreateResource,
+  useDeleteResource,
+  useResource,
+  useUpdateResource,
+} from '../hooks/useResources';
 
 interface ResourceEditorPageProps {
   mode?: 'create' | 'edit';
@@ -97,23 +97,46 @@ function calculateShiftHours(shifts: { start: string; end: string }[]): number {
   return Number((totalMinutes / 60).toFixed(1));
 }
 
+function normalizeWeeklySchedule(rawJson?: string): WeeklySchedule {
+  if (!rawJson) return DEFAULT_WEEKLY_SCHEDULE;
+  try {
+    const parsed = typeof rawJson === 'string' ? JSON.parse(rawJson) : rawJson;
+    if (!parsed || typeof parsed !== 'object') return DEFAULT_WEEKLY_SCHEDULE;
+
+    const result: WeeklySchedule = { ...DEFAULT_WEEKLY_SCHEDULE };
+
+    for (const { key } of DAYS_OF_WEEK) {
+      const shifts = (parsed as Record<string, unknown>)[key];
+      if (Array.isArray(shifts)) {
+        const hasShifts = shifts.length > 0;
+        result[key] = {
+          enabled: hasShifts,
+          shifts: hasShifts ? shifts : [],
+          reason: hasShifts ? '' : 'Closed / Off',
+        };
+      }
+    }
+
+    return result;
+  } catch {
+    return DEFAULT_WEEKLY_SCHEDULE;
+  }
+}
+
 export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPageProps) {
   const navigate = useNavigate();
   const { id: resourceIdFromParams, agentId } = useParams<{ id: string; agentId?: string }>();
 
   const isCreateMode = mode === 'create' || !resourceIdFromParams || resourceIdFromParams === 'new';
 
- 
   const { data: resourceResponse, isLoading: isResourceLoading } = useResource(
     isCreateMode ? undefined : resourceIdFromParams,
   );
-
 
   const createResourceMutation = useCreateResource();
   const updateResourceMutation = useUpdateResource();
   const deleteResourceMutation = useDeleteResource();
 
-  
   const [name, setName] = useState('');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('General');
@@ -126,16 +149,13 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
   const [description, setDescription] = useState('');
   const [isBookable, setIsBookable] = useState(true);
 
-
   const [schedule, setSchedule] = useState<WeeklySchedule>(DEFAULT_WEEKLY_SCHEDULE);
-
 
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
- 
   useEffect(() => {
     if (resourceResponse?.data && !isCreateMode) {
       const res = resourceResponse.data;
@@ -153,34 +173,18 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
           | 'vehicle') || 'staff',
       );
       setDispatchStatus(
-        (res.dispatch_status as
-          | 'active'
-          | 'on_leave'
-          | 'maintenance'
-          | 'retired'
-          | 'inactive') || 'active',
+        (res.dispatch_status as 'active' | 'on_leave' | 'maintenance' | 'retired' | 'inactive') ||
+          'active',
       );
       setDescription(res.description || '');
       setIsBookable(res.is_bookable !== undefined ? res.is_bookable : true);
 
-      
       if (res.custom_shift_overrides_json) {
-        try {
-          const parsed = JSON.parse(res.custom_shift_overrides_json);
-          if (parsed && typeof parsed === 'object') {
-            setSchedule((prev) => ({
-              ...prev,
-              ...parsed,
-            }));
-          }
-        } catch {
-        
-        }
+        setSchedule(normalizeWeeklySchedule(res.custom_shift_overrides_json));
       }
     }
   }, [resourceResponse, isCreateMode]);
 
- 
   const initials = useMemo(() => {
     if (!name.trim()) return 'RS';
     const parts = name.trim().split(/\s+/);
@@ -188,7 +192,6 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }, [name]);
 
- 
   const handleToggleDay = (dayKey: string) => {
     setSchedule((prev) => {
       const current = prev[dayKey] || { enabled: false, shifts: [] };
@@ -208,7 +211,6 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
     });
   };
 
- 
   const handleShiftChange = (
     dayKey: string,
     shiftIndex: number,
@@ -234,7 +236,6 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
     });
   };
 
- 
   const handleAddSplitShift = (dayKey: string) => {
     setSchedule((prev) => {
       const current = prev[dayKey] || { enabled: true, shifts: [] };
@@ -249,7 +250,6 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
       };
     });
   };
-
 
   const handleRemoveShift = (dayKey: string, shiftIndex: number) => {
     setSchedule((prev) => {
@@ -266,7 +266,6 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
     });
   };
 
-  
   const handleChangeReason = (dayKey: string, reason: string) => {
     setSchedule((prev) => {
       const current = prev[dayKey] || { enabled: false, shifts: [] };
@@ -280,12 +279,10 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
     });
   };
 
-
   const handleResetToDefault = () => {
     setSchedule(DEFAULT_WEEKLY_SCHEDULE);
   };
 
- 
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErrorMsg(null);
@@ -295,8 +292,19 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
       return;
     }
 
+    const cleanShiftOverrides: Record<string, { start: string; end: string }[]> = {};
+    for (const { key } of DAYS_OF_WEEK) {
+      const day = schedule[key];
+      if (day?.enabled && day.shifts && day.shifts.length > 0) {
+        cleanShiftOverrides[key] = day.shifts.map((s) => ({
+          start: s.start,
+          end: s.end,
+        }));
+      }
+    }
+
     const payload: CreateResourcePayload | UpdateResourcePayload = {
-      agent_id: agentId || (resourceResponse?.data as any)?.agent_id || '',
+      agent_id: agentId || resourceResponse?.data?.agent_id || '',
       name: name.trim(),
       title: title.trim(),
       category: category.trim() || 'General',
@@ -304,7 +312,7 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
       dispatch_status: dispatchStatus,
       description: description.trim(),
       is_bookable: isBookable,
-      custom_shift_overrides_json: JSON.stringify(schedule),
+      custom_shift_overrides_json: JSON.stringify(cleanShiftOverrides),
     };
 
     try {
@@ -333,7 +341,6 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
     }
   };
 
-  
   const handleDelete = async () => {
     if (!resourceIdFromParams) return;
     try {
@@ -372,7 +379,9 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
         <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3">
           <button
             type="button"
-            onClick={() => navigate(agentId ? `/tenant/agents/${agentId}/resources` : '/tenant/inventory')}
+            onClick={() =>
+              navigate(agentId ? `/tenant/agents/${agentId}/resources` : '/tenant/inventory')
+            }
             className="flex items-center gap-1 hover:text-slate-900 transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
@@ -393,7 +402,9 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
           )}
           <button
             type="button"
-            onClick={() => navigate(agentId ? `/tenant/agents/${agentId}/resources` : '/tenant/inventory')}
+            onClick={() =>
+              navigate(agentId ? `/tenant/agents/${agentId}/resources` : '/tenant/inventory')
+            }
             className="hover:text-slate-900 transition-colors cursor-pointer"
           >
             Resources & Inventory
@@ -410,16 +421,16 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
-              {isCreateMode
-                ? 'Create New Resource'
-                : `Edit Profile: ${name || 'Resource'}`}
+              {isCreateMode ? 'Create New Resource' : `Edit Profile: ${name || 'Resource'}`}
             </h1>
           </div>
 
           <div className="flex items-center gap-2.5">
             <button
               type="button"
-              onClick={() => navigate(agentId ? `/tenant/agents/${agentId}/resources` : '/tenant/inventory')}
+              onClick={() =>
+                navigate(agentId ? `/tenant/agents/${agentId}/resources` : '/tenant/inventory')
+              }
               className="px-4 py-2 rounded-full border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
             >
               Cancel
@@ -460,13 +471,10 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
 
       {/* Main Content Form */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-6">
-      
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-2xs space-y-6">
           {/* Section Header */}
           <div>
-            <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-              General Information
-            </h2>
+            <h2 className="text-lg font-bold text-slate-900 tracking-tight">General Information</h2>
             <p className="text-xs text-slate-500 mt-0.5">
               Resource identity, role/specialization, and operational dispatch parameters.
             </p>
@@ -603,9 +611,7 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-800 mb-1.5">
-                Category
-              </label>
+              <label className="block text-xs font-semibold text-slate-800 mb-1.5">Category</label>
               <input
                 type="text"
                 value={category}
@@ -660,14 +666,14 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
               className="w-full p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all leading-relaxed resize-none"
             />
             <p className="text-[11px] text-slate-400 mt-1.5">
-              Schedulux automatically inserts dynamic padding into Google Calendar and voice-booking agent reservations.
+              Schedulux automatically inserts dynamic padding into Google Calendar and voice-booking
+              agent reservations.
             </p>
           </div>
         </div>
 
-     
         {/* SECTION 2: Custom Working Hours                          */}
-       
+
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-2xs space-y-6">
           {/* Section Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -741,18 +747,14 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
                             <input
                               type="time"
                               value={shift.start}
-                              onChange={(e) =>
-                                handleShiftChange(key, idx, 'start', e.target.value)
-                              }
+                              onChange={(e) => handleShiftChange(key, idx, 'start', e.target.value)}
                               className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none"
                             />
                             <span className="text-slate-400 font-medium">to</span>
                             <input
                               type="time"
                               value={shift.end}
-                              onChange={(e) =>
-                                handleShiftChange(key, idx, 'end', e.target.value)
-                              }
+                              onChange={(e) => handleShiftChange(key, idx, 'end', e.target.value)}
                               className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none"
                             />
                             {shifts.length > 1 && (
@@ -816,7 +818,8 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
           <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 text-slate-600 text-xs">
             <Shield className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
             <span className="text-[11px] leading-relaxed">
-              Schedulux AI voice and autonomous text agents will strictly offer appointment slots within these confirmed operating hours.
+              Schedulux AI voice and autonomous text agents will strictly offer appointment slots
+              within these confirmed operating hours.
             </span>
           </div>
         </div>
@@ -875,11 +878,10 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
               <Trash2 className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900">
-                Delete "{name || 'Resource'}"?
-              </h3>
+              <h3 className="text-base font-bold text-slate-900">Delete "{name || 'Resource'}"?</h3>
               <p className="text-xs text-slate-500 mt-1">
-                Are you sure you want to permanently delete this resource? Services assigned to this resource will no longer be able to book slots with it.
+                Are you sure you want to permanently delete this resource? Services assigned to this
+                resource will no longer be able to book slots with it.
               </p>
             </div>
             <div className="flex items-center justify-end gap-2.5 pt-2">

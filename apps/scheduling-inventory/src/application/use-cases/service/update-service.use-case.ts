@@ -1,12 +1,12 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { SERVICE_REPOSITORY } from '../../../domain/tokens.js';
-import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
-import { ServiceEntity } from '../../../domain/entities/service.entity.js';
-import { PriceVO } from '../../../domain/value-objects/price.vo.js';
-import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
-import { IUpdateServiceUseCase } from '../../interfaces/service-use-cases.interface.js';
-import { SchedulingEventsProducer } from '../../../infrastructure/messaging/scheduling-events.producer.js';
 import { UpdateServiceRequest } from '@repo/proto/scheduling';
+import { ServiceEntity } from '../../../domain/entities/service.entity.js';
+import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
+import { SERVICE_REPOSITORY } from '../../../domain/tokens.js';
+import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
+import { PriceVO } from '../../../domain/value-objects/price.vo.js';
+import { SchedulingEventsProducer } from '../../../infrastructure/messaging/scheduling-events.producer.js';
+import { IUpdateServiceUseCase } from '../../interfaces/service-use-cases.interface.js';
 
 @Injectable()
 export class UpdateServiceUseCase implements IUpdateServiceUseCase {
@@ -19,7 +19,9 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
   async execute(dto: UpdateServiceRequest): Promise<ServiceEntity> {
     const existing = await this.serviceRepository.findById(dto.tenant_id, dto.service_id);
     if (!existing) {
-      throw new NotFoundException(`Service ${dto.service_id} not found for tenant ${dto.tenant_id}`);
+      throw new NotFoundException(
+        `Service ${dto.service_id} not found for tenant ${dto.tenant_id}`,
+      );
     }
 
     const price = dto.price
@@ -48,7 +50,10 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
       bookingMode: dto.booking_mode,
       price,
       deposit,
-      eligibleResourceIds: dto.eligible_resource_ids?.length ? dto.eligible_resource_ids : undefined,
+      verification: dto.verification ? { require_otp: dto.verification.require_otp } : undefined,
+      eligibleResourceIds: dto.eligible_resource_ids?.length
+        ? dto.eligible_resource_ids
+        : undefined,
       requiredAssetIds: dto.required_asset_ids?.length ? dto.required_asset_ids : undefined,
       recallIntervalDays: dto.recall_interval_days,
     });
@@ -58,7 +63,6 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
       throw new NotFoundException(`Failed to update service ${dto.service_id}`);
     }
 
-   
     await this.eventsProducer.emitServiceUpdated(updated);
 
     return updated;

@@ -1,14 +1,6 @@
+import { AlertCircle, Eye, EyeOff, Loader2, Lock, Mail, Shield } from 'lucide-react';
 import { useState } from 'react';
-import { useNavigate, Link, Navigate } from 'react-router';
-import {
-  Shield,
-  Eye,
-  EyeOff,
-  Loader2,
-  Lock,
-  Mail,
-  AlertCircle,
-} from 'lucide-react';
+import { Link, Navigate, useNavigate } from 'react-router';
 import { useSuperAdminLogin, useSuperAdminProfile } from '../hooks/useSuperAdmin';
 
 export default function SuperAdminLoginPage() {
@@ -57,7 +49,7 @@ export default function SuperAdminLoginPage() {
         onError: (err) => {
           setErrorMessage(err.message || 'Invalid credentials. Please try again.');
         },
-      }
+      },
     );
   };
 
@@ -83,15 +75,13 @@ export default function SuperAdminLoginPage() {
       {/* Card */}
       <div className="relative z-10 w-full max-w-[420px]">
         {/* Header badge */}
-        
+
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-rose-600 via-rose-500 to-violet-600 flex items-center justify-center shadow-xl shadow-rose-600/25 mb-4">
             <Shield className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">
-            Schedulux SuperAdmin
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight text-white">Schedulux SuperAdmin</h1>
           <p className="text-sm text-slate-400 mt-1">
             Platform control center — authorized personnel only
           </p>
@@ -110,9 +100,7 @@ export default function SuperAdminLoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Email */}
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                Admin Email
-              </label>
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">Admin Email</label>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
                 <input
@@ -130,9 +118,7 @@ export default function SuperAdminLoginPage() {
 
             {/* Password */}
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                Password
-              </label>
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">Password</label>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
                 <input

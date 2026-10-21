@@ -8,7 +8,7 @@ export class JwtTokenService implements IJwtService {
     return jwt.sign(payload, secret, options);
   }
 
-  verify<T = any>(token: string, secret: string, options?: jwt.VerifyOptions): T {
+  verify<T = unknown>(token: string, secret: string, options?: jwt.VerifyOptions): T {
     return jwt.verify(token, secret, options) as T;
   }
 }

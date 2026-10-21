@@ -1,6 +1,5 @@
 import { customAlphabet } from 'nanoid';
 
-
 const generateSuffix = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 10);
 
 export function generateSemanticId(prefix: 'srv' | 'res', name: string): string {

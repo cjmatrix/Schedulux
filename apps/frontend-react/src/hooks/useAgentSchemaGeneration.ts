@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { knowledgeApi } from '../api/knowledgeApi.js';
+import type { AgentDraftSchema } from '../pages/onboarding/types.js';
 import { useAuthStore } from '../store/useAuthStore.js';
 
 export type GenerationStage = 'idle' | 'crawling' | 'generating' | 'completed' | 'error';
@@ -12,7 +13,7 @@ export interface UseAgentSchemaGenerationReturn {
   stage: GenerationStage;
   progressMessage: string;
   jobId: string | null;
-  schema: any | null;
+  schema: AgentDraftSchema | null;
   error: string | null;
   reset: () => void;
 }
@@ -24,7 +25,7 @@ export function useAgentSchemaGeneration(): UseAgentSchemaGenerationReturn {
   const [jobId, setJobId] = useState<string | null>(null);
   const [stage, setStage] = useState<GenerationStage>('idle');
   const [progressMessage, setProgressMessage] = useState<string>('');
-  const [schema, setSchema] = useState<any | null>(null);
+  const [schema, setSchema] = useState<AgentDraftSchema | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
@@ -32,11 +33,14 @@ export function useAgentSchemaGeneration(): UseAgentSchemaGenerationReturn {
   const tenantIdRef = useRef<string>(tenantId);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  useEffect(() => {
+    jobIdRef.current = jobId;
+  }, [jobId]);
+  useEffect(() => {
+    tenantIdRef.current = tenantId;
+  }, [tenantId]);
 
-  useEffect(() => { jobIdRef.current = jobId; }, [jobId]);
-  useEffect(() => { tenantIdRef.current = tenantId; }, [tenantId]);
-
-  const applySchema = useCallback((receivedSchema: any) => {
+  const applySchema = useCallback((receivedSchema: AgentDraftSchema) => {
     setSchema(receivedSchema);
     setStage('completed');
     setProgressMessage('Agent schema successfully generated!');
@@ -55,27 +59,26 @@ export function useAgentSchemaGeneration(): UseAgentSchemaGenerationReturn {
       withCredentials: true,
       reconnectionAttempts: 10,
     });
-
     socketRef.current = socket;
 
     socket.on('connect', () => {
       console.log('[WebSocket] Connected to Schedulux Gateway:', socket.id);
-      
+
       socket.emit('join:tenant', { tenant_id: tenantIdRef.current });
-     
+
       if (jobIdRef.current) {
         socket.emit('join:job', { job_id: jobIdRef.current });
       }
     });
 
-    socket.on('schema:ready', (payload: any) => {
+    socket.on('schema:ready', (payload: { schema?: AgentDraftSchema }) => {
       console.log('[WebSocket] Received schema:ready notification:', payload);
       if (payload?.schema) {
         applySchema(payload.schema);
       }
     });
 
-    socket.on('schema:failed', (payload: any) => {
+    socket.on('schema:failed', (payload: { error?: string }) => {
       console.warn('[WebSocket] Received schema:failed notification:', payload);
       setError(payload?.error || 'Failed to generate agent schema');
       setStage('error');
@@ -106,10 +109,15 @@ export function useAgentSchemaGeneration(): UseAgentSchemaGenerationReturn {
     }
 
     const startDelay = setTimeout(() => {
-      console.log('[Polling] WebSocket may have missed schema:ready — starting REST polling fallback');
+      console.log(
+        '[Polling] WebSocket may have missed schema:ready — starting REST polling fallback',
+      );
       pollIntervalRef.current = setInterval(async () => {
         try {
-          const res = await knowledgeApi.getDraftSchema(tenantIdRef.current, jobIdRef.current ?? undefined);
+          const res = await knowledgeApi.getDraftSchema(
+            tenantIdRef.current,
+            jobIdRef.current ?? undefined,
+          );
           if (res?.data?.status === 'completed' && res?.data?.schema) {
             console.log('[Polling] Schema found via REST fallback');
             applySchema(res.data.schema);
@@ -148,25 +156,28 @@ export function useAgentSchemaGeneration(): UseAgentSchemaGenerationReturn {
         jobIdRef.current = newJobId;
         setProgressMessage('Website crawled! Analyzing services & compiling schema with AI...');
         setStage('generating');
-       
+
         socketRef.current?.emit('join:job', { job_id: newJobId });
       }
     },
-    onError: (err: any) => {
-      const msg = err?.message || 'Failed to start website crawl';
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Failed to start website crawl';
       setError(msg);
       setStage('error');
       setProgressMessage('');
     },
   });
 
-  const startCrawl = useCallback((url: string) => {
-    if (!url || !url.trim()) {
-      setError('Please enter a valid website URL');
-      return;
-    }
-    crawlMutation.mutate(url.trim());
-  }, [crawlMutation]);
+  const startCrawl = useCallback(
+    (url: string) => {
+      if (!url?.trim()) {
+        setError('Please enter a valid website URL');
+        return;
+      }
+      crawlMutation.mutate(url.trim());
+    },
+    [crawlMutation],
+  );
 
   const reset = useCallback(() => {
     setJobId(null);

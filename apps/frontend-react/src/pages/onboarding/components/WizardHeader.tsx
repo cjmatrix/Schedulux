@@ -1,5 +1,5 @@
-import React from 'react';
 import { User } from 'lucide-react';
+import React from 'react';
 
 interface WizardHeaderProps {
   onNavigateAgents: () => void;
@@ -27,7 +27,9 @@ export const WizardHeader: React.FC<WizardHeaderProps> = ({
             <span className="w-1 h-3.5 bg-slate-900 rounded-full"></span>
             <span className="w-1 h-5 bg-slate-900 rounded-full"></span>
           </div>
-          <span className="text-base font-extrabold tracking-tight text-slate-950">Schedulux AI</span>
+          <span className="text-base font-extrabold tracking-tight text-slate-950">
+            Schedulux AI
+          </span>
         </button>
       </div>
 

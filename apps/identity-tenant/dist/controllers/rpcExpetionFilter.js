@@ -4,20 +4,25 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+import * as grpc from '@grpc/grpc-js';
 import { Catch } from '@nestjs/common';
 import { throwError } from 'rxjs';
-import * as grpc from '@grpc/grpc-js';
 let AllExceptionsFilter = class AllExceptionsFilter {
-    catch(exception, host) {
+    catch(exception, _host) {
         let code = grpc.status.INTERNAL;
         let message = 'Internal server error';
-        switch (exception.message) {
+        const errMessage = exception instanceof Error
+            ? exception.message
+            : typeof exception === 'object' && exception !== null && 'message' in exception
+                ? String(exception.message)
+                : '';
+        switch (errMessage) {
             case 'Missing required fields':
             case 'Email and password are required':
             case 'Verification token is required':
             case 'Refresh token is required':
                 code = grpc.status.INVALID_ARGUMENT;
-                message = exception.message;
+                message = errMessage;
                 break;
             case 'EMAIL_ALREADY_EXISTS':
             case 'USER_ALREADY_EXISTS':

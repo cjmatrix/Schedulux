@@ -1,10 +1,14 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { RESOURCE_REPOSITORY } from '../../../domain/tokens.js';
-import { IResourceRepository } from '../../../domain/repositories/resource.repository.interface.js';
-import { ResourceEntity, ResourceType, DispatchStatus } from '../../../domain/entities/resource.entity.js';
-import { IUpdateResourceUseCase } from '../../interfaces/resource-use-cases.interface.js';
-import { SchedulingEventsProducer } from '../../../infrastructure/messaging/scheduling-events.producer.js';
 import { UpdateResourceRequest } from '@repo/proto/scheduling';
+import {
+  DispatchStatus,
+  ResourceEntity,
+  ResourceType,
+} from '../../../domain/entities/resource.entity.js';
+import { IResourceRepository } from '../../../domain/repositories/resource.repository.interface.js';
+import { RESOURCE_REPOSITORY } from '../../../domain/tokens.js';
+import { SchedulingEventsProducer } from '../../../infrastructure/messaging/scheduling-events.producer.js';
+import { IUpdateResourceUseCase } from '../../interfaces/resource-use-cases.interface.js';
 
 @Injectable()
 export class UpdateResourceUseCase implements IUpdateResourceUseCase {
@@ -17,7 +21,9 @@ export class UpdateResourceUseCase implements IUpdateResourceUseCase {
   async execute(dto: UpdateResourceRequest): Promise<ResourceEntity> {
     const existing = await this.resourceRepository.findById(dto.tenant_id, dto.resource_id);
     if (!existing) {
-      throw new NotFoundException(`Resource ${dto.resource_id} not found for tenant ${dto.tenant_id}`);
+      throw new NotFoundException(
+        `Resource ${dto.resource_id} not found for tenant ${dto.tenant_id}`,
+      );
     }
 
     existing.updateDetails({
@@ -36,7 +42,6 @@ export class UpdateResourceUseCase implements IUpdateResourceUseCase {
       throw new NotFoundException(`Failed to update resource ${dto.resource_id}`);
     }
 
-    
     await this.eventsProducer.emitResourceUpdated(updated);
 
     return updated;

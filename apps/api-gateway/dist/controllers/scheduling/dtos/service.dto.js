@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ListServicesQueryDto = exports.ListServicesQuerySchema = exports.UpdateServiceDto = exports.UpdateServiceDtoSchema = exports.CreateServiceDto = exports.CreateServiceDtoSchema = exports.DepositDtoSchema = exports.PriceDtoSchema = void 0;
+exports.ListServicesQueryDto = exports.ListServicesQuerySchema = exports.UpdateServiceDto = exports.UpdateServiceDtoSchema = exports.CreateServiceDto = exports.CreateServiceDtoSchema = exports.ServiceVerificationDtoSchema = exports.DepositDtoSchema = exports.PriceDtoSchema = void 0;
 const nestjs_zod_1 = require("nestjs-zod");
 const zod_1 = require("zod");
 exports.PriceDtoSchema = zod_1.z.object({
@@ -17,6 +17,9 @@ exports.DepositDtoSchema = zod_1.z.object({
     confirmation_method: zod_1.z.string().optional().default('automatic'),
     payment_instructions: zod_1.z.string().optional().default(''),
 });
+exports.ServiceVerificationDtoSchema = zod_1.z.object({
+    require_otp: zod_1.z.boolean().nullable().optional(),
+});
 exports.CreateServiceDtoSchema = zod_1.z.object({
     agent_id: zod_1.z.string().min(1, 'agent_id is required'),
     name: zod_1.z.string().min(1, 'Service name is required').trim(),
@@ -24,10 +27,21 @@ exports.CreateServiceDtoSchema = zod_1.z.object({
     description: zod_1.z.string().optional().default(''),
     duration_minutes: zod_1.z.number().int().min(1, 'Duration must be at least 1 minute').default(30),
     buffer_minutes: zod_1.z.number().int().min(0).default(0),
-    allocation_model: zod_1.z.enum(['single_resource', 'multi_resource', 'pooled', 'asset_only']).default('single_resource'),
+    allocation_model: zod_1.z
+        .enum(['single_resource', 'multi_resource', 'pooled', 'asset_only'])
+        .default('single_resource'),
     booking_mode: zod_1.z.enum(['time_slot', 'date_range']).default('time_slot'),
     price: exports.PriceDtoSchema.optional().default({ type: 'fixed', amount: 0, currency: 'USD' }),
-    deposit: exports.DepositDtoSchema.optional().default({ required: false, amount: 0, processor: '', upi_id: '', qr_code_url: '', confirmation_method: 'automatic', payment_instructions: '' }),
+    deposit: exports.DepositDtoSchema.optional().default({
+        required: false,
+        amount: 0,
+        processor: '',
+        upi_id: '',
+        qr_code_url: '',
+        confirmation_method: 'automatic',
+        payment_instructions: '',
+    }),
+    verification: exports.ServiceVerificationDtoSchema.optional(),
     eligible_resource_ids: zod_1.z.array(zod_1.z.string()).optional().default([]),
     required_asset_ids: zod_1.z.array(zod_1.z.string()).optional().default([]),
     recall_interval_days: zod_1.z.number().int().min(0).optional().default(0),
@@ -42,10 +56,13 @@ exports.UpdateServiceDtoSchema = zod_1.z.object({
     description: zod_1.z.string().optional(),
     duration_minutes: zod_1.z.number().int().min(1).optional(),
     buffer_minutes: zod_1.z.number().int().min(0).optional(),
-    allocation_model: zod_1.z.enum(['single_resource', 'multi_resource', 'pooled', 'asset_only']).optional(),
+    allocation_model: zod_1.z
+        .enum(['single_resource', 'multi_resource', 'pooled', 'asset_only'])
+        .optional(),
     booking_mode: zod_1.z.enum(['time_slot', 'date_range']).optional(),
     price: exports.PriceDtoSchema.optional(),
     deposit: exports.DepositDtoSchema.optional(),
+    verification: exports.ServiceVerificationDtoSchema.optional(),
     eligible_resource_ids: zod_1.z.array(zod_1.z.string()).optional(),
     required_asset_ids: zod_1.z.array(zod_1.z.string()).optional(),
     recall_interval_days: zod_1.z.number().int().min(0).optional(),

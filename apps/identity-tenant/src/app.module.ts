@@ -1,21 +1,20 @@
-import { Module } from "@nestjs/common";
-import { ConfigModule, ConfigService } from "@nestjs/config";
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { RedisModule } from './config/redis.js';
+import { DashboardUserController } from './controllers/DashboardUserController.js';
+import { SuperAdminAuthController } from './controllers/SuperAdminController.js';
+import { TenantAuthController } from './controllers/TenantController.js';
+import { EmailProducer } from './producers/emailProducer.js';
+import { CacheRepository } from './repository/CacheRepository.js';
+import { DashboardUserRepository } from './repository/DashboardUserRepository.js';
+import { SuperAdminRepository } from './repository/SuperAdminRepository.js';
 
-import { TenantAuthController } from "./controllers/TenantController.js";
-import { SuperAdminAuthController } from "./controllers/SuperAdminController.js";
-import { DashboardUserController } from "./controllers/DashboardUserController.js";
-import { TenantService } from "./services/tenantService.js";
-import { SuperAdminService } from "./services/superAdminService.js";
-import { DashboardUserService } from "./services/dashboardUserService.js";
-import { BcryptPasswordHasher } from "./services/bcryptPasswordHasher.js";
-import { JwtTokenService } from "./services/jwtTokenService.js";
-
-import { TenantRepository } from "./repository/TenantRepository.js";
-import { SuperAdminRepository } from "./repository/SuperAdminRepository.js";
-import { DashboardUserRepository } from "./repository/DashboardUserRepository.js";
-import { CacheRepository } from "./repository/CacheRepository.js";
-import { EmailProducer } from "./producers/emailProducer.js";
-import { RedisModule } from "./config/redis.js";
+import { TenantRepository } from './repository/TenantRepository.js';
+import { BcryptPasswordHasher } from './services/bcryptPasswordHasher.js';
+import { DashboardUserService } from './services/dashboardUserService.js';
+import { JwtTokenService } from './services/jwtTokenService.js';
+import { SuperAdminService } from './services/superAdminService.js';
+import { TenantService } from './services/tenantService.js';
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }), RedisModule],

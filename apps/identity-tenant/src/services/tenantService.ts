@@ -1,15 +1,22 @@
-import { Injectable, Inject } from '@nestjs/common';
+import crypto from 'node:crypto';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import crypto from 'crypto';
-import { nanoid } from 'nanoid';
+import type {
+  InviteUserRequest,
+  InviteUserResponse,
+  ListWorkspaceUsersRequest,
+  ListWorkspaceUsersResponse,
+} from '@repo/proto/dashboard';
+import type { RegisterRequest, RegisterResponse } from '@repo/proto/tenant';
 import { OAuth2Client } from 'google-auth-library';
 import type { SignOptions } from 'jsonwebtoken';
-import { ITenantRepository } from '../interfaces/ITenantRepository.js';
-import { IDashboardUserRepository } from '../interfaces/IDashboardUserRepository.js';
+import { nanoid } from 'nanoid';
 import { ICacheRepository } from '../interfaces/ICacheRepository.js';
+import { IDashboardUserRepository } from '../interfaces/IDashboardUserRepository.js';
 import { IEmailProducer } from '../interfaces/IEmailProducer.js';
-import { IPasswordHasher } from '../interfaces/IPasswordHasher.js';
 import { IJwtService } from '../interfaces/IJwtService.js';
+import { IPasswordHasher } from '../interfaces/IPasswordHasher.js';
+import { ITenantRepository } from '../interfaces/ITenantRepository.js';
 import { ITenantService } from '../interfaces/ITenantService.js';
 
 @Injectable()
@@ -28,32 +35,30 @@ export class TenantService implements ITenantService {
     @Inject('IPasswordHasher') private passwordHasher: IPasswordHasher,
     @Inject('IJwtService') private jwtService: IJwtService,
     @Inject(ConfigService) private configService: ConfigService,
-    @Inject('IEmailProducer') private emailProducer?: IEmailProducer
+    @Inject('IEmailProducer') private emailProducer?: IEmailProducer,
   ) {
     this.jwtSecret = this.configService.get<string>('JWT_SECRET') || 'dev-secret-change-in-prod';
     this.jwtRefreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET') || this.jwtSecret;
     this.googleClient = new OAuth2Client(this.configService.get<string>('GOOGLE_CLIENT_ID'));
-    this.accessTokenExpiry = (this.configService.get<string>('ACCESS_TOKEN_EXPIRY') || '15m') as SignOptions['expiresIn'];
-    this.refreshTokenExpiry = (this.configService.get<string>('REFRESH_TOKEN_EXPIRY') || '7d') as SignOptions['expiresIn'];
-    this.refreshTokenTtlSeconds = parseInt(this.configService.get<string>('REFRESH_TOKEN_TTL_SECONDS') || '', 10) || 7 * 24 * 60 * 60;
+    this.accessTokenExpiry = (this.configService.get<string>('ACCESS_TOKEN_EXPIRY') ||
+      '15m') as SignOptions['expiresIn'];
+    this.refreshTokenExpiry = (this.configService.get<string>('REFRESH_TOKEN_EXPIRY') ||
+      '7d') as SignOptions['expiresIn'];
+    this.refreshTokenTtlSeconds =
+      parseInt(this.configService.get<string>('REFRESH_TOKEN_TTL_SECONDS') || '', 10) ||
+      7 * 24 * 60 * 60;
   }
 
-  async register(data: {
-    business_name: string
-    full_name: string
-    email: string
-    password: string
-  }) {
+  async register(data: RegisterRequest): Promise<RegisterResponse> {
     let tenantId = `tnt_${nanoid(21)}`;
     const passwordHash = await this.passwordHasher.hash(data.password, 12);
     const verificationToken = crypto.randomBytes(32).toString('hex');
-    let tenant;
 
     const existingUser = await this.tenantRepo.findByEmail(data.email);
     if (existingUser) {
       if (existingUser.status === 'pending') {
         tenantId = existingUser._id;
-        tenant = await this.tenantRepo.update(existingUser._id, {
+        await this.tenantRepo.update(existingUser._id, {
           business_name: data.business_name,
           password_hash: passwordHash,
         });
@@ -61,17 +66,19 @@ export class TenantService implements ITenantService {
         throw new Error('EMAIL_ALREADY_EXISTS');
       }
     } else {
-      tenant = await this.tenantRepo.create({
+      await this.tenantRepo.create({
         _id: tenantId,
         business_name: data.business_name,
         contact_email: data.email,
         password_hash: passwordHash,
         tier: 'starter',
-        status: 'pending'
+        status: 'pending',
       });
     }
 
-    await this.cacheRepo.set(`tenant_verificationToken:${verificationToken}`, tenantId, { EX: 3600 });
+    await this.cacheRepo.set(`tenant_verificationToken:${verificationToken}`, tenantId, {
+      EX: 3600,
+    });
 
     if (this.emailProducer) {
       await this.emailProducer.sendVerificationEmail({
@@ -86,7 +93,7 @@ export class TenantService implements ITenantService {
     return {
       tenant_id: tenantId,
       message: 'Registration successful. Please check your email to verify your account.',
-      verification_token: verificationToken 
+      verification_token: verificationToken,
     };
   }
 
@@ -101,7 +108,7 @@ export class TenantService implements ITenantService {
 
     return {
       message: 'Email verified successfully. You can now log in.',
-      tenant_id: tenentId
+      tenant_id: tenentId,
     };
   }
 
@@ -132,27 +139,25 @@ export class TenantService implements ITenantService {
       {
         tenant_id: tenant._id,
         email: tenant.contact_email,
-        role: 'tenant_owner'
+        role: 'tenant_owner',
       },
       this.jwtSecret,
-      { expiresIn: this.accessTokenExpiry }
+      { expiresIn: this.accessTokenExpiry },
     );
 
     const tokenId = nanoid(16);
     const refreshToken = this.jwtService.sign(
       {
         tenant_id: tenant._id,
-        token_id: tokenId
+        token_id: tokenId,
       },
       this.jwtRefreshSecret,
-      { expiresIn: this.refreshTokenExpiry }
+      { expiresIn: this.refreshTokenExpiry },
     );
 
-    await this.cacheRepo.set(
-      `tenant_refresh_token:${tenant._id}:${tokenId}`,
-      refreshToken,
-      { EX: this.refreshTokenTtlSeconds }
-    );
+    await this.cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, {
+      EX: this.refreshTokenTtlSeconds,
+    });
 
     return {
       accessToken,
@@ -162,8 +167,8 @@ export class TenantService implements ITenantService {
         business_name: tenant.business_name,
         contact_email: tenant.contact_email,
         tier: tenant.tier,
-        status: tenant.status
-      }
+        status: tenant.status,
+      },
     };
   }
 
@@ -189,8 +194,9 @@ export class TenantService implements ITenantService {
       email = payload.email.toLowerCase().trim();
       name = payload.name || payload.given_name || email.split('@')[0];
       googleId = payload.sub;
-    } catch (err: any) {
-      throw new Error(err.message || 'INVALID_GOOGLE_TOKEN');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'INVALID_GOOGLE_TOKEN';
+      throw new Error(msg);
     }
 
     let tenant = await this.tenantRepo.findByEmail(email);
@@ -224,7 +230,7 @@ export class TenantService implements ITenantService {
         role: 'tenant_owner',
       },
       this.jwtSecret,
-      { expiresIn: this.accessTokenExpiry }
+      { expiresIn: this.accessTokenExpiry },
     );
 
     const tokenId = nanoid(16);
@@ -234,14 +240,12 @@ export class TenantService implements ITenantService {
         token_id: tokenId,
       },
       this.jwtRefreshSecret,
-      { expiresIn: this.refreshTokenExpiry }
+      { expiresIn: this.refreshTokenExpiry },
     );
 
-    await this.cacheRepo.set(
-      `tenant_refresh_token:${tenant._id}:${tokenId}`,
-      refreshToken,
-      { EX: this.refreshTokenTtlSeconds }
-    );
+    await this.cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, {
+      EX: this.refreshTokenTtlSeconds,
+    });
 
     return {
       accessToken,
@@ -280,8 +284,8 @@ export class TenantService implements ITenantService {
     let payload: { tenant_id: string; token_id: string };
     try {
       payload = this.jwtService.verify(incomingRefreshToken, this.jwtRefreshSecret) as {
-        tenant_id: string
-        token_id: string
+        tenant_id: string;
+        token_id: string;
       };
     } catch {
       throw new Error('INVALID_OR_EXPIRED_REFRESH_TOKEN');
@@ -293,7 +297,7 @@ export class TenantService implements ITenantService {
 
     const sessionKey = `tenant_refresh_token:${payload.tenant_id}:${payload.token_id}`;
     const storedToken = await this.cacheRepo.get(sessionKey);
-    
+
     if (!storedToken || storedToken !== incomingRefreshToken) {
       if (storedToken) {
         await this.cacheRepo.delete(sessionKey);
@@ -312,27 +316,25 @@ export class TenantService implements ITenantService {
       {
         tenant_id: tenant._id,
         email: tenant.contact_email,
-        role: 'tenant_owner'
+        role: 'tenant_owner',
       },
       this.jwtSecret,
-      { expiresIn: this.accessTokenExpiry }
+      { expiresIn: this.accessTokenExpiry },
     );
 
     const newTokenId = nanoid(16);
     const newRefreshToken = this.jwtService.sign(
       {
         tenant_id: tenant._id,
-        token_id: newTokenId
+        token_id: newTokenId,
       },
       this.jwtRefreshSecret,
-      { expiresIn: this.refreshTokenExpiry }
+      { expiresIn: this.refreshTokenExpiry },
     );
- 
-    await this.cacheRepo.set(
-      `tenant_refresh_token:${tenant._id}:${newTokenId}`,
-      newRefreshToken,
-      { EX: this.refreshTokenTtlSeconds }
-    );
+
+    await this.cacheRepo.set(`tenant_refresh_token:${tenant._id}:${newTokenId}`, newRefreshToken, {
+      EX: this.refreshTokenTtlSeconds,
+    });
 
     return {
       accessToken: newAccessToken,
@@ -342,8 +344,8 @@ export class TenantService implements ITenantService {
         business_name: tenant.business_name,
         contact_email: tenant.contact_email,
         tier: tenant.tier,
-        status: tenant.status
-      }
+        status: tenant.status,
+      },
     };
   }
 
@@ -351,15 +353,15 @@ export class TenantService implements ITenantService {
     if (refreshToken) {
       try {
         const payload = this.jwtService.verify(refreshToken, this.jwtRefreshSecret) as {
-          tenant_id: string
-          token_id: string
+          tenant_id: string;
+          token_id: string;
         };
         if (payload?.tenant_id && payload?.token_id) {
-          await this.cacheRepo.delete(`tenant_refresh_token:${payload.tenant_id}:${payload.token_id}`);
+          await this.cacheRepo.delete(
+            `tenant_refresh_token:${payload.tenant_id}:${payload.token_id}`,
+          );
         }
-      } catch {
-       
-      }
+      } catch {}
     }
     return { message: 'Logged out successfully' };
   }
@@ -367,7 +369,7 @@ export class TenantService implements ITenantService {
   async forgotPassword(email: string) {
     const tenant = await this.tenantRepo.findByEmail(email.toLowerCase().trim());
     if (!tenant || tenant.status !== 'active') {
-      return { message: "If that email exists, a password reset link has been sent." };
+      return { message: 'If that email exists, a password reset link has been sent.' };
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
@@ -378,32 +380,27 @@ export class TenantService implements ITenantService {
         to: tenant.contact_email,
         name: tenant.business_name,
         reset_token: resetToken,
-        role: 'tenant'
+        role: 'tenant',
       });
     }
 
-    return { message: "If that email exists, a password reset link has been sent." };
+    return { message: 'If that email exists, a password reset link has been sent.' };
   }
 
   async resetPassword(token: string, new_password: string) {
     const tenantId = await this.cacheRepo.get(`tenant_password_reset:${token}`);
     if (!tenantId) {
-      throw new Error("INVALID_OR_EXPIRED_TOKEN");
+      throw new Error('INVALID_OR_EXPIRED_TOKEN');
     }
 
     const password_hash = await this.passwordHasher.hash(new_password, 12);
     await this.tenantRepo.update(tenantId, { password_hash });
     await this.cacheRepo.delete(`tenant_password_reset:${token}`);
 
-    return { message: "Password has been successfully reset. You can now log in." };
+    return { message: 'Password has been successfully reset. You can now log in.' };
   }
 
-  async inviteUser(data: {
-    tenant_id: string;
-    email: string;
-    name: string;
-    system_role: 'root' | 'manager';
-  }) {
+  async inviteUser(data: InviteUserRequest): Promise<InviteUserResponse> {
     const tenant = await this.tenantRepo.findByTenantId(data.tenant_id);
     if (!tenant) {
       throw new Error('TENANT_NOT_FOUND');
@@ -415,7 +412,7 @@ export class TenantService implements ITenantService {
     }
 
     const rawPassword = nanoid(8);
-    console.log(rawPassword,"passwordddddddddddd")
+    console.log(rawPassword, 'passwordddddddddddd');
     const password_hash = await this.passwordHasher.hash(rawPassword, 10);
 
     const user = await this.dashboardUserRepo.create({
@@ -446,13 +443,9 @@ export class TenantService implements ITenantService {
     };
   }
 
-  async listWorkspaceUsers(options: {
-    tenant_id: string;
-    page?: number;
-    limit?: number;
-    search?: string;
-    role?: string;
-  }) {
+  async listWorkspaceUsers(
+    options: ListWorkspaceUsersRequest,
+  ): Promise<ListWorkspaceUsersResponse> {
     const { users, total_count } = await this.dashboardUserRepo.findWorkspaceUsers({
       tenantId: options.tenant_id,
       page: options.page,

@@ -1,7 +1,7 @@
-import { Navigate, Outlet, useLocation } from "react-router";
-import { Loader2, Calendar } from "lucide-react";
-import { useTenantProfile } from "../hooks/useAuth";
-import { useAuthStore } from "../../../store/useAuthStore";
+import { Calendar, Loader2 } from 'lucide-react';
+import { Navigate, Outlet, useLocation } from 'react-router';
+import { useAuthStore } from '../../../store/useAuthStore';
+import { useTenantProfile } from '../hooks/useAuth';
 
 export function TenantProtectedRoute() {
   const location = useLocation();

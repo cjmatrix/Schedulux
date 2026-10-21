@@ -4,7 +4,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
-import { Module, Global } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
 export const REDIS_CLIENT = 'REDIS_CLIENT';
@@ -18,7 +18,7 @@ const redisProvider = {
             enableReadyCheck: false,
         });
         client.on('connect', () => {
-            console.log("Redis COnnected");
+            console.log('Redis COnnected');
         });
         client.on('error', (error) => {
             console.log(`Redis connection error: ${error.message}`, error.stack);

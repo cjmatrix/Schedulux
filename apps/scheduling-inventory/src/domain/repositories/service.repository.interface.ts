@@ -18,7 +18,10 @@ export interface ServiceSummary {
 export interface IServiceRepository {
   create(service: ServiceEntity): Promise<ServiceEntity>;
   findById(tenantId: string, serviceId: string): Promise<ServiceEntity | null>;
-  findAll(tenantId: string, filter: FindServicesFilter): Promise<{
+  findAll(
+    tenantId: string,
+    filter: FindServicesFilter,
+  ): Promise<{
     services: ServiceEntity[];
     total: number;
     summary?: ServiceSummary;

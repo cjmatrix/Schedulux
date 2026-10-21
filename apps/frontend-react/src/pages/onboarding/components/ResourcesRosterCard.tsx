@@ -1,8 +1,9 @@
+import { Check, Users } from 'lucide-react';
 import React from 'react';
-import { Users, Check } from 'lucide-react';
+import type { OnboardingResourceItem } from '../types';
 
 interface ResourcesRosterCardProps {
-  resourcesList: any[];
+  resourcesList: OnboardingResourceItem[];
 }
 
 export const ResourcesRosterCard: React.FC<ResourcesRosterCardProps> = ({ resourcesList }) => {
@@ -15,7 +16,9 @@ export const ResourcesRosterCard: React.FC<ResourcesRosterCardProps> = ({ resour
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-slate-900">Practitioners &amp; Resources Roster</h3>
+              <h3 className="text-sm font-bold text-slate-900">
+                Practitioners &amp; Resources Roster
+              </h3>
               <span className="bg-slate-100 text-slate-700 font-extrabold text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                 {resourcesList.length} {resourcesList.length === 1 ? 'Resource' : 'Resources'}
               </span>
@@ -43,11 +46,12 @@ export const ResourcesRosterCard: React.FC<ResourcesRosterCardProps> = ({ resour
             {resourcesList.length === 0 ? (
               <tr>
                 <td colSpan={5} className="py-8 text-center text-slate-400 font-medium">
-                  No practitioners or resources configured yet. Add your staff members or operatory rooms in the chat.
+                  No practitioners or resources configured yet. Add your staff members or operatory
+                  rooms in the chat.
                 </td>
               </tr>
             ) : (
-              resourcesList.map((res: any) => (
+              resourcesList.map((res) => (
                 <tr key={res.resource_id || res.idx} className="hover:bg-slate-50/50 transition">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2.5">
@@ -84,7 +88,7 @@ export const ResourcesRosterCard: React.FC<ResourcesRosterCardProps> = ({ resour
                   <td className="py-3 px-4">
                     {res.handledServices.length > 0 ? (
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        {res.handledServices.map((srv: any) => (
+                        {res.handledServices.map((srv) => (
                           <span
                             key={srv.service_id}
                             className="bg-slate-50 border border-slate-200 text-slate-700 text-[10px] font-semibold px-2.5 py-0.5 rounded-full"
@@ -94,9 +98,7 @@ export const ResourcesRosterCard: React.FC<ResourcesRosterCardProps> = ({ resour
                         ))}
                       </div>
                     ) : (
-                      <span className="text-[11px] text-slate-400 italic">
-                        All services
-                      </span>
+                      <span className="text-[11px] text-slate-400 italic">All services</span>
                     )}
                   </td>
                   <td className="py-3 px-4">

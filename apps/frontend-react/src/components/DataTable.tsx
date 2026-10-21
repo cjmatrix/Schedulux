@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
 import { Pagination } from './Pagination';
 
 export interface Column<T> {
@@ -54,10 +54,7 @@ export function DataTable<T>({
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-bold text-slate-400 tracking-wider uppercase">
                 {columns.map((col, idx) => (
-                  <th
-                    key={idx}
-                    className={`px-6 py-3.5 ${col.headerClassName || ''}`}
-                  >
+                  <th key={idx} className={`px-6 py-3.5 ${col.headerClassName || ''}`}>
                     {col.header}
                   </th>
                 ))}
@@ -80,10 +77,7 @@ export function DataTable<T>({
                     className="hover:bg-slate-50/60 transition-colors group"
                   >
                     {columns.map((col, colIdx) => (
-                      <td
-                        key={colIdx}
-                        className={`px-6 py-4 ${col.className || ''}`}
-                      >
+                      <td key={colIdx} className={`px-6 py-4 ${col.className || ''}`}>
                         {col.cell(item, idx)}
                       </td>
                     ))}

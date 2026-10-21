@@ -1,263 +1,92 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router';
-import { compare, type Operation } from 'fast-json-patch';
-import { useQuery } from '@tanstack/react-query';
-import { io } from 'socket.io-client';
-
-import { axiosClient } from '../api/axiosClient';
-import { useAuthStore } from '../store/useAuthStore';
-
-import type { Message, RightViewMode, CanvasModule } from './onboarding/types';
-import { cleanForDiff, getOperatingScheduleGroups } from './onboarding/utils';
+import type { ResourceInfo, ServiceInfo } from '@repo/proto/scheduling';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
+import { useAgentOnboarding } from '../hooks/useAgentOnboarding.js';
 import {
-  WizardHeader,
-  WizardChatColumn,
-  CanvasHeader,
-  CanvasFilterTabs,
   BusinessProfileCard,
-  ServicesCatalogCard,
-  ResourcesRosterCard,
-  SecurityGuardrailsCard,
-  SandboxSimulation,
+  CanvasFilterTabs,
+  CanvasHeader,
   RawJsonViewer,
+  ResourcesRosterCard,
+  SandboxSimulation,
+  SecurityGuardrailsCard,
+  ServicesCatalogCard,
+  WizardChatColumn,
+  WizardHeader,
 } from './onboarding/components';
+import type {
+  CanvasModule,
+  OnboardingResourceItem,
+  OnboardingServiceItem,
+  RightViewMode,
+} from './onboarding/types.js';
+import { getOperatingScheduleGroups } from './onboarding/utils.js';
 
 export default function AgentOnboardingWizard() {
   const { id: agentId } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [pendingMessages, setPendingMessages] = useState<Message[]>([]);
-  const [inputValue, setInputValue] = useState('');
-  const [draftSchema, setDraftSchema] = useState<any>({});
-  const [baselineSchema, setBaselineSchema] = useState<any>(null);
-  const [showDiffDrawer, setShowDiffDrawer] = useState(false);
-  const [isSavingChanges, setIsSavingChanges] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'loading' | 'awaiting_input' | 'processing'>('idle');
-  const [isLive, setIsLive] = useState(false);
+  const {
+    messages,
+    inputValue,
+    setInputValue,
+    status,
+    sendMessage,
+    hasPreviousPage,
+    isFetchingPreviousPage,
+    fetchPreviousPage,
+    firstItemIndex,
+    draftSchema,
+    diffPatches,
+    isDirty,
+    isLive,
+    isSavingChanges,
+    saveChanges,
+    sandboxMessages,
+    setSandboxMessages,
+    sandboxInput,
+    setSandboxInput,
+    isSandboxTyping,
+    sendSandboxMessage,
+  } = useAgentOnboarding({ agentId });
 
+  const [showDiffDrawer, setShowDiffDrawer] = useState(false);
   const [rightViewMode, setRightViewMode] = useState<RightViewMode>('rules');
   const [canvasModule, setCanvasModule] = useState<CanvasModule>('all');
   const [copiedJson, setCopiedJson] = useState(false);
 
-  const [sandboxMessages, setSandboxMessages] = useState<Array<{ role: 'user' | 'agent'; text: string }>>([]);
-  const [sandboxInput, setSandboxInput] = useState('');
-  const [isSandboxTyping, setIsSandboxTyping] = useState(false);
+  const businessProfile = draftSchema?.business_profile || {};
+  const clinicName = businessProfile.name || 'AI Scheduling Agent';
+  const timezone = businessProfile.timezone || '';
+  const operatingHours = draftSchema?.operating_hours || {};
 
-  const hasStartedRef = useRef(false);
-  const lastAgentIdRef = useRef<string | null>(null);
-
-  const tenantId = useAuthStore((state) => state.user?.tenant_id);
-
-  const diffPatches: Operation[] = useMemo(() => {
-    if (!baselineSchema || !draftSchema) return [];
-    try {
-      const cleanedBaseline = cleanForDiff(baselineSchema) || {};
-      const cleanedDraft = cleanForDiff(draftSchema) || {};
-      return compare(cleanedBaseline, cleanedDraft);
-    } catch (err) {
-      console.error('Error computing schema diffs:', err);
-      return [];
-    }
-  }, [baselineSchema, draftSchema]);
-
-  const isDirty = diffPatches.length > 0;
-
+  // Initialize sandbox greeting when clinic name is loaded
   useEffect(() => {
-    if (!tenantId) return;
-
-    const socketUrl = import.meta.env.VITE_WS_URL || window.location.origin;
-    const socket = io(socketUrl, {
-      path: '/socket.io',
-      transports: ['websocket', 'polling'],
-    });
-
-    socket.on('connect', () => {
-      socket.emit('joinRoom', { tenantId });
-    });
-
-    socket.on('schema:updated', (payload: any) => {
-      if (payload?.tenantId === tenantId && payload?.schema) {
-        setDraftSchema(payload.schema);
-        if (payload.status === 'live' || payload.schema.status === 'live') {
-          setIsLive(true);
-          setBaselineSchema(payload.schema);
-        }
-      }
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, [tenantId]);
-
-  const { data: dbMessages = [] } = useQuery<Message[]>({
-    queryKey: ['agent-messages', tenantId, agentId],
-    queryFn: async () => {
-      if (!tenantId || !agentId) return [];
-      const res = await axiosClient.get(`/api/v1/tenant/knowledge/agents/${agentId}/messages`, {
-        params: { limit: 50 },
-      });
-      const msgs = res.data.data?.messages || [];
-      return msgs.map((m: any) => ({
-        id: m.message_id || m.id,
-        role: m.role === 'tenant' ? 'tenant' : 'agent',
-        text: m.content || m.text,
-      }));
-    },
-    enabled: !!tenantId && !!agentId,
-    refetchInterval: 2000,
-  });
-
-  const allMessages = useMemo(() => {
-    const dbTexts = new Set(dbMessages.map((m) => m.text.trim()));
-    const uniquePending = pendingMessages.filter((pm) => !dbTexts.has(pm.text.trim()));
-    return [...dbMessages, ...uniquePending];
-  }, [dbMessages, pendingMessages]);
-
-  useEffect(() => {
-    if (!tenantId || !agentId) return;
-    if (hasStartedRef.current) return;
-    hasStartedRef.current = true;
-
-    const startSession = async () => {
-      setStatus('loading');
-      try {
-        const res = await axiosClient.post('/api/v1/tenant/knowledge/onboarding/start', {
-          tenant_id: tenantId,
-          agent_id: agentId,
-        });
-
-        const data = res.data.data;
-        setDraftSchema(data.draft_schema);
-        setBaselineSchema(data.draft_schema);
-
-        const isCompleted =
-          data.status === 'complete' ||
-          data.draft_schema?.status === 'complete' ||
-          data.draft_schema?.status === 'created';
-
-        if (isCompleted) {
-          setIsLive(true);
-        }
-
-        setStatus('awaiting_input');
-      } catch (err) {
-        console.error('Failed to start session:', err);
-        setStatus('idle');
-      }
-    };
-
-    startSession();
-  }, [tenantId, agentId]);
-
-  const handleSendMessage = async (textToSend?: string) => {
-    const userMsg = (textToSend ?? inputValue).trim();
-    if (!userMsg || status === 'processing' || status === 'loading') return;
-
-    setInputValue('');
-    const userMsgId = 'user-' + Date.now();
-    setPendingMessages((prev) => [...prev, { id: userMsgId, role: 'tenant', text: userMsg }]);
-    setStatus('processing');
-
-    try {
-      const res = await axiosClient.post('/api/v1/tenant/knowledge/onboarding/message', {
-        tenant_id: tenantId,
-        agent_id: agentId,
-        user_answer: userMsg,
-      });
-
-      const data = res.data.data;
-      setDraftSchema(data.draft_schema);
-
-      const isCompleted =
-        data.status === 'complete' ||
-        data.draft_schema?.status === 'complete' ||
-        data.draft_schema?.status === 'created';
-
-      if (isCompleted) {
-        setIsLive(true);
-        setBaselineSchema(data.draft_schema);
-      }
-
-      setStatus('awaiting_input');
-
-      const agentMsgId = 'agent-' + Date.now();
-      if (data.status === 'complete') {
-        setPendingMessages((prev) => [
-          ...prev,
-          {
-            id: agentMsgId,
-            role: 'agent',
-            text:
-              data.question ||
-              'Your agent configuration is complete and saved to the database. You are ready to go live!',
-          },
-        ]);
-      } else if (data.question) {
-        setPendingMessages((prev) => [
-          ...prev,
-          {
-            id: agentMsgId,
-            role: 'agent',
-            text: data.question,
-          },
-        ]);
-      }
-    } catch (err) {
-      console.error('Failed to send message:', err);
-      setStatus('awaiting_input');
-      setPendingMessages((prev) => [
-        ...prev,
+    if (sandboxMessages.length === 0) {
+      setSandboxMessages([
         {
-          id: 'err-' + Date.now(),
           role: 'agent',
-          text: 'Encountered an issue compiling changes to the draft canvas. Please rephrase or try again.',
+          text: `Hello! Welcome to ${clinicName}. I'm your AI booking coordinator. How can I assist you with scheduling or consultations today?`,
         },
       ]);
     }
-  };
+  }, [clinicName, sandboxMessages.length, setSandboxMessages]);
 
   const handleFormSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    handleSendMessage();
+    sendMessage();
   };
 
   const handleSaveChanges = async () => {
-    if (!tenantId || !agentId || isSavingChanges) return;
-    setIsSavingChanges(true);
-
-    try {
-      await axiosClient.post('/api/v1/tenant/knowledge/onboarding/message', {
-        tenant_id: tenantId,
-        agent_id: agentId,
-        user_answer: 'deploy live now and finalize configuration',
-      });
-
-      const res = await axiosClient.post('/api/v1/tenant/knowledge/onboarding/start', {
-        tenant_id: tenantId,
-        agent_id: agentId,
-      });
-
-      const data = res.data.data;
-      if (data?.draft_schema) {
-        setDraftSchema(data.draft_schema);
-        setBaselineSchema(data.draft_schema);
-        setIsLive(true);
-      }
-
-      setShowDiffDrawer(false);
-    } catch (err) {
-      console.error('Failed to publish agent:', err);
-    } finally {
-      setIsSavingChanges(false);
-    }
+    await saveChanges();
+    setShowDiffDrawer(false);
   };
 
-  const businessProfile = draftSchema?.business_profile || {};
-  const clinicName = businessProfile.name || 'AI Scheduling Agent';
-  const timezone = businessProfile.timezone || 'UTC';
+  const handleSendSandboxMessage = (e: React.FormEvent) => {
+    sendSandboxMessage(e, clinicName);
+  };
 
-  const operatingHours = draftSchema?.operating_hours || {};
+  
   const scheduleGroups = getOperatingScheduleGroups(operatingHours);
   const openGroups = scheduleGroups.filter((g) => g.isOpen);
 
@@ -276,12 +105,12 @@ export default function AgentOnboardingWizard() {
   const rawResources = Array.isArray(draftSchema?.resources) ? draftSchema.resources : [];
   const rawServices = Array.isArray(draftSchema?.services) ? draftSchema.services : [];
 
-  const servicesList = useMemo(() => {
-    return rawServices.map((svc: any, idx: number) => {
-      const assigned = rawResources.filter((r: any) =>
-        Array.isArray(svc.eligible_resource_ids)
+  const servicesList: OnboardingServiceItem[] = useMemo(() => {
+    return rawServices.map((svc: Partial<ServiceInfo>, idx: number): OnboardingServiceItem => {
+      const assigned = rawResources.filter((r: Partial<ResourceInfo>) =>
+        Array.isArray(svc.eligible_resource_ids) && r.resource_id
           ? svc.eligible_resource_ids.includes(r.resource_id)
-          : false
+          : false,
       );
       return {
         ...svc,
@@ -291,12 +120,12 @@ export default function AgentOnboardingWizard() {
     });
   }, [rawServices, rawResources]);
 
-  const resourcesList = useMemo(() => {
-    return rawResources.map((res: any, idx: number) => {
-      const handled = rawServices.filter((s: any) =>
-        Array.isArray(s.eligible_resource_ids)
+  const resourcesList: OnboardingResourceItem[] = useMemo(() => {
+    return rawResources.map((res: Partial<ResourceInfo>, idx: number): OnboardingResourceItem => {
+      const handled = rawServices.filter((s: Partial<ServiceInfo>) =>
+        Array.isArray(s.eligible_resource_ids) && res.resource_id
           ? s.eligible_resource_ids.includes(res.resource_id)
-          : false
+          : false,
       );
       return {
         ...res,
@@ -315,63 +144,11 @@ export default function AgentOnboardingWizard() {
   const guardrails = draftSchema?.guardrails || {};
   const requireOtp = Boolean(
     guardrails?.verification_policy?.require_otp_for_reschedule ??
-    guardrails?.verification_policy?.require_otp_for_new_booking ??
-    false
+      guardrails?.verification_policy?.require_otp_for_new_booking ??
+      false,
   );
   const phiScrubbing = Boolean(guardrails?.phi_scrubbing?.enabled);
   const emergencyTriage = Boolean(guardrails?.triage_emergency?.enabled);
-
-  useEffect(() => {
-    if (sandboxMessages.length === 0) {
-      setSandboxMessages([
-        {
-          role: 'agent',
-          text: `Hello! Welcome to ${clinicName}. I'm your AI booking coordinator. How can I assist you with scheduling or consultations today?`,
-        },
-      ]);
-    }
-  }, [clinicName]);
-
-  useEffect(() => {
-    if (agentId !== lastAgentIdRef.current) {
-      lastAgentIdRef.current = agentId || null;
-      setSandboxMessages([]);
-    }
-  }, [agentId]);
-
-  const handleSendSandboxMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!sandboxInput.trim() || isSandboxTyping) return;
-
-    const userText = sandboxInput.trim();
-    setSandboxInput('');
-    setSandboxMessages((prev) => [...prev, { role: 'user', text: userText }]);
-    setIsSandboxTyping(true);
-
-    try {
-      const res = await axiosClient.post('/api/v1/tenant/knowledge/onboarding/sandbox', {
-        tenant_id: tenantId,
-        agent_id: agentId,
-        message: userText,
-      });
-
-      const reply =
-        res.data.data?.reply ||
-        `I would be happy to help you with that at ${clinicName}! According to our current scheduling policy, appointments are booked based on provider availability.`;
-
-      setSandboxMessages((prev) => [...prev, { role: 'agent', text: reply }]);
-    } catch {
-      setSandboxMessages((prev) => [
-        ...prev,
-        {
-          role: 'agent',
-          text: `I'd be happy to assist you! For ${clinicName}, please let me know your preferred day and time.`,
-        },
-      ]);
-    } finally {
-      setIsSandboxTyping(false);
-    }
-  };
 
   const handleCopyJson = () => {
     navigator.clipboard.writeText(JSON.stringify(draftSchema, null, 2));
@@ -392,7 +169,7 @@ export default function AgentOnboardingWizard() {
       <div className="flex flex-1 overflow-hidden">
         {/* LEFT COLUMN: CONVERSATIONAL AGENT ARCHITECT */}
         <WizardChatColumn
-          allMessages={allMessages}
+          allMessages={messages}
           status={status}
           inputValue={inputValue}
           setInputValue={setInputValue}
@@ -401,9 +178,13 @@ export default function AgentOnboardingWizard() {
           showDiffDrawer={showDiffDrawer}
           diffPatches={diffPatches}
           isDirty={isDirty}
+          hasPreviousPage={hasPreviousPage}
+          isFetchingPreviousPage={isFetchingPreviousPage}
+          onLoadPreviousMessages={fetchPreviousPage}
+          firstItemIndex={firstItemIndex}
         />
 
-    
+        {/* RIGHT COLUMN: SCHEMA CANVASES & TEST SIMULATOR */}
         <div className="w-1/2 flex flex-col bg-slate-50/80 overflow-hidden">
           {/* Canvas Subheader / Mode Switcher */}
           <CanvasHeader
@@ -442,7 +223,7 @@ export default function AgentOnboardingWizard() {
                 {(canvasModule === 'all' || canvasModule === 'services') && (
                   <ServicesCatalogCard
                     servicesList={servicesList}
-                    currency={businessProfile.currency}
+                    currency={businessProfile.currency || 'USD'}
                   />
                 )}
 
@@ -452,6 +233,7 @@ export default function AgentOnboardingWizard() {
 
                 {(canvasModule === 'all' || canvasModule === 'guardrails') && (
                   <SecurityGuardrailsCard
+                    guardrails={guardrails}
                     requireOtp={requireOtp}
                     phiScrubbing={phiScrubbing}
                     emergencyTriage={emergencyTriage}

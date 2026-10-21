@@ -1,7 +1,10 @@
-import { Injectable } from "@nestjs/common";
-import { IDashboardUserRepository } from "../interfaces/IDashboardUserRepository.js";
-import { DashboardUser, IDashboardUser } from "../model/DashboardUser.js";
-import { BaseRepository } from "./BaseRepository.js";
+import { Injectable } from '@nestjs/common';
+import {
+  FindWorkspaceUsersOptions,
+  IDashboardUserRepository,
+} from '../interfaces/IDashboardUserRepository.js';
+import { DashboardUser, IDashboardUser } from '../model/DashboardUser.js';
+import { BaseRepository } from './BaseRepository.js';
 
 @Injectable()
 export class DashboardUserRepository
@@ -17,20 +20,16 @@ export class DashboardUserRepository
   }
 
   async findByTenantId(tenantId: string): Promise<IDashboardUser[]> {
-    return this.model.find({ tenant_id: tenantId }).select("-password_hash").exec();
+    return this.model.find({ tenant_id: tenantId }).select('-password_hash').exec();
   }
 
-  async findWorkspaceUsers(options: {
-    tenantId: string;
-    page?: number;
-    limit?: number;
-    search?: string;
-    role?: string;
-  }): Promise<{ users: IDashboardUser[]; total_count: number }> {
+  async findWorkspaceUsers(
+    options: FindWorkspaceUsersOptions,
+  ): Promise<{ users: IDashboardUser[]; total_count: number }> {
     const { tenantId, page = 1, limit = 10, search, role } = options;
-    const query: any = { tenant_id: tenantId };
+    const query: Record<string, unknown> = { tenant_id: tenantId };
 
-    if (search && search.trim()) {
+    if (search?.trim()) {
       const regex = new RegExp(search.trim(), 'i');
       query.$or = [{ name: regex }, { email: regex }];
     }

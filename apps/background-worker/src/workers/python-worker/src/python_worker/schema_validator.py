@@ -86,6 +86,10 @@ class StrictDepositSchema(BaseModel):
     confirmation_method: Optional[str] = None
     payment_instructions: Optional[str] = None
 
+class StrictServiceVerificationSchema(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    require_otp: Optional[bool] = None
+
 class StrictServiceSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
     service_id: Optional[str] = None
@@ -98,6 +102,7 @@ class StrictServiceSchema(BaseModel):
     booking_mode: Optional[BookingMode] = None
     price: Optional[StrictPriceSchema] = None
     deposit: Optional[StrictDepositSchema] = None
+    verification: Optional[StrictServiceVerificationSchema] = None
     eligible_resource_ids: Optional[list[str]] = None
     required_asset_ids: Optional[list[str]] = None
     recall_interval_days: Optional[int] = None
@@ -139,6 +144,7 @@ class StrictOperatingHoursSchema(BaseModel):
 class StrictSchedulingEngineSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
     allocation_model: Optional[AllocationModel] = None
+    default_booking_mode: Optional[BookingMode] = None
     default_lead_time_hours: Optional[int] = None
     max_advance_booking_days: Optional[int] = None
     cancellation_window_hours: Optional[int] = None
@@ -253,7 +259,7 @@ def validate_and_sanitize_schema(schema: dict) -> tuple[dict, bool, list[str]]:
     try:
         validated = StrictDraftPatchValidator.model_validate(schema)
         
-        # Create cleaned clone preserving top-level fields
+       
         cleaned = copy.deepcopy(schema)
         
         if validated.business_profile:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, List
+
 from agent_orchestrator.domain.protocols import MessageRepository
 
 
@@ -18,7 +18,7 @@ class ChatMessageDTO:
 
 @dataclass
 class ChatHistoryResult:
-    messages: List[ChatMessageDTO]
+    messages: list[ChatMessageDTO]
     next_cursor: str
     has_more: bool
 
@@ -28,10 +28,10 @@ class ChatService:
         self.message_repo = message_repo
 
     async def get_history(
-        self, tenant_id: str, agent_id: str, before_iso: Optional[str], limit: int
+        self, tenant_id: str, agent_id: str, before_iso: str | None, limit: int
     ) -> ChatHistoryResult:
         safe_limit = min(max(1, limit), 100)
-        before_dt: Optional[datetime] = None
+        before_dt: datetime | None = None
 
         if before_iso:
             try:

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import grpc
-import agent_orchestrator.knowledge_pb2 as knowledge_pb2
+
+import agent_orchestrator.proto.knowledge_pb2 as knowledge_pb2
 from agent_orchestrator.services.chat_service import ChatService
 
 

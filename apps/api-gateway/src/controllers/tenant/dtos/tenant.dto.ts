@@ -1,7 +1,14 @@
+import { InviteUserRequest, ListWorkspaceUsersRequest } from '@repo/proto/dashboard';
+import {
+  LoginRequest,
+  LogoutRequest,
+  RefreshTokenRequest,
+  RegisterRequest,
+  TenantGoogleLoginRequest,
+  VerifyEmailRequest,
+} from '@repo/proto/tenant';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
-import { LoginRequest, RegisterRequest, VerifyEmailRequest, RefreshTokenRequest, LogoutRequest, TenantGoogleLoginRequest } from '@repo/proto/tenant';
-import { InviteUserRequest, ListWorkspaceUsersRequest } from '@repo/proto/dashboard';
 
 export const TenantGoogleLoginSchema: z.ZodType<TenantGoogleLoginRequest> = z.object({
   id_token: z.string().min(1, 'Google ID token is required'),
@@ -78,5 +85,3 @@ export const ResetPasswordSchema = z.object({
 });
 
 export class ResetPasswordDto extends createZodDto(ResetPasswordSchema) {}
-
-

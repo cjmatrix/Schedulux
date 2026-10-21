@@ -8,16 +8,17 @@ export const IGNORED_DIFF_KEYS = new Set([
   'created_at',
   'updated_at',
   'schema_version',
+  'creation_source',
   '_id',
 ]);
 
-export function cleanForDiff(val: any): any {
+export function cleanForDiff(val: unknown): unknown {
   if (val === null || val === undefined) return undefined;
   if (Array.isArray(val)) {
     return val.map(cleanForDiff).filter((item) => item !== undefined);
   }
   if (typeof val === 'object') {
-    const cleanedObj: Record<string, any> = {};
+    const cleanedObj: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(val)) {
       if (IGNORED_DIFF_KEYS.has(k)) continue;
       const cleanedVal = cleanForDiff(v);
@@ -35,19 +36,36 @@ export function formatTime12h(time24?: string): string {
   const [hStr, mStr] = time24.split(':');
   const h = parseInt(hStr, 10);
   const m = mStr || '00';
-  if (isNaN(h)) return time24;
+  if (Number.isNaN(h)) return time24;
   const ampm = h >= 12 ? 'PM' : 'AM';
   const hour12 = h % 12 === 0 ? 12 : h % 12;
   return `${hour12.toString().padStart(2, '0')}:${m} ${ampm}`;
 }
 
-export function calculateDailyHours(start?: string, end?: string): string {
-  if (!start || !end) return '10 hrs/day';
-  const [sh, sm] = start.split(':').map(Number);
+export function calculateDailyHours(
+  startOrSlots?: string | Array<{ start?: string; end?: string }>,
+  end?: string,
+): string {
+  if (Array.isArray(startOrSlots)) {
+    let totalMinutes = 0;
+    for (const slot of startOrSlots) {
+      if (!slot?.start || !slot?.end) continue;
+      const [sh, sm] = slot.start.split(':').map(Number);
+      const [eh, em] = slot.end.split(':').map(Number);
+      if (!Number.isNaN(sh) && !Number.isNaN(eh)) {
+        const diff = eh * 60 + (em || 0) - (sh * 60 + (sm || 0));
+        if (diff > 0) totalMinutes += diff;
+      }
+    }
+    const diffHours = totalMinutes / 60;
+    return `${diffHours > 0 ? Number(diffHours.toFixed(1)) : 8} hrs/day`;
+  }
+  if (!startOrSlots || !end) return '10 hrs/day';
+  const [sh, sm] = startOrSlots.split(':').map(Number);
   const [eh, em] = end.split(':').map(Number);
-  if (isNaN(sh) || isNaN(eh)) return '10 hrs/day';
+  if (Number.isNaN(sh) || Number.isNaN(eh)) return '10 hrs/day';
   const diffHours = (eh * 60 + (em || 0) - (sh * 60 + (sm || 0))) / 60;
-  return `${diffHours > 0 ? diffHours : 8} hrs/day`;
+  return `${diffHours > 0 ? Number(diffHours.toFixed(1)) : 8} hrs/day`;
 }
 
 export interface ScheduleGroup {
@@ -60,7 +78,20 @@ export interface ScheduleGroup {
   days: string[];
 }
 
-export function getOperatingScheduleGroups(operatingHours: any): ScheduleGroup[] {
+interface DayInfo {
+  key: string;
+  label: string;
+  timeKey: string;
+  timeText: string;
+  rawStart?: string;
+  rawEnd?: string;
+  isOpen: boolean;
+  dailyHoursText?: string;
+}
+
+export function getOperatingScheduleGroups(
+  operatingHours?: Record<string, Array<{ start?: string; end?: string }>> | null,
+): ScheduleGroup[] {
   if (!operatingHours || typeof operatingHours !== 'object') {
     return [];
   }
@@ -75,21 +106,10 @@ export function getOperatingScheduleGroups(operatingHours: any): ScheduleGroup[]
     { key: 'sunday', label: 'Sun' },
   ];
 
-  interface DayInfo {
-    key: string;
-    label: string;
-    timeKey: string;
-    timeText: string;
-    rawStart?: string;
-    rawEnd?: string;
-    isOpen: boolean;
-    dailyHoursText?: string;
-  }
-
   const dayInfos: DayInfo[] = daysOrder.map((day) => {
     const slots = operatingHours[day.key];
-    const isOpen = Array.isArray(slots) && slots.length > 0 && !!slots[0]?.start;
-    if (!isOpen) {
+    const isOpen = Array.isArray(slots) && slots.length > 0 && Boolean(slots[0]?.start);
+    if (!isOpen || !slots) {
       return {
         key: day.key,
         label: day.label,
@@ -99,13 +119,13 @@ export function getOperatingScheduleGroups(operatingHours: any): ScheduleGroup[]
       };
     }
 
-    const start = slots[0].start;
-    const end = slots[0].end;
-    const timeKey = slots.map((s: any) => `${s.start}-${s.end}`).join(';');
+    const start = slots[0]?.start;
+    const end = slots[0]?.end;
+    const timeKey = slots.map((s) => `${s.start}-${s.end}`).join(';');
     const timeText = slots
-      .map((s: any) => `${formatTime12h(s.start)} – ${formatTime12h(s.end)}`)
+      .map((s) => `${formatTime12h(s.start)} – ${formatTime12h(s.end)}`)
       .join(', ');
-    const dailyHoursText = calculateDailyHours(start, end);
+    const dailyHoursText = calculateDailyHours(slots);
 
     return {
       key: day.key,
@@ -140,7 +160,7 @@ export function getOperatingScheduleGroups(operatingHours: any): ScheduleGroup[]
   return groups;
 }
 
-function buildGroup(days: any[]): ScheduleGroup {
+function buildGroup(days: DayInfo[]): ScheduleGroup {
   const first = days[0];
   const last = days[days.length - 1];
   let label = first.label;
@@ -158,10 +178,9 @@ function buildGroup(days: any[]): ScheduleGroup {
     rawEnd: first.rawEnd,
     isOpen: first.isOpen,
     dailyHoursText: first.dailyHoursText,
-    days: days.map((d: any) => d.label),
+    days: days.map((d) => d.label),
   };
 }
-
 
 export function formatPrice(amount?: number, currency = 'INR', type = 'fixed'): string {
   if (type === 'free' || amount === 0) return 'Free';
@@ -193,8 +212,8 @@ export function syntaxHighlight(json: string): string {
   if (!json) return '';
   json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return json.replace(
-    /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
-    function (match) {
+    /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g,
+    (match) => {
       let cls = 'text-sky-400';
       if (/^"/.test(match)) {
         if (/:$/.test(match)) {
@@ -207,7 +226,7 @@ export function syntaxHighlight(json: string): string {
       } else if (/null/.test(match)) {
         cls = 'text-slate-500';
       }
-      return '<span class="' + cls + '">' + match + '</span>';
-    }
+      return `<span class="${cls}">${match}</span>`;
+    },
   );
 }

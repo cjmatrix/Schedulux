@@ -1,4 +1,4 @@
-import { Module, Global, Provider, Logger } from '@nestjs/common';
+import { Global, Module, Provider } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
 
@@ -11,18 +11,16 @@ const redisProvider: Provider = {
     const redisUri = configService.get<string>('REDIS_URI') || 'redis://localhost:6379';
 
     const client = new Redis(redisUri, {
-      maxRetriesPerRequest: null, 
+      maxRetriesPerRequest: null,
       enableReadyCheck: false,
     });
 
-  
     client.on('connect', () => {
-     console.log("Redis COnnected")
+      console.log('Redis COnnected');
     });
 
-    
     client.on('error', (error) => {
-     console.log(`Redis connection error: ${error.message}`, error.stack);
+      console.log(`Redis connection error: ${error.message}`, error.stack);
     });
 
     return client;

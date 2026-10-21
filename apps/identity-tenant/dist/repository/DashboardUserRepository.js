@@ -7,9 +7,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-import { Injectable } from "@nestjs/common";
-import { DashboardUser } from "../model/DashboardUser.js";
-import { BaseRepository } from "./BaseRepository.js";
+import { Injectable } from '@nestjs/common';
+import { DashboardUser } from '../model/DashboardUser.js';
+import { BaseRepository } from './BaseRepository.js';
 let DashboardUserRepository = class DashboardUserRepository extends BaseRepository {
     constructor() {
         super(DashboardUser);
@@ -18,12 +18,12 @@ let DashboardUserRepository = class DashboardUserRepository extends BaseReposito
         return this.model.findOne({ email }).exec();
     }
     async findByTenantId(tenantId) {
-        return this.model.find({ tenant_id: tenantId }).select("-password_hash").exec();
+        return this.model.find({ tenant_id: tenantId }).select('-password_hash').exec();
     }
     async findWorkspaceUsers(options) {
         const { tenantId, page = 1, limit = 10, search, role } = options;
         const query = { tenant_id: tenantId };
-        if (search && search.trim()) {
+        if (search?.trim()) {
             const regex = new RegExp(search.trim(), 'i');
             query.$or = [{ name: regex }, { email: regex }];
         }

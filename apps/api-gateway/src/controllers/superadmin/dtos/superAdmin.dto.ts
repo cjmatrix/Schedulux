@@ -1,7 +1,7 @@
+import { LoginRequest, LogoutRequest, RefreshTokenRequest } from '@repo/proto/superadmin';
+import { ListTenantsRequest } from '@repo/proto/tenant';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
-import { LoginRequest, RefreshTokenRequest, LogoutRequest } from '@repo/proto/superadmin';
-import { ListTenantsRequest } from '@repo/proto/tenant';
 
 export const SuperAdminLoginSchema: z.ZodType<LoginRequest> = z.object({
   email: z.string().trim().email('Please provide a valid email address'),
@@ -37,4 +37,3 @@ export const SuspendTenantParamSchema = z.object({
 });
 
 export class SuspendTenantParamDto extends createZodDto(SuspendTenantParamSchema) {}
-

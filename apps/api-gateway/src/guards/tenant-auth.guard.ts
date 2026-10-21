@@ -1,9 +1,9 @@
 import {
-  Injectable,
   CanActivate,
   ExecutionContext,
-  UnauthorizedException,
   Inject,
+  Injectable,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
@@ -28,15 +28,13 @@ export interface AuthenticatedTenantRequest extends Request {
 
 @Injectable()
 export class TenantAuthGuard implements CanActivate {
-  constructor(
-    @Inject(ConfigService) private readonly configService: ConfigService,
-  ) {}
+  constructor(@Inject(ConfigService) private readonly configService: ConfigService) {}
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<AuthenticatedTenantRequest>();
-    const tenantToken = request.cookies?.access_token 
+    const tenantToken = request.cookies?.access_token;
     const dashboardToken = request.cookies?.dashboarduser_access_token;
-    
+
     const token = tenantToken || dashboardToken;
 
     if (!token) {
@@ -44,8 +42,7 @@ export class TenantAuthGuard implements CanActivate {
     }
 
     try {
-      const secret =
-        this.configService.get<string>('JWT_SECRET') || 'dev-secret-change-in-prod';
+      const secret = this.configService.get<string>('JWT_SECRET') || 'dev-secret-change-in-prod';
 
       const decoded = jwt.verify(token, secret) as any;
 
@@ -55,13 +52,16 @@ export class TenantAuthGuard implements CanActivate {
 
       if (decoded.role === 'tenant_owner') {
         request.tenant = decoded;
-      } else if (decoded.role === 'root' || decoded.role === 'manager' || decoded.role === 'dashboard_user') {
+      } else if (
+        decoded.role === 'root' ||
+        decoded.role === 'manager' ||
+        decoded.role === 'dashboard_user'
+      ) {
         request.dashboardUser = decoded;
       } else {
-       
         throw new UnauthorizedException('Unrecognized user role');
       }
-      
+
       return true;
     } catch (err: any) {
       if (err instanceof UnauthorizedException) {

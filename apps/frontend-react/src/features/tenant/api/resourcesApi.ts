@@ -1,5 +1,5 @@
-import { axiosClient, type ApiResponse } from '../../../api/axiosClient';
 import type { ResourceInfo } from '@repo/proto/scheduling';
+import { type ApiResponse, axiosClient } from '../../../api/axiosClient';
 
 export type { ResourceInfo };
 
@@ -33,7 +33,7 @@ export interface ListResourcesResponseData {
 
 export interface ShiftSlot {
   start: string; // "08:00"
-  end: string;   // "17:00"
+  end: string; // "17:00"
 }
 
 export interface DaySchedule {

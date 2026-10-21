@@ -10,7 +10,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-import { Injectable, Inject } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { nanoid } from 'nanoid';
 let SuperAdminService = class SuperAdminService {
@@ -34,13 +34,21 @@ let SuperAdminService = class SuperAdminService {
         this.configService = configService;
         const globalSecret = this.configService.get('JWT_SECRET');
         const globalRefreshSecret = this.configService.get('JWT_REFRESH_SECRET');
-        this.jwtSecret = this.configService.get('SUPERADMIN_JWT_SECRET') ||
-            (globalSecret ? `${globalSecret}_superadmin` : 'superadmin_access_secret_2025');
-        this.jwtRefreshSecret = this.configService.get('SUPERADMIN_JWT_REFRESH_SECRET') ||
-            (globalRefreshSecret ? `${globalRefreshSecret}_superadmin` : 'superadmin_refresh_secret_2025');
-        this.accessTokenExpiry = (this.configService.get('ACCESS_TOKEN_EXPIRY') || '15m');
-        this.refreshTokenExpiry = (this.configService.get('REFRESH_TOKEN_EXPIRY') || '7d');
-        this.refreshTokenTtlSeconds = parseInt(this.configService.get('REFRESH_TOKEN_TTL_SECONDS') || '', 10) || 7 * 24 * 60 * 60;
+        this.jwtSecret =
+            this.configService.get('SUPERADMIN_JWT_SECRET') ||
+                (globalSecret ? `${globalSecret}_superadmin` : 'superadmin_access_secret_2025');
+        this.jwtRefreshSecret =
+            this.configService.get('SUPERADMIN_JWT_REFRESH_SECRET') ||
+                (globalRefreshSecret
+                    ? `${globalRefreshSecret}_superadmin`
+                    : 'superadmin_refresh_secret_2025');
+        this.accessTokenExpiry = (this.configService.get('ACCESS_TOKEN_EXPIRY') ||
+            '15m');
+        this.refreshTokenExpiry = (this.configService.get('REFRESH_TOKEN_EXPIRY') ||
+            '7d');
+        this.refreshTokenTtlSeconds =
+            parseInt(this.configService.get('REFRESH_TOKEN_TTL_SECONDS') || '', 10) ||
+                7 * 24 * 60 * 60;
     }
     async login(email, password) {
         const admin = await this.superAdminRepo.findByEmail(email.toLowerCase().trim());
@@ -64,7 +72,9 @@ let SuperAdminService = class SuperAdminService {
             token_id: tokenId,
             role: admin.role,
         }, this.jwtRefreshSecret, { expiresIn: this.refreshTokenExpiry });
-        await this.cacheRepo.set(`superadmin_refresh_token:${adminId}:${tokenId}`, refreshToken, { EX: this.refreshTokenTtlSeconds });
+        await this.cacheRepo.set(`superadmin_refresh_token:${adminId}:${tokenId}`, refreshToken, {
+            EX: this.refreshTokenTtlSeconds,
+        });
         return {
             accessToken,
             refreshToken,
@@ -135,8 +145,7 @@ let SuperAdminService = class SuperAdminService {
                 await this.cacheRepo.delete(`superadmin_refresh_token:${payload.super_admin_id}:${payload.token_id}`);
             }
         }
-        catch {
-        }
+        catch { }
     }
     async createSuperAdmin(data) {
         const existing = await this.superAdminRepo.findByEmail(data.email.toLowerCase().trim());

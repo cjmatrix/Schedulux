@@ -1,4 +1,10 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException, Inject } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Inject,
+  Injectable,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator.js';
 import { AuthenticatedTenantRequest } from './tenant-auth.guard.js';
@@ -12,14 +18,13 @@ export class RolesGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    
+
     if (!requiredRoles || requiredRoles.length === 0) {
-      return true; 
+      return true;
     }
 
     const request = context.switchToHttp().getRequest<AuthenticatedTenantRequest>();
-    
-    
+
     const user = request.tenant || request.dashboardUser;
 
     if (!user) {
@@ -29,7 +34,9 @@ export class RolesGuard implements CanActivate {
     const hasRole = requiredRoles.includes(user.role);
 
     if (!hasRole) {
-      throw new ForbiddenException(`Forbidden: Requires one of the following roles: ${requiredRoles.join(', ')}`);
+      throw new ForbiddenException(
+        `Forbidden: Requires one of the following roles: ${requiredRoles.join(', ')}`,
+      );
     }
 
     return true;

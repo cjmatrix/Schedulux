@@ -15,9 +15,6 @@ var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (
 }) : function(o, v) {
     o["default"] = v;
 });
-var __exportStar = (this && this.__exportStar) || function(m, exports) {
-    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
-};
 var __importStar = (this && this.__importStar) || (function () {
     var ownKeys = function(o) {
         ownKeys = Object.getOwnPropertyNames || function (o) {
@@ -35,13 +32,16 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SchedulingProto = exports.KnowledgeProto = exports.SuperAdminProto = exports.DashboardProto = void 0;
-__exportStar(require("./interfaces/tenant.js"), exports);
+exports.SuperAdminProto = exports.SchedulingProto = exports.KnowledgeProto = exports.DashboardProto = void 0;
 exports.DashboardProto = __importStar(require("./interfaces/dashboard.js"));
-exports.SuperAdminProto = __importStar(require("./interfaces/superadmin.js"));
 exports.KnowledgeProto = __importStar(require("./interfaces/knowledge.js"));
 exports.SchedulingProto = __importStar(require("./interfaces/scheduling.js"));
+exports.SuperAdminProto = __importStar(require("./interfaces/superadmin.js"));
+__exportStar(require("./interfaces/tenant.js"), exports);
 // export type {
 //   DashboardUserLoginRequest,
 //   DashboardUserLoginResponse,

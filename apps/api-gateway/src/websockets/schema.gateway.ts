@@ -1,14 +1,14 @@
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import {
-  WebSocketGateway,
-  WebSocketServer,
-  SubscribeMessage,
-  OnGatewayConnection,
-  OnGatewayDisconnect,
   ConnectedSocket,
   MessageBody,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
+  SubscribeMessage,
+  WebSocketGateway,
+  WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Injectable, Logger, OnModuleInit, Inject } from '@nestjs/common';
 import {
   ISchemaEventSubscriber,
   SchemaGeneratedEvent,
@@ -80,7 +80,9 @@ export class SchemaGateway implements OnGatewayConnection, OnGatewayDisconnect, 
       return;
     }
 
-    this.logger.log(`Broadcasting schema:ready for job ${event.job_id} / tenant ${event.tenant_id}`);
+    this.logger.log(
+      `Broadcasting schema:ready for job ${event.job_id} / tenant ${event.tenant_id}`,
+    );
 
     this.server.to(`job:${event.job_id}`).emit('schema:ready', event);
     this.server.to(`tenant:${event.tenant_id}`).emit('schema:ready', event);

@@ -1,7 +1,4 @@
-import {
-  ListTenantsRequest,
-  ListTenantsResponse,
-} from "@repo/proto/tenant";
+import { ListTenantsRequest, ListTenantsResponse } from '@repo/proto/tenant';
 
 export interface SuperAdminAuthResult {
   superAdmin: {

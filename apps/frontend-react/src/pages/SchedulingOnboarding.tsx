@@ -1,21 +1,21 @@
-import { useState } from "react";
-import { useNavigate } from "react-router";
-import { 
+import {
+  AlertCircle,
   ArrowLeft,
-  ArrowRight, 
-  Sparkles, 
-  Loader2, 
-  CheckCircle2, 
-  Clock, 
-  Building2, 
-  Layers, 
-  AlertCircle, 
+  ArrowRight,
+  Building2,
+  CheckCircle2,
+  Clock,
   Code2,
-  Settings2
-} from "lucide-react";
-import { useAgentSchemaGeneration } from "../hooks/useAgentSchemaGeneration.js";
-import { knowledgeApi } from "../api/knowledgeApi.js";
-import { getOperatingScheduleGroups } from "./onboarding/utils";
+  Layers,
+  Loader2,
+  Settings2,
+  Sparkles,
+} from 'lucide-react';
+import { useState } from 'react';
+import { useNavigate } from 'react-router';
+import { knowledgeApi } from '../api/knowledgeApi.js';
+import { useAgentSchemaGeneration } from '../hooks/useAgentSchemaGeneration.js';
+import { getOperatingScheduleGroups } from './onboarding/utils';
 
 type ServiceType = {
   id: string;
@@ -27,62 +27,53 @@ type ServiceType = {
 
 const services: ServiceType[] = [
   {
-    id: "medical",
-    title: "Medical & Dental Clinics",
+    id: 'medical',
+    title: 'Medical & Dental Clinics',
     description:
-      "Doctor shifts, chair sanitization buffers, insurance triage, and HIPAA-compliant patient intake.",
-    badge: "Pre-configured 15m buffers + OTP verify",
-    icon: "✚",
+      'Doctor shifts, chair sanitization buffers, insurance triage, and HIPAA-compliant patient intake.',
+    badge: 'Pre-configured 15m buffers + OTP verify',
+    icon: '✚',
   },
   {
-    id: "auto",
-    title: "Auto Repair & Services",
+    id: 'auto',
+    title: 'Auto Repair & Services',
     description:
-      "Physical bay & lift allocations, vehicle VIN collection, parts lead times, and diagnostic scaling.",
-    badge: "Equipment & bay constraint modeling",
-    icon: "◉",
+      'Physical bay & lift allocations, vehicle VIN collection, parts lead times, and diagnostic scaling.',
+    badge: 'Equipment & bay constraint modeling',
+    icon: '◉',
   },
   {
-    id: "hospitality",
-    title: "Hospitality & Rooms",
+    id: 'hospitality',
+    title: 'Hospitality & Rooms',
     description:
-      "Check-in/out date ranges, 4-hour housekeeping turnover blocks, room categories, and guest add-ons.",
-    badge: "Multi-day capacity & turnover blocks",
-    icon: "▣",
+      'Check-in/out date ranges, 4-hour housekeeping turnover blocks, room categories, and guest add-ons.',
+    badge: 'Multi-day capacity & turnover blocks',
+    icon: '▣',
   },
   {
-    id: "custom",
-    title: "Others / Custom Service",
+    id: 'custom',
+    title: 'Others / Custom Service',
     description:
-      "Salons, legal practices, consulting, or bespoke service models with custom rulesets and buffers.",
-    badge: "Configurable slot math & custom fields",
-    icon: "☷",
+      'Salons, legal practices, consulting, or bespoke service models with custom rulesets and buffers.',
+    badge: 'Configurable slot math & custom fields',
+    icon: '☷',
   },
 ];
 
 export default function SchedulingOnboarding() {
-  const [selected, setSelected] = useState("web_crawl");
+  const [selected, setSelected] = useState('web_crawl');
 
-  console.log(selected)
-  const [websiteUrl, setWebsiteUrl] = useState("");
+  console.log(selected);
+  const [websiteUrl, setWebsiteUrl] = useState('');
   const [showJsonRaw, setShowJsonRaw] = useState(false);
   const navigate = useNavigate();
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [saveDraftError, setSaveDraftError] = useState<string | null>(null);
 
-  const {
-    startCrawl,
-    isLoading,
-    stage,
-    progressMessage,
-    schema,
-    error,
-    reset,
-  } = useAgentSchemaGeneration();
+  const { startCrawl, isLoading, stage, progressMessage, schema, error, reset } =
+    useAgentSchemaGeneration();
 
-  const selectedService = services.find(
-    (service) => service.id === selected
-  );
+  const selectedService = services.find((service) => service.id === selected);
 
   const handleAutoDetect = (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,13 +81,12 @@ export default function SchedulingOnboarding() {
     startCrawl(websiteUrl);
   };
 
-  const handleConfigureAndSaveDraft = async (source:string) => {
-
+  const handleConfigureAndSaveDraft = async (source: string) => {
     try {
       setIsSavingDraft(true);
       setSaveDraftError(null);
       const res = await knowledgeApi.saveInitialAgentDraft({
-        name: schema?.business_profile?.name || "AI Scheduling Agent",
+        name: schema?.business_profile?.name || 'AI Scheduling Agent',
         creation_source: source,
       });
 
@@ -104,25 +94,22 @@ export default function SchedulingOnboarding() {
       if (newAgentId) {
         navigate(`/tenant/agent-setup/${newAgentId}`);
       } else {
-        navigate("/tenant/agents");
+        navigate('/tenant/agents');
       }
-    } catch (err: any) {
-      console.error("Failed to save initial agent draft:", err);
-      setSaveDraftError(err?.response?.data?.message || err?.message || "Failed to save agent draft");
+    } catch (err: unknown) {
+      console.error('Failed to save initial agent draft:', err);
+      setSaveDraftError(err instanceof Error ? err.message : 'Failed to save agent draft');
     } finally {
       setIsSavingDraft(false);
     }
   };
 
   const handleContinue = () => {
-    if(schema)
-    handleConfigureAndSaveDraft("web_crawl");
-    else{
-      handleConfigureAndSaveDraft(selected)
+    if (schema) handleConfigureAndSaveDraft('web_crawl');
+    else {
+      handleConfigureAndSaveDraft(selected);
     }
   };
-
- 
 
   return (
     <div className="min-h-screen bg-white text-neutral-900 antialiased selection:bg-neutral-900 selection:text-white">
@@ -131,7 +118,7 @@ export default function SchedulingOnboarding() {
         {/* Logo & Back button */}
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate("/tenant/agents")}
+            onClick={() => navigate('/tenant/agents')}
             className="p-1.5 rounded-xl border border-neutral-200 hover:bg-neutral-100 text-neutral-600 transition cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
             title="Back to AI Agents Dashboard"
           >
@@ -144,9 +131,7 @@ export default function SchedulingOnboarding() {
               <span className="w-1.5 h-5 bg-neutral-950 rounded-full inline-block" />
               <span className="w-1.5 h-5 bg-neutral-950 rounded-full inline-block" />
             </div>
-            <span className="font-bold text-lg tracking-tight text-neutral-950">
-              Schedulux AI
-            </span>
+            <span className="font-bold text-lg tracking-tight text-neutral-950">Schedulux AI</span>
           </div>
         </div>
 
@@ -157,7 +142,7 @@ export default function SchedulingOnboarding() {
               Agent Studio
             </button>
             <button
-              onClick={() => navigate("/tenant/agents")}
+              onClick={() => navigate('/tenant/agents')}
               className="px-5 py-1.5 text-neutral-500 hover:text-neutral-900 transition cursor-pointer text-xs font-medium"
             >
               Agents Dashboard
@@ -194,7 +179,8 @@ export default function SchedulingOnboarding() {
             What kind of service are you scheduling?
           </h1>
           <p className="mt-4 text-base text-neutral-500 leading-relaxed">
-            Auto-generate your business rules from your website via AI, or start with a pre-configured template.
+            Auto-generate your business rules from your website via AI, or start with a
+            pre-configured template.
           </p>
         </div>
 
@@ -211,7 +197,8 @@ export default function SchedulingOnboarding() {
           </div>
 
           <p className="text-sm leading-relaxed text-neutral-500 mb-6 max-w-2xl">
-            Paste your website or booking page URL. Schedulux AI will crawl your site, parse staff roles, appointment buffers, and generate your custom scheduling schema in real-time.
+            Paste your website or booking page URL. Schedulux AI will crawl your site, parse staff
+            roles, appointment buffers, and generate your custom scheduling schema in real-time.
           </p>
 
           <form onSubmit={handleAutoDetect} className="flex flex-col sm:flex-row gap-3">
@@ -282,7 +269,9 @@ export default function SchedulingOnboarding() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold uppercase tracking-wider text-neutral-900">
-                      {stage === 'crawling' ? 'Step 1: Web Crawler Active' : 'Step 2: AI Schema Synthesis'}
+                      {stage === 'crawling'
+                        ? 'Step 1: Web Crawler Active'
+                        : 'Step 2: AI Schema Synthesis'}
                     </span>
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   </div>
@@ -344,7 +333,11 @@ export default function SchedulingOnboarding() {
                     {schema?.business_profile?.name || 'Inferred Business'}
                   </p>
                   <p className="text-xs text-neutral-500 mt-0.5">
-                    Vertical: <span className="font-semibold text-neutral-800 capitalize">{schema?.business_profile?.vertical || 'Service'}</span> • Timezone: {schema?.business_profile?.timezone || 'America/New_York'}
+                    Vertical:{' '}
+                    <span className="font-semibold text-neutral-800 capitalize">
+                      {schema?.business_profile?.vertical || 'Service'}
+                    </span>{' '}
+                    • Timezone: {schema?.business_profile?.timezone || 'Not configured'}
                   </p>
                   {schema?.business_profile?.address && (
                     <p className="text-xs text-neutral-400 mt-2 truncate">
@@ -359,10 +352,15 @@ export default function SchedulingOnboarding() {
                   </span>
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {(() => {
-                      const groups = getOperatingScheduleGroups(schema?.operating_hours).filter((g) => g.isOpen);
+                      const groups = getOperatingScheduleGroups(schema?.operating_hours).filter(
+                        (g) => g.isOpen,
+                      );
                       if (groups.length > 0) {
                         return groups.map((g, idx) => (
-                          <span key={idx} className="rounded-md bg-neutral-100 px-2 py-1 text-[11px] font-medium text-neutral-700">
+                          <span
+                            key={idx}
+                            className="rounded-md bg-neutral-100 px-2 py-1 text-[11px] font-medium text-neutral-700"
+                          >
                             {g.label}: {g.timeText}
                           </span>
                         ));
@@ -393,12 +391,13 @@ export default function SchedulingOnboarding() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {schema?.services?.map((srv: any, idx: number) => (
-                    <div key={srv.service_id || idx} className="rounded-xl border border-neutral-200 bg-white p-4">
+                  {schema?.services?.map((srv, idx: number) => (
+                    <div
+                      key={srv.service_id || idx}
+                      className="rounded-xl border border-neutral-200 bg-white p-4"
+                    >
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-bold text-neutral-950 truncate">
-                          {srv.name}
-                        </p>
+                        <p className="text-sm font-bold text-neutral-950 truncate">{srv.name}</p>
                         <span className="rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-bold text-neutral-900 shrink-0">
                           ${srv?.price?.amount || 0}
                         </span>
@@ -479,12 +478,12 @@ export default function SchedulingOnboarding() {
                 onClick={() => setSelected(service.id)}
                 className={`relative min-h-[180px] rounded-[24px] border p-6 text-left transition-all duration-200 cursor-pointer ${
                   isSelected
-                    ? "border-neutral-950 bg-white shadow-md ring-1 ring-neutral-950"
-                    : "border-neutral-200 bg-[#fbfbfb] hover:border-neutral-300 hover:bg-white"
+                    ? 'border-neutral-950 bg-white shadow-md ring-1 ring-neutral-950'
+                    : 'border-neutral-200 bg-[#fbfbfb] hover:border-neutral-300 hover:bg-white'
                 }`}
               >
                 {/* Recommended Badge */}
-                {service.id === "medical" && (
+                {service.id === 'medical' && (
                   <span className="absolute right-6 top-6 rounded-full bg-amber-50 border border-amber-200 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">
                     Recommended
                   </span>
@@ -493,16 +492,16 @@ export default function SchedulingOnboarding() {
                 {/* Icon */}
                 <div
                   className={`mb-6 flex h-12 w-12 items-center justify-center rounded-2xl ${
-                    isSelected ? "bg-neutral-950 text-white" : "bg-white border border-neutral-200 text-neutral-700 shadow-sm"
+                    isSelected
+                      ? 'bg-neutral-950 text-white'
+                      : 'bg-white border border-neutral-200 text-neutral-700 shadow-sm'
                   } text-xl`}
                 >
                   {service.icon}
                 </div>
 
                 {/* Content */}
-                <h3 className="text-lg font-bold text-neutral-950 mb-2">
-                  {service.title}
-                </h3>
+                <h3 className="text-lg font-bold text-neutral-950 mb-2">{service.title}</h3>
                 <p className="text-sm leading-relaxed text-neutral-500 mb-6 pr-4">
                   {service.description}
                 </p>
@@ -526,7 +525,9 @@ export default function SchedulingOnboarding() {
                   Active Configuration
                 </p>
                 <p className="text-sm font-bold text-neutral-950 mt-0.5">
-                  {schema ? `${schema?.business_profile?.name || 'AI Inferred'} (Live)` : `${selectedService?.title} Template`}
+                  {schema
+                    ? `${schema?.business_profile?.name || 'AI Inferred'} (Live)`
+                    : `${selectedService?.title} Template`}
                 </p>
               </div>
             </div>
@@ -548,13 +549,14 @@ export default function SchedulingOnboarding() {
 
           <button
             onClick={() => {
-              setSelected("custom");
+              setSelected('custom');
               reset();
-              console.log("Starting from blank canvas");
+              console.log('Starting from blank canvas');
             }}
             className="text-sm font-medium text-neutral-500 hover:text-neutral-950 transition-colors cursor-pointer group flex items-center gap-1"
           >
-            Or start from a blank canvas <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+            Or start from a blank canvas{' '}
+            <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
           </button>
         </div>
 

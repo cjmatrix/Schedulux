@@ -1,34 +1,34 @@
-import { useState, useMemo } from "react";
-import { useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from '@tanstack/react-query';
 import {
-  Bot,
-  Plus,
-  Search,
-  Sparkles,
   ArrowRight,
-  Clock,
-  Layers,
-  Globe,
-  Settings2,
-  RefreshCw,
-  CheckCircle2,
-  FileText,
-  Copy,
-  Check,
-  LogOut,
-  Loader2,
+  Bot,
   Calendar,
+  Check,
+  CheckCircle2,
+  Clock,
+  Copy,
+  FileText,
+  Globe,
+  Layers,
   LayoutDashboard,
-} from "lucide-react";
-import { knowledgeApi, type AgentSummaryInfo } from "../../../api/knowledgeApi.js";
-import { useLogout, useTenantProfile } from "../hooks/useAuth.js";
-import { useAuthStore } from "../../../store/useAuthStore.js";
+  Loader2,
+  LogOut,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings2,
+  Sparkles,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { type AgentSummaryInfo, knowledgeApi } from '../../../api/knowledgeApi.js';
+import { useAuthStore } from '../../../store/useAuthStore.js';
+import { useLogout, useTenantProfile } from '../hooks/useAuth.js';
 
 export default function TenantAgentsPage() {
   const navigate = useNavigate();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "created" | "pending">("all");
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'created' | 'pending'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const { data: profileData } = useTenantProfile();
@@ -37,8 +37,8 @@ export default function TenantAgentsPage() {
 
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
-      onSuccess: () => navigate("/login"),
-      onError: () => navigate("/login"),
+      onSuccess: () => navigate('/login'),
+      onError: () => navigate('/login'),
     });
   };
 
@@ -48,7 +48,7 @@ export default function TenantAgentsPage() {
     refetch,
     isRefetching,
   } = useQuery({
-    queryKey: ["tenant-agents"],
+    queryKey: ['tenant-agents'],
     queryFn: () => knowledgeApi.listTenantAgents(),
   });
 
@@ -59,29 +59,28 @@ export default function TenantAgentsPage() {
       const matchesSearch =
         agent.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         agent.agent_id.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus =
-        statusFilter === "all" ? true : agent.status === statusFilter;
+      const matchesStatus = statusFilter === 'all' ? true : agent.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
   }, [agents, searchTerm, statusFilter]);
 
-  const createdCount = agents.filter((a) => a.status === "created").length;
-  const pendingCount = agents.filter((a) => a.status === "pending").length;
+  const createdCount = agents.filter((a) => a.status === 'created').length;
+  const pendingCount = agents.filter((a) => a.status === 'pending').length;
 
   const currentTenant = profileData?.data;
   const currentBusinessName =
-    currentTenant?.business_name || authUser?.business_name || "My Workspace";
+    currentTenant?.business_name || authUser?.business_name || 'My Workspace';
   const currentUserFullName =
     authUser?.name ||
-    authUser?.email?.split("@")[0] ||
+    authUser?.email?.split('@')[0] ||
     currentTenant?.business_name ||
-    "Tenant Owner";
+    'Tenant Owner';
   const currentUserRole =
-    authUser?.system_role === "root"
-      ? "Root Admin"
-      : authUser?.system_role === "manager"
-        ? "Manager"
-        : "Tenant Owner";
+    authUser?.system_role === 'root'
+      ? 'Root Admin'
+      : authUser?.system_role === 'manager'
+        ? 'Manager'
+        : 'Tenant Owner';
   const userInitials = currentUserFullName.substring(0, 2).toUpperCase();
 
   const handleCopyId = (id: string, e: React.MouseEvent) => {
@@ -129,9 +128,7 @@ export default function TenantAgentsPage() {
               <span className="text-xs font-bold text-slate-800 leading-tight">
                 {currentUserFullName}
               </span>
-              <span className="text-[9px] text-slate-400 capitalize">
-                {currentUserRole}
-              </span>
+              <span className="text-[9px] text-slate-400 capitalize">{currentUserRole}</span>
             </div>
           </div>
 
@@ -164,7 +161,8 @@ export default function TenantAgentsPage() {
                   AI Agents Dashboard
                 </h1>
                 <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-                  Manage your scheduling bots. Each agent has its own dedicated services, resources, and knowledge.
+                  Manage your scheduling bots. Each agent has its own dedicated services, resources,
+                  and knowledge.
                 </p>
               </div>
             </div>
@@ -178,10 +176,10 @@ export default function TenantAgentsPage() {
               className="p-2.5 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-white rounded-xl transition cursor-pointer shadow-2xs disabled:opacity-50"
               title="Refresh Agents"
             >
-              <RefreshCw className={`w-4 h-4 ${isRefetching ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-4 h-4 ${isRefetching ? 'animate-spin' : ''}`} />
             </button>
             <button
-              onClick={() => navigate("/tenant/landingboard")}
+              onClick={() => navigate('/tenant/landingboard')}
               className="flex items-center gap-2 bg-neutral-950 hover:bg-neutral-800 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-md transition active:scale-98 cursor-pointer"
             >
               <Plus className="w-4 h-4 text-emerald-400" />
@@ -197,9 +195,7 @@ export default function TenantAgentsPage() {
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                 Total Agents
               </p>
-              <p className="text-3xl font-black text-slate-900 mt-1">
-                {agents.length}
-              </p>
+              <p className="text-3xl font-black text-slate-900 mt-1">{agents.length}</p>
               <span className="text-[11px] text-slate-500">Across this workspace</span>
             </div>
             <div className="w-11 h-11 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-700">
@@ -212,9 +208,7 @@ export default function TenantAgentsPage() {
               <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5" /> Live Agents
               </p>
-              <p className="text-3xl font-black text-emerald-950 mt-1">
-                {createdCount}
-              </p>
+              <p className="text-3xl font-black text-emerald-950 mt-1">{createdCount}</p>
               <span className="text-[11px] text-emerald-700 font-medium">
                 Active in Runtime Config
               </span>
@@ -229,12 +223,8 @@ export default function TenantAgentsPage() {
               <p className="text-xs font-bold text-amber-700 uppercase tracking-wider flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5" /> Pending Drafts
               </p>
-              <p className="text-3xl font-black text-amber-950 mt-1">
-                {pendingCount}
-              </p>
-              <span className="text-[11px] text-amber-700 font-medium">
-                In Draft Setup
-              </span>
+              <p className="text-3xl font-black text-amber-950 mt-1">{pendingCount}</p>
+              <span className="text-[11px] text-amber-700 font-medium">In Draft Setup</span>
             </div>
             <div className="w-11 h-11 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-800 font-bold text-xs shadow-2xs">
               DRAFT
@@ -257,32 +247,32 @@ export default function TenantAgentsPage() {
 
           <div className="flex items-center gap-1.5 w-full sm:w-auto">
             <button
-              onClick={() => setStatusFilter("all")}
+              onClick={() => setStatusFilter('all')}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
-                statusFilter === "all"
-                  ? "bg-slate-900 text-white shadow-2xs"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                statusFilter === 'all'
+                  ? 'bg-slate-900 text-white shadow-2xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               All ({agents.length})
             </button>
             <button
-              onClick={() => setStatusFilter("created")}
+              onClick={() => setStatusFilter('created')}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-                statusFilter === "created"
-                  ? "bg-emerald-600 text-white shadow-2xs"
-                  : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                statusFilter === 'created'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
               }`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-current" />
               Live ({createdCount})
             </button>
             <button
-              onClick={() => setStatusFilter("pending")}
+              onClick={() => setStatusFilter('pending')}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-                statusFilter === "pending"
-                  ? "bg-amber-600 text-white shadow-2xs"
-                  : "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                statusFilter === 'pending'
+                  ? 'bg-amber-600 text-white shadow-2xs'
+                  : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
               }`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-current" />
@@ -304,18 +294,18 @@ export default function TenantAgentsPage() {
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900">
-                {searchTerm || statusFilter !== "all"
-                  ? "No matching agents found"
-                  : "No AI agents created yet"}
+                {searchTerm || statusFilter !== 'all'
+                  ? 'No matching agents found'
+                  : 'No AI agents created yet'}
               </h3>
               <p className="text-xs text-slate-500 max-w-sm mt-1">
-                {searchTerm || statusFilter !== "all"
-                  ? "Try clearing your search query or switching filters."
-                  : "Get started by generating your first AI scheduling agent from your website URL or picking a template."}
+                {searchTerm || statusFilter !== 'all'
+                  ? 'Try clearing your search query or switching filters.'
+                  : 'Get started by generating your first AI scheduling agent from your website URL or picking a template.'}
               </p>
             </div>
             <button
-              onClick={() => navigate("/tenant/landingboard")}
+              onClick={() => navigate('/tenant/landingboard')}
               className="flex items-center gap-2 bg-neutral-950 hover:bg-neutral-800 text-white px-6 py-3 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer mt-2"
             >
               <Sparkles className="w-4 h-4 text-emerald-400" />
@@ -325,7 +315,7 @@ export default function TenantAgentsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredAgents.map((agent) => {
-              const isCreated = agent.status === "created";
+              const isCreated = agent.status === 'created';
 
               return (
                 <div
@@ -349,7 +339,7 @@ export default function TenantAgentsPage() {
                     </div>
 
                     <span className="text-[11px] font-semibold text-slate-400 capitalize flex items-center gap-1 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
-                      {agent.creation_source === "web_crawl" ? (
+                      {agent.creation_source === 'web_crawl' ? (
                         <>
                           <Globe className="w-3 h-3 text-indigo-500" /> Web Crawl
                         </>
@@ -389,13 +379,13 @@ export default function TenantAgentsPage() {
                     <div className="mt-5 flex items-center gap-4 text-xs text-slate-500 border-t border-slate-100 pt-3">
                       <span className="flex items-center gap-1.5 font-semibold text-slate-700">
                         <Layers className="w-3.5 h-3.5 text-indigo-500" />
-                        {agent.services_count} {agent.services_count === 1 ? "Service" : "Services"}
+                        {agent.services_count} {agent.services_count === 1 ? 'Service' : 'Services'}
                       </span>
                       <span>•</span>
                       <span className="text-slate-400 text-[11px]">
                         {agent.updated_at
                           ? `Updated ${new Date(agent.updated_at).toLocaleDateString()}`
-                          : "Draft"}
+                          : 'Draft'}
                       </span>
                     </div>
                   </div>
@@ -410,7 +400,7 @@ export default function TenantAgentsPage() {
                       title="Resume onboarding and edit draft schema"
                     >
                       <Settings2 className="w-3.5 h-3.5" />
-                      <span>{isCreated ? "Edit Config" : "Resume Setup"}</span>
+                      <span>{isCreated ? 'Edit Config' : 'Resume Setup'}</span>
                     </button>
 
                     {/* Go to Dashboard button: enters TenantLayout for this agent */}

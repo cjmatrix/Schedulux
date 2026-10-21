@@ -1,41 +1,37 @@
 import {
-  Controller,
-  Post,
-  Get,
-  Put,
-  Delete,
   Body,
-  Param,
-  Query,
-  Req,
-  Inject,
-  OnModuleInit,
-  UsePipes,
-  UseGuards,
+  Controller,
+  Delete,
+  Get,
   HttpCode,
   HttpStatus,
+  Inject,
+  OnModuleInit,
+  Param,
+  Post,
+  Put,
+  Query,
+  Req,
   UnauthorizedException,
+  UseGuards,
+  UsePipes,
 } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
-import { lastValueFrom } from 'rxjs';
-import { ZodValidationPipe } from 'nestjs-zod';
 import {
-  SchedulingInventoryServiceClient,
   SCHEDULING_INVENTORY_SERVICE_NAME,
+  SchedulingInventoryServiceClient,
 } from '@repo/proto/scheduling';
-import { TenantAuthGuard, AuthenticatedTenantRequest } from '../../guards/tenant-auth.guard.js';
-import { RolesGuard } from '../../guards/roles.guard.js';
+import { ZodValidationPipe } from 'nestjs-zod';
+import { lastValueFrom } from 'rxjs';
 import { Roles } from '../../decorators/roles.decorator.js';
-import {
-  CreateServiceDto,
-  UpdateServiceDto,
-  ListServicesQueryDto,
-} from './dtos/service.dto.js';
+import { RolesGuard } from '../../guards/roles.guard.js';
+import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
 import {
   CreateResourceDto,
-  UpdateResourceDto,
   ListResourcesQueryDto,
+  UpdateResourceDto,
 } from './dtos/resource.dto.js';
+import { CreateServiceDto, ListServicesQueryDto, UpdateServiceDto } from './dtos/service.dto.js';
 
 @Controller('api/v1/tenant/scheduling')
 @UseGuards(TenantAuthGuard, RolesGuard)
@@ -43,9 +39,7 @@ import {
 export class SchedulingController implements OnModuleInit {
   private schedulingService!: SchedulingInventoryServiceClient;
 
-  constructor(
-    @Inject('SCHEDULING_PACKAGE') private readonly client: ClientGrpc,
-  ) {}
+  constructor(@Inject('SCHEDULING_PACKAGE') private readonly client: ClientGrpc) {}
 
   onModuleInit() {
     this.schedulingService = this.client.getService<SchedulingInventoryServiceClient>(
@@ -61,14 +55,10 @@ export class SchedulingController implements OnModuleInit {
     return tenantId;
   }
 
-
   @Post('services')
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(ZodValidationPipe)
-  async createService(
-    @Req() req: AuthenticatedTenantRequest,
-    @Body() body: CreateServiceDto,
-  ) {
+  async createService(@Req() req: AuthenticatedTenantRequest, @Body() body: CreateServiceDto) {
     const tenantId = this.getTenantId(req);
     const response = await lastValueFrom(
       this.schedulingService.createService({
@@ -83,6 +73,9 @@ export class SchedulingController implements OnModuleInit {
         booking_mode: body.booking_mode,
         price: body.price,
         deposit: body.deposit,
+        verification: body.verification
+          ? { require_otp: body.verification.require_otp ?? undefined }
+          : undefined,
         eligible_resource_ids: body.eligible_resource_ids,
         required_asset_ids: body.required_asset_ids,
         recall_interval_days: body.recall_interval_days,
@@ -97,10 +90,7 @@ export class SchedulingController implements OnModuleInit {
 
   @Get('services')
   @UsePipes(ZodValidationPipe)
-  async listServices(
-    @Req() req: AuthenticatedTenantRequest,
-    @Query() query: ListServicesQueryDto,
-  ) {
+  async listServices(@Req() req: AuthenticatedTenantRequest, @Query() query: ListServicesQueryDto) {
     const tenantId = this.getTenantId(req);
     const response = await lastValueFrom(
       this.schedulingService.listServices({
@@ -126,10 +116,7 @@ export class SchedulingController implements OnModuleInit {
   }
 
   @Get('services/:id')
-  async getService(
-    @Req() req: AuthenticatedTenantRequest,
-    @Param('id') serviceId: string,
-  ) {
+  async getService(@Req() req: AuthenticatedTenantRequest, @Param('id') serviceId: string) {
     const tenantId = this.getTenantId(req);
     const response = await lastValueFrom(
       this.schedulingService.getService({
@@ -165,6 +152,9 @@ export class SchedulingController implements OnModuleInit {
         booking_mode: body.booking_mode,
         price: body.price,
         deposit: body.deposit,
+        verification: body.verification
+          ? { require_otp: body.verification.require_otp ?? undefined }
+          : undefined,
         eligible_resource_ids: body.eligible_resource_ids ?? [],
         required_asset_ids: body.required_asset_ids ?? [],
         recall_interval_days: body.recall_interval_days,
@@ -178,10 +168,7 @@ export class SchedulingController implements OnModuleInit {
   }
 
   @Delete('services/:id')
-  async deleteService(
-    @Req() req: AuthenticatedTenantRequest,
-    @Param('id') serviceId: string,
-  ) {
+  async deleteService(@Req() req: AuthenticatedTenantRequest, @Param('id') serviceId: string) {
     const tenantId = this.getTenantId(req);
     const response = await lastValueFrom(
       this.schedulingService.deleteService({
@@ -196,15 +183,10 @@ export class SchedulingController implements OnModuleInit {
     };
   }
 
- 
-
   @Post('resources')
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(ZodValidationPipe)
-  async createResource(
-    @Req() req: AuthenticatedTenantRequest,
-    @Body() body: CreateResourceDto,
-  ) {
+  async createResource(@Req() req: AuthenticatedTenantRequest, @Body() body: CreateResourceDto) {
     const tenantId = this.getTenantId(req);
     const response = await lastValueFrom(
       this.schedulingService.createResource({
@@ -260,10 +242,7 @@ export class SchedulingController implements OnModuleInit {
   }
 
   @Get('resources/:id')
-  async getResource(
-    @Req() req: AuthenticatedTenantRequest,
-    @Param('id') resourceId: string,
-  ) {
+  async getResource(@Req() req: AuthenticatedTenantRequest, @Param('id') resourceId: string) {
     const tenantId = this.getTenantId(req);
     const response = await lastValueFrom(
       this.schedulingService.getResource({
@@ -308,10 +287,7 @@ export class SchedulingController implements OnModuleInit {
   }
 
   @Delete('resources/:id')
-  async deleteResource(
-    @Req() req: AuthenticatedTenantRequest,
-    @Param('id') resourceId: string,
-  ) {
+  async deleteResource(@Req() req: AuthenticatedTenantRequest, @Param('id') resourceId: string) {
     const tenantId = this.getTenantId(req);
     const response = await lastValueFrom(
       this.schedulingService.deleteResource({

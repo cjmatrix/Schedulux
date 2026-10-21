@@ -36,6 +36,9 @@
     "./scheduling.proto": "./src/scheduling.proto"
   },
   "scripts": {
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check .",
     "build": "mkdir -p ./src/interfaces && protoc -I=./src --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=./src/interfaces ./src/*.proto --ts_proto_opt=esModuleInterop=true,outputEncodeMethods=false,outputJsonMethods=false,nestJs=true,snakeToCamel=false && tsc"
   },
   "dependencies": {

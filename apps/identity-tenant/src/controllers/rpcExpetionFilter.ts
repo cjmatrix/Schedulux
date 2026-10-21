@@ -1,21 +1,26 @@
-
-import { Catch, RpcExceptionFilter, ArgumentsHost } from '@nestjs/common';
+import * as grpc from '@grpc/grpc-js';
+import { ArgumentsHost, Catch, RpcExceptionFilter } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { Observable, throwError } from 'rxjs';
-import * as grpc from '@grpc/grpc-js';
 
 @Catch()
 export class AllExceptionsFilter implements RpcExceptionFilter<RpcException> {
-  catch(exception: any, host: ArgumentsHost){
+  catch(exception: unknown, _host: ArgumentsHost): Observable<never> {
     let code = grpc.status.INTERNAL;
     let message = 'Internal server error';
-    switch (exception.message) {
+    const errMessage =
+      exception instanceof Error
+        ? exception.message
+        : typeof exception === 'object' && exception !== null && 'message' in exception
+          ? String((exception as { message: unknown }).message)
+          : '';
+    switch (errMessage) {
       case 'Missing required fields':
       case 'Email and password are required':
       case 'Verification token is required':
       case 'Refresh token is required':
         code = grpc.status.INVALID_ARGUMENT;
-        message = exception.message;
+        message = errMessage;
         break;
       case 'EMAIL_ALREADY_EXISTS':
       case 'USER_ALREADY_EXISTS':

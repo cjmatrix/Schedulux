@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import os
 import json
+import os
 from typing import Any
+
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
 
-local_env = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+local_env = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env"))
 load_dotenv(local_env)
 
 REDIS_URI = os.environ.get("REDIS_URI", "redis://localhost:6379")

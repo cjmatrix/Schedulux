@@ -1,12 +1,7 @@
-import { axiosClient, type ApiResponse } from '../../../api/axiosClient';
-import type {
-  ServiceInfo,
-  PriceInfo,
-  DepositInfo,
-  ResourceInfo,
-} from '@repo/proto/scheduling';
+import type { DepositInfo, PriceInfo, ResourceInfo, ServiceInfo } from '@repo/proto/scheduling';
+import { type ApiResponse, axiosClient } from '../../../api/axiosClient';
 
-export type { ServiceInfo, PriceInfo, DepositInfo, ResourceInfo };
+export type { DepositInfo, PriceInfo, ResourceInfo, ServiceInfo };
 
 export interface ListServicesParams {
   page?: number;
@@ -57,6 +52,9 @@ export interface CreateServicePayload {
     confirmation_method?: string;
     payment_instructions?: string;
   };
+  verification?: {
+    require_otp?: boolean | null;
+  };
   eligible_resource_ids?: string[];
   required_asset_ids?: string[];
   recall_interval_days?: number;
@@ -106,19 +104,27 @@ export interface CreateResourcePayload {
 
 export const servicesApi = {
   listServices: async (params?: ListServicesParams): Promise<ListServicesResponseData> => {
-    const { data } = await axiosClient.get<ListServicesResponseData>('/api/v1/tenant/scheduling/services', {
-      params,
-    });
+    const { data } = await axiosClient.get<ListServicesResponseData>(
+      '/api/v1/tenant/scheduling/services',
+      {
+        params,
+      },
+    );
     return data;
   },
 
   getService: async (serviceId: string): Promise<ApiResponse<ServiceInfo>> => {
-    const { data } = await axiosClient.get<ApiResponse<ServiceInfo>>(`/api/v1/tenant/scheduling/services/${serviceId}`);
+    const { data } = await axiosClient.get<ApiResponse<ServiceInfo>>(
+      `/api/v1/tenant/scheduling/services/${serviceId}`,
+    );
     return data;
   },
 
   createService: async (payload: CreateServicePayload): Promise<ApiResponse<ServiceInfo>> => {
-    const { data } = await axiosClient.post<ApiResponse<ServiceInfo>>('/api/v1/tenant/scheduling/services', payload);
+    const { data } = await axiosClient.post<ApiResponse<ServiceInfo>>(
+      '/api/v1/tenant/scheduling/services',
+      payload,
+    );
     return data;
   },
 
@@ -141,14 +147,20 @@ export const servicesApi = {
   },
 
   listResources: async (params?: ListResourcesParams): Promise<ListResourcesResponseData> => {
-    const { data } = await axiosClient.get<ListResourcesResponseData>('/api/v1/tenant/scheduling/resources', {
-      params,
-    });
+    const { data } = await axiosClient.get<ListResourcesResponseData>(
+      '/api/v1/tenant/scheduling/resources',
+      {
+        params,
+      },
+    );
     return data;
   },
 
   createResource: async (payload: CreateResourcePayload): Promise<ApiResponse<ResourceInfo>> => {
-    const { data } = await axiosClient.post<ApiResponse<ResourceInfo>>('/api/v1/tenant/scheduling/resources', payload);
+    const { data } = await axiosClient.post<ApiResponse<ResourceInfo>>(
+      '/api/v1/tenant/scheduling/resources',
+      payload,
+    );
     return data;
   },
 };

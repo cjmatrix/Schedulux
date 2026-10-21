@@ -1,19 +1,19 @@
-import { useState } from 'react';
-import { useNavigate, Outlet, useLocation } from 'react-router';
 import {
-  Shield,
-  LayoutDashboard,
-  Building2,
-  Settings,
-  LogOut,
-  Bell,
-  ChevronRight,
-  Loader2,
-  Menu,
-  X,
   Activity,
+  Bell,
+  Building2,
+  ChevronRight,
+  LayoutDashboard,
+  Loader2,
+  LogOut,
+  Menu,
+  Settings,
+  Shield,
+  X,
 } from 'lucide-react';
-import { useSuperAdminProfile, useSuperAdminLogout } from '../hooks/useSuperAdmin'
+import { useState } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router';
+import { useSuperAdminLogout, useSuperAdminProfile } from '../hooks/useSuperAdmin';
 
 const NAV_ITEMS = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/superadmin/dashboard' },
@@ -58,7 +58,9 @@ export default function AdminLayout() {
           </div>
           <div className="min-w-0">
             <p className="text-sm font-bold text-white leading-none">Schedulux</p>
-            <p className="text-[10px] text-rose-400 font-semibold tracking-widest uppercase mt-0.5">SuperAdmin</p>
+            <p className="text-[10px] text-rose-400 font-semibold tracking-widest uppercase mt-0.5">
+              SuperAdmin
+            </p>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -142,13 +144,18 @@ export default function AdminLayout() {
             <div>
               <h1 className="text-sm font-bold text-white">Platform Overview</h1>
               <p className="text-[11px] text-slate-500 hidden sm:block">
-                {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} · All systems operational
+                {new Date().toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                })}{' '}
+                · All systems operational
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            
             <button className="relative p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors">
               <Bell className="w-4 h-4" />
               <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-rose-500" />

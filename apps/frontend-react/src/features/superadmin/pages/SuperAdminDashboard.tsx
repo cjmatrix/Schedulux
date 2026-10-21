@@ -1,13 +1,13 @@
 import {
-  Users,
-  Building2,
-  TrendingUp,
-  Server,
   Activity,
-  CreditCard,
   AlertTriangle,
+  Building2,
   CheckCircle2,
   ChevronRight,
+  CreditCard,
+  Server,
+  TrendingUp,
+  Users,
 } from 'lucide-react';
 import { useSuperAdminProfile } from '../hooks/useSuperAdmin';
 
@@ -15,16 +15,57 @@ import { useSuperAdminProfile } from '../hooks/useSuperAdmin';
 const STATS = [
   { label: 'Total Tenants', value: '1,248', change: '+12%', icon: Building2, color: 'indigo' },
   { label: 'Active Users', value: '8,432', change: '+4.3%', icon: Users, color: 'violet' },
-  { label: 'Monthly Revenue', value: '$48,920', change: '+18%', icon: CreditCard, color: 'emerald' },
+  {
+    label: 'Monthly Revenue',
+    value: '$48,920',
+    change: '+18%',
+    icon: CreditCard,
+    color: 'emerald',
+  },
   { label: 'System Health', value: '99.97%', change: 'Nominal', icon: Activity, color: 'rose' },
 ];
 
 const RECENT_TENANTS = [
-  { id: 'tnt_1', name: 'Apex Dental Clinic', email: 'owner@apexdental.com', tier: 'Pro', status: 'active', joined: 'Sep 28, 2025' },
-  { id: 'tnt_2', name: 'Mikey Garrix Auto', email: 'mikey@garrix.com', tier: 'Starter', status: 'active', joined: 'Sep 27, 2025' },
-  { id: 'tnt_3', name: 'Sunrise Spa & Wellness', email: 'hello@sunrisespa.co', tier: 'Pro', status: 'pending', joined: 'Sep 26, 2025' },
-  { id: 'tnt_4', name: 'TechCore Solutions', email: 'admin@techcore.io', tier: 'Enterprise', status: 'active', joined: 'Sep 25, 2025' },
-  { id: 'tnt_5', name: 'Blue Ridge Barbers', email: 'contact@blueridge.com', tier: 'Starter', status: 'suspended', joined: 'Sep 22, 2025' },
+  {
+    id: 'tnt_1',
+    name: 'Apex Dental Clinic',
+    email: 'owner@apexdental.com',
+    tier: 'Pro',
+    status: 'active',
+    joined: 'Sep 28, 2025',
+  },
+  {
+    id: 'tnt_2',
+    name: 'Mikey Garrix Auto',
+    email: 'mikey@garrix.com',
+    tier: 'Starter',
+    status: 'active',
+    joined: 'Sep 27, 2025',
+  },
+  {
+    id: 'tnt_3',
+    name: 'Sunrise Spa & Wellness',
+    email: 'hello@sunrisespa.co',
+    tier: 'Pro',
+    status: 'pending',
+    joined: 'Sep 26, 2025',
+  },
+  {
+    id: 'tnt_4',
+    name: 'TechCore Solutions',
+    email: 'admin@techcore.io',
+    tier: 'Enterprise',
+    status: 'active',
+    joined: 'Sep 25, 2025',
+  },
+  {
+    id: 'tnt_5',
+    name: 'Blue Ridge Barbers',
+    email: 'contact@blueridge.com',
+    tier: 'Starter',
+    status: 'suspended',
+    joined: 'Sep 22, 2025',
+  },
 ];
 
 const SYSTEM_ALERTS = [
@@ -91,7 +132,9 @@ export default function SuperAdminDashboard() {
           >
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-400 font-medium">{stat.label}</span>
-              <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${STAT_COLOR[stat.color]} flex items-center justify-center shadow-lg flex-shrink-0`}>
+              <div
+                className={`w-9 h-9 rounded-xl bg-gradient-to-br ${STAT_COLOR[stat.color]} flex items-center justify-center shadow-lg flex-shrink-0`}
+              >
                 <stat.icon className="w-4.5 h-4.5 text-white w-4 h-4" />
               </div>
             </div>
@@ -123,7 +166,9 @@ export default function SuperAdminDashboard() {
                   <th className="text-left px-5 py-3 bg-slate-900/40">Business</th>
                   <th className="text-left px-5 py-3 bg-slate-900/40 hidden sm:table-cell">Tier</th>
                   <th className="text-left px-5 py-3 bg-slate-900/40">Status</th>
-                  <th className="text-left px-5 py-3 bg-slate-900/40 hidden md:table-cell">Joined</th>
+                  <th className="text-left px-5 py-3 bg-slate-900/40 hidden md:table-cell">
+                    Joined
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
@@ -134,12 +179,16 @@ export default function SuperAdminDashboard() {
                       <p className="text-[11px] text-slate-500 mt-0.5">{tenant.email}</p>
                     </td>
                     <td className="px-5 py-3.5 hidden sm:table-cell">
-                      <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${TIER_COLOR[tenant.tier]}`}>
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${TIER_COLOR[tenant.tier]}`}
+                      >
                         {tenant.tier}
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium capitalize ${STATUS_COLOR[tenant.status]}`}>
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium capitalize ${STATUS_COLOR[tenant.status]}`}
+                      >
                         {tenant.status}
                       </span>
                     </td>
@@ -166,7 +215,10 @@ export default function SuperAdminDashboard() {
           </div>
           <div className="flex-1 divide-y divide-slate-800/50 overflow-y-auto">
             {SYSTEM_ALERTS.map((alert, i) => (
-              <div key={i} className="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-800/30 transition-colors">
+              <div
+                key={i}
+                className="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-800/30 transition-colors"
+              >
                 <div className="flex-shrink-0 mt-0.5">
                   {alert.type === 'ok' ? (
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -199,7 +251,7 @@ export default function SuperAdminDashboard() {
           {[
             { name: 'API Gateway', status: 'Operational', port: '5000' },
             { name: 'Identity Service', status: 'Operational', port: '5001' },
-            { name: 'Background Worker', status: 'Operational', port: 'BullMQ' },
+            { name: 'Background Worker', status: 'Operational', port: 'RabbitMQ' },
             { name: 'Frontend App', status: 'Operational', port: '5173' },
           ].map((svc) => (
             <div

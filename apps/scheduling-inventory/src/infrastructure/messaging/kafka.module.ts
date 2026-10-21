@@ -1,39 +1,36 @@
-import { Global, Module } from "@nestjs/common";
-import { ClientsModule, Transport } from "@nestjs/microservices";
-import { ConfigModule, ConfigService } from "@nestjs/config";
-import { SchedulingEventsProducer } from "./scheduling-events.producer.js";
+import { Global, Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { SchedulingEventsProducer } from './scheduling-events.producer.js';
 
 @Global()
 @Module({
   imports: [
     ClientsModule.registerAsync([
       {
-        name: "KAFKA_SERVICE",
+        name: 'KAFKA_SERVICE',
         imports: [ConfigModule],
         inject: [ConfigService],
         useFactory: (configService: ConfigService) => {
           const brokers =
-            configService.get<string>("KAFKA_BROKERS") ||
+            configService.get<string>('KAFKA_BROKERS') ||
             process.env.KAFKA_BROKERS ||
-            "localhost:9092";
+            'localhost:9092';
           const username =
-            configService.get<string>("KAFKA_USERNAME") ||
-            process.env.KAFKA_USERNAME ||
-            "avnadmin";
+            configService.get<string>('KAFKA_USERNAME') || process.env.KAFKA_USERNAME || 'avnadmin';
           const password =
-            configService.get<string>("KAFKA_PASSWORD") ||
-            process.env.KAFKA_PASSWORD;
+            configService.get<string>('KAFKA_PASSWORD') || process.env.KAFKA_PASSWORD;
 
           return {
             transport: Transport.KAFKA,
             options: {
               client: {
-                clientId: "scheduling-inventory-service",
+                clientId: 'scheduling-inventory-service',
                 brokers: [brokers],
                 ssl: password ? { rejectUnauthorized: false } : undefined,
                 sasl: password
                   ? {
-                      mechanism: "scram-sha-256",
+                      mechanism: 'scram-sha-256',
                       username,
                       password,
                     }
@@ -41,8 +38,7 @@ import { SchedulingEventsProducer } from "./scheduling-events.producer.js";
               },
               consumer: {
                 groupId:
-                  configService.get<string>("KAFKA_CONSUMER_GROUP") ||
-                  "scheduling-consumer-group",
+                  configService.get<string>('KAFKA_CONSUMER_GROUP') || 'scheduling-consumer-group',
               },
             },
           };

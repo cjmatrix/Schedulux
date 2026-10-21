@@ -1,9 +1,9 @@
-import React from 'react';
 import { Check, Copy } from 'lucide-react';
+import React from 'react';
 import { syntaxHighlight } from '../utils';
 
 interface RawJsonViewerProps {
-  draftSchema: any;
+  draftSchema: unknown;
   copiedJson: boolean;
   onCopyJson: () => void;
 }

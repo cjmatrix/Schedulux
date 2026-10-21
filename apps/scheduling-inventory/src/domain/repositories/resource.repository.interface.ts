@@ -20,7 +20,10 @@ export interface ResourceSummary {
 export interface IResourceRepository {
   create(resource: ResourceEntity): Promise<ResourceEntity>;
   findById(tenantId: string, resourceId: string): Promise<ResourceEntity | null>;
-  findAll(tenantId: string, filter: FindResourcesFilter): Promise<{
+  findAll(
+    tenantId: string,
+    filter: FindResourcesFilter,
+  ): Promise<{
     resources: ResourceEntity[];
     total: number;
     summary?: ResourceSummary;

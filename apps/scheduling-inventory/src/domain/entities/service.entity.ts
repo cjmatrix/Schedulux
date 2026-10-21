@@ -1,5 +1,5 @@
-import { PriceVO } from '../value-objects/price.vo.js';
 import { DepositVO } from '../value-objects/deposit.vo.js';
+import { PriceVO } from '../value-objects/price.vo.js';
 
 export interface ServiceEntityProps {
   id: string;
@@ -14,6 +14,7 @@ export interface ServiceEntityProps {
   bookingMode?: string;
   price: PriceVO;
   deposit: DepositVO;
+  verification?: { require_otp?: boolean | null };
   eligibleResourceIds: string[];
   requiredAssetIds: string[];
   recallIntervalDays: number;
@@ -36,6 +37,7 @@ export class ServiceEntity {
   private _bookingMode: string;
   private _price: PriceVO;
   private _deposit: DepositVO;
+  private _verification?: { require_otp?: boolean | null };
   private _eligibleResourceIds: string[];
   private _requiredAssetIds: string[];
   private _recallIntervalDays: number;
@@ -70,6 +72,7 @@ export class ServiceEntity {
     this._bookingMode = props.bookingMode ?? 'time_slot';
     this._price = props.price ?? PriceVO.create();
     this._deposit = props.deposit ?? DepositVO.create();
+    this._verification = props.verification;
     this._eligibleResourceIds = props.eligibleResourceIds ?? [];
     this._requiredAssetIds = props.requiredAssetIds ?? [];
     this._recallIntervalDays = props.recallIntervalDays ?? 0;
@@ -79,25 +82,66 @@ export class ServiceEntity {
     this._updatedAt = props.updatedAt ?? new Date();
   }
 
-  get id(): string { return this._id; }
-  get tenantId(): string { return this._tenantId; }
-  get agentId(): string { return this._agentId; }
-  get name(): string { return this._name; }
-  get category(): string { return this._category; }
-  get description(): string { return this._description; }
-  get durationMinutes(): number { return this._durationMinutes; }
-  get bufferMinutes(): number { return this._bufferMinutes; }
-  get allocationModel(): string { return this._allocationModel; }
-  get bookingMode(): string { return this._bookingMode; }
-  get price(): PriceVO { return this._price; }
-  get deposit(): DepositVO { return this._deposit; }
-  get eligibleResourceIds(): string[] { return [...this._eligibleResourceIds]; }
-  get requiredAssetIds(): string[] { return [...this._requiredAssetIds]; }
-  get recallIntervalDays(): number { return this._recallIntervalDays; }
-  get isDeleted(): boolean { return this._isDeleted; }
-  get deletedAt(): Date | null { return this._deletedAt; }
-  get createdAt(): Date { return this._createdAt; }
-  get updatedAt(): Date { return this._updatedAt; }
+  get id(): string {
+    return this._id;
+  }
+  get tenantId(): string {
+    return this._tenantId;
+  }
+  get agentId(): string {
+    return this._agentId;
+  }
+  get name(): string {
+    return this._name;
+  }
+  get category(): string {
+    return this._category;
+  }
+  get description(): string {
+    return this._description;
+  }
+  get durationMinutes(): number {
+    return this._durationMinutes;
+  }
+  get bufferMinutes(): number {
+    return this._bufferMinutes;
+  }
+  get allocationModel(): string {
+    return this._allocationModel;
+  }
+  get bookingMode(): string {
+    return this._bookingMode;
+  }
+  get price(): PriceVO {
+    return this._price;
+  }
+  get deposit(): DepositVO {
+    return this._deposit;
+  }
+  get verification(): { require_otp?: boolean | null } | undefined {
+    return this._verification;
+  }
+  get eligibleResourceIds(): string[] {
+    return [...this._eligibleResourceIds];
+  }
+  get requiredAssetIds(): string[] {
+    return [...this._requiredAssetIds];
+  }
+  get recallIntervalDays(): number {
+    return this._recallIntervalDays;
+  }
+  get isDeleted(): boolean {
+    return this._isDeleted;
+  }
+  get deletedAt(): Date | null {
+    return this._deletedAt;
+  }
+  get createdAt(): Date {
+    return this._createdAt;
+  }
+  get updatedAt(): Date {
+    return this._updatedAt;
+  }
 
   softDelete(): void {
     this._isDeleted = true;
@@ -115,6 +159,7 @@ export class ServiceEntity {
     bookingMode?: string;
     price?: PriceVO;
     deposit?: DepositVO;
+    verification?: { require_otp?: boolean | null };
     eligibleResourceIds?: string[];
     requiredAssetIds?: string[];
     recallIntervalDays?: number;
@@ -154,6 +199,9 @@ export class ServiceEntity {
     }
     if (details.deposit !== undefined) {
       this._deposit = details.deposit;
+    }
+    if (details.verification !== undefined) {
+      this._verification = details.verification;
     }
     if (details.eligibleResourceIds !== undefined) {
       this._eligibleResourceIds = details.eligibleResourceIds;

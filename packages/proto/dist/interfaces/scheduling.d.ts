@@ -14,6 +14,9 @@ export interface DepositInfo {
     confirmation_method: string;
     payment_instructions: string;
 }
+export interface ServiceVerificationInfo {
+    require_otp?: boolean | undefined;
+}
 export interface ServiceInfo {
     service_id: string;
     tenant_id: string;
@@ -32,6 +35,7 @@ export interface ServiceInfo {
     updated_at: string;
     booking_mode: string;
     agent_id: string;
+    verification?: ServiceVerificationInfo | undefined;
 }
 export interface CreateServiceRequest {
     tenant_id: string;
@@ -49,6 +53,7 @@ export interface CreateServiceRequest {
     booking_mode?: string | undefined;
     agent_id?: string | undefined;
     service_id?: string | undefined;
+    verification?: ServiceVerificationInfo | undefined;
 }
 export interface GetServiceRequest {
     tenant_id: string;
@@ -91,6 +96,7 @@ export interface UpdateServiceRequest {
     recall_interval_days?: number | undefined;
     booking_mode?: string | undefined;
     agent_id?: string | undefined;
+    verification?: ServiceVerificationInfo | undefined;
 }
 export interface DeleteServiceRequest {
     tenant_id: string;

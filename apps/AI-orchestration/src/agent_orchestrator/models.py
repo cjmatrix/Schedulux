@@ -1,27 +1,14 @@
-"""
-Schedulux Agent Runtime Config — MongoDB Model (Beanie Async ODM)
-
-Industry-standard Python MongoDB models for agent_runtime_configs and agent_drafts.
-Collections: agent_runtime_configs, agent_drafts
-Database:   schedulux_ai (or configured via MONGO_URI)
-
-Design decisions:
-  - Beanie Document (native async Motor/PyMongo + Pydantic v2)
-  - Pydantic BaseModel for all embedded structures
-  - Indexes on tenant_id + status + agent_id for runtime hot-path queries
-  - ConfigDict(extra="ignore") for seamless backwards/forwards schema compatibility
-"""
-
 from __future__ import annotations
+
 import copy
 import os
 import urllib.parse
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Literal
-from pydantic import BaseModel, ConfigDict, Field
-from pymongo import AsyncMongoClient, IndexModel
+from datetime import datetime
+from enum import StrEnum
+
 from beanie import Document, init_beanie
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pymongo import AsyncMongoClient, IndexModel
 
 
 class ContactEmbed(BaseModel):
@@ -52,8 +39,8 @@ class BusinessProfileEmbed(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     name: str = ""
-    vertical: str = ""  # e.g. "medical", "auto", "hospitality", "custom"
-    timezone: str = "UTC"
+    vertical: str = ""
+    timezone: str | None = None
     locale: str | None = None
     currency: str | None = "USD"
     address: str | None = None
@@ -108,6 +95,7 @@ class SchedulingEngineEmbed(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     allocation_model: str = "time_slot"
+    default_booking_mode: str = "time_slot"
     default_lead_time_hours: int = 2
     max_advance_booking_days: int = 60
     cancellation_window_hours: int = 24
@@ -122,20 +110,27 @@ class BlackoutDateEmbed(BaseModel):
     is_closed: bool = True
 
 
+class TimeSlotEmbed(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    start: str
+    end: str
+
+
 class OperatingHoursEmbed(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    monday: list[dict[str, Any]] = Field(default_factory=list)
-    tuesday: list[dict[str, Any]] = Field(default_factory=list)
-    wednesday: list[dict[str, Any]] = Field(default_factory=list)
-    thursday: list[dict[str, Any]] = Field(default_factory=list)
-    friday: list[dict[str, Any]] = Field(default_factory=list)
-    saturday: list[dict[str, Any]] = Field(default_factory=list)
-    sunday: list[dict[str, Any]] = Field(default_factory=list)
+    monday: list[TimeSlotEmbed] = Field(default_factory=list)
+    tuesday: list[TimeSlotEmbed] = Field(default_factory=list)
+    wednesday: list[TimeSlotEmbed] = Field(default_factory=list)
+    thursday: list[TimeSlotEmbed] = Field(default_factory=list)
+    friday: list[TimeSlotEmbed] = Field(default_factory=list)
+    saturday: list[TimeSlotEmbed] = Field(default_factory=list)
+    sunday: list[TimeSlotEmbed] = Field(default_factory=list)
     blackout_dates: list[BlackoutDateEmbed] = Field(default_factory=list)
 
 
-class ResourceType(str, Enum):
+class ResourceType(StrEnum):
     STAFF = "staff"
     ROOM = "room"
     CHAIR = "chair"
@@ -145,7 +140,7 @@ class ResourceType(str, Enum):
     VEHICLE = "vehicle"
 
 
-class DispatchStatus(str, Enum):
+class DispatchStatus(StrEnum):
     ACTIVE = "active"
     ON_LEAVE = "on_leave"
     MAINTENANCE = "maintenance"
@@ -153,19 +148,19 @@ class DispatchStatus(str, Enum):
     INACTIVE = "inactive"
 
 
-class ServiceAllocationModel(str, Enum):
+class ServiceAllocationModel(StrEnum):
     SINGLE_RESOURCE = "single_resource"
     MULTI_RESOURCE = "multi_resource"
     POOLED = "pooled"
     ASSET_ONLY = "asset_only"
 
 
-class BookingMode(str, Enum):
+class BookingMode(StrEnum):
     TIME_SLOT = "time_slot"
     DATE_RANGE = "date_range"
 
 
-class PriceType(str, Enum):
+class PriceType(StrEnum):
     FIXED = "fixed"
     STARTING_AT = "starting_at"
     HOURLY = "hourly"
@@ -184,7 +179,7 @@ class ResourceEmbed(BaseModel):
     description: str = ""
     is_bookable: bool = True
     dispatch_status: DispatchStatus = DispatchStatus.ACTIVE
-    custom_shift_overrides: dict[str, Any] = Field(default_factory=dict)
+    custom_shift_overrides: dict[str, object] = Field(default_factory=dict)
 
 
 class PriceEmbed(BaseModel):
@@ -193,6 +188,16 @@ class PriceEmbed(BaseModel):
     type: PriceType = PriceType.FIXED
     amount: float = 0.0
     currency: str = "USD"
+
+    @field_validator("amount", mode="before")
+    @classmethod
+    def parse_amount(cls, v: object) -> float:
+        if v is None:
+            return 0.0
+        try:
+            return float(v)  # type: ignore[arg-type]
+        except (ValueError, TypeError):
+            return 0.0
 
 
 class DepositEmbed(BaseModel):
@@ -206,6 +211,27 @@ class DepositEmbed(BaseModel):
     confirmation_method: str = "utr_reference"
     payment_instructions: str = ""
 
+    @field_validator("amount", mode="before")
+    @classmethod
+    def parse_amount(cls, v: object) -> float:
+        if v is None:
+            return 0.0
+        try:
+            return float(v)  # type: ignore[arg-type]
+        except (ValueError, TypeError):
+            return 0.0
+
+    @field_validator("required", mode="before")
+    @classmethod
+    def parse_required(cls, v: object) -> bool:
+        return False if v is None else bool(v)
+
+
+class ServiceVerificationEmbed(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    require_otp: bool | None = None
+
 
 class ServiceEmbed(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -214,15 +240,58 @@ class ServiceEmbed(BaseModel):
     name: str
     category: str = "General"
     description: str = ""
-    duration_minutes: int = 30
-    buffer_minutes: int = 0
+    duration_minutes: int | None = 30
+    buffer_minutes: int | None = 0
     allocation_model: ServiceAllocationModel = ServiceAllocationModel.SINGLE_RESOURCE
     booking_mode: BookingMode = BookingMode.TIME_SLOT
     price: PriceEmbed = Field(default_factory=PriceEmbed)
     deposit: DepositEmbed = Field(default_factory=DepositEmbed)
+    verification: ServiceVerificationEmbed = Field(default_factory=ServiceVerificationEmbed)
     eligible_resource_ids: list[str] = Field(default_factory=list)
     required_asset_ids: list[str] = Field(default_factory=list)
-    recall_interval_days: int = 0
+    recall_interval_days: int | None = 0
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def parse_category(cls, v: object) -> str:
+        if not v or not str(v).strip():
+            return "General"
+        return str(v).strip()
+
+    @field_validator("recall_interval_days", "buffer_minutes", mode="before")
+    @classmethod
+    def parse_zero_ints(cls, v: object) -> int:
+        if v is None:
+            return 0
+        try:
+            return int(v)  # type: ignore[call-overload,arg-type]
+        except (ValueError, TypeError):
+            return 0
+
+    @field_validator("duration_minutes", mode="before")
+    @classmethod
+    def parse_duration_minutes(cls, v: object) -> int:
+        if v is None:
+            return 30
+        try:
+            return int(v)  # type: ignore[call-overload,arg-type]
+        except (ValueError, TypeError):
+            return 30
+
+    @field_validator("price", mode="before")
+    @classmethod
+    def parse_price(cls, v: object) -> object:
+        return {} if v is None else v
+
+    @field_validator("deposit", mode="before")
+    @classmethod
+    def parse_deposit(cls, v: object) -> object:
+        return {} if v is None else v
+
+    @field_validator("eligible_resource_ids", "required_asset_ids", mode="before")
+    @classmethod
+    def parse_lists(cls, v: object) -> object:
+        return [] if v is None else v
 
 
 class VerificationPolicyEmbed(BaseModel):
@@ -231,7 +300,6 @@ class VerificationPolicyEmbed(BaseModel):
     require_otp_for_new_booking: bool = False
     require_otp_for_reschedule: bool = True
     require_otp_for_cancel: bool = True
-
 
 
 class PatientFieldEmbed(BaseModel):
@@ -322,9 +390,9 @@ class PaymentGatewayEmbed(BaseModel):
 class IntegrationsEmbed(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    stripe: dict[str, Any] = Field(default_factory=dict)
+    stripe: dict[str, object] = Field(default_factory=dict)
     payment_gateway: PaymentGatewayEmbed | None = None
-    twilio: dict[str, Any] = Field(default_factory=dict)
+    twilio: dict[str, object] = Field(default_factory=dict)
 
 
 class SubscriptionEmbed(BaseModel):
@@ -340,6 +408,7 @@ class AgentRuntimeConfig(Document):
     One document per active agent per tenant.
     Indexed for runtime hot-path: tenant_id + status is the primary lookup.
     """
+
     model_config = ConfigDict(extra="ignore")
 
     schema_version: str = "2.4"
@@ -372,15 +441,14 @@ class AgentRuntimeConfig(Document):
         indexes = [
             IndexModel([("tenant_id", 1), ("status", 1)], name="idx_tenant_status"),
             IndexModel([("agent_id", 1)], unique=True, sparse=True, name="idx_agent_id"),
-            IndexModel([("tenant_id", 1), ("status", 1), ("compiled_at", -1)], name="idx_tenant_latest"),
+            IndexModel(
+                [("tenant_id", 1), ("status", 1), ("compiled_at", -1)], name="idx_tenant_latest"
+            ),
         ]
 
 
-def canonicalize_agent_schema(data: dict[str, Any], status: str = "draft") -> dict[str, Any]:
-    """
-    Normalizes any agent configuration dictionary (draft or runtime) into the
-    exact canonical structure and default values of AgentRuntimeConfig.
-    """
+def canonicalize_agent_schema(data: dict[str, object], status: str = "draft") -> dict[str, object]:
+
     if not data:
         return {}
 
@@ -399,27 +467,48 @@ def canonicalize_agent_schema(data: dict[str, Any], status: str = "draft") -> di
 
     try:
         cfg = AgentRuntimeConfig(**clean_data)
-        res: dict[str, Any] = {
+        res: dict[str, object] = {
             "schema_version": cfg.schema_version,
             "status": status,
             "tenant_id": cfg.tenant_id,
             "agent_id": cfg.agent_id,
             "creation_source": cfg.creation_source,
-            "business_profile": cfg.business_profile.model_dump() if cfg.business_profile else BusinessProfileEmbed().model_dump(),
-            "operating_hours": cfg.operating_hours.model_dump() if cfg.operating_hours else OperatingHoursEmbed().model_dump(),
-            "scheduling_engine": cfg.scheduling_engine.model_dump() if cfg.scheduling_engine else SchedulingEngineEmbed().model_dump(),
+            "business_profile": cfg.business_profile.model_dump()
+            if cfg.business_profile
+            else BusinessProfileEmbed().model_dump(),
+            "operating_hours": cfg.operating_hours.model_dump()
+            if cfg.operating_hours
+            else OperatingHoursEmbed().model_dump(),
+            "scheduling_engine": cfg.scheduling_engine.model_dump()
+            if cfg.scheduling_engine
+            else SchedulingEngineEmbed().model_dump(),
             "services": [s.model_dump() for s in cfg.services],
             "resources": [r.model_dump() for r in cfg.resources],
-            "guardrails": cfg.guardrails.model_dump() if cfg.guardrails else GuardrailsEmbed().model_dump(),
-            "widget_config": cfg.widget_config.model_dump() if cfg.widget_config else WidgetConfigEmbed().model_dump(),
-            "llm_engine": cfg.llm_engine.model_dump() if cfg.llm_engine else LlmEngineEmbed().model_dump(),
-            "knowledge_base": cfg.knowledge_base.model_dump() if cfg.knowledge_base else KnowledgeBaseEmbed().model_dump(),
+            "guardrails": cfg.guardrails.model_dump()
+            if cfg.guardrails
+            else GuardrailsEmbed().model_dump(),
+            "widget_config": cfg.widget_config.model_dump()
+            if cfg.widget_config
+            else WidgetConfigEmbed().model_dump(),
+            "llm_engine": cfg.llm_engine.model_dump()
+            if cfg.llm_engine
+            else LlmEngineEmbed().model_dump(),
+            "knowledge_base": cfg.knowledge_base.model_dump()
+            if cfg.knowledge_base
+            else KnowledgeBaseEmbed().model_dump(),
             "sub_agents": [sa.model_dump() for sa in cfg.sub_agents],
-            "integrations": cfg.integrations.model_dump() if cfg.integrations else IntegrationsEmbed().model_dump(),
-            "subscription": cfg.subscription.model_dump() if cfg.subscription else SubscriptionEmbed().model_dump(),
+            "integrations": cfg.integrations.model_dump()
+            if cfg.integrations
+            else IntegrationsEmbed().model_dump(),
+            "subscription": cfg.subscription.model_dump()
+            if cfg.subscription
+            else SubscriptionEmbed().model_dump(),
         }
         if cfg.supervisor_prompt:
             res["supervisor_prompt"] = cfg.supervisor_prompt
+        bp = res.get("business_profile")
+        if status == "live" and isinstance(bp, dict) and not bp.get("timezone"):
+            bp["timezone"] = "UTC"
         return res
     except Exception:
         bp_raw = clean_data.get("business_profile")
@@ -432,26 +521,60 @@ def canonicalize_agent_schema(data: dict[str, Any], status: str = "draft") -> di
         int_raw = clean_data.get("integrations")
         sub_raw = clean_data.get("subscription")
 
-        res_fallback: dict[str, Any] = {
+        raw_services = clean_data.get("services")
+        raw_resources = clean_data.get("resources")
+        raw_sub_agents = clean_data.get("sub_agents")
+        services_list = raw_services if isinstance(raw_services, list) else []
+        resources_list = raw_resources if isinstance(raw_resources, list) else []
+        sub_agents_list = raw_sub_agents if isinstance(raw_sub_agents, list) else []
+
+        res_fallback: dict[str, object] = {
             "schema_version": clean_data.get("schema_version", "2.4"),
             "status": status,
             "tenant_id": clean_data.get("tenant_id", ""),
             "agent_id": clean_data.get("agent_id", ""),
-            "business_profile": BusinessProfileEmbed(**bp_raw).model_dump() if isinstance(bp_raw, dict) else BusinessProfileEmbed().model_dump(),
-            "operating_hours": OperatingHoursEmbed(**oh_raw).model_dump() if isinstance(oh_raw, dict) else OperatingHoursEmbed().model_dump(),
-            "scheduling_engine": SchedulingEngineEmbed(**se_raw).model_dump() if isinstance(se_raw, dict) else SchedulingEngineEmbed().model_dump(),
-            "services": [ServiceEmbed(**s).model_dump() for s in clean_data.get("services", []) if isinstance(s, dict)],
-            "resources": [ResourceEmbed(**r).model_dump() for r in clean_data.get("resources", []) if isinstance(r, dict)],
-            "guardrails": GuardrailsEmbed(**gr_raw).model_dump() if isinstance(gr_raw, dict) else GuardrailsEmbed().model_dump(),
-            "widget_config": WidgetConfigEmbed(**wc_raw).model_dump() if isinstance(wc_raw, dict) else WidgetConfigEmbed().model_dump(),
-            "llm_engine": LlmEngineEmbed(**llm_raw).model_dump() if isinstance(llm_raw, dict) else LlmEngineEmbed().model_dump(),
-            "knowledge_base": KnowledgeBaseEmbed(**kb_raw).model_dump() if isinstance(kb_raw, dict) else KnowledgeBaseEmbed().model_dump(),
-            "sub_agents": [SubAgentEmbed(**sa).model_dump() for sa in clean_data.get("sub_agents", []) if isinstance(sa, dict)],
-            "integrations": IntegrationsEmbed(**int_raw).model_dump() if isinstance(int_raw, dict) else IntegrationsEmbed().model_dump(),
-            "subscription": SubscriptionEmbed(**sub_raw).model_dump() if isinstance(sub_raw, dict) else SubscriptionEmbed().model_dump(),
+            "business_profile": BusinessProfileEmbed(**bp_raw).model_dump()
+            if isinstance(bp_raw, dict)
+            else BusinessProfileEmbed().model_dump(),
+            "operating_hours": OperatingHoursEmbed(**oh_raw).model_dump()
+            if isinstance(oh_raw, dict)
+            else OperatingHoursEmbed().model_dump(),
+            "scheduling_engine": SchedulingEngineEmbed(**se_raw).model_dump()
+            if isinstance(se_raw, dict)
+            else SchedulingEngineEmbed().model_dump(),
+            "services": [
+                ServiceEmbed(**s).model_dump() for s in services_list if isinstance(s, dict)
+            ],
+            "resources": [
+                ResourceEmbed(**r).model_dump() for r in resources_list if isinstance(r, dict)
+            ],
+            "guardrails": GuardrailsEmbed(**gr_raw).model_dump()
+            if isinstance(gr_raw, dict)
+            else GuardrailsEmbed().model_dump(),
+            "widget_config": WidgetConfigEmbed(**wc_raw).model_dump()
+            if isinstance(wc_raw, dict)
+            else WidgetConfigEmbed().model_dump(),
+            "llm_engine": LlmEngineEmbed(**llm_raw).model_dump()
+            if isinstance(llm_raw, dict)
+            else LlmEngineEmbed().model_dump(),
+            "knowledge_base": KnowledgeBaseEmbed(**kb_raw).model_dump()
+            if isinstance(kb_raw, dict)
+            else KnowledgeBaseEmbed().model_dump(),
+            "sub_agents": [
+                SubAgentEmbed(**sa).model_dump() for sa in sub_agents_list if isinstance(sa, dict)
+            ],
+            "integrations": IntegrationsEmbed(**int_raw).model_dump()
+            if isinstance(int_raw, dict)
+            else IntegrationsEmbed().model_dump(),
+            "subscription": SubscriptionEmbed(**sub_raw).model_dump()
+            if isinstance(sub_raw, dict)
+            else SubscriptionEmbed().model_dump(),
         }
         if clean_data.get("supervisor_prompt"):
             res_fallback["supervisor_prompt"] = clean_data["supervisor_prompt"]
+        bp_fb = res_fallback.get("business_profile")
+        if status == "live" and isinstance(bp_fb, dict) and not bp_fb.get("timezone"):
+            bp_fb["timezone"] = "UTC"
         return res_fallback
 
 
@@ -462,7 +585,7 @@ class DraftCheckpointEmbed(BaseModel):
     message_id: str
     user_prompt: str | None = ""
     summary: str | None = ""
-    draft_snapshot: dict[str, Any] = Field(default_factory=dict)
+    draft_snapshot: dict[str, object] = Field(default_factory=dict)
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -472,6 +595,7 @@ class AgentDraft(Document):
     Maintains a rolling timeline of the last 20 message checkpoints (full snapshots)
     enabling instant Google Antigravity-style time travel rewind to any message.
     """
+
     model_config = ConfigDict(extra="ignore")
 
     tenant_id: str
@@ -481,7 +605,7 @@ class AgentDraft(Document):
     status: str = "pending"
     last_edited_by: str | None = None
 
-    current_draft: dict[str, Any] = Field(default_factory=dict)
+    current_draft: dict[str, object] = Field(default_factory=dict)
     active_message_id: str | None = None
 
     conversation_summary: str = ""
@@ -503,7 +627,7 @@ class AgentDraft(Document):
         self,
         checkpoint_id: str,
         message_id: str,
-        draft_snapshot: dict[str, Any],
+        draft_snapshot: dict[str, object],
         user_prompt: str = "",
         summary: str = "",
         max_checkpoints: int = 20,
@@ -552,11 +676,6 @@ class AgentDraft(Document):
 
 
 class AgentMessage(Document):
-    """
-    Dedicated persistent chat log document for conversations between the
-    service owner (tenant) and the AI onboarding agent.
-    Optimized for high-performance cursor pagination in the frontend UI.
-    """
     model_config = ConfigDict(extra="ignore")
 
     tenant_id: str
@@ -576,7 +695,7 @@ class AgentMessage(Document):
                 [("tenant_id", 1), ("agent_id", 1)],
                 name="idx_tenant_agent",
             ),
-        ]   
+        ]
 
 
 _client: AsyncMongoClient | None = None
@@ -584,10 +703,7 @@ _db_initialized = False
 
 
 async def init_db(mongo_uri: str | None = None):
-    """
-    Initializes Beanie connection with PyMongo AsyncMongoClient.
-    Idempotent: safe to call multiple times.
-    """
+
     global _client, _db_initialized
     if _db_initialized:
         return
@@ -595,7 +711,7 @@ async def init_db(mongo_uri: str | None = None):
         mongo_uri = os.environ.get("MONGO_URI", "mongodb://localhost:27017/schedulux_ai")
 
     parsed = urllib.parse.urlparse(mongo_uri)
-    db_name = parsed.path.lstrip('/') if parsed.path else ""
+    db_name = parsed.path.lstrip("/") if parsed.path else ""
     if not db_name or "?" in db_name:
         db_name = db_name.split("?")[0] if db_name else ""
     if not db_name:

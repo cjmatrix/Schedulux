@@ -4,7 +4,7 @@ import json
 import os
 from urllib.parse import urlparse, urljoin
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
-from python_worker.queues import get_schema_queue, get_redis_client
+from python_worker.queues import publish_schema_generation_job, get_redis_client
 
 
 CACHE_TTL_SECONDS = int(os.environ.get("CRAWL_CACHE_TTL_SECONDS", "86400"))
@@ -134,42 +134,55 @@ async def crawl_site_knowledge(target_url: str, tenant_id: str = "default") -> d
 
     return site_knowledge
 
-async def process_crawl_job(job, token):
-    """BullMQ job processor — receives a crawl-site job, crawls, and passes to schema-generation-queue."""
-    data = job.data
+async def process_crawl_job(data: dict):
+    """RabbitMQ message processor — receives a crawl-site job, crawls, and publishes to schema-generation-queue."""
     tenant_id = data.get("tenant_id", "default")
     url = data.get("url")
     job_id = data.get("job_id")
+    redis = get_redis_client()
     
-    print(f"[Crawler Worker] Processing job {job_id} for tenant {tenant_id} — URL: {url}")
+    print(f"[Crawler Worker] Processing job {job_id} for tenant {tenant_id} — URL: {url}", flush=True)
     
     try:
-        await job.updateProgress(10)
+       
+        status_payload = {
+            "status": "active",
+            "tenant_id": tenant_id,
+            "url": url,
+            "job_id": job_id,
+            "pages": {},
+        }
+        await redis.setex(f"crawl:job:{job_id}", 86400, json.dumps(status_payload))
         
         knowledge = await crawl_site_knowledge(url, tenant_id=tenant_id)
         
-        schema_queue = get_schema_queue()
-        await schema_queue.add(
-            "generate-schema",
-            {
-                "tenant_id": tenant_id,
-                "url": url,
-                "job_id": job_id,
-                "crawled_data": knowledge
-            },
-            {
-                "jobId": f"schema_{job_id}",
-                "removeOnComplete": {"count": 10},
-                "removeOnFail": {"count": 10},
-            }
+       
+        await publish_schema_generation_job(
+            tenant_id=tenant_id,
+            url=url,
+            job_id=job_id,
+            crawled_data=knowledge,
         )
         
-        await job.updateProgress(100)
+    
+        status_payload["status"] = "completed"
+        status_payload["pages"] = knowledge
+        await redis.setex(f"crawl:job:{job_id}", 86400, json.dumps(status_payload))
         
-        print(f"[Crawler Worker] Job {job_id} complete — {len(knowledge)} pages crawled and pushed to schema-generation-queue")
-        
+        print(f"[Crawler Worker] Job {job_id} complete — {len(knowledge)} pages crawled and pushed to schema-generation-queue", flush=True)
         return knowledge
         
     except Exception as e:
-        print(f"[Crawler Worker] Job {job_id} failed: {str(e)}")
+        print(f"[Crawler Worker] Job {job_id} failed: {str(e)}", flush=True)
+        try:
+            err_payload = {
+                "status": "failed",
+                "tenant_id": tenant_id,
+                "url": url,
+                "job_id": job_id,
+                "error": str(e),
+            }
+            await redis.setex(f"crawl:job:{job_id}", 86400, json.dumps(err_payload))
+        except Exception:
+            pass
         raise

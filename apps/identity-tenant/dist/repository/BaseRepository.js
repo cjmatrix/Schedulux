@@ -5,7 +5,7 @@ export class BaseRepository {
     }
     async create(item) {
         const newEntity = new this.model(item);
-        return await newEntity.save();
+        return (await newEntity.save());
     }
     async findById(id) {
         return await this.model.findById(id).exec();

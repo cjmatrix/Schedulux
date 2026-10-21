@@ -1,8 +1,8 @@
-import { ServiceEntity } from '../../../domain/entities/service.entity.js';
-import { PriceVO, PriceType } from '../../../domain/value-objects/price.vo.js';
-import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
-import { IServiceDoc } from '../schemas/service.schema.js';
 import { ServiceInfo } from '@repo/proto/scheduling';
+import { ServiceEntity } from '../../../domain/entities/service.entity.js';
+import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
+import { PriceVO } from '../../../domain/value-objects/price.vo.js';
+import { IServiceDoc } from '../schemas/service.schema.js';
 
 export class ServiceMapper {
   static toDomain(doc: IServiceDoc): ServiceEntity {
@@ -27,6 +27,7 @@ export class ServiceMapper {
         confirmationMethod: doc.deposit?.confirmation_method,
         paymentInstructions: doc.deposit?.payment_instructions,
       }),
+      verification: doc.verification ? { require_otp: doc.verification.require_otp } : undefined,
       eligibleResourceIds: doc.eligible_resource_ids ?? [],
       requiredAssetIds: doc.required_asset_ids ?? [],
       recallIntervalDays: doc.recall_interval_days ?? 0,
@@ -63,6 +64,9 @@ export class ServiceMapper {
         confirmation_method: entity.deposit.confirmationMethod,
         payment_instructions: entity.deposit.paymentInstructions,
       },
+      verification: entity.verification
+        ? { require_otp: entity.verification.require_otp ?? null }
+        : undefined,
       eligible_resource_ids: entity.eligibleResourceIds,
       required_asset_ids: entity.requiredAssetIds,
       recall_interval_days: entity.recallIntervalDays,
@@ -97,6 +101,9 @@ export class ServiceMapper {
         confirmation_method: entity.deposit.confirmationMethod,
         payment_instructions: entity.deposit.paymentInstructions,
       },
+      verification: entity.verification
+        ? { require_otp: entity.verification.require_otp ?? undefined }
+        : undefined,
       eligible_resource_ids: entity.eligibleResourceIds,
       required_asset_ids: entity.requiredAssetIds,
       recall_interval_days: entity.recallIntervalDays,

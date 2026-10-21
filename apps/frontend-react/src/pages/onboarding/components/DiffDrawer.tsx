@@ -1,6 +1,6 @@
-import React from 'react';
-import { FileDiff, X } from 'lucide-react';
 import type { Operation } from 'fast-json-patch';
+import { FileDiff, X } from 'lucide-react';
+import React from 'react';
 
 interface DiffDrawerProps {
   diffPatches: Operation[];
@@ -40,11 +40,11 @@ export const DiffDrawer: React.FC<DiffDrawerProps> = ({ diffPatches, onClose }) 
                 <span className="uppercase text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 mr-1.5">
                   {patch.op}
                 </span>
-                {patch.op === 'add' || patch.op === 'replace' ? (
+                {'value' in patch ? (
                   <span className="text-emerald-700 font-semibold">
-                    {typeof (patch as any).value === 'object'
-                      ? JSON.stringify((patch as any).value).slice(0, 45) + '...'
-                      : String((patch as any).value)}
+                    {typeof patch.value === 'object' && patch.value !== null
+                      ? JSON.stringify(patch.value).slice(0, 45) + '...'
+                      : String(patch.value)}
                   </span>
                 ) : null}
               </div>

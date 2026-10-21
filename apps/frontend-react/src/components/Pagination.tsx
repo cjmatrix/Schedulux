@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export interface PaginationProps {
   currentPage: number;
@@ -79,8 +79,11 @@ export function Pagination({
       <div className="flex items-center gap-2">
         <CheckCircle2 className="w-4 h-4 text-slate-400" />
         <span>
-          Showing <strong className="text-slate-800">{startRecord} to {endRecord}</strong> of{' '}
-          <strong className="text-slate-800">{totalCount}</strong> {entityName}
+          Showing{' '}
+          <strong className="text-slate-800">
+            {startRecord} to {endRecord}
+          </strong>{' '}
+          of <strong className="text-slate-800">{totalCount}</strong> {entityName}
         </span>
       </div>
 

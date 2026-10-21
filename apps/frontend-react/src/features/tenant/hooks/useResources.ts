@@ -1,13 +1,13 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { ResourceInfo } from '@repo/proto/scheduling';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ApiResponse } from '../../../api/axiosClient';
 import {
-  resourcesApi,
+  type CreateResourcePayload,
   type ListResourcesParams,
   type ListResourcesResponseData,
-  type CreateResourcePayload,
+  resourcesApi,
   type UpdateResourcePayload,
 } from '../api/resourcesApi';
-import type { ApiResponse } from '../../../api/axiosClient';
-import type { ResourceInfo } from '@repo/proto/scheduling';
 
 export const RESOURCE_KEYS = {
   all: ['scheduling-resources'] as const,

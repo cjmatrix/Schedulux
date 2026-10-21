@@ -1,35 +1,28 @@
 import {
-  TenantGetProfileResponse,
-  ForgotPasswordResponse,
-  ResetPasswordResponse,
-} from "@repo/proto/tenant";
-import {
+  InviteUserRequest,
   InviteUserResponse,
+  ListWorkspaceUsersRequest,
   ListWorkspaceUsersResponse,
-} from "@repo/proto/dashboard";
+} from '@repo/proto/dashboard';
+import {
+  ForgotPasswordResponse,
+  RegisterRequest,
+  RegisterResponse,
+  ResetPasswordResponse,
+  TenantGetProfileResponse,
+  TenantInfo,
+  VerifyEmailResponse,
+} from '@repo/proto/tenant';
 
 export interface TenantAuthResult {
-  tenant: {
-    tenant_id: string;
-    business_name: string;
-    contact_email: string;
-    tier: string;
-    status: string;
-  };
+  tenant: TenantInfo;
   accessToken: string;
   refreshToken: string;
 }
 
-export interface RegisterResult {
-  tenant_id: string;
-  message: string;
-  verification_token: string;
-}
+export type RegisterResult = RegisterResponse;
 
-export interface VerifyEmailResult {
-  message: string;
-  tenant_id: string;
-}
+export type VerifyEmailResult = VerifyEmailResponse;
 
 export interface TokenRotationResult {
   accessToken: string;
@@ -37,14 +30,9 @@ export interface TokenRotationResult {
 }
 
 export interface ITenantService {
-  register(data: {
-    business_name: string;
-    full_name: string;
-    email: string;
-    password: string;
-  }): Promise<RegisterResult>;
+  register(data: RegisterRequest): Promise<RegisterResponse>;
 
-  verifyEmail(token: string): Promise<VerifyEmailResult>;
+  verifyEmail(token: string): Promise<VerifyEmailResponse>;
 
   login(email: string, password: string): Promise<TenantAuthResult>;
 
@@ -54,24 +42,13 @@ export interface ITenantService {
 
   refreshToken(incomingRefreshToken: string): Promise<TokenRotationResult>;
 
-  logout(refreshToken?: string): Promise<{ message: string; }>;
+  logout(refreshToken?: string): Promise<{ message: string }>;
 
   forgotPassword(email: string): Promise<ForgotPasswordResponse>;
 
   resetPassword(token: string, new_password: string): Promise<ResetPasswordResponse>;
 
-  inviteUser(data: {
-    tenant_id: string;
-    email: string;
-    name: string;
-    system_role: 'root' | 'manager';
-  }): Promise<InviteUserResponse>;
+  inviteUser(data: InviteUserRequest): Promise<InviteUserResponse>;
 
-  listWorkspaceUsers(options: {
-    tenant_id: string;
-    page?: number;
-    limit?: number;
-    search?: string;
-    role?: string;
-  }): Promise<ListWorkspaceUsersResponse>;
+  listWorkspaceUsers(options: ListWorkspaceUsersRequest): Promise<ListWorkspaceUsersResponse>;
 }

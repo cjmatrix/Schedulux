@@ -1,6 +1,6 @@
+import { CrawlSiteRequest, GetCrawlStatusRequest } from '@repo/proto/knowledge';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
-import { CrawlSiteRequest, GetCrawlStatusRequest } from '@repo/proto/knowledge';
 
 export const CrawlSiteSchema: z.ZodType<CrawlSiteRequest> = z.object({
   tenant_id: z.string().min(1, 'Tenant ID is required'),
@@ -36,13 +36,7 @@ export const SaveInitialAgentDraftSchema = z.object({
   tenant_id: z.string().optional(),
   draft_json: z.string().optional(),
   creation_source: z
-    .enum([
-      'medical',
-      'auto',
-      'hospitality',
-      'custom',
-      'web_crawl',
-    ])
+    .enum(['medical', 'auto', 'hospitality', 'custom', 'web_crawl'])
     .optional()
     .default('web_crawl'),
   name: z.string().optional(),

@@ -1,30 +1,30 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router';
 import {
-  ArrowLeft,
-  Clock,
-  Bell,
-  Shield,
-  Plus,
-  X,
-  Trash2,
-  Lock,
-  Save,
-  Loader2,
-  CheckCircle2,
-  Building2,
   AlertCircle,
+  ArrowLeft,
+  Bell,
+  Building2,
   Calendar,
+  CheckCircle2,
+  Clock,
+  Loader2,
+  Lock,
+  Plus,
+  Save,
+  Shield,
+  Trash2,
+  X,
 } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
+import type { CreateServicePayload, UpdateServicePayload } from '../api/servicesApi';
 import {
-  useService,
+  useCreateResource,
   useCreateService,
-  useUpdateService,
   useDeleteService,
   useResourcesList,
-  useCreateResource,
+  useService,
+  useUpdateService,
 } from '../hooks/useServices';
-import type { CreateServicePayload, UpdateServicePayload } from '../api/servicesApi';
 
 interface ServiceEditorPageProps {
   mode?: 'create' | 'edit';
@@ -36,26 +36,27 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
 
   const isCreateMode = mode === 'create' || !serviceIdFromParams || serviceIdFromParams === 'new';
 
-  // Queries
-  const {
-    data: serviceResponse,
-    isLoading: isServiceLoading,
-  } = useService(isCreateMode ? undefined : serviceIdFromParams);
+  const { data: serviceResponse, isLoading: isServiceLoading } = useService(
+    isCreateMode ? undefined : serviceIdFromParams,
+  );
 
   const { data: resourcesResponse } = useResourcesList(agentId ? { agent_id: agentId } : undefined);
   const allResources = resourcesResponse?.data || [];
 
-  // Mutations
   const createServiceMutation = useCreateService();
   const updateServiceMutation = useUpdateService();
   const deleteServiceMutation = useDeleteService();
   const createResourceMutation = useCreateResource();
 
+  type ServicePriceType = 'fixed' | 'starting_at' | 'hourly' | 'free' | 'custom';
+
   // Form States
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Surgery');
+  const [priceType, setPriceType] = useState<ServicePriceType>('fixed');
   const [priceAmount, setPriceAmount] = useState<number>(350);
   const [priceCurrency, setPriceCurrency] = useState('USD');
+  const [requireOtp, setRequireOtp] = useState<boolean>(false);
   const [description, setDescription] = useState('');
   const [requireDeposit, setRequireDeposit] = useState(false);
   const [depositAmount, setDepositAmount] = useState<number>(50);
@@ -69,22 +70,21 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
   >('single_resource');
   const [bookingMode, setBookingMode] = useState<'time_slot' | 'date_range'>('time_slot');
 
-  // Resource linkage IDs
   const [eligibleResourceIds, setEligibleResourceIds] = useState<string[]>([]);
   const [requiredAssetIds, setRequiredAssetIds] = useState<string[]>([]);
 
-  // Modals for resource assignment
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
 
-  // Quick resource creation inside modal
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffTitle, setNewStaffTitle] = useState('');
   const [newAssetName, setNewAssetName] = useState('');
   const [newAssetCategory, setNewAssetCategory] = useState('');
 
-  // UI state
-  const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   // Populate existing data when editing
@@ -93,8 +93,10 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
       const s = serviceResponse.data;
       setName(s.name || '');
       setCategory(s.category || 'General');
+      setPriceType((s.price?.type as ServicePriceType) || 'fixed');
       setPriceAmount(s.price?.amount ?? 0);
       setPriceCurrency(s.price?.currency || 'USD');
+      setRequireOtp(s.verification?.require_otp ?? false);
       setDescription(s.description || '');
       setRequireDeposit(s.deposit?.required ?? false);
       setDepositAmount(s.deposit?.amount ?? 0);
@@ -105,25 +107,22 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
       setRecallIntervalDays(s.recall_interval_days ?? 0);
       setAllocationModel(
         (s.allocation_model as 'single_resource' | 'multi_resource' | 'pooled' | 'asset_only') ||
-          'single_resource'
+          'single_resource',
       );
-      setBookingMode(
-        (s.booking_mode as 'time_slot' | 'date_range') || 'time_slot'
-      );
+      setBookingMode((s.booking_mode as 'time_slot' | 'date_range') || 'time_slot');
       setEligibleResourceIds(s.eligible_resource_ids || []);
       setRequiredAssetIds(s.required_asset_ids || []);
     }
   }, [isCreateMode, serviceResponse]);
 
-  // Derived available staff & physical assets
   const staffResources = useMemo(
     () => allResources.filter((r) => r.resource_type === 'staff'),
-    [allResources]
+    [allResources],
   );
 
   const assetResources = useMemo(
     () => allResources.filter((r) => r.resource_type !== 'staff'),
-    [allResources]
+    [allResources],
   );
 
   const selectedStaffList = useMemo(() => {
@@ -148,7 +147,6 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
     });
   }, [requiredAssetIds, assetResources]);
 
-  // Save handler
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
@@ -159,7 +157,7 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
     setFeedbackMessage(null);
 
     const payload: CreateServicePayload = {
-      agent_id: agentId || (serviceResponse?.data as any)?.agent_id || '',
+      agent_id: agentId || serviceResponse?.data?.agent_id || '',
       name: name.trim(),
       category: category.trim() || 'General',
       description: description.trim(),
@@ -168,8 +166,8 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
       allocation_model: allocationModel,
       booking_mode: bookingMode,
       price: {
-        type: 'fixed',
-        amount: Number(priceAmount) || 0,
+        type: priceType,
+        amount: priceType === 'free' ? 0 : Number(priceAmount) || 0,
         currency: priceCurrency,
       },
       deposit: {
@@ -179,6 +177,9 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
         upi_id: upiId.trim(),
         qr_code_url: qrCodeUrl.trim(),
         confirmation_method: 'utr_reference',
+      },
+      verification: {
+        require_otp: requireOtp,
       },
       eligible_resource_ids: eligibleResourceIds,
       required_asset_ids: requiredAssetIds,
@@ -204,8 +205,8 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
         setFeedbackMessage({ type: 'success', text: 'Service changes saved successfully!' });
         setTimeout(() => setFeedbackMessage(null), 3000);
       }
-    } catch (err: any) {
-      const errMsg = err?.response?.data?.message || err.message || 'Failed to save service.';
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'Failed to save service.';
       setFeedbackMessage({ type: 'error', text: errMsg });
     }
   };
@@ -215,10 +216,10 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
     try {
       await deleteServiceMutation.mutateAsync(serviceIdFromParams);
       navigate(agentId ? `/tenant/agents/${agentId}/services` : '/tenant/services');
-    } catch (err: any) {
+    } catch (err: unknown) {
       setFeedbackMessage({
         type: 'error',
-        text: err?.response?.data?.message || 'Failed to delete service.',
+        text: err instanceof Error ? err.message : 'Failed to delete service.',
       });
       setIsDeleteConfirmOpen(false);
     }
@@ -251,8 +252,8 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
       setNewStaffName('');
       setNewStaffTitle('');
       setIsStaffModalOpen(false);
-    } catch (err: any) {
-      alert(err?.response?.data?.message || 'Could not create staff resource');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Could not create staff resource');
     }
   };
 
@@ -282,8 +283,8 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
       setNewAssetName('');
       setNewAssetCategory('');
       setIsAssetModalOpen(false);
-    } catch (err: any) {
-      alert(err?.response?.data?.message || 'Could not create asset resource');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Could not create asset resource');
     }
   };
 
@@ -299,7 +300,8 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
   }
 
   const serviceData = serviceResponse?.data;
-  const displayServiceId = serviceData?.service_id || (isCreateMode ? 'srv_new_draft' : serviceIdFromParams);
+  const displayServiceId =
+    serviceData?.service_id || (isCreateMode ? 'srv_new_draft' : serviceIdFromParams);
 
   return (
     <div className="min-h-screen bg-[#fafbfc] p-6 lg:p-10 font-sans text-slate-800">
@@ -308,7 +310,9 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
         <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
           <button
             type="button"
-            onClick={() => navigate(agentId ? `/tenant/agents/${agentId}/services` : '/tenant/services')}
+            onClick={() =>
+              navigate(agentId ? `/tenant/agents/${agentId}/services` : '/tenant/services')
+            }
             className="flex items-center gap-1.5 text-slate-700 hover:text-black font-semibold cursor-pointer transition"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
@@ -327,7 +331,9 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
             </>
           )}
           <span
-            onClick={() => navigate(agentId ? `/tenant/agents/${agentId}/services` : '/tenant/services')}
+            onClick={() =>
+              navigate(agentId ? `/tenant/agents/${agentId}/services` : '/tenant/services')
+            }
             className="hover:text-slate-600 cursor-pointer transition"
           >
             Services & Pricing
@@ -376,7 +382,9 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => navigate(agentId ? `/tenant/agents/${agentId}/services` : '/tenant/services')}
+              onClick={() =>
+                navigate(agentId ? `/tenant/agents/${agentId}/services` : '/tenant/services')
+              }
               className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold rounded-full shadow-2xs transition active:scale-95 cursor-pointer"
             >
               Cancel
@@ -406,7 +414,8 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
               <code className="text-slate-700 font-mono text-[11px] bg-slate-200/70 px-1.5 py-0.5 rounded">
                 {displayServiceId}
               </code>{' '}
-              • Autonomous Agent will lock multi-resource calendar slots atomically without double-booking.
+              • Autonomous Agent will lock multi-resource calendar slots atomically without
+              double-booking.
             </span>
           </div>
           <span className="text-[11px] text-slate-400 font-medium sm:text-right shrink-0">
@@ -415,15 +424,15 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
         </div>
 
         <form onSubmit={handleSave} className="flex flex-col gap-6">
-          
           {/* MODULE 01: General Details */}
-          
+
           <div className="bg-white rounded-3xl p-7 lg:p-8 border border-slate-200/80 shadow-2xs flex flex-col gap-6">
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900 tracking-tight">General Details</h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Configure clinical catalog name, surgical categorization, and patient fee structure.
+                  Configure clinical catalog name, surgical categorization, and patient fee
+                  structure.
                 </p>
               </div>
               <span className="bg-slate-100 text-slate-500 font-bold text-[10px] tracking-wider uppercase px-2.5 py-1 rounded-full border border-slate-200/60">
@@ -431,9 +440,9 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
               {/* Service Name */}
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 md:col-span-2">
                 <label className="text-xs font-semibold text-slate-700">Service Name</label>
                 <input
                   type="text"
@@ -446,7 +455,7 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
               </div>
 
               {/* Category */}
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 md:col-span-2">
                 <label className="text-xs font-semibold text-slate-700">Category</label>
                 <input
                   type="text"
@@ -457,9 +466,27 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
                 />
               </div>
 
-              {/* Price */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-700">Price ({priceCurrency})</label>
+              {/* Price Model */}
+              <div className="flex flex-col gap-1.5 md:col-span-2">
+                <label className="text-xs font-semibold text-slate-700">Pricing Model</label>
+                <select
+                  value={priceType}
+                  onChange={(e) => setPriceType(e.target.value as ServicePriceType)}
+                  className="w-full px-4 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition cursor-pointer"
+                >
+                  <option value="fixed">Fixed Price</option>
+                  <option value="starting_at">Starting At (Base Fee)</option>
+                  <option value="hourly">Hourly Rate</option>
+                  <option value="free">Free / Complimentary</option>
+                  <option value="custom">Custom / Consultation Quote</option>
+                </select>
+              </div>
+
+              {/* Price Amount */}
+              <div className="flex flex-col gap-1.5 md:col-span-2">
+                <label className="text-xs font-semibold text-slate-700">
+                  {priceType === 'free' ? 'Price (Free)' : `Price Amount (${priceCurrency})`}
+                </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
                     $
@@ -468,10 +495,11 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
                     type="number"
                     min="0"
                     step="0.01"
+                    disabled={priceType === 'free'}
                     placeholder="350.00"
-                    value={priceAmount}
+                    value={priceType === 'free' ? 0 : priceAmount}
                     onChange={(e) => setPriceAmount(parseFloat(e.target.value) || 0)}
-                    className="w-full pl-8 pr-4 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition"
+                    className="w-full pl-8 pr-4 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -547,7 +575,9 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-500">QR Code URL (optional):</span>
+                    <span className="text-xs font-semibold text-slate-500">
+                      QR Code URL (optional):
+                    </span>
                     <input
                       type="url"
                       placeholder="https://cdn.example.com/upi_qr.png"
@@ -558,22 +588,51 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
                   </div>
 
                   <p className="text-[11px] text-slate-400">
-                    Direct UPI Payments: Patients pay via UPI ID or QR code and provide a UTR reference number. Money goes directly to the tenant with zero platform fee.
+                    Direct UPI Payments: Patients pay via UPI ID or QR code and provide a UTR
+                    reference number. Money goes directly to the tenant with zero platform fee.
                   </p>
                 </div>
               )}
             </div>
+
+            {/* Verification Box */}
+            <div className="bg-slate-50/70 border border-slate-200/90 rounded-2xl p-4 flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-semibold text-slate-800">
+                  Require Patient OTP Verification
+                </span>
+                <span className="text-[11px] text-slate-500 font-medium">
+                  Enforces one-time phone/SMS code verification prior to booking slot confirmation.
+                </span>
+              </div>
+              <label className="flex items-center gap-3 cursor-pointer select-none shrink-0">
+                <div
+                  onClick={() => setRequireOtp(!requireOtp)}
+                  className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-200 ease-in-out cursor-pointer ${
+                    requireOtp ? 'bg-slate-950' : 'bg-slate-300'
+                  }`}
+                >
+                  <div
+                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
+                      requireOtp ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </div>
+              </label>
+            </div>
           </div>
 
-          
           {/* MODULE 02: Duration & Rules */}
-        
+
           <div className="bg-white rounded-3xl p-7 lg:p-8 border border-slate-200/80 shadow-2xs flex flex-col gap-6">
             <div className="flex items-start justify-between">
               <div>
-                <h2 className="text-lg font-bold text-slate-900 tracking-tight">Duration & Rules</h2>
+                <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+                  Duration & Rules
+                </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Set clinical execution duration, required sanitization buffer, and automated recall workflows.
+                  Set clinical execution duration, required sanitization buffer, and automated
+                  recall workflows.
                 </p>
               </div>
               <span className="bg-slate-100 text-slate-500 font-bold text-[10px] tracking-wider uppercase px-2.5 py-1 rounded-full border border-slate-200/60">
@@ -636,8 +695,11 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
               <div className="flex items-center gap-2.5 text-xs text-slate-700">
                 <Shield className="w-4 h-4 text-slate-600 shrink-0" />
                 <span>
-                  <strong className="font-semibold text-slate-900">Deterministic Buffer Enforced:</strong>{' '}
-                  Agent automatically adds {bufferMinutes}m sterile buffer to doctor and operatory schedule.
+                  <strong className="font-semibold text-slate-900">
+                    Deterministic Buffer Enforced:
+                  </strong>{' '}
+                  Agent automatically adds {bufferMinutes}m sterile buffer to doctor and operatory
+                  schedule.
                 </span>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -705,32 +767,43 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
                   value={allocationModel}
                   onChange={(e) =>
                     setAllocationModel(
-                      e.target.value as 'single_resource' | 'multi_resource' | 'pooled' | 'asset_only'
+                      e.target.value as
+                        | 'single_resource'
+                        | 'multi_resource'
+                        | 'pooled'
+                        | 'asset_only',
                     )
                   }
                   className="w-full px-4 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 transition cursor-pointer"
                 >
-                  <option value="single_resource">Single Resource (1 Doctor / 1 Staff Member)</option>
-                  <option value="multi_resource">Multi-Resource (Simultaneous Staff + Room / Bay)</option>
+                  <option value="single_resource">
+                    Single Resource (1 Doctor / 1 Staff Member)
+                  </option>
+                  <option value="multi_resource">
+                    Multi-Resource (Simultaneous Staff + Room / Bay)
+                  </option>
                   <option value="pooled">Pooled (Auto-Assign Any Available Provider)</option>
                   <option value="asset_only">Asset Only (Room / Equipment, No Staff)</option>
                 </select>
                 <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                  Defines how the booking engine dispatches staff and equipment from your eligible pool.
+                  Defines how the booking engine dispatches staff and equipment from your eligible
+                  pool.
                 </p>
               </div>
             </div>
           </div>
 
-         
           {/* MODULE 03: Required Resources */}
-      
+
           <div className="bg-white rounded-3xl p-7 lg:p-8 border border-slate-200/80 shadow-2xs flex flex-col gap-6">
             <div className="flex items-start justify-between">
               <div>
-                <h2 className="text-lg font-bold text-slate-900 tracking-tight">Required Resources</h2>
+                <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+                  Required Resources
+                </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  The AI will only book this service when these specific people and assets are available simultaneously.
+                  The AI will only book this service when these specific people and assets are
+                  available simultaneously.
                 </p>
               </div>
               <span className="bg-slate-100 text-slate-500 font-bold text-[10px] tracking-wider uppercase px-2.5 py-1 rounded-full border border-slate-200/60">
@@ -968,7 +1041,9 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
                     >
                       <div>
                         <p className="text-xs font-bold text-slate-800">{a.name}</p>
-                        <p className="text-[11px] text-slate-400">{a.category || a.resource_type}</p>
+                        <p className="text-[11px] text-slate-400">
+                          {a.category || a.resource_type}
+                        </p>
                       </div>
                       {isSelected ? (
                         <span className="text-[11px] font-semibold text-emerald-600">Added</span>

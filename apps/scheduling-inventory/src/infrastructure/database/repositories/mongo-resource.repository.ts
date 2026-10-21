@@ -1,8 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { IResourceRepository, FindResourcesFilter, ResourceSummary } from '../../../domain/repositories/resource.repository.interface.js';
 import { ResourceEntity } from '../../../domain/entities/resource.entity.js';
-import { ResourceModel, IResourceDoc } from '../schemas/resource.schema.js';
+import {
+  FindResourcesFilter,
+  IResourceRepository,
+  ResourceSummary,
+} from '../../../domain/repositories/resource.repository.interface.js';
 import { ResourceMapper } from '../mappers/resource.mapper.js';
+import { ResourceModel } from '../schemas/resource.schema.js';
 
 @Injectable()
 export class MongoResourceRepository implements IResourceRepository {
@@ -26,7 +30,7 @@ export class MongoResourceRepository implements IResourceRepository {
     tenantId: string,
     filter: FindResourcesFilter,
   ): Promise<{ resources: ResourceEntity[]; total: number; summary?: ResourceSummary }> {
-    const baseMatch: Record<string, any> = {
+    const baseMatch: Record<string, unknown> = {
       tenant_id: tenantId,
       is_deleted: { $ne: true },
     };
@@ -34,7 +38,7 @@ export class MongoResourceRepository implements IResourceRepository {
       baseMatch.agent_id = filter.agentId;
     }
 
-    const query: Record<string, any> = { ...baseMatch };
+    const query: Record<string, unknown> = { ...baseMatch };
     if (filter.resourceType) {
       query.resource_type = filter.resourceType;
     }
@@ -45,7 +49,10 @@ export class MongoResourceRepository implements IResourceRepository {
       query.category = filter.category;
     }
     if (filter.search?.trim()) {
-      const searchRegex = new RegExp(filter.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const searchRegex = new RegExp(
+        filter.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+        'i',
+      );
       query.$or = [
         { name: searchRegex },
         { title: searchRegex },
@@ -61,11 +68,7 @@ export class MongoResourceRepository implements IResourceRepository {
     const skip = (page - 1) * limit;
 
     const [docs, total, statsResult] = await Promise.all([
-      ResourceModel.find(query)
-        .sort({ created_at: -1 })
-        .skip(skip)
-        .limit(limit)
-        .exec(),
+      ResourceModel.find(query).sort({ created_at: -1 }).skip(skip).limit(limit).exec(),
       ResourceModel.countDocuments(query).exec(),
       ResourceModel.aggregate([
         { $match: baseMatch },
@@ -139,7 +142,7 @@ export class MongoResourceRepository implements IResourceRepository {
   }
 
   async findByTenant(tenantId: string, agentId?: string): Promise<ResourceEntity[]> {
-    const query: Record<string, any> = {
+    const query: Record<string, unknown> = {
       tenant_id: tenantId,
       is_deleted: { $ne: true },
     };

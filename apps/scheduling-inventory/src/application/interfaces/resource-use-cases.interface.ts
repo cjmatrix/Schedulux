@@ -1,14 +1,13 @@
-import { IUseCase } from './use-case.interface.js';
-import { ResourceEntity } from '../../domain/entities/resource.entity.js';
 import {
   CreateResourceRequest,
+  DeleteResourceRequest,
   GetResourceRequest,
   ListResourcesRequest,
   UpdateResourceRequest,
-  DeleteResourceRequest,
 } from '@repo/proto/scheduling';
-
+import { ResourceEntity } from '../../domain/entities/resource.entity.js';
 import { ResourceSummary } from '../../domain/repositories/resource.repository.interface.js';
+import { IUseCase } from './use-case.interface.js';
 
 export interface ListResourcesOutput {
   resources: ResourceEntity[];
@@ -20,7 +19,8 @@ export interface ListResourcesOutput {
 
 export interface ICreateResourceUseCase extends IUseCase<CreateResourceRequest, ResourceEntity> {}
 export interface IGetResourceUseCase extends IUseCase<GetResourceRequest, ResourceEntity> {}
-export interface IListResourcesUseCase extends IUseCase<ListResourcesRequest, ListResourcesOutput> {}
+export interface IListResourcesUseCase
+  extends IUseCase<ListResourcesRequest, ListResourcesOutput> {}
 export interface IUpdateResourceUseCase extends IUseCase<UpdateResourceRequest, ResourceEntity> {}
 export interface IDeleteResourceUseCase extends IUseCase<DeleteResourceRequest, boolean> {}
 

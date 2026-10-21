@@ -1,40 +1,37 @@
 import 'reflect-metadata';
-import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 import { createRequire } from 'node:module';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
-import { AppModule } from './app.module.js';
-import { ConfigService } from '@nestjs/config';
 import mongoose from 'mongoose';
+import { AppModule } from './app.module.js';
 
 const require = createRequire(import.meta.url);
 
 async function bootstrap() {
-  const app = await NestFactory.createMicroservice<MicroserviceOptions>(
-    AppModule,
-    {
-      transport: Transport.GRPC,
-      options: {
-        url: '0.0.0.0:50053',
-        package: 'scheduling',
-        protoPath: require.resolve('@repo/proto/scheduling.proto'),
-        loader: {
-          keepCase: true,
-          longs: String,
-          enums: String,
-          defaults: true,
-          oneofs: true,
-        },
+  const app = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule, {
+    transport: Transport.GRPC,
+    options: {
+      url: '0.0.0.0:50053',
+      package: 'scheduling',
+      protoPath: require.resolve('@repo/proto/scheduling.proto'),
+      loader: {
+        keepCase: true,
+        longs: String,
+        enums: String,
+        defaults: true,
+        oneofs: true,
       },
     },
-  );
+  });
 
   const configService = app.get(ConfigService);
 

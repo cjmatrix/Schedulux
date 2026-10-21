@@ -1,7 +1,7 @@
-import { Navigate, Outlet, useLocation } from "react-router";
-import { Loader2, Calendar } from "lucide-react";
-import { useAuthStore } from "../../../store/useAuthStore";
-import { useDashboardProfile } from "../../tenant/hooks/useAuth";
+import { Calendar, Loader2 } from 'lucide-react';
+import { Navigate, Outlet, useLocation } from 'react-router';
+import { useAuthStore } from '../../../store/useAuthStore';
+import { useDashboardProfile } from '../../tenant/hooks/useAuth';
 
 export function DashboardUserProtectedRoute() {
   const location = useLocation();

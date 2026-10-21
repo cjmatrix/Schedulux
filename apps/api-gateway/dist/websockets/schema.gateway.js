@@ -14,9 +14,9 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 var SchemaGateway_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SchemaGateway = void 0;
+const common_1 = require("@nestjs/common");
 const websockets_1 = require("@nestjs/websockets");
 const socket_io_1 = require("socket.io");
-const common_1 = require("@nestjs/common");
 let SchemaGateway = SchemaGateway_1 = class SchemaGateway {
     eventSubscriber;
     server;

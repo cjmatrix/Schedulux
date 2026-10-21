@@ -1,15 +1,16 @@
+import { Building2, Calendar, Check, ChevronDown } from 'lucide-react';
 import React from 'react';
-import { Building2, Check, ChevronDown, Calendar } from 'lucide-react';
+import type { BusinessProfileData, OperatingHoursData } from '../types';
 import { getOperatingScheduleGroups } from '../utils';
 
 interface BusinessProfileCardProps {
   clinicName: string;
   timezone: string;
-  businessProfile: any;
+  businessProfile?: BusinessProfileData;
   isLive: boolean;
   dailyHoursText: string;
   formattedHoursText: string;
-  operatingHours: any;
+  operatingHours?: OperatingHoursData;
 }
 
 export const BusinessProfileCard: React.FC<BusinessProfileCardProps> = ({
@@ -75,7 +76,11 @@ export const BusinessProfileCard: React.FC<BusinessProfileCardProps> = ({
           </label>
           <div className="bg-slate-50 border border-slate-200/80 rounded-2xl px-4 py-2.5 flex items-center justify-between text-xs font-bold text-slate-900 shadow-2xs">
             <span className="truncate">
-              {timezone} • {businessProfile.currency || 'INR'}
+              {timezone ? (
+                `${timezone} • ${businessProfile?.currency || 'USD'}`
+              ) : (
+                <span className="text-amber-600 font-medium">⚠️ Timezone not set</span>
+              )}
             </span>
             <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0 ml-2" />
           </div>
@@ -88,9 +93,7 @@ export const BusinessProfileCard: React.FC<BusinessProfileCardProps> = ({
           <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
             OPERATING SCHEDULE
           </label>
-          <span className="text-[11px] font-semibold text-slate-500">
-            {dailyHoursText}
-          </span>
+          <span className="text-[11px] font-semibold text-slate-500">{dailyHoursText}</span>
         </div>
 
         <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-3 shadow-2xs">
@@ -123,9 +126,7 @@ export const BusinessProfileCard: React.FC<BusinessProfileCardProps> = ({
             {closedGroups.length > 0 && openGroups.length > 0 && (
               <div className="flex items-center gap-2 pt-1 text-[11px] text-slate-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-                <span>
-                  {closedGroups.map((g) => g.label).join(', ')} Closed
-                </span>
+                <span>{closedGroups.map((g) => g.label).join(', ')} Closed</span>
               </div>
             )}
           </div>
@@ -148,7 +149,7 @@ export const BusinessProfileCard: React.FC<BusinessProfileCardProps> = ({
                     {day.label}
                   </p>
                   <p className="truncate mt-0.5">
-                    {isOpen ? `${slots[0].start.slice(0, 5)}` : 'Closed'}
+                    {isOpen ? (slots?.[0]?.start?.slice(0, 5) ?? 'Open') : 'Closed'}
                   </p>
                 </div>
               );

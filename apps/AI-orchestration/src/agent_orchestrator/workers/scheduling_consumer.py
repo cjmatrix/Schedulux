@@ -23,66 +23,68 @@ import asyncio
 import json
 import logging
 import os
-import ssl
 import secrets
-from datetime import datetime, timezone
+import ssl
 from typing import Any
 
 from aiokafka import AIOKafkaConsumer
-from aiokafka.errors import KafkaConnectionError
 from dotenv import load_dotenv
 
+from agent_orchestrator.clients.redis_client import set_cached_draft
 from agent_orchestrator.models import (
-    AgentRuntimeConfig,
     AgentDraft,
-    ResourceEmbed,
-    ServiceEmbed,
-    PriceEmbed,
-    DepositEmbed,
-    ResourceType,
-    DispatchStatus,
-    ServiceAllocationModel,
+    AgentRuntimeConfig,
     BookingMode,
+    DepositEmbed,
+    DispatchStatus,
+    PriceEmbed,
     PriceType,
+    ResourceEmbed,
+    ResourceType,
+    ServiceAllocationModel,
+    ServiceEmbed,
+    ServiceVerificationEmbed,
     init_db,
 )
-from agent_orchestrator.redis_client import set_cached_draft
 
-local_env = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
+local_env = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env"))
 load_dotenv(local_env)
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
-KAFKA_BROKERS    = os.environ.get("KAFKA_BROKERS", "localhost:9092")
-KAFKA_USERNAME   = os.environ.get("KAFKA_USERNAME", "")
-KAFKA_PASSWORD   = os.environ.get("KAFKA_PASSWORD", "")
-CONSUMER_GROUP   = os.environ.get("KAFKA_CONSUMER_GROUP", "ai-orchestration-consumer-group")
-TOPICS           = ["scheduling.service.events", "scheduling.resource.events"]
-
-
+KAFKA_BROKERS = os.environ.get("KAFKA_BROKERS", "localhost:9092")
+KAFKA_USERNAME = os.environ.get("KAFKA_USERNAME", "")
+KAFKA_PASSWORD = os.environ.get("KAFKA_PASSWORD", "")
+CONSUMER_GROUP = os.environ.get("KAFKA_CONSUMER_GROUP", "ai-orchestration-consumer-group")
+TOPICS = ["scheduling.service.events", "scheduling.resource.events"]
 
 
 async def handle_service_event(payload: dict[str, Any]) -> None:
     event_type = payload.get("event_type", "")
-    agent_id   = payload.get("agent_id", "")
+    agent_id = payload.get("agent_id", "")
     service_id = payload.get("service_id", "")
 
     if not agent_id or not service_id:
-        logger.warning("[Consumer] Skipping service event — missing agent_id or service_id: %s", payload)
+        logger.warning(
+            "[Consumer] Skipping service event — missing agent_id or service_id: %s", payload
+        )
         return
 
     data = payload.get("data")
-    price_raw   = data.get("price", {}) if data else {}
+    price_raw = data.get("price", {}) if data else {}
     deposit_raw = data.get("deposit", {}) if data else {}
 
-   
     config = await AgentRuntimeConfig.find_one({"agent_id": agent_id})
     if config:
         if event_type == "service.deleted":
             config.services = [s for s in config.services if s.service_id != service_id]
             await config.save()
-            logger.info("[Consumer] Removed service %s from live AgentRuntimeConfig of agent %s", service_id, agent_id)
+            logger.info(
+                "[Consumer] Removed service %s from live AgentRuntimeConfig of agent %s",
+                service_id,
+                agent_id,
+            )
         elif data:
             price = PriceEmbed(
                 type=PriceType(price_raw.get("type", "fixed")),
@@ -98,52 +100,79 @@ async def handle_service_event(payload: dict[str, Any]) -> None:
                 confirmation_method=deposit_raw.get("confirmation_method", "automatic"),
                 payment_instructions=deposit_raw.get("payment_instructions", ""),
             )
+            existing_embed = next((s for s in config.services if s.service_id == service_id), None)
+            verif_raw = data.get("verification")
+            if verif_raw is not None and isinstance(verif_raw, dict):
+                verification = ServiceVerificationEmbed(require_otp=verif_raw.get("require_otp"))
+            elif existing_embed and existing_embed.verification:
+                verification = existing_embed.verification
+            else:
+                verification = ServiceVerificationEmbed()
+
             new_embed = ServiceEmbed(
                 service_id=service_id,
                 name=data.get("name", ""),
                 category=data.get("category", "General"),
                 description=data.get("description", ""),
-                duration_minutes=int(data.get("duration_minutes", 30)),
-                buffer_minutes=int(data.get("buffer_minutes", 0)),
-                allocation_model=ServiceAllocationModel(data.get("allocation_model", "single_resource")),
+                duration_minutes=int(data.get("duration_minutes") or 30),
+                buffer_minutes=int(data.get("buffer_minutes") or 0),
+                allocation_model=ServiceAllocationModel(
+                    data.get("allocation_model", "single_resource")
+                ),
                 booking_mode=BookingMode(data.get("booking_mode", "time_slot")),
                 price=price,
                 deposit=deposit,
+                verification=verification,
                 eligible_resource_ids=data.get("eligible_resource_ids", []),
                 required_asset_ids=data.get("required_asset_ids", []),
-                recall_interval_days=int(data.get("recall_interval_days", 0)),
+                recall_interval_days=int(data.get("recall_interval_days") or 0),
             )
             config.services = [s for s in config.services if s.service_id != service_id]
             config.services.append(new_embed)
             await config.save()
-            logger.info("[Consumer] Upserted service %s into live AgentRuntimeConfig of agent %s", service_id, agent_id)
+            logger.info(
+                "[Consumer] Upserted service %s into live AgentRuntimeConfig of agent %s",
+                service_id,
+                agent_id,
+            )
 
- 
     agent_draft = await AgentDraft.find_one({"agent_id": agent_id})
     if agent_draft:
-        current_draft = agent_draft.current_draft or {}
-        svcs = current_draft.setdefault("services", [])
+        current_draft = dict(agent_draft.current_draft) if agent_draft.current_draft else {}
+        raw_svcs = current_draft.get("services")
+        svcs: list[dict[str, Any]] = (
+            [s for s in raw_svcs if isinstance(s, dict)] if isinstance(raw_svcs, list) else []
+        )
         if event_type == "service.deleted":
             current_draft["services"] = [s for s in svcs if s.get("service_id") != service_id]
             summary = f"Deleted service {service_id} via inventory"
         elif data:
-            svc_dict = {
+            existing_draft_svc = next((s for s in svcs if s.get("service_id") == service_id), None)
+            verif_dict = (
+                data.get("verification")
+                if "verification" in data
+                else (existing_draft_svc.get("verification") if existing_draft_svc else None)
+            )
+
+            svc_dict: dict[str, Any] = {
                 "service_id": service_id,
                 "name": data.get("name", ""),
                 "category": data.get("category", "General"),
                 "description": data.get("description", ""),
-                "duration_minutes": int(data.get("duration_minutes", 30)),
-                "buffer_minutes": int(data.get("buffer_minutes", 0)),
+                "duration_minutes": int(data.get("duration_minutes") or 30),
+                "buffer_minutes": int(data.get("buffer_minutes") or 0),
                 "allocation_model": data.get("allocation_model", "single_resource"),
                 "booking_mode": data.get("booking_mode", "time_slot"),
                 "price": price_raw,
                 "deposit": deposit_raw,
+                "verification": verif_dict,
                 "eligible_resource_ids": data.get("eligible_resource_ids", []),
                 "required_asset_ids": data.get("required_asset_ids", []),
-                "recall_interval_days": int(data.get("recall_interval_days", 0)),
+                "recall_interval_days": int(data.get("recall_interval_days") or 0),
             }
-            current_draft["services"] = [s for s in svcs if s.get("service_id") != service_id]
-            current_draft["services"].append(svc_dict)
+            updated_svcs = [s for s in svcs if s.get("service_id") != service_id]
+            updated_svcs.append(svc_dict)
+            current_draft["services"] = updated_svcs
             summary = f"Upserted service {data.get('name', service_id)} via inventory"
 
         agent_draft.add_checkpoint(
@@ -157,27 +186,34 @@ async def handle_service_event(payload: dict[str, Any]) -> None:
             await set_cached_draft(agent_draft.tenant_id, agent_id, current_draft)
         except Exception:
             pass
-        logger.info("[Consumer] Synced service %s to AgentDraft & Redis for agent %s", service_id, agent_id)
+        logger.info(
+            "[Consumer] Synced service %s to AgentDraft & Redis for agent %s", service_id, agent_id
+        )
 
 
 async def handle_resource_event(payload: dict[str, Any]) -> None:
-    event_type  = payload.get("event_type", "")
-    agent_id    = payload.get("agent_id", "")
+    event_type = payload.get("event_type", "")
+    agent_id = payload.get("agent_id", "")
     resource_id = payload.get("resource_id", "")
 
     if not agent_id or not resource_id:
-        logger.warning("[Consumer] Skipping resource event — missing agent_id or resource_id: %s", payload)
+        logger.warning(
+            "[Consumer] Skipping resource event — missing agent_id or resource_id: %s", payload
+        )
         return
 
     data = payload.get("data")
 
-    
     config = await AgentRuntimeConfig.find_one({"agent_id": agent_id})
     if config:
         if event_type == "resource.deleted":
             config.resources = [r for r in config.resources if r.resource_id != resource_id]
             await config.save()
-            logger.info("[Consumer] Removed resource %s from live AgentRuntimeConfig of agent %s", resource_id, agent_id)
+            logger.info(
+                "[Consumer] Removed resource %s from live AgentRuntimeConfig of agent %s",
+                resource_id,
+                agent_id,
+            )
         elif data:
             new_embed = ResourceEmbed(
                 resource_id=resource_id,
@@ -193,18 +229,26 @@ async def handle_resource_event(payload: dict[str, Any]) -> None:
             config.resources = [r for r in config.resources if r.resource_id != resource_id]
             config.resources.append(new_embed)
             await config.save()
-            logger.info("[Consumer] Upserted resource %s into live AgentRuntimeConfig of agent %s", resource_id, agent_id)
+            logger.info(
+                "[Consumer] Upserted resource %s into live AgentRuntimeConfig of agent %s",
+                resource_id,
+                agent_id,
+            )
 
-  
     agent_draft = await AgentDraft.find_one({"agent_id": agent_id})
     if agent_draft:
-        current_draft = agent_draft.current_draft or {}
-        res_list = current_draft.setdefault("resources", [])
+        current_draft = dict(agent_draft.current_draft) if agent_draft.current_draft else {}
+        raw_res = current_draft.get("resources")
+        res_list: list[dict[str, Any]] = (
+            [r for r in raw_res if isinstance(r, dict)] if isinstance(raw_res, list) else []
+        )
         if event_type == "resource.deleted":
-            current_draft["resources"] = [r for r in res_list if r.get("resource_id") != resource_id]
+            current_draft["resources"] = [
+                r for r in res_list if r.get("resource_id") != resource_id
+            ]
             summary = f"Deleted resource {resource_id} via inventory"
         elif data:
-            res_dict = {
+            res_dict: dict[str, Any] = {
                 "resource_id": resource_id,
                 "resource_type": data.get("resource_type", "staff"),
                 "name": data.get("name", ""),
@@ -215,8 +259,9 @@ async def handle_resource_event(payload: dict[str, Any]) -> None:
                 "dispatch_status": data.get("dispatch_status", "active"),
                 "custom_shift_overrides": data.get("custom_shift_overrides", {}),
             }
-            current_draft["resources"] = [r for r in res_list if r.get("resource_id") != resource_id]
-            current_draft["resources"].append(res_dict)
+            updated_res = [r for r in res_list if r.get("resource_id") != resource_id]
+            updated_res.append(res_dict)
+            current_draft["resources"] = updated_res
             summary = f"Upserted resource {data.get('name', resource_id)} via inventory"
 
         agent_draft.add_checkpoint(
@@ -230,9 +275,11 @@ async def handle_resource_event(payload: dict[str, Any]) -> None:
             await set_cached_draft(agent_draft.tenant_id, agent_id, current_draft)
         except Exception:
             pass
-        logger.info("[Consumer] Synced resource %s to AgentDraft & Redis for agent %s", resource_id, agent_id)
-
-
+        logger.info(
+            "[Consumer] Synced resource %s to AgentDraft & Redis for agent %s",
+            resource_id,
+            agent_id,
+        )
 
 
 async def dispatch(topic: str, raw_value: bytes) -> None:
@@ -253,10 +300,7 @@ async def dispatch(topic: str, raw_value: bytes) -> None:
         else:
             logger.warning("[Consumer] Unknown topic: %s", topic)
     except Exception as exc:
-       
         logger.error("[Consumer] Error processing event %s: %s", event_type, exc, exc_info=True)
-
-
 
 
 async def run_consumer() -> None:
@@ -279,8 +323,8 @@ async def run_consumer() -> None:
         sasl_plain_password=KAFKA_PASSWORD,
         ssl_context=ssl_context,
         auto_offset_reset="earliest",
-        enable_auto_commit=False,    
-        value_deserializer=None,     
+        enable_auto_commit=False,
+        value_deserializer=None,
         max_poll_interval_ms=300_000,
     )
 
@@ -290,7 +334,7 @@ async def run_consumer() -> None:
     try:
         async for msg in consumer:
             await dispatch(msg.topic, msg.value)
-         
+
             await consumer.commit()
     except asyncio.CancelledError:
         logger.info("[Consumer] Consumer task cancelled — shutting down.")

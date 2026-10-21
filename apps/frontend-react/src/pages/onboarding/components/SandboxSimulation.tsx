@@ -1,5 +1,5 @@
-import React from 'react';
 import { Bot, RotateCcw } from 'lucide-react';
+import React from 'react';
 
 interface SandboxSimulationProps {
   clinicName: string;
@@ -56,10 +56,7 @@ export const SandboxSimulation: React.FC<SandboxSimulationProps> = ({
       {/* Sandbox Message Feed */}
       <div className="flex-1 overflow-y-auto py-4 space-y-3">
         {sandboxMessages.map((m, idx) => (
-          <div
-            key={idx}
-            className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
+          <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`max-w-[80%] rounded-2xl p-3.5 text-xs leading-relaxed ${
                 m.role === 'user'

@@ -1,18 +1,19 @@
 from __future__ import annotations
 
 import grpc
-import agent_orchestrator.knowledge_pb2 as knowledge_pb2
-import agent_orchestrator.knowledge_pb2_grpc as knowledge_pb2_grpc
+
+import agent_orchestrator.proto.knowledge_pb2 as knowledge_pb2
+import agent_orchestrator.proto.knowledge_pb2_grpc as knowledge_pb2_grpc
+from agent_orchestrator.api.servicers.chat_servicer import ChatRPCHandler
 from agent_orchestrator.domain.exceptions import (
     AgentNotFoundException,
     CrawlJobNotFoundException,
     InvalidDraftException,
 )
-from agent_orchestrator.services.onboarding_service import OnboardingService
-from agent_orchestrator.services.chat_service import ChatService
 from agent_orchestrator.services.agent_service import AgentManagementService
+from agent_orchestrator.services.chat_service import ChatService
 from agent_orchestrator.services.crawler_service import CrawlerService
-from agent_orchestrator.api.servicers.chat_servicer import ChatRPCHandler
+from agent_orchestrator.services.onboarding_service import OnboardingService
 
 
 class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):

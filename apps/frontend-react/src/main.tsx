@@ -1,41 +1,39 @@
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { GoogleOAuthProvider } from "@react-oauth/google";
-import { createBrowserRouter, RouterProvider, Navigate } from "react-router";
-import "./index.css";
-import App from "./App.tsx";
-import LandingPage from "./pages/LandingPage.tsx";
-import RegisterPage from "./features/tenant/pages/RegisterPage.tsx";
-import LoginPage from "./features/tenant/pages/LoginPage.tsx";
-import DashboardUserLoginPage from "./features/dashboard-user/DashboardUserLoginPage.tsx";
-import VerifyEmailPage from "./features/tenant/pages/VerifyEmailPage.tsx";
-import ForgotPasswordPage from "./features/tenant/pages/ForgotPasswordPage.tsx";
-import ResetPasswordPage from "./features/tenant/pages/ResetPasswordPage.tsx";
-
+import { GoogleOAuthProvider } from '@react-oauth/google';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createRoot } from 'react-dom/client';
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
+import './index.css';
+import App from './App.tsx';
+import { DashboardUserProtectedRoute } from './features/dashboard-user/components/DashboardUserProtectedRoute.tsx';
+import DashboardUserLoginPage from './features/dashboard-user/DashboardUserLoginPage.tsx';
+import AdminLayout from './features/superadmin/components/AdminLayout.tsx';
+import { SuperAdminProtectedRoute } from './features/superadmin/components/SuperAdminProtectedRoute.tsx';
+import GlobalSettingsPage from './features/superadmin/pages/GlobalSettingsPage.tsx';
+import SuperAdminDashboard from './features/superadmin/pages/SuperAdminDashboard.tsx';
 // Superadmin Feature Imports
-import SuperAdminLoginPage from "./features/superadmin/pages/SuperAdminLoginPage.tsx";
-import AdminLayout from "./features/superadmin/components/AdminLayout.tsx";
-import SuperAdminDashboard from "./features/superadmin/pages/SuperAdminDashboard.tsx";
-import TenantListPage from "./features/superadmin/pages/TenantListPage.tsx";
-import SystemHealthPage from "./features/superadmin/pages/SystemHealthPage.tsx";
-import GlobalSettingsPage from "./features/superadmin/pages/GlobalSettingsPage.tsx";
-import { SuperAdminProtectedRoute } from "./features/superadmin/components/SuperAdminProtectedRoute.tsx";
+import SuperAdminLoginPage from './features/superadmin/pages/SuperAdminLoginPage.tsx';
+import SystemHealthPage from './features/superadmin/pages/SystemHealthPage.tsx';
+import TenantListPage from './features/superadmin/pages/TenantListPage.tsx';
+import { TenantProtectedRoute } from './features/tenant/components/TenantProtectedRoute.tsx';
+import AgentDashboardPage from './features/tenant/pages/AgentDashboardPage.tsx';
+import BookingsPage from './features/tenant/pages/BookingsPage.tsx';
+import ForgotPasswordPage from './features/tenant/pages/ForgotPasswordPage.tsx';
+import LoginPage from './features/tenant/pages/LoginPage.tsx';
 
 // Tenant Dashboard Feature Imports
-import TenantLayout from "./features/tenant/pages/layout/TenantLayout.tsx";
-import WorkspaceUsersPage from "./features/tenant/pages/WorkspaceUsersPage.tsx";
-import BookingsPage from "./features/tenant/pages/BookingsPage.tsx";
-import TenantAgentsPage from "./features/tenant/pages/TenantAgentsPage.tsx";
-import ServicesListPage from "./features/tenant/pages/ServicesListPage.tsx";
-import ServiceEditorPage from "./features/tenant/pages/ServiceEditorPage.tsx";
-import ResourcesListPage from "./features/tenant/pages/ResourcesListPage.tsx";
-import ResourceEditorPage from "./features/tenant/pages/ResourceEditorPage.tsx";
-import { TenantProtectedRoute } from "./features/tenant/components/TenantProtectedRoute.tsx";
-import { DashboardUserProtectedRoute } from "./features/dashboard-user/components/DashboardUserProtectedRoute.tsx";
-import SchedulingOnboarding from "./pages/SchedulingOnboarding.tsx";
-import AgentOnboardingWizard from "./pages/AgentOnboardingWizard.tsx";
-import AgentDashboardPage from "./features/tenant/pages/AgentDashboardPage.tsx";
+import TenantLayout from './features/tenant/pages/layout/TenantLayout.tsx';
+import RegisterPage from './features/tenant/pages/RegisterPage.tsx';
+import ResetPasswordPage from './features/tenant/pages/ResetPasswordPage.tsx';
+import ResourceEditorPage from './features/tenant/pages/ResourceEditorPage.tsx';
+import ResourcesListPage from './features/tenant/pages/ResourcesListPage.tsx';
+import ServiceEditorPage from './features/tenant/pages/ServiceEditorPage.tsx';
+import ServicesListPage from './features/tenant/pages/ServicesListPage.tsx';
+import TenantAgentsPage from './features/tenant/pages/TenantAgentsPage.tsx';
+import VerifyEmailPage from './features/tenant/pages/VerifyEmailPage.tsx';
+import WorkspaceUsersPage from './features/tenant/pages/WorkspaceUsersPage.tsx';
+import AgentOnboardingWizard from './pages/AgentOnboardingWizard.tsx';
+import LandingPage from './pages/LandingPage.tsx';
+import SchedulingOnboarding from './pages/SchedulingOnboarding.tsx';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,51 +46,51 @@ const queryClient = new QueryClient({
 
 const router = createBrowserRouter([
   {
-    path: "/",
+    path: '/',
     element: <App />,
   },
   {
-    path: "/home",
+    path: '/home',
     element: <LandingPage />,
   },
   {
-    path: "/register",
+    path: '/register',
     element: <RegisterPage />,
   },
   {
-    path: "/login",
+    path: '/login',
     element: <LoginPage />,
   },
   {
-    path: "/dashboarduser/login",
+    path: '/dashboarduser/login',
     element: <DashboardUserLoginPage />,
   },
   {
-    path: "/tenant/user-login",
+    path: '/tenant/user-login',
     element: <DashboardUserLoginPage />,
   },
   {
-    path: "/verify-email",
+    path: '/verify-email',
     element: <VerifyEmailPage />,
   },
   {
-    path: "/forgot-password",
+    path: '/forgot-password',
     element: <ForgotPasswordPage />,
   },
   {
-    path: "/dashboarduser/forgot-password",
+    path: '/dashboarduser/forgot-password',
     element: <ForgotPasswordPage />,
   },
   {
-    path: "/reset-password",
+    path: '/reset-password',
     element: <ResetPasswordPage />,
   },
   {
-    path: "/superadmin/login",
+    path: '/superadmin/login',
     element: <SuperAdminLoginPage />,
   },
   {
-    path: "/superadmin",
+    path: '/superadmin',
     element: <SuperAdminProtectedRoute />,
     children: [
       {
@@ -103,19 +101,19 @@ const router = createBrowserRouter([
             element: <Navigate to="/superadmin/dashboard" replace />,
           },
           {
-            path: "dashboard",
+            path: 'dashboard',
             element: <SuperAdminDashboard />,
           },
           {
-            path: "tenants",
+            path: 'tenants',
             element: <TenantListPage />,
           },
           {
-            path: "system-health",
+            path: 'system-health',
             element: <SystemHealthPage />,
           },
           {
-            path: "settings",
+            path: 'settings',
             element: <GlobalSettingsPage />,
           },
         ],
@@ -123,7 +121,7 @@ const router = createBrowserRouter([
     ],
   },
   {
-    path: "/tenant",
+    path: '/tenant',
     element: <TenantProtectedRoute />,
     children: [
       {
@@ -131,96 +129,96 @@ const router = createBrowserRouter([
         element: <Navigate to="/tenant/agents" replace />,
       },
       {
-        path: "dashboard",
+        path: 'dashboard',
         element: <Navigate to="/tenant/agents" replace />,
       },
       {
-        path: "agents",
+        path: 'agents',
         element: <TenantAgentsPage />,
       },
       {
-        path: "landingboard",
+        path: 'landingboard',
         element: <SchedulingOnboarding />,
       },
       {
-        path: "agent-setup/:id",
+        path: 'agent-setup/:id',
         element: <AgentOnboardingWizard />,
       },
       {
         element: <TenantLayout isTenant={true} />,
         children: [
           {
-            path: "users",
+            path: 'users',
             element: <WorkspaceUsersPage />,
           },
           {
-            path: "bookings",
+            path: 'bookings',
             element: <BookingsPage />,
           },
-       
+
           {
-            path: "agents/:agentId/dashboard",
+            path: 'agents/:agentId/dashboard',
             element: <AgentDashboardPage />,
           },
           {
-            path: "agents/:agentId/services",
+            path: 'agents/:agentId/services',
             element: <ServicesListPage />,
           },
           {
-            path: "agents/:agentId/services/new",
+            path: 'agents/:agentId/services/new',
             element: <ServiceEditorPage mode="create" />,
           },
           {
-            path: "agents/:agentId/services/:id",
+            path: 'agents/:agentId/services/:id',
             element: <ServiceEditorPage mode="edit" />,
           },
           {
-            path: "agents/:agentId/resources",
+            path: 'agents/:agentId/resources',
             element: <ResourcesListPage />,
           },
           {
-            path: "agents/:agentId/resources/new",
+            path: 'agents/:agentId/resources/new',
             element: <ResourceEditorPage mode="create" />,
           },
           {
-            path: "agents/:agentId/resources/:id",
+            path: 'agents/:agentId/resources/:id',
             element: <ResourceEditorPage mode="edit" />,
           },
-       
+
           {
-            path: "services",
+            path: 'services',
             element: <ServicesListPage />,
           },
           {
-            path: "services/new",
+            path: 'services/new',
             element: <ServiceEditorPage mode="create" />,
           },
           {
-            path: "services/:id",
+            path: 'services/:id',
             element: <ServiceEditorPage mode="edit" />,
           },
           {
-            path: "inventory",
+            path: 'inventory',
             element: <ResourcesListPage />,
           },
           {
-            path: "inventory/new",
+            path: 'inventory/new',
             element: <ResourceEditorPage mode="create" />,
           },
           {
-            path: "inventory/:id",
+            path: 'inventory/:id',
             element: <ResourceEditorPage mode="edit" />,
           },
           {
-            path: "resources",
+            path: 'resources',
             element: <Navigate to="/tenant/inventory" replace />,
           },
           {
-            path: "resources/new",
+            path: 'resources/new',
             element: <Navigate to="/tenant/inventory/new" replace />,
           },
           {
-            path: "resources/:id",
+            path: 'resources/:id',
             element: <Navigate to="/tenant/inventory/:id" replace />,
           },
         ],
@@ -228,15 +226,15 @@ const router = createBrowserRouter([
     ],
   },
   {
-    path: "/workspace/users",
+    path: '/workspace/users',
     element: <Navigate to="/tenant/users" replace />,
   },
   {
-    path: "/dashboarduser",
+    path: '/dashboarduser',
     element: <DashboardUserProtectedRoute />,
     children: [
       {
-        path: "tenant",
+        path: 'tenant',
         element: <TenantLayout isTenant={false} />,
         children: [
           {
@@ -244,7 +242,7 @@ const router = createBrowserRouter([
             element: <Navigate to="/dashboarduser/tenant/bookings" replace />,
           },
           {
-            path: "bookings",
+            path: 'bookings',
             element: <BookingsPage />,
           },
         ],
@@ -253,14 +251,17 @@ const router = createBrowserRouter([
   },
 ]);
 
-const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <GoogleOAuthProvider clientId={googleClientId}>
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
-    </GoogleOAuthProvider>
-  </StrictMode>,
-);
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  createRoot(rootElement).render(
+    <>
+      <GoogleOAuthProvider clientId={googleClientId}>
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </GoogleOAuthProvider>
+    </>,
+  );
+}

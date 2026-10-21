@@ -1,24 +1,24 @@
-import { useState } from "react";
 import {
-  Calendar as CalendarIcon,
-  Plus,
-  Search,
-  Filter,
-  Clock,
-  User,
-  CheckCircle2,
   AlertCircle,
-  Sparkles,
+  CalendarDays,
+  Calendar as CalendarIcon,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  MoreVertical,
-  CalendarDays,
-  X,
-  PhoneCall,
+  Clock,
+  Filter,
   Globe,
   Mail,
+  MoreVertical,
   Phone,
-} from "lucide-react";
+  PhoneCall,
+  Plus,
+  Search,
+  Sparkles,
+  User,
+  X,
+} from 'lucide-react';
+import { useState } from 'react';
 
 interface BookingItem {
   id: string;
@@ -29,119 +29,114 @@ interface BookingItem {
   date: string;
   timeSlot: string;
   duration: string;
-  status: "confirmed" | "pending" | "completed" | "cancelled";
-  source: "AI Voice Agent" | "Web Embed" | "Manual";
+  status: 'confirmed' | 'pending' | 'completed' | 'cancelled';
+  source: 'AI Voice Agent' | 'Web Embed' | 'Manual';
   assignedStaff: string;
   price: string;
 }
 
 const INITIAL_BOOKINGS: BookingItem[] = [
   {
-    id: "BK-8021",
-    customerName: "Sarah Jenkins",
-    customerEmail: "sarah.j@example.com",
-    customerPhone: "+1 (555) 234-5678",
-    serviceName: "Executive Strategy Consultation",
-    date: "2026-10-03",
-    timeSlot: "09:00 AM - 10:00 AM",
-    duration: "60 mins",
-    status: "confirmed",
-    source: "AI Voice Agent",
-    assignedStaff: "Dr. Alex Rivera",
-    price: "$150.00",
+    id: 'BK-8021',
+    customerName: 'Sarah Jenkins',
+    customerEmail: 'sarah.j@example.com',
+    customerPhone: '+1 (555) 234-5678',
+    serviceName: 'Executive Strategy Consultation',
+    date: '2026-10-03',
+    timeSlot: '09:00 AM - 10:00 AM',
+    duration: '60 mins',
+    status: 'confirmed',
+    source: 'AI Voice Agent',
+    assignedStaff: 'Dr. Alex Rivera',
+    price: '$150.00',
   },
   {
-    id: "BK-8022",
-    customerName: "Michael Chen",
-    customerEmail: "mchen@techcorp.io",
-    customerPhone: "+1 (555) 876-5432",
-    serviceName: "Initial Product Onboarding",
-    date: "2026-10-03",
-    timeSlot: "11:30 AM - 12:15 PM",
-    duration: "45 mins",
-    status: "confirmed",
-    source: "Web Embed",
-    assignedStaff: "Elena Rostova",
-    price: "$95.00",
+    id: 'BK-8022',
+    customerName: 'Michael Chen',
+    customerEmail: 'mchen@techcorp.io',
+    customerPhone: '+1 (555) 876-5432',
+    serviceName: 'Initial Product Onboarding',
+    date: '2026-10-03',
+    timeSlot: '11:30 AM - 12:15 PM',
+    duration: '45 mins',
+    status: 'confirmed',
+    source: 'Web Embed',
+    assignedStaff: 'Elena Rostova',
+    price: '$95.00',
   },
   {
-    id: "BK-8023",
-    customerName: "Amanda Vance",
-    customerEmail: "amanda@vancelegal.com",
-    customerPhone: "+1 (555) 345-6789",
-    serviceName: "Comprehensive Operations Review",
-    date: "2026-10-03",
-    timeSlot: "02:00 PM - 03:00 PM",
-    duration: "60 mins",
-    status: "pending",
-    source: "AI Voice Agent",
-    assignedStaff: "Dr. Alex Rivera",
-    price: "$200.00",
+    id: 'BK-8023',
+    customerName: 'Amanda Vance',
+    customerEmail: 'amanda@vancelegal.com',
+    customerPhone: '+1 (555) 345-6789',
+    serviceName: 'Comprehensive Operations Review',
+    date: '2026-10-03',
+    timeSlot: '02:00 PM - 03:00 PM',
+    duration: '60 mins',
+    status: 'pending',
+    source: 'AI Voice Agent',
+    assignedStaff: 'Dr. Alex Rivera',
+    price: '$200.00',
   },
   {
-    id: "BK-8024",
-    customerName: "David Miller",
-    customerEmail: "dmiller@apexsystems.com",
-    customerPhone: "+1 (555) 987-6543",
-    serviceName: "Technical Architecture Audit",
-    date: "2026-10-04",
-    timeSlot: "10:00 AM - 11:30 AM",
-    duration: "90 mins",
-    status: "confirmed",
-    source: "Web Embed",
-    assignedStaff: "Marcus Thorne",
-    price: "$275.00",
+    id: 'BK-8024',
+    customerName: 'David Miller',
+    customerEmail: 'dmiller@apexsystems.com',
+    customerPhone: '+1 (555) 987-6543',
+    serviceName: 'Technical Architecture Audit',
+    date: '2026-10-04',
+    timeSlot: '10:00 AM - 11:30 AM',
+    duration: '90 mins',
+    status: 'confirmed',
+    source: 'Web Embed',
+    assignedStaff: 'Marcus Thorne',
+    price: '$275.00',
   },
   {
-    id: "BK-8025",
-    customerName: "Jessica Taylor",
-    customerEmail: "jess.taylor@designco.com",
-    customerPhone: "+1 (555) 456-7890",
-    serviceName: "Follow-up Consultation",
-    date: "2026-10-04",
-    timeSlot: "01:15 PM - 02:00 PM",
-    duration: "45 mins",
-    status: "completed",
-    source: "Manual",
-    assignedStaff: "Elena Rostova",
-    price: "$80.00",
+    id: 'BK-8025',
+    customerName: 'Jessica Taylor',
+    customerEmail: 'jess.taylor@designco.com',
+    customerPhone: '+1 (555) 456-7890',
+    serviceName: 'Follow-up Consultation',
+    date: '2026-10-04',
+    timeSlot: '01:15 PM - 02:00 PM',
+    duration: '45 mins',
+    status: 'completed',
+    source: 'Manual',
+    assignedStaff: 'Elena Rostova',
+    price: '$80.00',
   },
   {
-    id: "BK-8026",
-    customerName: "Robert Hayes",
-    customerEmail: "rhayes@globalnet.org",
-    customerPhone: "+1 (555) 654-3210",
-    serviceName: "AI Automation Workshop",
-    date: "2026-10-05",
-    timeSlot: "03:30 PM - 05:00 PM",
-    duration: "90 mins",
-    status: "confirmed",
-    source: "AI Voice Agent",
-    assignedStaff: "Dr. Alex Rivera",
-    price: "$310.00",
+    id: 'BK-8026',
+    customerName: 'Robert Hayes',
+    customerEmail: 'rhayes@globalnet.org',
+    customerPhone: '+1 (555) 654-3210',
+    serviceName: 'AI Automation Workshop',
+    date: '2026-10-05',
+    timeSlot: '03:30 PM - 05:00 PM',
+    duration: '90 mins',
+    status: 'confirmed',
+    source: 'AI Voice Agent',
+    assignedStaff: 'Dr. Alex Rivera',
+    price: '$310.00',
   },
 ];
 
 export default function BookingsPage() {
   const [bookings, setBookings] = useState<BookingItem[]>(INITIAL_BOOKINGS);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [isNewBookingModalOpen, setIsNewBookingModalOpen] = useState(false);
-  const [selectedBooking, setSelectedBooking] = useState<BookingItem | null>(
-    null,
-  );
+  const [selectedBooking, setSelectedBooking] = useState<BookingItem | null>(null);
 
-
-  const [newCustomerName, setNewCustomerName] = useState("");
-  const [newCustomerEmail, setNewCustomerEmail] = useState("");
-  const [newCustomerPhone, setNewCustomerPhone] = useState("");
-  const [newService, setNewService] = useState(
-    "Executive Strategy Consultation",
-  );
-  const [newDate, setNewDate] = useState("2026-10-06");
-  const [newTime, setNewTime] = useState("10:00 AM - 11:00 AM");
-  const [newStaff, setNewStaff] = useState("Dr. Alex Rivera");
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerEmail, setNewCustomerEmail] = useState('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+  const [newService, setNewService] = useState('Executive Strategy Consultation');
+  const [newDate, setNewDate] = useState('2026-10-06');
+  const [newTime, setNewTime] = useState('10:00 AM - 11:00 AM');
+  const [newStaff, setNewStaff] = useState('Dr. Alex Rivera');
 
   const filteredBookings = bookings.filter((item) => {
     const matchesSearch =
@@ -149,8 +144,7 @@ export default function BookingsPage() {
       item.serviceName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.id.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus =
-      statusFilter === "all" || item.status === statusFilter;
+    const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
 
     return matchesSearch && matchesStatus;
   });
@@ -163,32 +157,27 @@ export default function BookingsPage() {
       id: `BK-${Math.floor(8000 + Math.random() * 1000)}`,
       customerName: newCustomerName,
       customerEmail: newCustomerEmail,
-      customerPhone: newCustomerPhone || "+1 (555) 000-0000",
+      customerPhone: newCustomerPhone || '+1 (555) 000-0000',
       serviceName: newService,
       date: newDate,
       timeSlot: newTime,
-      duration: "60 mins",
-      status: "confirmed",
-      source: "Manual",
+      duration: '60 mins',
+      status: 'confirmed',
+      source: 'Manual',
       assignedStaff: newStaff,
-      price: "$150.00",
+      price: '$150.00',
     };
 
     setBookings([newBooking, ...bookings]);
     setIsNewBookingModalOpen(false);
     // Reset form
-    setNewCustomerName("");
-    setNewCustomerEmail("");
-    setNewCustomerPhone("");
+    setNewCustomerName('');
+    setNewCustomerEmail('');
+    setNewCustomerPhone('');
   };
 
-  const updateBookingStatus = (
-    id: string,
-    newStatus: BookingItem["status"],
-  ) => {
-    setBookings(
-      bookings.map((b) => (b.id === id ? { ...b, status: newStatus } : b)),
-    );
+  const updateBookingStatus = (id: string, newStatus: BookingItem['status']) => {
+    setBookings(bookings.map((b) => (b.id === id ? { ...b, status: newStatus } : b)));
     if (selectedBooking && selectedBooking.id === id) {
       setSelectedBooking({ ...selectedBooking, status: newStatus });
     }
@@ -222,21 +211,21 @@ export default function BookingsPage() {
         <div className="flex items-center gap-2.5">
           <div className="flex items-center bg-white border border-slate-200/90 rounded-full p-1 shadow-2xs">
             <button
-              onClick={() => setViewMode("list")}
+              onClick={() => setViewMode('list')}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                viewMode === "list"
-                  ? "bg-slate-950 text-white shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
+                viewMode === 'list'
+                  ? 'bg-slate-950 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               List View
             </button>
             <button
-              onClick={() => setViewMode("calendar")}
+              onClick={() => setViewMode('calendar')}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                viewMode === "calendar"
-                  ? "bg-slate-950 text-white shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
+                viewMode === 'calendar'
+                  ? 'bg-slate-950 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Calendar View
@@ -265,9 +254,7 @@ export default function BookingsPage() {
             </div>
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">
-              142
-            </span>
+            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">142</span>
             <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
               +14% vs last mo
             </span>
@@ -284,9 +271,7 @@ export default function BookingsPage() {
             </div>
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">
-              84.2%
-            </span>
+            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">84.2%</span>
             <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
               119 by AI Agent
             </span>
@@ -306,9 +291,7 @@ export default function BookingsPage() {
             <span className="text-2xl font-extrabold text-slate-900 tracking-tight">
               3 Sessions
             </span>
-            <span className="text-xs font-semibold text-slate-500">
-              Next: 09:00 AM
-            </span>
+            <span className="text-xs font-semibold text-slate-500">Next: 09:00 AM</span>
           </div>
         </div>
 
@@ -322,9 +305,7 @@ export default function BookingsPage() {
             </div>
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">
-              1 Pending
-            </span>
+            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">1 Pending</span>
             <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
               Action Required
             </span>
@@ -364,7 +345,7 @@ export default function BookingsPage() {
       </div>
 
       {/* Main Content Body */}
-      {viewMode === "list" ? (
+      {viewMode === 'list' ? (
         /* List View Table */
         <div className="bg-white border border-slate-200/90 rounded-2xl shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
@@ -383,10 +364,7 @@ export default function BookingsPage() {
               <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                 {filteredBookings.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={7}
-                      className="py-12 text-center text-slate-400 text-xs"
-                    >
+                    <td colSpan={7} className="py-12 text-center text-slate-400 text-xs">
                       No bookings match your current filter.
                     </td>
                   </tr>
@@ -403,9 +381,7 @@ export default function BookingsPage() {
                             {item.customerName.charAt(0)}
                           </div>
                           <div>
-                            <div className="font-bold text-slate-900">
-                              {item.customerName}
-                            </div>
+                            <div className="font-bold text-slate-900">{item.customerName}</div>
                             <div className="text-[11px] text-slate-400 font-mono">
                               {item.id} • {item.customerEmail}
                             </div>
@@ -413,57 +389,47 @@ export default function BookingsPage() {
                         </div>
                       </td>
                       <td className="py-4 px-5">
-                        <div className="font-semibold text-slate-800">
-                          {item.serviceName}
-                        </div>
+                        <div className="font-semibold text-slate-800">{item.serviceName}</div>
                         <div className="text-[11px] text-slate-400">
                           {item.duration} • {item.price}
                         </div>
                       </td>
                       <td className="py-4 px-5">
-                        <div className="font-medium text-slate-800">
-                          {item.date}
-                        </div>
-                        <div className="text-[11px] text-slate-500 font-mono">
-                          {item.timeSlot}
-                        </div>
+                        <div className="font-medium text-slate-800">{item.date}</div>
+                        <div className="text-[11px] text-slate-500 font-mono">{item.timeSlot}</div>
                       </td>
-                      <td className="py-4 px-5 font-medium text-slate-700">
-                        {item.assignedStaff}
-                      </td>
+                      <td className="py-4 px-5 font-medium text-slate-700">{item.assignedStaff}</td>
                       <td className="py-4 px-5">
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">
-                          {item.source === "AI Voice Agent" && (
+                          {item.source === 'AI Voice Agent' && (
                             <PhoneCall className="w-3 h-3 text-indigo-600" />
                           )}
-                          {item.source === "Web Embed" && (
+                          {item.source === 'Web Embed' && (
                             <Globe className="w-3 h-3 text-blue-600" />
                           )}
-                          {item.source === "Manual" && (
-                            <User className="w-3 h-3 text-slate-500" />
-                          )}
+                          {item.source === 'Manual' && <User className="w-3 h-3 text-slate-500" />}
                           <span>{item.source}</span>
                         </span>
                       </td>
                       <td className="py-4 px-5">
-                        {item.status === "confirmed" && (
+                        {item.status === 'confirmed' && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                             Confirmed
                           </span>
                         )}
-                        {item.status === "pending" && (
+                        {item.status === 'pending' && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/60">
                             <Clock className="w-3 h-3 text-amber-600" />
                             Pending
                           </span>
                         )}
-                        {item.status === "completed" && (
+                        {item.status === 'completed' && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200/60">
                             Completed
                           </span>
                         )}
-                        {item.status === "cancelled" && (
+                        {item.status === 'cancelled' && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200/60">
                             Cancelled
                           </span>
@@ -492,9 +458,7 @@ export default function BookingsPage() {
         <div className="bg-white border border-slate-200/90 rounded-2xl shadow-2xs p-6 flex flex-col gap-5">
           <div className="flex items-center justify-between pb-4 border-b border-slate-100">
             <div className="flex items-center gap-3">
-              <h2 className="text-lg font-bold text-slate-900">
-                October 2026
-              </h2>
+              <h2 className="text-lg font-bold text-slate-900">October 2026</h2>
               <span className="px-2.5 py-0.5 bg-slate-100 rounded-full text-xs font-semibold text-slate-600">
                 Today
               </span>
@@ -530,13 +494,13 @@ export default function BookingsPage() {
                   key={i}
                   className={`min-h-[90px] p-2 rounded-xl border transition-all ${
                     dayNum === 3
-                      ? "bg-slate-900 text-white border-slate-900"
-                      : "bg-slate-50/50 border-slate-100 hover:bg-white hover:border-slate-300"
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-slate-50/50 border-slate-100 hover:bg-white hover:border-slate-300'
                   }`}
                 >
                   <div
                     className={`text-xs font-bold mb-1 ${
-                      dayNum === 3 ? "text-white" : "text-slate-700"
+                      dayNum === 3 ? 'text-white' : 'text-slate-700'
                     }`}
                   >
                     {dayNum}
@@ -548,11 +512,11 @@ export default function BookingsPage() {
                         onClick={() => setSelectedBooking(b)}
                         className={`text-[10px] p-1.5 rounded-md font-semibold truncate cursor-pointer transition-all ${
                           dayNum === 3
-                            ? "bg-white/20 text-white hover:bg-white/30"
-                            : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                            ? 'bg-white/20 text-white hover:bg-white/30'
+                            : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
                         }`}
                       >
-                        {b.timeSlot.split(" - ")[0]} • {b.customerName}
+                        {b.timeSlot.split(' - ')[0]} • {b.customerName}
                       </div>
                     ))}
                   </div>
@@ -586,9 +550,7 @@ export default function BookingsPage() {
 
             <div className="py-5 space-y-4">
               <div>
-                <h3 className="text-xl font-bold text-slate-900">
-                  {selectedBooking.serviceName}
-                </h3>
+                <h3 className="text-xl font-bold text-slate-900">{selectedBooking.serviceName}</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Scheduled for {selectedBooking.date} at {selectedBooking.timeSlot}
                 </p>
@@ -622,21 +584,19 @@ export default function BookingsPage() {
                   <span className="block text-[10px] font-bold text-slate-400 uppercase">
                     Channel Source
                   </span>
-                  <span className="font-semibold text-slate-800">
-                    {selectedBooking.source}
-                  </span>
+                  <span className="font-semibold text-slate-800">{selectedBooking.source}</span>
                 </div>
               </div>
 
-              {selectedBooking.source === "AI Voice Agent" && (
+              {selectedBooking.source === 'AI Voice Agent' && (
                 <div className="p-3.5 bg-indigo-50/60 border border-indigo-100 rounded-2xl text-xs text-indigo-900 space-y-1">
                   <div className="flex items-center gap-1.5 font-bold">
                     <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
                     <span>AI Voice Transcript Summary</span>
                   </div>
                   <p className="text-[11px] text-indigo-700 leading-relaxed">
-                    Customer called to schedule consultation for business scaling.
-                    The AI agent confirmed available slot with Dr. Alex Rivera.
+                    Customer called to schedule consultation for business scaling. The AI agent
+                    confirmed available slot with Dr. Alex Rivera.
                   </p>
                 </div>
               )}
@@ -644,15 +604,15 @@ export default function BookingsPage() {
 
             <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
               <button
-                onClick={() => updateBookingStatus(selectedBooking.id, "cancelled")}
+                onClick={() => updateBookingStatus(selectedBooking.id, 'cancelled')}
                 className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
               >
                 Cancel Booking
               </button>
               <div className="flex gap-2">
-                {selectedBooking.status === "pending" && (
+                {selectedBooking.status === 'pending' && (
                   <button
-                    onClick={() => updateBookingStatus(selectedBooking.id, "confirmed")}
+                    onClick={() => updateBookingStatus(selectedBooking.id, 'confirmed')}
                     className="px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
                   >
                     Confirm Booking
@@ -679,9 +639,7 @@ export default function BookingsPage() {
                 <div className="w-7 h-7 rounded-lg bg-black text-white flex items-center justify-center font-bold text-xs">
                   <CalendarIcon className="w-4 h-4" />
                 </div>
-                <h3 className="font-bold text-slate-900 text-base">
-                  Create New Booking
-                </h3>
+                <h3 className="font-bold text-slate-900 text-base">Create New Booking</h3>
               </div>
               <button
                 onClick={() => setIsNewBookingModalOpen(false)}

@@ -10,8 +10,8 @@ export interface UserData {
   tier?: string;
   status?: string;
   user_id?: string;
-  system_role?: 'owner' | 'root' | 'manager'; 
-  [key: string]: any;
+  system_role?: 'owner' | 'root' | 'manager';
+  created_at?: string;
 }
 
 interface AuthState {

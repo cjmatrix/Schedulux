@@ -1,4 +1,4 @@
-import { axiosClient, type ApiResponse } from "../../../api/axiosClient";
+import { type ApiResponse, axiosClient } from '../../../api/axiosClient';
 
 export interface RegisterTenantPayload {
   business_name: string;
@@ -25,35 +25,28 @@ export interface TenantInfo {
   status: string;
 }
 
-export type { DashboardUserInfo } from "../../dashboard-user/api/authApi";
-
+export type { DashboardUserInfo } from '../../dashboard-user/api/authApi';
 
 export const authApi = {
-  register: async (
-    payload: RegisterTenantPayload,
-  ): Promise<ApiResponse<RegisterTenantData>> => {
+  register: async (payload: RegisterTenantPayload): Promise<ApiResponse<RegisterTenantData>> => {
     const { data } = await axiosClient.post<ApiResponse<RegisterTenantData>>(
-      "/api/v1/tenant/auth/register",
+      '/api/v1/tenant/auth/register',
       payload,
     );
     return data;
   },
 
-  login: async (
-    payload: LoginTenantPayload,
-  ): Promise<ApiResponse<TenantInfo>> => {
+  login: async (payload: LoginTenantPayload): Promise<ApiResponse<TenantInfo>> => {
     const { data } = await axiosClient.post<ApiResponse<TenantInfo>>(
-      "/api/v1/tenant/auth/login",
+      '/api/v1/tenant/auth/login',
       payload,
     );
     return data;
   },
 
-  googleLogin: async (
-    payload: { id_token: string },
-  ): Promise<ApiResponse<TenantInfo>> => {
+  googleLogin: async (payload: { id_token: string }): Promise<ApiResponse<TenantInfo>> => {
     const { data } = await axiosClient.post<ApiResponse<TenantInfo>>(
-      "/api/v1/tenant/auth/google",
+      '/api/v1/tenant/auth/google',
       payload,
     );
     return data;
@@ -61,24 +54,24 @@ export const authApi = {
 
   forgotPassword: async (email: string): Promise<ApiResponse<null>> => {
     const { data } = await axiosClient.post<ApiResponse<null>>(
-      "/api/v1/tenant/auth/forgot-password",
+      '/api/v1/tenant/auth/forgot-password',
       { email },
     );
     return data;
   },
 
-  resetPassword: async (payload: { token: string; new_password: string }): Promise<ApiResponse<null>> => {
+  resetPassword: async (payload: {
+    token: string;
+    new_password: string;
+  }): Promise<ApiResponse<null>> => {
     const { data } = await axiosClient.post<ApiResponse<null>>(
-      "/api/v1/tenant/auth/reset-password",
+      '/api/v1/tenant/auth/reset-password',
       payload,
     );
     return data;
   },
 
-
-  verifyEmail: async (
-    token: string,
-  ): Promise<ApiResponse<{ tenant_id: string }>> => {
+  verifyEmail: async (token: string): Promise<ApiResponse<{ tenant_id: string }>> => {
     const { data } = await axiosClient.get<ApiResponse<{ tenant_id: string }>>(
       `/api/v1/tenant/auth/verify-email?token=${encodeURIComponent(token)}`,
     );
@@ -86,16 +79,12 @@ export const authApi = {
   },
 
   getProfile: async (): Promise<ApiResponse<TenantInfo>> => {
-    const { data } = await axiosClient.get<ApiResponse<TenantInfo>>(
-      "/api/v1/tenant/auth/me",
-    );
+    const { data } = await axiosClient.get<ApiResponse<TenantInfo>>('/api/v1/tenant/auth/me');
     return data;
   },
 
   logout: async (): Promise<ApiResponse<null>> => {
-    const { data } = await axiosClient.post<ApiResponse<null>>(
-      "/api/v1/tenant/auth/logout",
-    );
+    const { data } = await axiosClient.post<ApiResponse<null>>('/api/v1/tenant/auth/logout');
     return data;
   },
 };

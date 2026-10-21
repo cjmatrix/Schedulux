@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import secrets
 from dataclasses import dataclass
-from typing import List, Dict, Any
-from agent_orchestrator.domain.protocols import CrawlerQueue
+from typing import Any
+
 from agent_orchestrator.domain.exceptions import CrawlJobNotFoundException
+from agent_orchestrator.domain.protocols import CrawlerQueue
 
 
 @dataclass
@@ -12,7 +13,7 @@ class CrawlResultDTO:
     job_id: str
     status: str
     pages_crawled: int
-    pages: List[Dict[str, Any]]
+    pages: list[dict[str, Any]]
 
 
 class CrawlerService:

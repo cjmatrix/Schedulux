@@ -1,11 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { RESOURCE_REPOSITORY } from '../../../domain/tokens.js';
-import { IResourceRepository } from '../../../domain/repositories/resource.repository.interface.js';
-import { ResourceEntity, ResourceType, DispatchStatus } from '../../../domain/entities/resource.entity.js';
-import { generateSemanticId } from '../../../domain/utils/id-generator.js';
-import { ICreateResourceUseCase } from '../../interfaces/resource-use-cases.interface.js';
-import { SchedulingEventsProducer } from '../../../infrastructure/messaging/scheduling-events.producer.js';
 import { CreateResourceRequest } from '@repo/proto/scheduling';
+import {
+  DispatchStatus,
+  ResourceEntity,
+  ResourceType,
+} from '../../../domain/entities/resource.entity.js';
+import { IResourceRepository } from '../../../domain/repositories/resource.repository.interface.js';
+import { RESOURCE_REPOSITORY } from '../../../domain/tokens.js';
+import { generateSemanticId } from '../../../domain/utils/id-generator.js';
+import { SchedulingEventsProducer } from '../../../infrastructure/messaging/scheduling-events.producer.js';
+import { ICreateResourceUseCase } from '../../interfaces/resource-use-cases.interface.js';
 
 @Injectable()
 export class CreateResourceUseCase implements ICreateResourceUseCase {

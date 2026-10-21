@@ -1,23 +1,23 @@
 from __future__ import annotations
 
 import json
-from typing import Optional, List, Dict, Any
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import SystemMessage, HumanMessage
+from typing import Any
 
-from agent_orchestrator.models import AgentDraft, AgentMessage
+from langchain_core.messages import HumanMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+from agent_orchestrator.config import (
+    MEMORY_CHUNK_SIZE,
+    MEMORY_SUMMARIZER_MODEL,
+    MEMORY_TRIGGER_THRESHOLD,
+)
 from agent_orchestrator.domain.protocols import (
-    MessageRepository,
     DraftRepository,
     MemoryQueue,
+    MessageRepository,
 )
-from agent_orchestrator.config import (
-    MEMORY_TRIGGER_THRESHOLD,
-    MEMORY_CHUNK_SIZE,
-    MEMORY_KEEP_RECENT,
-    MEMORY_SUMMARIZER_MODEL,
-)
-from agent_orchestrator.utils.embedding_util import embed_texts, embed_query
+from agent_orchestrator.models import AgentMessage
+from agent_orchestrator.utils.embedding_util import embed_query, embed_texts
 from agent_orchestrator.utils.qdrant_util import get_qdrant_store
 
 
@@ -58,7 +58,7 @@ class MemoryService:
 
     async def consolidate_memory(
         self, tenant_id: str, agent_id: str, cutoff_seq: int
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         agent_draft = await self.draft_repo.get_agent_draft(tenant_id, agent_id)
         if not agent_draft:
             return {"status": "skipped", "reason": "agent_draft_not_found"}
@@ -67,15 +67,16 @@ class MemoryService:
         existing_summary = agent_draft.conversation_summary or ""
 
         # Fetch messages up to cutoff_seq
-        all_msgs = await AgentMessage.find(
-            {"tenant_id": tenant_id, "agent_id": agent_id}
-        ).sort("created_at").to_list()
+        all_msgs = (
+            await AgentMessage.find({"tenant_id": tenant_id, "agent_id": agent_id})
+            .sort("created_at")
+            .to_list()
+        )
 
         unprocessed = all_msgs[last_seq:cutoff_seq]
         if not unprocessed:
             return {"status": "skipped", "reason": "no_new_messages"}
 
-      
         transcript_lines = []
         for idx, m in enumerate(unprocessed, start=last_seq + 1):
             role = "Tenant" if m.role in ("tenant", "user") else "Agent"
@@ -119,7 +120,14 @@ Transcript to analyze:
 
         try:
             response = await llm.ainvoke([HumanMessage(content=prompt)])
-            raw_text = response.content.strip()
+            content = response.content
+            if isinstance(content, list):
+                raw_text = "".join(
+                    b.get("text", "") if isinstance(b, dict) else str(b) for b in content
+                ).strip()
+            else:
+                raw_text = str(content).strip()
+
             # Clean possible markdown fencing
             if raw_text.startswith("```json"):
                 raw_text = raw_text[7:]
@@ -132,7 +140,6 @@ Transcript to analyze:
             new_summary = parsed.get("updated_summary", existing_summary)
             extracted_facts = parsed.get("extracted_facts", [])
 
-           
             agent_draft.conversation_summary = new_summary
             agent_draft.last_summarized_seq = cutoff_seq
             await agent_draft.save()
@@ -166,11 +173,11 @@ Transcript to analyze:
 
     async def get_relevant_memory(
         self, tenant_id: str, agent_id: str, query: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         agent_draft = await self.draft_repo.get_agent_draft(tenant_id, agent_id)
         summary = agent_draft.conversation_summary if agent_draft else ""
 
-        relevant_facts: List[str] = []
+        relevant_facts: list[str] = []
         if query:
             try:
                 query_vector = await embed_query(query)

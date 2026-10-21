@@ -1,15 +1,17 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Redis } from 'ioredis';
 import {
-  ISchemaEventSubscriber,
   ISchemaCacheService,
+  ISchemaEventSubscriber,
   SchemaGeneratedEvent,
 } from '../interfaces/ISchemaEventSubscriber.js';
 
 export { SchemaGeneratedEvent };
 
 @Injectable()
-export class RedisService implements ISchemaEventSubscriber, ISchemaCacheService, OnModuleInit, OnModuleDestroy {
+export class RedisService
+  implements ISchemaEventSubscriber, ISchemaCacheService, OnModuleInit, OnModuleDestroy
+{
   private readonly logger = new Logger(RedisService.name);
   private client!: Redis;
   private subscriber!: Redis;
@@ -34,7 +36,9 @@ export class RedisService implements ISchemaEventSubscriber, ISchemaCacheService
       if (channel === 'schema-generation-events') {
         try {
           const parsed: SchemaGeneratedEvent = JSON.parse(message);
-          this.logger.log(`Received schema event for tenant ${parsed.tenant_id}, job ${parsed.job_id}`);
+          this.logger.log(
+            `Received schema event for tenant ${parsed.tenant_id}, job ${parsed.job_id}`,
+          );
           for (const handler of this.eventHandlers) {
             handler(parsed);
           }

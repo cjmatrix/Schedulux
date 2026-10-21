@@ -3,6 +3,20 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "lint": "biome lint .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "check": "biome check .",
+    "ci": "biome ci .",
+    "lint:py": "cd apps/AI-orchestration && uv run ruff check .",
+    "lint:py:fix": "cd apps/AI-orchestration && uv run ruff check --fix .",
+    "format:py": "cd apps/AI-orchestration && uv run ruff format .",
+    "format:py:check": "cd apps/AI-orchestration && uv run ruff format --check .",
+    "typecheck:py": "cd apps/AI-orchestration && uv run mypy src",
+    "check:py": "cd apps/AI-orchestration && uv run ruff check . && uv run ruff format --check . && uv run mypy src",
+    "check:all": "pnpm check && pnpm check:py",
+    "dev:rabbitmq": "docker compose up rabbitmq",
     "dev:gateway": "pnpm --filter @repo/api-gateway dev",
     "dev:identity": "pnpm --filter @repo/identity-tenant dev",
     "dev:scheduling": "pnpm --filter @repo/scheduling-inventory dev",
@@ -10,10 +24,14 @@
     "dev:worker": "pnpm --filter @repo/background-worker dev",
     "dev:worker:python": "pnpm --filter @repo/background-worker worker:python",
     "dev:ai:grpc": "cd apps/AI-orchestration && PYTHONUNBUFFERED=1 uv run agent-orchestrator",
-    "dev": "concurrently --kill-others --names \"GATEWAY,IDENTITY,SCHEDULING,FRONTEND,WORKER-TS,WORKER-PY,AI-GRPC\" -c \"blue,green,magenta,yellow,cyan,white,red\" \"pnpm dev:gateway\" \"pnpm dev:identity\" \"pnpm dev:scheduling\" \"pnpm dev:frontend\" \"pnpm dev:worker\" \"pnpm dev:worker:python\" \"pnpm dev:ai:grpc\"",
+    "dev": "concurrently --kill-others --names \"RABBITMQ,GATEWAY,IDENTITY,SCHEDULING,FRONTEND,WORKER-TS,WORKER-PY,AI-GRPC\" -c \"gray,blue,green,magenta,yellow,cyan,white,red\" \"pnpm dev:rabbitmq\" \"pnpm dev:gateway\" \"pnpm dev:identity\" \"pnpm dev:scheduling\" \"pnpm dev:frontend\" \"pnpm dev:worker\" \"pnpm dev:worker:python\" \"pnpm dev:ai:grpc\"",
+    "rabbitmq:up": "docker compose up -d rabbitmq",
+    "rabbitmq:down": "docker compose down",
+    "rabbitmq:logs": "docker compose logs -f rabbitmq",
     "build": "pnpm -r run build"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
     "concurrently": "^10.0.5"
   }
 }

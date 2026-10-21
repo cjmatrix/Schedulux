@@ -1,42 +1,42 @@
-import { Outlet, useLocation, useNavigate } from "react-router";
 import {
-  Calendar,
-  BookOpen,
-  MessageSquare,
-  Users,
-  Package,
-  Briefcase,
-  Tag,
-  Settings,
-  CreditCard,
-  Code2,
-  Bell,
-  HelpCircle,
   ArrowLeft,
-  LogOut,
-  Loader2,
+  Bell,
+  BookOpen,
   Bot,
-} from "lucide-react";
-import { useLogout, useTenantProfile } from "../../hooks/useAuth";
-import { useAuthStore } from "../../../../store/useAuthStore";
+  Briefcase,
+  Calendar,
+  Code2,
+  CreditCard,
+  HelpCircle,
+  Loader2,
+  LogOut,
+  MessageSquare,
+  Package,
+  Settings,
+  Tag,
+  Users,
+} from 'lucide-react';
+import { Outlet, useLocation, useNavigate } from 'react-router';
+import { useAuthStore } from '../../../../store/useAuthStore';
+import { useLogout, useTenantProfile } from '../../hooks/useAuth';
 
 const ALL_NAV_ITEMS = [
-  { icon: Bot, label: "AI Agents", path: "/tenant/agents" },
-  { icon: Calendar, label: "Calendar & Bookings", path: "/tenant/bookings" },
-  { icon: BookOpen, label: "Knowledge Base", path: "/tenant/knowledge" },
+  { icon: Bot, label: 'AI Agents', path: '/tenant/agents' },
+  { icon: Calendar, label: 'Calendar & Bookings', path: '/tenant/bookings' },
+  { icon: BookOpen, label: 'Knowledge Base', path: '/tenant/knowledge' },
   {
     icon: MessageSquare,
-    label: "Live Conversations",
-    path: "/tenant/conversations",
+    label: 'Live Conversations',
+    path: '/tenant/conversations',
     badge: true,
   },
-  { icon: Users, label: "Customers", path: "/tenant/customers" },
-  { icon: Package, label: "Resources & Inventory", path: "/tenant/inventory" },
-  { icon: Briefcase, label: "Workspace Users", path: "/tenant/users" },
-  { icon: Tag, label: "Services & Pricing", path: "/tenant/services" },
-  { icon: Settings, label: "Settings", path: "/tenant/settings" },
-  { icon: CreditCard, label: "Billing", path: "/tenant/billing" },
-  { icon: Code2, label: "Embed Widget", path: "/tenant/widget" },
+  { icon: Users, label: 'Customers', path: '/tenant/customers' },
+  { icon: Package, label: 'Resources & Inventory', path: '/tenant/inventory' },
+  { icon: Briefcase, label: 'Workspace Users', path: '/tenant/users' },
+  { icon: Tag, label: 'Services & Pricing', path: '/tenant/services' },
+  { icon: Settings, label: 'Settings', path: '/tenant/settings' },
+  { icon: CreditCard, label: 'Billing', path: '/tenant/billing' },
+  { icon: Code2, label: 'Embed Widget', path: '/tenant/widget' },
 ];
 
 interface TenantLayoutProps {
@@ -52,32 +52,28 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
 
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
-      onSuccess: () => navigate(isTenant ? "/login" : "/dashboarduser/login"),
-      onError: () => navigate(isTenant ? "/login" : "/dashboarduser/login"),
+      onSuccess: () => navigate(isTenant ? '/login' : '/dashboarduser/login'),
+      onError: () => navigate(isTenant ? '/login' : '/dashboarduser/login'),
     });
   };
 
   const userRole = authUser?.system_role;
 
-  
   const NAV_ITEMS = ALL_NAV_ITEMS.filter((item) => {
-  
-    if (!userRole || userRole === "owner") {
+    if (!userRole || userRole === 'owner') {
       return true;
     }
 
-    
-    if (userRole === "root") {
-      return item.path !== "/tenant/billing";
+    if (userRole === 'root') {
+      return item.path !== '/tenant/billing';
     }
 
-   
-    if (userRole === "manager") {
+    if (userRole === 'manager') {
       const hiddenForManager = [
-        "/tenant/users",
-        "/tenant/billing",
-        "/tenant/widget",
-        "/tenant/knowledge",
+        '/tenant/users',
+        '/tenant/billing',
+        '/tenant/widget',
+        '/tenant/knowledge',
       ];
       return !hiddenForManager.includes(item.path);
     }
@@ -85,34 +81,34 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
     return true;
   });
 
-  const canAccessAgentStudio = isTenant && (!userRole || userRole === "owner");
+  const canAccessAgentStudio = isTenant && (!userRole || userRole === 'owner');
 
   const currentTenant = profileData?.data;
   const currentBusinessName =
-    currentTenant?.business_name || authUser?.business_name || "My Workspace";
+    currentTenant?.business_name || authUser?.business_name || 'My Workspace';
   const currentUserFullName =
     authUser?.name ||
-    authUser?.email?.split("@")[0] ||
+    authUser?.email?.split('@')[0] ||
     currentTenant?.business_name ||
-    currentTenant?.contact_email?.split("@")[0] ||
-    "Workspace Member";
+    currentTenant?.contact_email?.split('@')[0] ||
+    'Workspace Member';
   const currentUserRole =
-    authUser?.system_role === "root"
-      ? "Root Admin"
-      : authUser?.system_role === "manager"
-        ? "Manager"
-        : "Tenant Owner";
+    authUser?.system_role === 'root'
+      ? 'Root Admin'
+      : authUser?.system_role === 'manager'
+        ? 'Manager'
+        : 'Tenant Owner';
   const userInitials = currentUserFullName.substring(0, 2).toUpperCase();
 
-  const currentAgentId = location.pathname.match(/\/tenant\/agents\/([^\/]+)/)?.[1];
+  const currentAgentId = location.pathname.match(/\/tenant\/agents\/([^/]+)/)?.[1];
 
   const handleNavItemClick = (itemPath: string) => {
     if (currentAgentId) {
-      if (itemPath === "/tenant/services") {
+      if (itemPath === '/tenant/services') {
         navigate(`/tenant/agents/${currentAgentId}/services`);
         return;
       }
-      if (itemPath === "/tenant/inventory") {
+      if (itemPath === '/tenant/inventory') {
         navigate(`/tenant/agents/${currentAgentId}/resources`);
         return;
       }
@@ -137,19 +133,17 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
             </div>
 
             <button
-              onClick={() => navigate("/tenant/agents")}
+              onClick={() => navigate('/tenant/agents')}
               className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-100/90 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-semibold transition cursor-pointer border border-slate-200/60"
               title="Return to AI Agents Dashboard"
             >
               <div className="flex items-center gap-2 min-w-0">
                 <Bot className="w-4 h-4 text-slate-900 shrink-0" />
                 <span className="truncate">
-                  {currentAgentId ? `Agent: ${currentAgentId}` : "All Agents Hub"}
+                  {currentAgentId ? `Agent: ${currentAgentId}` : 'All Agents Hub'}
                 </span>
               </div>
-              <span className="text-[10px] text-slate-500 font-medium shrink-0 ml-1">
-                Switch
-              </span>
+              <span className="text-[10px] text-slate-500 font-medium shrink-0 ml-1">Switch</span>
             </button>
           </div>
 
@@ -159,29 +153,30 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
                 onClick={() => navigate(`/tenant/agents/${currentAgentId}/dashboard`)}
                 className={`w-full flex items-center justify-between px-3 py-2 mb-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                   location.pathname === `/tenant/agents/${currentAgentId}/dashboard`
-                    ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                    ? 'bg-slate-100 text-slate-900 font-semibold shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Bot className={`w-4 h-4 ${location.pathname.endsWith("/dashboard") ? "text-slate-900" : "text-slate-400"}`} />
+                  <Bot
+                    className={`w-4 h-4 ${location.pathname.endsWith('/dashboard') ? 'text-slate-900' : 'text-slate-400'}`}
+                  />
                   <span>Agent Overview</span>
                 </div>
               </button>
             )}
 
             {NAV_ITEMS.map((item) => {
-              const isAgentsTab = item.path === "/tenant/agents";
+              const isAgentsTab = item.path === '/tenant/agents';
               const isActive =
                 (!isAgentsTab && location.pathname === item.path) ||
-                (isAgentsTab && location.pathname === "/tenant/agents") ||
-                (item.path === "/tenant/services" &&
-                  location.pathname.includes("/services")) ||
-                (item.path === "/tenant/inventory" &&
-                  (location.pathname.includes("/inventory") || location.pathname.includes("/resources"))) ||
-                (item.path === "/tenant/users" &&
-                  (location.pathname === "/tenant" ||
-                    location.pathname === "/tenant/"));
+                (isAgentsTab && location.pathname === '/tenant/agents') ||
+                (item.path === '/tenant/services' && location.pathname.includes('/services')) ||
+                (item.path === '/tenant/inventory' &&
+                  (location.pathname.includes('/inventory') ||
+                    location.pathname.includes('/resources'))) ||
+                (item.path === '/tenant/users' &&
+                  (location.pathname === '/tenant' || location.pathname === '/tenant/'));
               const Icon = item.icon;
 
               return (
@@ -190,14 +185,12 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
                   onClick={() => handleNavItemClick(item.path)}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                     isActive
-                      ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                      ? 'bg-slate-100 text-slate-900 font-semibold shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Icon
-                      className={`w-4 h-4 ${isActive ? "text-slate-900" : "text-slate-400"}`}
-                    />
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-slate-900' : 'text-slate-400'}`} />
                     <span>{item.label}</span>
                   </div>
                   {item.badge && (
@@ -212,7 +205,7 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
         <div className="p-3 border-t border-slate-100 flex flex-col gap-2">
           {canAccessAgentStudio && (
             <button
-              onClick={() => navigate("/tenant/landingboard")}
+              onClick={() => navigate('/tenant/landingboard')}
               className="w-full py-2 px-3 bg-black hover:bg-slate-900 text-white rounded-full text-xs font-semibold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-98 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
@@ -253,16 +246,12 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-14 bg-white border-b border-slate-200/80 px-6 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-            <span className="text-slate-900 font-semibold">
-              {currentBusinessName}
-            </span>
+            <span className="text-slate-900 font-semibold">{currentBusinessName}</span>
             <span>/</span>
             <span>Service Operations</span>
           </div>
 
           <div className="flex items-center gap-4">
-           
-
             <button className="p-1.5 text-slate-500 hover:text-slate-800 rounded-full hover:bg-slate-100 transition-colors">
               <Bell className="w-4 h-4" />
             </button>

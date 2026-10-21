@@ -96,6 +96,7 @@
 
   "scheduling_engine": {
     "allocation_model": "time_slot",
+    "default_booking_mode": "time_slot",
     "slot_granularity_minutes": 15,
     "default_lead_time_hours": 2,
     "max_advance_booking_days": 60,
@@ -204,6 +205,9 @@
         "confirmation_method": "automatic",
         "payment_instructions": ""
       },
+      "verification": {
+        "require_otp": false
+      },
       "eligible_resource_ids": ["res_dr_aris_smith", "res_dr_elena_vance"],
       "required_asset_ids": [],
       "recall_interval_days": 180
@@ -231,6 +235,9 @@
         "confirmation_method": "utr_reference",
         "payment_instructions": "Please pay ₹100 deposit to UPI ID: apexdental@hdfcbank and share your UTR/transaction reference to confirm your slot."
       },
+      "verification": {
+        "require_otp": true
+      },
       "eligible_resource_ids": ["res_dr_aris_smith"],
       "required_asset_ids": ["res_xray_room"],
       "recall_interval_days": 0
@@ -257,6 +264,9 @@
         "qr_code_url": "https://cdn.schedulux.ai/tenants/apex/upi_qr.png",
         "confirmation_method": "utr_reference",
         "payment_instructions": "Please pay ₹50 deposit to UPI ID: apexdental@hdfcbank and share your UTR/transaction reference to confirm your slot."
+      },
+      "verification": {
+        "require_otp": true
       },
       "eligible_resource_ids": ["res_dr_aris_smith"],
       "required_asset_ids": ["res_xray_room"],

@@ -1,9 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { RESOURCE_REPOSITORY } from '../../../domain/tokens.js';
-import { IResourceRepository } from '../../../domain/repositories/resource.repository.interface.js';
-import { ResourceEntity } from '../../../domain/entities/resource.entity.js';
-import { IListResourcesUseCase, ListResourcesOutput } from '../../interfaces/resource-use-cases.interface.js';
 import { ListResourcesRequest } from '@repo/proto/scheduling';
+import { IResourceRepository } from '../../../domain/repositories/resource.repository.interface.js';
+import { RESOURCE_REPOSITORY } from '../../../domain/tokens.js';
+import {
+  IListResourcesUseCase,
+  ListResourcesOutput,
+} from '../../interfaces/resource-use-cases.interface.js';
 
 @Injectable()
 export class ListResourcesUseCase implements IListResourcesUseCase {

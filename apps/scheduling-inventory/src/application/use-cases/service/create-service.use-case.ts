@@ -1,13 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { SERVICE_REPOSITORY } from '../../../domain/tokens.js';
-import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
-import { ServiceEntity } from '../../../domain/entities/service.entity.js';
-import { PriceVO } from '../../../domain/value-objects/price.vo.js';
-import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
-import { generateSemanticId } from '../../../domain/utils/id-generator.js';
-import { ICreateServiceUseCase } from '../../interfaces/service-use-cases.interface.js';
-import { SchedulingEventsProducer } from '../../../infrastructure/messaging/scheduling-events.producer.js';
 import { CreateServiceRequest } from '@repo/proto/scheduling';
+import { ServiceEntity } from '../../../domain/entities/service.entity.js';
+import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
+import { SERVICE_REPOSITORY } from '../../../domain/tokens.js';
+import { generateSemanticId } from '../../../domain/utils/id-generator.js';
+import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
+import { PriceVO } from '../../../domain/value-objects/price.vo.js';
+import { SchedulingEventsProducer } from '../../../infrastructure/messaging/scheduling-events.producer.js';
+import { ICreateServiceUseCase } from '../../interfaces/service-use-cases.interface.js';
 
 @Injectable()
 export class CreateServiceUseCase implements ICreateServiceUseCase {
@@ -20,11 +20,7 @@ export class CreateServiceUseCase implements ICreateServiceUseCase {
   async execute(dto: CreateServiceRequest): Promise<ServiceEntity> {
     const serviceId = generateSemanticId('srv', dto.name);
 
-    const price = PriceVO.create(
-      dto.price?.type,
-      dto.price?.amount,
-      dto.price?.currency,
-    );
+    const price = PriceVO.create(dto.price?.type, dto.price?.amount, dto.price?.currency);
 
     const deposit = DepositVO.create({
       required: dto.deposit?.required,
@@ -49,6 +45,7 @@ export class CreateServiceUseCase implements ICreateServiceUseCase {
       bookingMode: dto.booking_mode || 'time_slot',
       price,
       deposit,
+      verification: dto.verification ? { require_otp: dto.verification.require_otp } : undefined,
       eligibleResourceIds: dto.eligible_resource_ids ?? [],
       requiredAssetIds: dto.required_asset_ids ?? [],
       recallIntervalDays: dto.recall_interval_days || 0,
@@ -56,7 +53,6 @@ export class CreateServiceUseCase implements ICreateServiceUseCase {
 
     const created = await this.serviceRepository.create(service);
 
-   
     await this.eventsProducer.emitServiceCreated(created);
 
     return created;

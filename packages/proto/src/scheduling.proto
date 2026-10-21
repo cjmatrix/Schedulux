@@ -37,6 +37,10 @@ message DepositInfo {
   string payment_instructions = 7;
 }
 
+message ServiceVerificationInfo {
+  optional bool require_otp = 1;
+}
+
 message ServiceInfo {
   string service_id = 1;
   string tenant_id = 2;
@@ -55,6 +59,7 @@ message ServiceInfo {
   string updated_at = 15;
   string booking_mode = 16;
   string agent_id = 17;
+  optional ServiceVerificationInfo verification = 18;
 }
 
 message CreateServiceRequest {
@@ -73,6 +78,7 @@ message CreateServiceRequest {
   optional string booking_mode = 13;
   optional string agent_id = 14;
   optional string service_id = 15;
+  optional ServiceVerificationInfo verification = 16;
 }
 
 message GetServiceRequest {
@@ -120,6 +126,7 @@ message UpdateServiceRequest {
   optional int32 recall_interval_days = 13;
   optional string booking_mode = 14;
   optional string agent_id = 15;
+  optional ServiceVerificationInfo verification = 16;
 }
 
 message DeleteServiceRequest {

@@ -1,38 +1,33 @@
-import { useState } from "react";
-import { useNavigate, Link, useSearchParams, Navigate } from "react-router";
+import { GoogleLogin } from '@react-oauth/google';
 import {
   ArrowLeft,
   ArrowRight,
+  Calendar,
+  CheckCircle2,
   Eye,
   EyeOff,
-  ShieldCheck,
-  Calendar,
   Loader2,
-  CheckCircle2,
-} from "lucide-react";
-import { GoogleLogin } from "@react-oauth/google";
-import {
-  useLogin,
-  useGoogleLoginTenant,
-  useTenantProfile,
-} from "../hooks/useAuth";
-import { useAuthStore } from "../../../store/useAuthStore";
+  ShieldCheck,
+} from 'lucide-react';
+import { useState } from 'react';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
+import { useAuthStore } from '../../../store/useAuthStore';
+import { useGoogleLoginTenant, useLogin, useTenantProfile } from '../hooks/useAuth';
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const { data: profileData, isLoading: isCheckingSession } =
-    useTenantProfile();
+  const { data: profileData, isLoading: isCheckingSession } = useTenantProfile();
   const loginMutation = useLogin();
   const googleLoginMutation = useGoogleLoginTenant();
   const authStoreLogin = useAuthStore((state) => state.login);
-  const justVerified = searchParams.get("verified") === "true";
+  const justVerified = searchParams.get('verified') === 'true';
 
   if (isCheckingSession) {
     return (
@@ -54,10 +49,10 @@ export default function LoginPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage("");
+    setErrorMessage('');
 
     if (!email.trim() || !password) {
-      setErrorMessage("Please enter your email and password.");
+      setErrorMessage('Please enter your email and password.');
       return;
     }
 
@@ -71,15 +66,15 @@ export default function LoginPage() {
           if (res?.data) {
             authStoreLogin(res.data);
           }
-          navigate("/tenant/agents");
+          navigate('/tenant/agents');
         },
         onError: (err) => {
-          if (err.message === "EMAIL_NOT_VERIFIED") {
+          if (err.message === 'EMAIL_NOT_VERIFIED') {
             setErrorMessage(
-              "Your email is not verified yet. Please check your inbox and click the verification link.",
+              'Your email is not verified yet. Please check your inbox and click the verification link.',
             );
           } else {
-            setErrorMessage(err.message || "Invalid email or password.");
+            setErrorMessage(err.message || 'Invalid email or password.');
           }
         },
       },
@@ -118,9 +113,7 @@ export default function LoginPage() {
               <div className="w-7 h-7 bg-black rounded-lg flex items-center justify-center text-white shadow-sm">
                 <Calendar className="w-4 h-4" />
               </div>
-              <span className="font-bold text-gray-900 text-sm">
-                Schedulux AI
-              </span>
+              <span className="font-bold text-gray-900 text-sm">Schedulux AI</span>
             </div>
 
             {/* Title & Subtitle */}
@@ -137,13 +130,10 @@ export default function LoginPage() {
             {justVerified && (
               <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs text-center font-medium flex items-center justify-center gap-2">
                 <CheckCircle2 className="w-4 h-4" />
-                <span>
-                  Account verified! Please sign in with your credentials.
-                </span>
+                <span>Account verified! Please sign in with your credentials.</span>
               </div>
             )}
 
-           
             <div className="w-full flex flex-col items-center justify-center">
               {googleLoginMutation.isPending ? (
                 <div className="w-full py-3 rounded-full bg-gray-100 flex items-center justify-center gap-2 text-xs font-medium text-gray-700">
@@ -155,7 +145,7 @@ export default function LoginPage() {
                   <GoogleLogin
                     onSuccess={(credentialResponse) => {
                       if (credentialResponse.credential) {
-                        setErrorMessage("");
+                        setErrorMessage('');
                         googleLoginMutation.mutate(
                           { id_token: credentialResponse.credential },
                           {
@@ -163,21 +153,17 @@ export default function LoginPage() {
                               if (res?.data) {
                                 authStoreLogin(res.data);
                               }
-                              navigate("/tenant/agents");
+                              navigate('/tenant/agents');
                             },
                             onError: (err) => {
-                              setErrorMessage(
-                                err.message || "Google sign-in failed.",
-                              );
+                              setErrorMessage(err.message || 'Google sign-in failed.');
                             },
                           },
                         );
                       }
                     }}
                     onError={() => {
-                      setErrorMessage(
-                        "Google authentication was cancelled or failed.",
-                      );
+                      setErrorMessage('Google authentication was cancelled or failed.');
                     }}
                     theme="outline"
                     size="large"
@@ -240,7 +226,7 @@ export default function LoginPage() {
                 </div>
                 <div className="relative flex items-center bg-[#f3f4f6] rounded-xl px-3.5 py-3 border border-transparent focus-within:border-gray-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-black/5 transition-all">
                   <input
-                    type={showPassword ? "text" : "password"}
+                    type={showPassword ? 'text' : 'password'}
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -252,11 +238,7 @@ export default function LoginPage() {
                     onClick={() => setShowPassword(!showPassword)}
                     className="text-gray-400 hover:text-gray-600 focus:outline-none ml-2"
                   >
-                    {showPassword ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
@@ -283,11 +265,8 @@ export default function LoginPage() {
 
             {/* Switch to Register */}
             <div className="text-center mt-6 pt-5 border-t border-gray-100 text-xs text-gray-600">
-              Don't have an account?{" "}
-              <Link
-                to="/register"
-                className="font-bold text-gray-900 hover:underline"
-              >
+              Don't have an account?{' '}
+              <Link to="/register" className="font-bold text-gray-900 hover:underline">
                 Get started
               </Link>
             </div>
@@ -297,15 +276,12 @@ export default function LoginPage() {
           <div className="mt-6 text-center space-y-2">
             <div className="inline-flex items-center gap-2 text-xs font-medium text-gray-600">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>
-                Autonomous Cluster: US-East (Virginia) • 99.99% operational
-              </span>
+              <span>Autonomous Cluster: US-East (Virginia) • 99.99% operational</span>
             </div>
             <div className="flex items-center justify-center gap-1.5 text-[11px] text-gray-400">
               <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
               <span>
-                Enterprise SAML 2.0 Ready • SOC2 Type II Certified • 256-Bit
-                Vault Storage
+                Enterprise SAML 2.0 Ready • SOC2 Type II Certified • 256-Bit Vault Storage
               </span>
             </div>
           </div>

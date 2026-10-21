@@ -25,6 +25,9 @@ export interface IServiceDoc extends Document<string> {
     confirmation_method: string;
     payment_instructions: string;
   };
+  verification?: {
+    require_otp?: boolean | null;
+  };
   eligible_resource_ids: string[];
   required_asset_ids: string[];
   recall_interval_days: number;
@@ -71,6 +74,9 @@ export const ServiceMongooseSchema = new Schema<IServiceDoc>(
       qr_code_url: { type: String, default: '' },
       confirmation_method: { type: String, default: 'automatic' },
       payment_instructions: { type: String, default: '' },
+    },
+    verification: {
+      require_otp: { type: Boolean, default: null },
     },
     eligible_resource_ids: { type: [String], default: [] },
     required_asset_ids: { type: [String], default: [] },

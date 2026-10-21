@@ -1,5 +1,5 @@
-import React from 'react';
 import { Code2, Loader2, Rocket } from 'lucide-react';
+import React from 'react';
 import type { RightViewMode } from '../types';
 
 interface CanvasHeaderProps {

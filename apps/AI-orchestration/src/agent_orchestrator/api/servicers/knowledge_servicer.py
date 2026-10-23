@@ -10,19 +10,21 @@ from agent_orchestrator.domain.exceptions import (
     CrawlJobNotFoundException,
     InvalidDraftException,
 )
-from agent_orchestrator.services.agent_service import AgentManagementService
-from agent_orchestrator.services.chat_service import ChatService
-from agent_orchestrator.services.crawler_service import CrawlerService
-from agent_orchestrator.services.onboarding_service import OnboardingService
+from agent_orchestrator.services.protocols import (
+    AgentManagementServiceProtocol,
+    ChatServiceProtocol,
+    CrawlerServiceProtocol,
+    OnboardingServiceProtocol,
+)
 
 
 class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
     def __init__(
         self,
-        onboarding_service: OnboardingService,
-        chat_service: ChatService,
-        agent_service: AgentManagementService,
-        crawler_service: CrawlerService,
+        onboarding_service: OnboardingServiceProtocol,
+        chat_service: ChatServiceProtocol,
+        agent_service: AgentManagementServiceProtocol,
+        crawler_service: CrawlerServiceProtocol,
     ):
         self.onboarding_service = onboarding_service
         self.chat_handler = ChatRPCHandler(chat_service)

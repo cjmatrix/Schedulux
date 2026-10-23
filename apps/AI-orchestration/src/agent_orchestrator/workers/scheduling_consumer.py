@@ -23,7 +23,6 @@ import asyncio
 import json
 import logging
 import os
-import secrets
 import ssl
 from typing import Any
 
@@ -145,7 +144,6 @@ async def handle_service_event(payload: dict[str, Any]) -> None:
         )
         if event_type == "service.deleted":
             current_draft["services"] = [s for s in svcs if s.get("service_id") != service_id]
-            summary = f"Deleted service {service_id} via inventory"
         elif data:
             existing_draft_svc = next((s for s in svcs if s.get("service_id") == service_id), None)
             verif_dict = (
@@ -173,14 +171,8 @@ async def handle_service_event(payload: dict[str, Any]) -> None:
             updated_svcs = [s for s in svcs if s.get("service_id") != service_id]
             updated_svcs.append(svc_dict)
             current_draft["services"] = updated_svcs
-            summary = f"Upserted service {data.get('name', service_id)} via inventory"
 
-        agent_draft.add_checkpoint(
-            checkpoint_id=f"cp_{secrets.token_hex(4)}",
-            message_id=f"kafka_{service_id}",
-            draft_snapshot=current_draft,
-            summary=summary,
-        )
+        agent_draft.current_draft = current_draft
         await agent_draft.save()
         try:
             await set_cached_draft(agent_draft.tenant_id, agent_id, current_draft)
@@ -246,7 +238,6 @@ async def handle_resource_event(payload: dict[str, Any]) -> None:
             current_draft["resources"] = [
                 r for r in res_list if r.get("resource_id") != resource_id
             ]
-            summary = f"Deleted resource {resource_id} via inventory"
         elif data:
             res_dict: dict[str, Any] = {
                 "resource_id": resource_id,
@@ -262,14 +253,8 @@ async def handle_resource_event(payload: dict[str, Any]) -> None:
             updated_res = [r for r in res_list if r.get("resource_id") != resource_id]
             updated_res.append(res_dict)
             current_draft["resources"] = updated_res
-            summary = f"Upserted resource {data.get('name', resource_id)} via inventory"
 
-        agent_draft.add_checkpoint(
-            checkpoint_id=f"cp_{secrets.token_hex(4)}",
-            message_id=f"kafka_{resource_id}",
-            draft_snapshot=current_draft,
-            summary=summary,
-        )
+        agent_draft.current_draft = current_draft
         await agent_draft.save()
         try:
             await set_cached_draft(agent_draft.tenant_id, agent_id, current_draft)
@@ -290,7 +275,13 @@ async def dispatch(topic: str, raw_value: bytes) -> None:
         return
 
     event_type = payload.get("event_type", "")
-    logger.info("[Consumer] Received event=%s on topic=%s", event_type, topic)
+    service_id = payload.get("service_id", "")
+    resource_id = payload.get("resource_id", "")
+    aggregate_id = service_id or resource_id or ""
+    timestamp = payload.get("timestamp", "")
+    event_id = payload.get("event_id") or f"kafka_{aggregate_id}_{timestamp}"
+
+    logger.info("[Consumer] Processing event=%s id=%s on topic=%s", event_type, event_id, topic)
 
     try:
         if topic == "scheduling.service.events":
@@ -300,7 +291,14 @@ async def dispatch(topic: str, raw_value: bytes) -> None:
         else:
             logger.warning("[Consumer] Unknown topic: %s", topic)
     except Exception as exc:
-        logger.error("[Consumer] Error processing event %s: %s", event_type, exc, exc_info=True)
+        logger.error(
+            "[Consumer] Error processing event %s (id=%s): %s",
+            event_type,
+            event_id,
+            exc,
+            exc_info=True,
+        )
+        raise
 
 
 async def run_consumer() -> None:

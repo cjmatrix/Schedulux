@@ -6,17 +6,25 @@ import {
   ResourceType,
 } from '../../../domain/entities/resource.entity.js';
 import { IResourceRepository } from '../../../domain/repositories/resource.repository.interface.js';
-import { RESOURCE_REPOSITORY } from '../../../domain/tokens.js';
+import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
+import {
+  RESOURCE_REPOSITORY,
+  SCHEDULING_EVENTS_PRODUCER,
+  UNIT_OF_WORK,
+} from '../../../domain/tokens.js';
 import { generateSemanticId } from '../../../domain/utils/id-generator.js';
-import { SchedulingEventsProducer } from '../../../infrastructure/messaging/scheduling-events.producer.js';
 import { ICreateResourceUseCase } from '../../interfaces/resource-use-cases.interface.js';
+import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-events-producer.interface.js';
 
 @Injectable()
 export class CreateResourceUseCase implements ICreateResourceUseCase {
   constructor(
     @Inject(RESOURCE_REPOSITORY)
     private readonly resourceRepository: IResourceRepository,
-    private readonly eventsProducer: SchedulingEventsProducer,
+    @Inject(SCHEDULING_EVENTS_PRODUCER)
+    private readonly eventsProducer: ISchedulingEventsProducer,
+    @Inject(UNIT_OF_WORK)
+    private readonly unitOfWork: IUnitOfWork,
   ) {}
 
   async execute(dto: CreateResourceRequest): Promise<ResourceEntity> {
@@ -36,9 +44,13 @@ export class CreateResourceUseCase implements ICreateResourceUseCase {
       customShiftOverridesJson: dto.custom_shift_overrides_json || '{}',
     });
 
-    const created = await this.resourceRepository.create(resource);
+    const { created, outbox } = await this.unitOfWork.withTransaction(async () => {
+      const createdEntity = await this.resourceRepository.create(resource);
+      const outboxDoc = await this.eventsProducer.createResourceCreatedOutboxEvent(createdEntity);
+      return { created: createdEntity, outbox: outboxDoc };
+    });
 
-    await this.eventsProducer.emitResourceCreated(created);
+    await this.eventsProducer.publishOutboxEvent(outbox);
 
     return created;
   }

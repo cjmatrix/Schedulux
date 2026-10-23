@@ -1,17 +1,29 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ServiceEntity } from '../../../domain/entities/service.entity.js';
 import {
   FindServicesFilter,
   IServiceRepository,
   ServiceSummary,
 } from '../../../domain/repositories/service.repository.interface.js';
+import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
+import { UNIT_OF_WORK } from '../../../domain/tokens.js';
 import { ServiceMapper } from '../mappers/service.mapper.js';
 import { ServiceModel } from '../schemas/service.schema.js';
 
 @Injectable()
 export class MongoServiceRepository implements IServiceRepository {
+  constructor(
+    @Inject(UNIT_OF_WORK)
+    private readonly unitOfWork: IUnitOfWork,
+  ) {}
+
   async create(service: ServiceEntity): Promise<ServiceEntity> {
+    const session = this.unitOfWork?.getSession();
     const persistenceData = ServiceMapper.toPersistence(service);
+    if (session) {
+      const [created] = await ServiceModel.create([persistenceData], { session });
+      return ServiceMapper.toDomain(created);
+    }
     const created = await ServiceModel.create(persistenceData);
     return ServiceMapper.toDomain(created);
   }
@@ -102,11 +114,12 @@ export class MongoServiceRepository implements IServiceRepository {
   }
 
   async update(service: ServiceEntity): Promise<ServiceEntity | null> {
+    const session = this.unitOfWork?.getSession();
     const persistenceData = ServiceMapper.toPersistence(service);
     const updated = await ServiceModel.findOneAndUpdate(
       { _id: service.id, tenant_id: service.tenantId, is_deleted: { $ne: true } },
       { $set: persistenceData },
-      { new: true },
+      { new: true, session },
     ).exec();
 
     if (!updated) return null;
@@ -114,9 +127,11 @@ export class MongoServiceRepository implements IServiceRepository {
   }
 
   async delete(tenantId: string, serviceId: string): Promise<boolean> {
+    const session = this.unitOfWork?.getSession();
     const result = await ServiceModel.updateOne(
       { _id: serviceId, tenant_id: tenantId, is_deleted: { $ne: true } },
       { $set: { is_deleted: true, deleted_at: new Date() } },
+      { session },
     ).exec();
     return (result.modifiedCount ?? 0) > 0;
   }

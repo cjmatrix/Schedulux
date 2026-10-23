@@ -1,29 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
 
 from agent_orchestrator.domain.protocols import MessageRepository
+from agent_orchestrator.services.protocols import (
+    ChatHistoryResult,
+    ChatMessageDTO,
+    ChatServiceProtocol,
+)
 
 
-@dataclass
-class ChatMessageDTO:
-    id: str
-    tenant_id: str
-    agent_id: str
-    role: str
-    content: str
-    created_at: str
-
-
-@dataclass
-class ChatHistoryResult:
-    messages: list[ChatMessageDTO]
-    next_cursor: str
-    has_more: bool
-
-
-class ChatService:
+class ChatService(ChatServiceProtocol):
     def __init__(self, message_repo: MessageRepository):
         self.message_repo = message_repo
 

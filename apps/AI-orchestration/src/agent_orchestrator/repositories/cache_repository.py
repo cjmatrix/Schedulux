@@ -7,9 +7,10 @@ from agent_orchestrator.clients.redis_client import (
     get_redis_client,
     set_cached_draft,
 )
+from agent_orchestrator.domain.protocols import CacheRepository
 
 
-class RedisCacheRepository:
+class RedisCacheRepository(CacheRepository):
     async def get_cached_draft(self, tenant_id: str, agent_id: str) -> dict[str, Any] | None:
         return await get_cached_draft(tenant_id, agent_id)
 

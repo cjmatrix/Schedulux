@@ -6,12 +6,13 @@ from typing import Any
 
 import aio_pika
 
-from agent_orchestrator.redis_client import get_redis_client
+from agent_orchestrator.clients.redis_client import get_redis_client
+from agent_orchestrator.domain.protocols import CrawlerQueue
 
 CRAWL_QUEUE_NAME = "knowledge-crawl-queue"
 
 
-class RabbitMQCrawlerQueue:
+class RabbitMQCrawlerQueue(CrawlerQueue):
     def __init__(self, rabbitmq_uri: str | None = None):
         self.uri = rabbitmq_uri or os.environ.get(
             "RABBITMQ_URI", "amqp://guest:guest@localhost:5672"

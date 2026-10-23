@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import json
 import os
-import re
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Any, Literal, cast
@@ -15,10 +14,8 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
-from langgraph.types import interrupt
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from typing_extensions import TypedDict
 
@@ -42,6 +39,7 @@ class GraphState(TypedDict):
     decision: str | None
     pending_patches: list[dict] | None
     status: str
+    patch_retries: int
 
 
 STRUCTURAL_REQUIREMENTS: list[dict] = [
@@ -185,183 +183,6 @@ def _get_llm(temperature: float = 0.2) -> BaseChatModel:
         )
 
 
-def _extract_text(resp) -> str:
-    content = resp.content
-    if isinstance(content, list):
-        return " ".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content)
-    return str(content)
-
-
-class TimeSlot(BaseModel):
-    start: str = Field(description="Start time in HH:MM 24h format")
-    end: str = Field(description="End time in HH:MM 24h format")
-
-
-class OperatingHours(BaseModel):
-    monday: list[TimeSlot] = Field(default_factory=list)
-    tuesday: list[TimeSlot] = Field(default_factory=list)
-    wednesday: list[TimeSlot] = Field(default_factory=list)
-    thursday: list[TimeSlot] = Field(default_factory=list)
-    friday: list[TimeSlot] = Field(default_factory=list)
-    saturday: list[TimeSlot] = Field(default_factory=list)
-    sunday: list[TimeSlot] = Field(default_factory=list)
-
-
-async def _parse_operating_hours_with_llm(raw_text: str, llm: BaseChatModel) -> dict:
-    """Converts free-form hours description → {monday: [{start,end}], ...}"""
-    structured_llm = llm.with_structured_output(OperatingHours)
-    prompt = f"Convert this business hours description into structured data:\n{raw_text}"
-    try:
-        resp = await structured_llm.ainvoke([HumanMessage(content=prompt)])
-        if isinstance(resp, BaseModel):
-            return resp.model_dump()
-        if isinstance(resp, dict):
-            return resp
-        return {}
-    except Exception as e:
-        print(f"[LLM Pydantic Parse Error] {e}", flush=True)
-        slot = [{"start": "09:00", "end": "17:00"}]
-        return {d: slot for d in ("monday", "tuesday", "wednesday", "thursday", "friday")} | {
-            "saturday": [],
-            "sunday": [],
-        }
-
-
-class ServiceDetails(BaseModel):
-    name: str = Field(description="Name of the service")
-    description: str | None = Field(
-        default=None, description="Description of the service, if mentioned"
-    )
-    booking_mode: Literal["time_slot", "date_range"] = Field(
-        default="time_slot",
-        description="Booking mode: 'time_slot' for clock-hour appointments (e.g. consultations, car wash, haircut) or 'date_range' for multi-day bookings (e.g. hotel stays, equipment rentals)",
-    )
-    duration_minutes: int = Field(
-        description="Duration in minutes (e.g. 30, 60; for date_range use 1440 or 0)", default=30
-    )
-    buffer_minutes: int = Field(description="Buffer/cleanup time in minutes", default=0)
-    price_amount: float = Field(description="Price amount", default=0.0)
-    price_currency: str = Field(description="Currency code", default="USD")
-    require_otp: bool | None = Field(
-        default=None,
-        description="Whether this service specifically requires OTP verification before booking (true=mandatory, false=skip OTP, null=inherit global policy)",
-    )
-
-
-async def _parse_service_with_llm(raw_text: str, llm: BaseChatModel) -> dict | None:
-    """Parses a free-form service description → structured service dict."""
-    structured_llm = llm.with_structured_output(ServiceDetails)
-    prompt = f"Extract service details from this input:\n{raw_text}"
-    try:
-        p = await structured_llm.ainvoke([HumanMessage(content=prompt)])
-        if not isinstance(p, ServiceDetails):
-            return None
-        svc_name = p.name
-        service_id = "srv_" + svc_name.lower().replace(" ", "_")[:24]
-        return {
-            "service_id": service_id,
-            "name": svc_name,
-            "description": p.description or "",
-            "booking_mode": getattr(p, "booking_mode", "time_slot") or "time_slot",
-            "duration_minutes": p.duration_minutes,
-            "buffer_minutes": p.buffer_minutes,
-            "price": {
-                "type": "fixed",
-                "amount": p.price_amount,
-                "currency": p.price_currency,
-            },
-            "verification": {
-                "require_otp": getattr(p, "require_otp", None),
-            },
-            "eligible_resource_ids": [],
-            "required_asset_ids": [],
-        }
-    except Exception as e:
-        print(f"[LLM Pydantic Parse Error] {e}", flush=True)
-        return None
-
-
-class PartialServiceUpdate(BaseModel):
-    booking_mode: Literal["time_slot", "date_range"] | None = Field(
-        default=None,
-        description="Booking mode: 'time_slot' (appointments) or 'date_range' (multi-day stays/rentals)",
-    )
-    duration_minutes: int | None = Field(
-        default=None, description="Duration in minutes, if mentioned"
-    )
-    buffer_minutes: int | None = Field(
-        default=None, description="Buffer/cleanup time in minutes, if mentioned"
-    )
-    price_amount: float | None = Field(default=None, description="Price amount, if mentioned")
-    name: str | None = Field(default=None, description="Name of the service, if mentioned")
-    description: str | None = Field(
-        default=None, description="Description of the service, if mentioned"
-    )
-    require_otp: bool | None = Field(
-        default=None, description="Whether this service requires OTP verification"
-    )
-
-
-async def _parse_partial_service_update(
-    raw_text: str, current_service: dict, llm: BaseChatModel
-) -> dict:
-    structured_llm = llm.with_structured_output(PartialServiceUpdate)
-    prompt = (
-        f"The user is updating a service. Current details: {json.dumps(current_service)}.\n"
-        f"Extract any new or updated fields from the user's input:\n{raw_text}"
-    )
-    try:
-        resp = await structured_llm.ainvoke([HumanMessage(content=prompt)])
-        if isinstance(resp, BaseModel):
-            return resp.model_dump(exclude_none=True)
-        if isinstance(resp, dict):
-            return resp
-        return {}
-    except Exception as e:
-        print(f"[LLM Pydantic Parse Error] {e}", flush=True)
-        return {}
-
-
-class ResourceDetails(BaseModel):
-    name: str = Field(description="Name of the person, staff member, room, chair, bay, or asset")
-    resource_type: Literal["staff", "physical_asset"] = Field(
-        default="staff",
-        description="Whether this is a human staff member ('staff') or a room/chair/equipment/bay ('physical_asset')",
-    )
-    title: str | None = Field(
-        default=None,
-        description="Job title, role, or asset category (e.g. Senior Barber, Doctor, Bay 1, Deluxe Suite)",
-    )
-    description: str | None = Field(default=None, description="Brief description")
-
-
-async def _parse_resource_with_llm(raw_text: str, llm: BaseChatModel) -> dict | None:
-    """Parses a free-form resource description → structured resource dict."""
-    structured_llm = llm.with_structured_output(ResourceDetails)
-    prompt = f"Extract resource details from this input:\n{raw_text}"
-    try:
-        p = await structured_llm.ainvoke([HumanMessage(content=prompt)])
-        if not isinstance(p, ResourceDetails):
-            return None
-        res_name = p.name
-        clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", res_name.lower().replace(" ", "_"))
-        resource_id = "res_" + clean_name[:24]
-        return {
-            "resource_id": resource_id,
-            "resource_type": p.resource_type,
-            "name": res_name,
-            "title": p.title or "",
-            "category": p.resource_type,
-            "description": p.description or "",
-            "is_bookable": True,
-            "dispatch_status": "active",
-            "custom_shift_overrides": {},
-        }
-    except Exception as e:
-        print(f"[LLM Resource Parse Error] {e}", flush=True)
-        return None
-
-
 def _compute_structural_gaps(draft: dict) -> list[dict]:
     gaps: list[dict] = []
 
@@ -417,126 +238,18 @@ def _compute_structural_gaps(draft: dict) -> list[dict]:
     return gaps
 
 
-async def _apply_patch(draft: dict, gap: dict, answer: str, llm: BaseChatModel) -> dict:
-    draft = copy.deepcopy(draft)
-
-    if isinstance(answer, list):
-        answer = answer[0] if answer else ""
-    answer = str(answer)
-
-    rtype = gap["type"]
-
-    if rtype == "scalar":
-        _set_nested(draft, gap["field"], answer.strip())
-
-    elif rtype == "operating_hours":
-        parsed = await _parse_operating_hours_with_llm(answer, llm)
-        oh = draft.get("operating_hours", {})
-        oh.update(parsed)
-        draft["operating_hours"] = oh
-
-    elif rtype == "services_present":
-        svc = await _parse_service_with_llm(answer, llm)
-        if svc:
-            existing_resources = draft.get("resources", [])
-            if existing_resources and not svc.get("eligible_resource_ids"):
-                svc["eligible_resource_ids"] = [existing_resources[0].get("resource_id")]
-            draft.setdefault("services", []).append(svc)
-
-    elif rtype == "resources_present":
-        res = await _parse_resource_with_llm(answer, llm)
-        if res:
-            draft.setdefault("resources", []).append(res)
-            for svc in draft.get("services", []):
-                if not svc.get("eligible_resource_ids"):
-                    svc["eligible_resource_ids"] = [res["resource_id"]]
-
-    elif rtype in ("per_service", "per_service_nested"):
-        idx = gap.get("service_idx", 0)
-        svcs = draft.get("services", [])
-        if idx < len(svcs):
-            updates = await _parse_partial_service_update(answer, svcs[idx], llm)
-
-            if "duration_minutes" in updates:
-                svcs[idx]["duration_minutes"] = updates["duration_minutes"]
-            if "buffer_minutes" in updates:
-                svcs[idx]["buffer_minutes"] = updates["buffer_minutes"]
-            if "name" in updates:
-                svcs[idx]["name"] = updates["name"]
-            if "description" in updates:
-                svcs[idx]["description"] = updates["description"]
-            if "price_amount" in updates:
-                if "price" not in svcs[idx] or not isinstance(svcs[idx]["price"], dict):
-                    curr = draft.get("business_profile", {}).get("currency", "USD")
-                    svcs[idx]["price"] = {"type": "fixed", "currency": curr}
-                svcs[idx]["price"]["amount"] = updates["price_amount"]
-
-    return draft
-
-
-def _build_semantic_review_prompt(draft: dict) -> str:
-    bp = draft.get("business_profile", {})
-    services = draft.get("services", [])
-    resources = draft.get("resources", [])
-
-    svc_lines = (
-        "\n".join(
-            f"  • {s.get('name', '?')} — {s.get('duration_minutes', '?')}min "
-            f"+ {s.get('buffer_minutes', 0)}min buffer, "
-            f"{s.get('price', {}).get('currency', 'USD')} {s.get('price', {}).get('amount', '?')}"
-            for s in services
-        )
-        or "  (none)"
-    )
-
-    res_lines = (
-        "\n".join(f"  • {r.get('name', '?')} ({r.get('resource_type', '?')})" for r in resources)
-        or "  (none)"
-    )
-
-    return f"""You are reviewing a Schedulux AI agent config before it goes live.
-
-Business: {bp.get("name", "?")} | Vertical: {bp.get("vertical", "?")} | Timezone: {bp.get("timezone", "?")}
-
-Services ({len(services)}):
-{svc_lines}
-
-Staff / Resources ({len(resources)}):
-{res_lines}
-
-Task:
-1. For this vertical, are there OBVIOUSLY IMPORTANT services missing that most businesses of this type offer?
-2. Any critical setup issues?
-
-Rules:
-- If everything looks reasonably complete, reply exactly: COMPLETE
-- If something important is missing, ask ONE specific short question to the tenant.
-- Do NOT ask about optional fields. Do NOT repeat already-filled fields.
-- Do NOT add preamble. Just the question or COMPLETE."""
-
-
 def _format_draft_toon(draft: dict) -> str:
     """
-    Serializes the draft schema using Recursive Pruning + TOON (Token-Oriented Object Notation).
-    Automatically captures 100% of schema fields (future-proof against schema drift),
-    strips empty/null syntax bloat, and provides optimal token compression for LLM attention.
+    Serializes the draft schema using TOON (Token-Oriented Object Notation).
+    Provides optimal token compression for LLM attention while preserving complete schema structure.
     """
-
-    def prune_empty(d):
-        if isinstance(d, dict):
-            return {k: prune_empty(v) for k, v in d.items() if v not in (None, "", {}, [])}
-        elif isinstance(d, list):
-            return [prune_empty(v) for v in d if v not in (None, "", {}, [])]
-        return d
-
-    pruned = prune_empty(copy.deepcopy(draft))
     try:
         import toon
 
-        return toon.encode(pruned)
+        return toon.encode(draft)
     except Exception as e:
-        print(f"[TOON Warning] Fallback to pruned json: {e}", flush=True)
-        return json.dumps(pruned, indent=2)
+        print(f"[TOON Warning] Fallback to json: {e}", flush=True)
+        return json.dumps(draft, indent=2)
 
 
 async def node_load_draft(state: GraphState) -> dict:
@@ -563,81 +276,7 @@ async def node_load_draft(state: GraphState) -> dict:
         "semantic_note": None,
         "decision": None,
         "pending_patches": None,
-    }
-
-
-async def node_validate_structural(state: GraphState) -> dict:
-    """Pure Python. Zero LLM calls. Computes all structural gaps."""
-    gaps = _compute_structural_gaps(state["draft"])
-    return {"structural_gaps": gaps}
-
-
-async def node_ask_human_structural(state: GraphState) -> dict:
-    """
-    Pops the first structural gap and raises a LangGraph interrupt.
-    The graph is paused here. Resume by calling Command(resume=user_answer).
-    """
-    gaps = state["structural_gaps"]
-    if not gaps:
-        return {}
-
-    gap = gaps[0]
-
-    user_answer: str = interrupt(
-        {
-            "type": "structural_gap",
-            "field": gap["field"],
-            "question": gap["question"],
-        }
-    )
-
-    llm = _get_llm()
-    updated_draft = await _apply_patch(state["draft"], gap, user_answer, llm)
-
-    tenant_id = state.get("tenant_id", "")
-    agent_id = state.get("agent_id") or updated_draft.get("agent_id", "")
-    if tenant_id and agent_id:
-        try:
-            from agent_orchestrator.clients.redis_client import set_cached_draft
-
-            await set_cached_draft(tenant_id, agent_id, updated_draft)
-            print(
-                f"[Structural Node] Updated draft cached in Redis for tenant {tenant_id}, agent {agent_id}",
-                flush=True,
-            )
-        except Exception as re:
-            print(f"[Structural Node] Redis cache write warning: {re}", flush=True)
-
-        try:
-            import secrets
-
-            from agent_orchestrator.models import AgentDraft, init_db
-
-            await init_db()
-            agent_draft = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
-            if agent_draft:
-                agent_draft.add_checkpoint(
-                    checkpoint_id=f"cp_{secrets.token_hex(4)}",
-                    message_id=f"msg_{secrets.token_hex(4)}",
-                    draft_snapshot=updated_draft,
-                    user_prompt=str(user_answer)[:200],
-                    summary=f"Set {gap.get('field', 'field')}",
-                )
-                await agent_draft.save()
-                print(
-                    f"[Structural Node] Persisted turn checkpoint to AgentDraft ({tenant_id}/{agent_id})",
-                    flush=True,
-                )
-        except Exception as de:
-            print(
-                f"[Structural Node Warning] Failed to persist AgentDraft turn checkpoint: {de}",
-                flush=True,
-            )
-
-    return {
-        "draft": updated_draft,
-        "pending_field": gap["field"],
-        "messages": [HumanMessage(content=f"[{gap['field']}] {user_answer}")],
+        "patch_retries": 0,
     }
 
 
@@ -645,11 +284,20 @@ class SemanticAction(BaseModel):
     action: Literal["update_schema", "ask_user", "finalize"] = Field(
         description="Action to take based on current state"
     )
-    question: str | None = Field(
-        default=None, description="The question to ask the user, if action is ask_user or finalize"
+    question: str = Field(
+        description=(
+            "MANDATORY. The conversational response and follow-up question sent to the user. "
+            "Must ALWAYS be a non-empty string. "
+            "When updating the schema ('update_schema'): briefly acknowledge the applied changes (1 sentence) "
+            "AND proactively ask the next specific question from the deployment checklist or suggest an optional feature. "
+            "For 'ask_user': ask a specific, contextual follow-up question based on what is missing in the draft. "
+            "For 'finalize': confirm the save and summarise next steps. "
+            "NEVER leave this field empty or null."
+        ),
     )
     patches: list[dict] | None = Field(
-        default=None, description="RFC 6902 JSON Patches to apply, if action is update_schema"
+        default=None,
+        description="RFC 6902 JSON Patches to apply whenever user provides configuration details",
     )
 
 
@@ -660,29 +308,39 @@ async def node_llm_semantic_review(state: GraphState) -> dict:
     """
     llm = _get_llm().with_structured_output(SemanticAction)
 
-    history_msgs = state.get("messages", [])[-6:]
-    history = (
-        "\n".join([m.content for m in history_msgs])
-        if history_msgs
-        else "No conversation history yet."
-    )
+    all_msgs = state.get("messages", [])
+    history_msgs = all_msgs
 
-    last_msg = history_msgs[-1] if history_msgs else None
-    just_applied_patches = bool(
-        last_msg
-        and isinstance(last_msg, SystemMessage)
-        and "Successfully applied" in str(last_msg.content)
-    )
+    history_lines = []
+    for m in history_msgs:
+        if isinstance(m, SystemMessage):
+            continue
+        prefix = "Tenant: " if isinstance(m, HumanMessage) else "Agent: "
+        c = str(m.content)
+        if c.startswith("Tenant: ") or c.startswith("Agent: ") or c.startswith("User: "):
+            history_lines.append(c)
+        else:
+            history_lines.append(f"{prefix}{c}")
+    history = "\n".join(history_lines) if history_lines else "No conversation history yet."
+
+    last_msg = all_msgs[-1] if all_msgs else None
+    is_system_feedback = isinstance(last_msg, SystemMessage)
+    system_feedback_text = str(last_msg.content) if isinstance(last_msg, SystemMessage) else ""
+
+    _early_draft = state.get("draft", {})
+    _early_gaps = _compute_structural_gaps(_early_draft)
 
     post_patch_instruction = ""
-    if just_applied_patches:
-        post_patch_instruction = """
-*** ATTENTION: YOU JUST APPLIED JSON PATCHES IN THE IMMEDIATE PRECEDING STEP ***
-- You CANNOT choose 'update_schema' again in this step.
-- Review the updated draft below:
-  * If any mandatory dependent fields are missing (e.g., active deposit missing UPI ID or QR code URL, or emergency triage missing contact), you MUST choose 'ask_user' and ask for that specific detail.
-  * If the draft is valid and all dependent fields are sound, you MUST choose 'ask_user'. Inform the user of the exact changes applied, and ask if they would like to make any other adjustments or if they are ready to save their changes.
-  * You must NEVER choose 'finalize' unless the user EXPLICITLY commanded to save/deploy in their recent message (e.g. "save", "save changes", "deploy now", "finalize").
+    if is_system_feedback:
+        post_patch_instruction = f"""
+*** SYSTEM EXECUTION FEEDBACK: PREVIOUS PATCH FAILED ***
+{system_feedback_text}
+
+CRITICAL RULES FOR RECOVERY:
+1. The draft was NOT updated with your patches.
+2. You must NOT pretend or tell the user that any changes were applied.
+3. Analyze the error above, correct the invalid patch path, field name, or value, and output an 'update_schema' action with corrected patches now.
+4. If a field was flagged as extra_forbidden, inspect the allowed schema specification below and use only valid allowed fields.
 """
 
     summary_block = ""
@@ -731,6 +389,7 @@ REQUIRED MINIMUM DEPLOYMENT CHECKLIST (These must be configured before the agent
 CONVERSATIONAL GUIDANCE:
 - You are holding a natural, consultative setup conversation with the user.
 - The user may configure their business in ANY order (e.g. they might describe multiple services first, then set hours, then introduce staff/rooms). NEVER force the user into a rigid sequence.
+- INCREMENTAL UPDATES (CRITICAL): The REQUIRED MINIMUM DEPLOYMENT CHECKLIST above applies ONLY to 'finalize' (going live). It is NOT a requirement for 'update_schema'! You MUST apply patches incrementally as details are provided. For example, if the user gives services or business name, apply them immediately to the draft canvas even if phone number, timezone, or resources are still missing. NEVER withhold patches waiting for a "complete" configuration!
 - If the user provides service, staff, or business details, generate all required JSON patches immediately.
 - If you have just applied patches or if the user asks what to do next, proactively and conversationally prompt for 1 or 2 missing items from the checklist above.
 - If there is no conversation history yet, greet the user warmly as their Schedulux AI setup assistant and ask for their business name and what services they provide.
@@ -738,24 +397,71 @@ CONVERSATIONAL GUIDANCE:
 - CRITICAL: DO NOT choose 'finalize' if ANY items from the REQUIRED MINIMUM DEPLOYMENT CHECKLIST above are still missing. If the user asks to save/finalize while items are missing, choose 'ask_user' and politely explain what is still needed before going live.
 """
 
+    optional_features_block = """
+OPTIONAL FEATURES YOU CAN SUGGEST (Not required to go live, but proactively mention them when relevant):
+These features are fully configurable and can dramatically improve the user's booking experience. Suggest them naturally in conversation at the right moment — don't dump them all at once.
+
+1. DEPOSIT / ADVANCE PAYMENT (services[].deposit):
+   - Ask: "Would you like to collect an advance deposit for any service? (e.g. ₹500 upfront for a Deep Cleaning)"
+   - Relevant when: a service has a non-zero price and deposit is not yet configured.
+   - Requires: deposit.required=true, deposit.amount, deposit.processor="upi_direct", deposit.upi_id, deposit.confirmation_method="utr_reference".
+
+2. OTP VERIFICATION POLICY (guardrails.verification_policy):
+   - Ask: "Should customers verify via OTP before booking, rescheduling, or cancelling? (Recommended for high-value or deposit-backed services)"
+   - Fields: require_otp_for_new_booking, require_otp_for_reschedule, require_otp_for_cancel (all boolean).
+
+3. BLACKOUT / HOLIDAY DATES (operating_hours.blackout_dates):
+   - Ask: "Do you have any holidays or days when you'll be closed? I can block those dates out."
+   - Relevant when: operating hours are set but no blackout_dates are configured.
+   - Format: list of {date: "YYYY-MM-DD", reason: "string", is_closed: true}.
+
+4. CANCELLATION & LEAD TIME POLICY (scheduling_engine):
+   - Ask: "How far in advance can customers book? And is there a cancellation window? (e.g. must cancel 24h before appointment)"
+   - Fields: cancellation_window_hours, default_lead_time_hours, max_advance_booking_days, hold_duration_minutes.
+
+5. HUMAN HANDOFF / ESCALATION (guardrails.human_handoff):
+   - Ask: "If the AI can't handle a query, should it transfer the customer to a human? (e.g. for complex cases or emergencies)"
+   - Fields: enabled, trigger_topics, reception_contact, handoff_message.
+
+6. RETURN VISIT REMINDERS (services[].recall_interval_days):
+   - Ask: "Should the system remind customers to book again after a set number of days? (e.g. remind dental patients every 180 days)"
+   - Relevant when: service is configured but recall_interval_days is null or 0.
+
+7. WIDGET CUSTOMISATION (widget_config):
+   - Ask: "Would you like to customise the booking widget? (e.g. chatbot name, greeting message, brand color, or which platforms to enable it on)"
+   - Fields: agent_name, initial_greeting, fallback_message, primary_color, platform_sources.
+
+8. SUPERVISOR / CUSTOM AI INSTRUCTIONS (supervisor_prompt):
+   - Ask: "Do you want to give the AI any special instructions? (e.g. 'Always upsell the premium package' or 'Never book Sundays')"
+   - Field: supervisor_prompt (free-text string).
+
+SUGGESTION TIMING RULES:
+- Suggest at most 1 optional feature per turn to avoid overwhelming the user.
+- Prioritise suggestions that are MOST RELEVANT to the vertical and current draft state (e.g. suggest deposits for salons/clinics that have priced services; suggest blackout dates after operating hours are set; suggest OTP after services are added).
+- If the user declines a suggestion (e.g. "no deposit needed"), do NOT re-suggest it.
+- Only suggest optional features AFTER the immediate context/action is resolved (e.g. don't suggest deposits mid-flow while the user is still naming their services).
+"""
+
     prompt = f"""You are the Schedulux AI Configuration Agent.
 Your job is to review the JSON draft, apply user changes, and converse with the user to ensure the configuration is logically sound, functional, and complete.
-{summary_block}{facts_block}{gaps_block}
+{summary_block}{facts_block}{gaps_block}{optional_features_block}
 
 CRITICAL RULES FOR REASONING & ACTIONS:
 1. GRAMMAR & CASING: Automatically correct spelling, casing, and grammar from user messages before generating patches (e.g., "tier punchuree repai" -> "Tire Puncture Repair").
 2. SINGLE-TURN PATCHES: If the user provides multiple updates, generate ALL required JSON patches in a SINGLE turn. Do not break them down into multiple turns.
 3. ANTI-HALLUCINATION / NEVER GUESS DETAILS:
-   - NEVER assume, default, or invent external user details that the user did not provide (specifically: UPI IDs (upi_id), QR code URLs, phone numbers, email addresses, or business verticals).
+   - NEVER assume, default, or invent external user details that the user did not provide (specifically: UPI IDs (upi_id), phone numbers, email addresses, or business verticals).
    - Internal system slugs ('resource_id', 'service_id') are NOT user details—always auto-generate them from the name (e.g. "Dr. Shijisha" -> "res_shijisha"). NEVER ask the user for an ID!
+4. STRICT JSON FORMATTING (NO COMMENTS):
+   - Never include comments (// or /* */) anywhere inside JSON tool arguments. All tool arguments must be 100% strict JSON.
 
 DOMAIN INTEGRITY & DEPENDENCY RULES:
 1. DEPOSITS & PAYMENTS (UPI ONLY):
-   - Schedulux ONLY supports direct UPI deposit payments (through UPI ID or QR Code URL). No Stripe, no bank transfer, and no cash on arrival are supported for service deposits.
+   - Schedulux ONLY supports direct UPI deposit payments. The frontend system automatically generates dynamic payment QR codes for customers directly from the owner's UPI ID.
    - When configuring a deposit (deposit.required is True or deposit.amount > 0):
      * Set `deposit.processor` to "upi_direct" and `deposit.confirmation_method` to "utr_reference".
-     * Either `deposit.upi_id` (e.g., clinic@okhdfcbank) or `deposit.qr_code_url` is MANDATORY for collecting deposits.
-     * If the user enables a deposit without providing their UPI ID or QR code, apply the deposit amount patch and ASK the user for their clinic's UPI ID or QR code so patients can pay their deposit.
+     * `deposit.upi_id` (e.g., clinic@okhdfcbank or 9876543210@paytm) is MANDATORY for collecting deposits.
+     * If the user enables a deposit without providing their UPI ID, apply the deposit amount patch and ASK the user specifically for their UPI ID (e.g., "Please provide your UPI ID for collecting deposit payments."). NEVER ask the user for a QR code image or QR code URL, as the system generates the QR code automatically from their UPI ID.
      * `deposit.amount` cannot exceed `price.amount` (unless `price.type` is "variable" or "starting_at").
      * If `price.type == "free"`, deposit cannot be required (`deposit.required` must be False).
 2. CURRENCY SYNCHRONIZATION:
@@ -777,7 +483,15 @@ DOMAIN INTEGRITY & DEPENDENCY RULES:
        {{"resource_id": "res_<sanitized_name>", "resource_type": "staff" (or "room" / "chair" / "bay" / "equipment" if physical), "name": "<Resource Name>", "title": "Specialist", "category": "General", "description": "", "is_bookable": true, "dispatch_status": "active", "custom_shift_overrides": {{}}}}
      * DO NOT ask the user for `resource_id`, title, or category as a blocker. Add the resource to the canvas first, and let the user refine optional details later if they want.
    - AT LEAST ONE RESOURCE IS MANDATORY: `resources[]` MUST contain at least one bookable resource (a staff member or a physical asset like a room, chair, or bay). If `resources[]` is empty, you CANNOT finalize; you MUST choose 'ask_user' and ask who or what delivers their service.
-   - Any IDs in `services[].eligible_resource_ids` must correspond to actual resources in `resources[]`. Always link services to eligible resources.
+   - RESOURCE-TO-SERVICE LINKING (MANDATORY — DO NOT SKIP):
+     * `services[].eligible_resource_ids` MUST be populated for every service. An empty `eligible_resource_ids: []` means the service has NO provider and CANNOT be booked.
+     * WHENEVER you add or modify resources, you MUST ALSO emit `replace` patches to update `eligible_resource_ids` on the matching service(s) IN THE SAME PATCH BATCH.
+     * Match resources to services by type/category/name context (e.g. AC rooms → AC Homestay service, Non-AC rooms → Non-AC Homestay service, staff doctor → consultation service).
+     * EXAMPLE: User says "I have 3 AC rooms: 300, 301, 302 and 2 Non-AC rooms: 400, 401":
+       - Patches to add resources: `add /resources/- {{res_room_300...}}`, `add /resources/- {{res_room_301...}}`, etc.
+       - ALSO add patches to link: `replace /services/0/eligible_resource_ids ["res_room_300","res_room_301","res_room_302"]` (for AC Homestay at index 0)
+       - AND: `replace /services/1/eligible_resource_ids ["res_room_400","res_room_401"]` (for Non-AC Homestay at index 1)
+     * NEVER leave `eligible_resource_ids` as `[]` on any service that has corresponding resources in `resources[]`.
    - INTELLIGENT BOOKING MODE DETERMINATION (`booking_mode`):
      Every service MUST have `booking_mode` set to EXACTLY one of these two lowercase string enums:
        * "time_slot"
@@ -832,7 +546,7 @@ CRITICAL: When generating JSON patches, you MUST use ONLY these exact fields:
 - services[].verification: require_otp (boolean|null)
 - resources[]: resource_id, resource_type (staff|room|chair|bay|equipment|asset|vehicle), name, title, category, description, is_bookable, dispatch_status (active|on_leave|maintenance|retired|inactive), custom_shift_overrides
 - operating_hours: monday, tuesday, wednesday, thursday, friday, saturday, sunday (each is list of {{start: "HH:MM", end: "HH:MM"}}), blackout_dates (list of {{date: "YYYY-MM-DD", reason, is_closed}})
-- scheduling_engine: allocation_model ("time_slot"|"date_range"), default_booking_mode ("time_slot"|"date_range"), default_lead_time_hours, max_advance_booking_days, cancellation_window_hours
+- scheduling_engine: allocation_model ("time_slot"|"date_range"), default_booking_mode ("time_slot"|"date_range"), default_lead_time_hours, max_advance_booking_days, cancellation_window_hours, hold_duration_minutes
 - widget_config: agent_name, avatar_url, initial_greeting, fallback_message, position, launcher_style, sound_on_load, auto_expand_delay_seconds, platform_sources, whitelisted_domains
 - compliance: hipaa_mode, phi_scrubbing, data_retention_policy, zero_hallucination_mode, audit_trail_enabled
 - guardrails.verification_policy: require_otp_for_new_booking, require_otp_for_reschedule, require_otp_for_cancel
@@ -846,16 +560,36 @@ Current Draft (Token-Optimized TOON Notation):
 
 NOTE ON TOON NOTATION:
 The draft above is formatted in TOON (Token-Oriented Object Notation) for optimal token efficiency.
-- Arrays (e.g. `services[N]`, `resources[N]`) declare keys in `{...}` headers followed by compact data rows, or YAML lists with `-`.
+- Arrays (e.g. `services[N]`, `resources[N]`) declare keys in `{{...}}` headers followed by compact data rows, or YAML lists with `-`.
 - Array rows correspond to 0-indexed elements (row 1 is index 0, row 2 is index 1, etc.) for your RFC 6902 patch paths (e.g. `/services/0/price/amount`).
 
 Recent Conversation:
 {history}
 
 Decide your next action:
-1. 'update_schema': The user requested a configuration change. Generate the JSON patches (e.g. op: replace/add/remove). Only populate fields explicitly mentioned. Do NOT invent missing details.
-2. 'ask_user': A mandatory dependent field is missing, or changes were just applied and you are confirming with the user, or the user asked a question.
-3. 'finalize': ONLY choose this if the user EXPLICITLY requested to save, finalize, or deploy the agent (e.g. "save changes", "looks good, save it", "deploy now") AND all mandatory dependent fields are complete. Never finalize on a routine modification without explicit user confirmation.
+CRITICAL ACTION SELECTION RULES (STRICT PRIORITY):
+1. 'update_schema' (HIGHEST PRIORITY):
+   - Whenever the user provides ANY configuration detail (e.g. business name, vertical, timezone, hours, services, prices, resources/rooms/staff, phone number), you MUST choose 'update_schema' and output the RFC 6902 JSON patches.
+   - You MUST NOT choose 'ask_user' when the user provides configuration details, even if other checklist items or mandatory fields are still missing!
+   - SINGLE-TURN DUAL OUTPUT: In the SAME turn that you emit patches, your 'question' field must BOTH:
+     1) Confirm the update in 1 natural sentence (e.g., "I've added Dr. Shijisha as a resource and updated your business hours.").
+     2) Proactively ask the user for the NEXT missing item from the REQUIRED MINIMUM DEPLOYMENT CHECKLIST (e.g., "What are your services or pricing?").
+   - NEVER pretend or say in text "I've set your business name to..." or "I've updated..." unless you are also generating the patches for it right now.
+2. 'ask_user':
+   - Choose 'ask_user' if the user asked a question, sent a greeting, or if no new configuration details were provided in their message.
+3. 'finalize':
+   - ONLY choose this if the user EXPLICITLY requested to save, finalize, or deploy the agent (e.g. "save changes", "looks good, save it", "deploy now") AND all mandatory checklist items are complete. Never finalize on a routine modification without explicit user confirmation.
+
+CRITICAL OUTPUT RULE — QUESTION FIELD IS MANDATORY:
+- You MUST always populate the `question` field. It must NEVER be empty, null, or a generic filler like "Do you have any more changes?".
+- For 'update_schema': acknowledge what you updated in 1 sentence AND proactively prompt for the next missing item from the REQUIRED MINIMUM DEPLOYMENT CHECKLIST or suggest a relevant optional feature.
+  Example: "I've updated your business timezone to Asia/Kolkata. What are your operating hours during the week?"
+- For 'ask_user': ask a SPECIFIC, CONTEXTUAL question based on what is still missing in the draft (use the REQUIRED MINIMUM DEPLOYMENT CHECKLIST above or the OPTIONAL FEATURES list). Examples:
+    * "What are your weekly operating hours? (e.g. Mon–Fri 9am–6pm, Sat 10am–2pm, closed Sun)"
+    * "Who delivers your AC Home Stay service — should I create a room like 'Room 301' as a resource?"
+    * "Would you like to collect an advance deposit for AC Home Stay bookings?"
+- For 'finalize': confirm the action (e.g. "✅ Your agent is now live! Customers can start booking.").
+- FAILURE TO FILL `question` WILL BREAK THE FRONTEND — the user will see a blank message.
 """
 
     try:
@@ -907,16 +641,14 @@ Decide your next action:
                 "semantic_note": "I encountered an error processing that update. Would you like to try again?",
             }
 
-    if just_applied_patches and resp.action == "update_schema":
-        print("[Semantic Agent Brain] Forcing ask_user after patch application.", flush=True)
-        return {
-            "decision": "ask_user",
-            "pending_patches": None,
-            "semantic_note": resp.question
-            or "I've applied your changes. Would you like to adjust anything else or are you ready to save?",
-        }
+    follow_up = (resp.question or "").strip()
+    if not follow_up:
+        if _early_gaps:
+            follow_up = f"I've updated your configuration. {_early_gaps[0]['question']}"
+        else:
+            follow_up = "Configuration updated. What would you like to configure next?"
 
-    if resp.action == "update_schema" and resp.patches:
+    if resp.patches:
         print(
             f"[Semantic Agent Brain] Decided to update schema with {len(resp.patches)} patches.",
             flush=True,
@@ -924,269 +656,68 @@ Decide your next action:
         return {
             "decision": "update_schema",
             "pending_patches": resp.patches,
-            "semantic_note": None,
+            "semantic_note": follow_up,
         }
-    elif resp.action == "ask_user" and resp.question:
-        print(f"[Semantic Agent Brain] Asking: {resp.question[:120]}", flush=True)
+
+    if resp.action == "ask_user":
+        print(f"[Semantic Agent Brain] Asking: {follow_up[:120]}", flush=True)
         return {
             "decision": "ask_user",
             "pending_patches": None,
-            "semantic_note": resp.question,
+            "semantic_note": follow_up,
         }
     elif resp.action == "finalize":
         print("[Semantic Agent Brain] Finalizing setup.", flush=True)
         return {
             "decision": "finalize",
             "pending_patches": None,
-            "semantic_note": resp.question
+            "semantic_note": follow_up
             or "✅ Your agent configuration has been saved and deployed live!",
         }
     else:
         return {
             "decision": "ask_user",
             "pending_patches": None,
-            "semantic_note": resp.question
-            or "Configuration updated. What would you like to configure next?",
+            "semantic_note": follow_up,
         }
 
 
-class StrictContactSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    support_email: str | None = None
-    public_phone: str | None = None
-    escalation_phone: str | None = None
+from agent_orchestrator.models import StrictDraftPatchValidator
 
 
-class StrictTerminologySchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    customer_singular: str | None = None
-    customer_plural: str | None = None
-    primary_metric: str | None = None
-    action_metric: str | None = None
+def _prepare_draft_for_patches(draft: dict, patches: list[dict]) -> tuple[dict, list[dict]]:
+    """
+    1. Auto-vivifies None parent objects into empty dicts along patch target paths.
+       Prevents jsonpatch from raising 'Document <class NoneType> does not support indexing'
+       when setting child fields like /business_profile/contact/public_phone where contact is None.
+    2. LLM-Tolerant Patch Normalization:
+       If the LLM emits op='replace' targeting an object property that does not exist yet,
+       auto-heals op to 'add' (which creates or updates in RFC 6902), preventing
+       'can't replace a non-existent object' exceptions.
+    """
+    d = copy.deepcopy(draft)
+    normalized_patches: list[dict] = []
+    for p in patches:
+        p_norm = copy.deepcopy(p)
+        parts = [s for s in p_norm.get("path", "").split("/") if s]
+        if parts:
+            curr = d
+            for seg in parts[:-1]:
+                if isinstance(curr, dict):
+                    if curr.get(seg) is None:
+                        curr[seg] = {}
+                    curr = curr[seg]
+                elif isinstance(curr, list) and seg.isdigit():
+                    idx = int(seg)
+                    if 0 <= idx < len(curr):
+                        curr = curr[idx]
 
+            leaf = parts[-1]
+            if p_norm.get("op") == "replace" and isinstance(curr, dict) and leaf not in curr:
+                p_norm["op"] = "add"
 
-class StrictBrandSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    primary_color: str | None = None
-    logo_url: str | None = None
-
-
-class StrictBusinessProfileSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    name: str | None = None
-    vertical: str | None = None
-    timezone: str | None = None
-    locale: str | None = None
-    currency: str | None = None
-    address: str | None = None
-    contact: StrictContactSchema | None = None
-    terminology: StrictTerminologySchema | None = None
-    brand: StrictBrandSchema | None = None
-
-
-class ServiceAllocationModel(StrEnum):
-    SINGLE_RESOURCE = "single_resource"
-    MULTI_RESOURCE = "multi_resource"
-    POOLED = "pooled"
-    ASSET_ONLY = "asset_only"
-
-
-class BookingMode(StrEnum):
-    TIME_SLOT = "time_slot"
-    DATE_RANGE = "date_range"
-
-
-class ResourceType(StrEnum):
-    STAFF = "staff"
-    ROOM = "room"
-    CHAIR = "chair"
-    BAY = "bay"
-    EQUIPMENT = "equipment"
-    ASSET = "asset"
-    VEHICLE = "vehicle"
-
-
-class DispatchStatus(StrEnum):
-    ACTIVE = "active"
-    ON_LEAVE = "on_leave"
-    MAINTENANCE = "maintenance"
-    RETIRED = "retired"
-    INACTIVE = "inactive"
-
-
-class PriceType(StrEnum):
-    FIXED = "fixed"
-    STARTING_AT = "starting_at"
-    HOURLY = "hourly"
-    FREE = "free"
-    CUSTOM = "custom"
-
-
-class StrictPriceSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    type: PriceType | None = None
-    amount: float | None = None
-    currency: str | None = None
-
-
-class StrictDepositSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    required: bool | None = None
-    amount: float | None = None
-    processor: Literal["upi_direct"] | None = None
-    upi_id: str | None = None
-    qr_code_url: str | None = None
-    confirmation_method: str | None = None
-    payment_instructions: str | None = None
-
-
-class AllocationModel(StrEnum):
-    TIME_SLOT = "time_slot"
-    DATE_RANGE = "date_range"
-
-
-class StrictServiceVerificationSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    require_otp: bool | None = None
-
-
-class StrictServiceSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    service_id: str | None = None
-    name: str | None = None
-    category: str | None = None
-    description: str | None = None
-    duration_minutes: int | None = None
-    buffer_minutes: int | None = None
-    allocation_model: ServiceAllocationModel | None = None
-    booking_mode: BookingMode | None = None
-    price: StrictPriceSchema | None = None
-    deposit: StrictDepositSchema | None = None
-    verification: StrictServiceVerificationSchema | None = None
-    eligible_resource_ids: list[str] | None = None
-    required_asset_ids: list[str] | None = None
-    recall_interval_days: int | None = None
-
-
-class StrictResourceSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    resource_id: str | None = None
-    resource_type: ResourceType | None = None
-    name: str | None = None
-    title: str | None = None
-    category: str | None = None
-    description: str | None = None
-    is_bookable: bool | None = None
-    dispatch_status: DispatchStatus | None = None
-    custom_shift_overrides: dict | None = None
-
-
-class StrictTimeSlotSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    start: str | None = None
-    end: str | None = None
-
-
-class StrictBlackoutDateSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    date: str | None = None
-    reason: str | None = None
-    is_closed: bool | None = None
-
-
-class StrictOperatingHoursSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    monday: list[StrictTimeSlotSchema] | None = None
-    tuesday: list[StrictTimeSlotSchema] | None = None
-    wednesday: list[StrictTimeSlotSchema] | None = None
-    thursday: list[StrictTimeSlotSchema] | None = None
-    friday: list[StrictTimeSlotSchema] | None = None
-    saturday: list[StrictTimeSlotSchema] | None = None
-    sunday: list[StrictTimeSlotSchema] | None = None
-    blackout_dates: list[StrictBlackoutDateSchema] | None = None
-
-
-class StrictSchedulingEngineSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    allocation_model: AllocationModel | None = None
-    default_booking_mode: BookingMode | None = None
-    default_lead_time_hours: int | None = None
-    max_advance_booking_days: int | None = None
-    cancellation_window_hours: int | None = None
-
-
-class StrictWidgetConfigSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    agent_name: str | None = None
-    avatar_url: str | None = None
-    initial_greeting: str | None = None
-    fallback_message: str | None = None
-    position: str | None = None
-    launcher_style: str | None = None
-    sound_on_load: bool | None = None
-    auto_expand_delay_seconds: int | None = None
-    platform_sources: list[str] | None = None
-    whitelisted_domains: list[str] | None = None
-
-
-class StrictComplianceSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    hipaa_mode: bool | None = None
-    phi_scrubbing: bool | None = None
-    data_retention_policy: str | None = None
-    zero_hallucination_mode: bool | None = None
-    audit_trail_enabled: bool | None = None
-
-
-class StrictPhiScrubSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    enabled: bool | None = None
-    policy: str | None = None
-    description: str | None = None
-    hipaa_compliant: bool | None = None
-
-
-class StrictTriageEmergencySchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    enabled: bool | None = None
-    keywords: list[str] | None = None
-    response_override: str | None = None
-
-
-class StrictHumanHandoffSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    enabled: bool | None = None
-    trigger_topics: list[str] | None = None
-    reception_contact: str | None = None
-    handoff_message: str | None = None
-
-
-class StrictVerificationPolicySchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    require_otp_for_new_booking: bool | None = None
-    require_otp_for_reschedule: bool | None = None
-    require_otp_for_cancel: bool | None = None
-
-
-class StrictGuardrailsSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    verification_policy: StrictVerificationPolicySchema | None = None
-    phi_scrubbing: StrictPhiScrubSchema | None = None
-    triage_emergency: StrictTriageEmergencySchema | None = None
-    human_handoff: StrictHumanHandoffSchema | None = None
-
-
-class StrictDraftPatchValidator(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    business_profile: StrictBusinessProfileSchema | None = None
-    services: list[StrictServiceSchema] | None = None
-    resources: list[StrictResourceSchema] | None = None
-    operating_hours: StrictOperatingHoursSchema | None = None
-    scheduling_engine: StrictSchedulingEngineSchema | None = None
-    widget_config: StrictWidgetConfigSchema | None = None
-    compliance: StrictComplianceSchema | None = None
-    guardrails: StrictGuardrailsSchema | None = None
-    supervisor_prompt: str | None = None
+        normalized_patches.append(p_norm)
+    return d, normalized_patches
 
 
 async def node_apply_json_patches(state: GraphState) -> dict:
@@ -1200,8 +731,9 @@ async def node_apply_json_patches(state: GraphState) -> dict:
         return {"decision": None, "pending_patches": None}
 
     try:
-        patcher = jsonpatch.JsonPatch(patches)
-        updated_draft = patcher.apply(copy.deepcopy(state["draft"]))
+        prepared_draft, normalized_patches = _prepare_draft_for_patches(state["draft"], patches)
+        patcher = jsonpatch.JsonPatch(normalized_patches)
+        updated_draft = patcher.apply(prepared_draft)
 
         StrictDraftPatchValidator.model_validate(updated_draft)
 
@@ -1222,20 +754,36 @@ async def node_apply_json_patches(state: GraphState) -> dict:
         )
         return {
             "draft": updated_draft,
-            "decision": None,
+            "decision": "ask_user",
             "pending_patches": None,
+            "patch_retries": 0,
             "structural_gaps": _compute_structural_gaps(updated_draft),
-            "messages": [
-                SystemMessage(
-                    content=f"Successfully applied {len(patches)} JSON patches. The schema is now updated. Analyze the new draft and decide your next move. DO NOT repeat these exact patches."
-                )
-            ],
+            "semantic_note": state.get("semantic_note"),
         }
     except Exception as e:
-        print(f"[Patch Node Error] Failed applying patches (or validation): {e}", flush=True)
+        retries = state.get("patch_retries", 0) + 1
+        print(
+            f"[Patch Node Error] Failed applying patches (or validation) [retry {retries}/3]: {e}",
+            flush=True,
+        )
+        if retries >= 3:
+            print(
+                f"[Patch Node Error] Max retries reached ({retries}). Breaking loop to ask user.",
+                flush=True,
+            )
+            return {
+                "decision": "ask_user",
+                "pending_patches": None,
+                "patch_retries": 0,
+                "semantic_note": (
+                    f"I encountered an error updating the draft configuration: {e}. "
+                    "Could you please clarify or provide the details again?"
+                ),
+            }
         return {
             "decision": None,
             "pending_patches": None,
+            "patch_retries": retries,
             "messages": [
                 SystemMessage(
                     content=f"Error applying JSON patches: {e}. The draft was NOT updated. Please generate a corrected patch."
@@ -1253,7 +801,7 @@ async def node_ask_human_semantic(state: GraphState) -> dict:
     tenant_id = state.get("tenant_id", "")
     agent_id = state.get("agent_id") or state.get("draft", {}).get("agent_id", "")
     current_draft = state.get("draft", {})
-    question = state.get("semantic_note") or "Do you have any more changes?"
+    question = state.get("semantic_note") or ""
 
     if tenant_id and agent_id and current_draft:
         try:
@@ -1289,24 +837,11 @@ async def node_ask_human_semantic(state: GraphState) -> dict:
                 flush=True,
             )
 
-    user_answer: str = interrupt(
-        {
-            "type": "semantic_review",
-            "question": question,
-        }
-    )
-
-    if isinstance(user_answer, list):
-        user_answer = user_answer[0] if user_answer else ""
-    user_answer = str(user_answer)
-
     return {
-        "decision": None,
-        "semantic_note": None,
-        "messages": [
-            HumanMessage(content=f"Agent: {question}"),
-            HumanMessage(content=f"User: {user_answer}"),
-        ],
+        "decision": "ask_user",
+        "semantic_note": question,
+        "status": "awaiting_input",
+        "messages": [AIMessage(content=question)],
     }
 
 
@@ -1442,10 +977,6 @@ async def node_block_incomplete_finalize(state: GraphState) -> dict:
     }
 
 
-def route_structural(state: GraphState) -> Literal["ask_human_structural", "llm_semantic_review"]:
-    return "ask_human_structural" if state["structural_gaps"] else "llm_semantic_review"
-
-
 def route_semantic(state: GraphState) -> str:
     """
     Routes from semantic review based on the explicit decision state:
@@ -1467,10 +998,19 @@ def route_semantic(state: GraphState) -> str:
     return "ask_human_semantic"
 
 
-def build_tenant_onboarding_graph():
-    """Compiles and returns the LangGraph StateGraph with MemorySaver checkpoint."""
-    checkpointer = MemorySaver()
+def route_after_patch(state: GraphState) -> str:
+    """
+    Routes from patch application node:
+      - If patches were applied or max retries were exceeded (decision == 'ask_user'), routes directly to ask_human_semantic.
+      - Otherwise (patch failed and retries < 3), returns to LLM semantic review for self-correction.
+    """
+    if state.get("decision") == "ask_user":
+        return "ask_human_semantic"
+    return "llm_semantic_review"
 
+
+def build_tenant_onboarding_graph():
+    """Compiles and returns the LangGraph StateGraph without in-memory checkpointing dependency."""
     builder = StateGraph(GraphState)
 
     builder.add_node("load_draft", node_load_draft)
@@ -1494,12 +1034,19 @@ def build_tenant_onboarding_graph():
         },
     )
 
-    builder.add_edge("apply_json_patches", "llm_semantic_review")
-    builder.add_edge("ask_human_semantic", "llm_semantic_review")
+    builder.add_conditional_edges(
+        "apply_json_patches",
+        route_after_patch,
+        {
+            "ask_human_semantic": "ask_human_semantic",
+            "llm_semantic_review": "llm_semantic_review",
+        },
+    )
     builder.add_edge("block_incomplete_finalize", "ask_human_semantic")
+    builder.add_edge("ask_human_semantic", END)
     builder.add_edge("finalize_and_save", END)
 
-    return builder.compile(checkpointer=checkpointer)
+    return builder.compile()
 
 
 _graph = build_tenant_onboarding_graph()
@@ -1525,8 +1072,6 @@ async def start_onboarding_session(tenant_id: str, draft: dict, agent_id: str = 
     target_agent_id = agent_id or draft.get("agent_id") or f"agent_{tenant_id}_v1"
     draft["agent_id"] = target_agent_id
 
-    thread_id = f"{tenant_id}:{target_agent_id}" if target_agent_id else tenant_id
-    config = {"configurable": {"thread_id": thread_id}}
     initial: GraphState = {
         "tenant_id": tenant_id,
         "agent_id": target_agent_id,
@@ -1538,6 +1083,7 @@ async def start_onboarding_session(tenant_id: str, draft: dict, agent_id: str = 
         "decision": None,
         "pending_patches": None,
         "status": "onboarding",
+        "patch_retries": 0,
     }
 
     try:
@@ -1547,33 +1093,11 @@ async def start_onboarding_session(tenant_id: str, draft: dict, agent_id: str = 
     except Exception as e:
         print(f"[Start Session Warning] Failed to prime Redis cache: {e}", flush=True)
 
-    async for _ in _graph.astream(initial, config=config, stream_mode="values"):
-        pass
-
-    return _extract_payload(await _graph.aget_state(config))
+    result_state = await _graph.ainvoke(initial)
+    return _extract_payload(result_state)
 
 
 async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: str = "") -> dict:
-    from langchain_core.messages import HumanMessage
-    from langgraph.types import Command
-
-    thread_id = f"{tenant_id}:{agent_id}" if agent_id else tenant_id
-    config = {"configurable": {"thread_id": thread_id}}
-    snap = await _graph.aget_state(config)
-
-    has_interrupt = False
-    for task in getattr(snap, "tasks", []):
-        if getattr(task, "interrupts", []):
-            has_interrupt = True
-            break
-
-    if has_interrupt:
-        async for _ in _graph.astream(
-            Command(resume=user_answer), config=config, stream_mode="values"
-        ):
-            pass
-        return _extract_payload(await _graph.aget_state(config))
-
     from agent_orchestrator.clients.redis_client import get_cached_draft
 
     draft = await get_cached_draft(tenant_id, agent_id)
@@ -1589,24 +1113,9 @@ async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: 
                     {"tenant_id": tenant_id, "agent_id": agent_id}
                 )
                 if cfg:
-                    draft = {
-                        "tenant_id": tenant_id,
-                        "agent_id": agent_id,
-                        "business_profile": cfg.business_profile.model_dump()
-                        if cfg.business_profile
-                        else {},
-                        "operating_hours": cfg.operating_hours.model_dump()
-                        if cfg.operating_hours
-                        else {},
-                        "scheduling_engine": cfg.scheduling_engine.model_dump()
-                        if cfg.scheduling_engine
-                        else {},
-                        "services": [s.model_dump() for s in cfg.services] if cfg.services else [],
-                        "resources": [r.model_dump() for r in cfg.resources]
-                        if cfg.resources
-                        else [],
-                        "supervisor_prompt": cfg.supervisor_prompt,
-                    }
+                    from agent_orchestrator.models import canonicalize_agent_schema
+
+                    draft = canonicalize_agent_schema(cfg.model_dump(), status="live")
         except Exception:
             pass
 
@@ -1618,7 +1127,6 @@ async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: 
     recent_history: list[HumanMessage | AIMessage] = []
     if target_agent_id:
         try:
-            from agent_orchestrator.config import MEMORY_WINDOW_LIMIT
             from agent_orchestrator.models import AgentDraft, AgentMessage
 
             agent_draft_doc = await AgentDraft.find_one(
@@ -1626,26 +1134,42 @@ async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: 
             )
             last_summarized = agent_draft_doc.last_summarized_seq if agent_draft_doc else 0
 
-            all_db_msgs = (
-                await AgentMessage.find({"tenant_id": tenant_id, "agent_id": target_agent_id})
-                .sort("created_at")
+            active_db_msgs = (
+                await AgentMessage.find(
+                    {
+                        "tenant_id": tenant_id,
+                        "agent_id": target_agent_id,
+                        "seq": {"$gt": last_summarized},
+                    }
+                )
+                .sort("seq")
                 .to_list()
             )
 
-            active_msgs = all_db_msgs[last_summarized:]
+            # If active messages accumulate past token threshold (e.g. worker delayed), cap by token budget
+            from agent_orchestrator.config import MEMORY_TRIGGER_TOKEN_THRESHOLD
 
-            if len(active_msgs) > MEMORY_WINDOW_LIMIT:
-                active_msgs = active_msgs[-MEMORY_WINDOW_LIMIT:]
+            total_active_tokens = sum(
+                (m.token_count or max(1, len(m.content) // 4)) for m in active_db_msgs
+            )
+            if total_active_tokens > MEMORY_TRIGGER_TOKEN_THRESHOLD:
+                budget = MEMORY_TRIGGER_TOKEN_THRESHOLD
+                kept: list[AgentMessage] = []
+                for m in reversed(active_db_msgs):
+                    t = m.token_count or max(1, len(m.content) // 4)
+                    if budget - t < 0 and kept:
+                        break
+                    kept.append(m)
+                    budget -= t
+                active_db_msgs = list(reversed(kept))
 
-            for m in active_msgs:
+            for m in active_db_msgs:
                 if m.role in ("tenant", "user"):
                     recent_history.append(HumanMessage(content=m.content))
                 else:
                     recent_history.append(AIMessage(content=m.content))
         except Exception as rhe:
             print(f"[TenantAgent Warning] Could not rehydrate recent history: {rhe}", flush=True)
-
-    recent_history.append(HumanMessage(content=f"User: {user_answer}"))
 
     initial: GraphState = {
         "tenant_id": tenant_id,
@@ -1658,43 +1182,63 @@ async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: 
         "decision": None,
         "pending_patches": None,
         "status": "onboarding",
+        "patch_retries": 0,
     }
-    async for _ in _graph.astream(initial, config=config, stream_mode="values"):
-        pass
 
-    return _extract_payload(await _graph.aget_state(config))
+    result_state = await _graph.ainvoke(initial)
+    return _extract_payload(result_state)
 
 
 async def get_current_draft(tenant_id: str, agent_id: str = "") -> dict:
     if agent_id:
         try:
-            from agent_orchestrator.clients.redis_client import get_cached_draft
+            from agent_orchestrator.clients.redis_client import (
+                get_cached_draft,
+                set_cached_draft,
+            )
+            from agent_orchestrator.models import (
+                AgentDraft,
+                canonicalize_agent_schema,
+                init_db,
+            )
 
             cached = await get_cached_draft(tenant_id, agent_id)
             if cached:
-                from agent_orchestrator.models import canonicalize_agent_schema
-
                 return canonicalize_agent_schema(cached, status="draft")
-        except Exception:
-            pass
+
+            await init_db()
+            doc = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
+            if doc and doc.current_draft:
+                canonical = canonicalize_agent_schema(doc.current_draft, status="draft")
+
+                try:
+                    await set_cached_draft(tenant_id, agent_id, canonical)
+                except Exception:
+                    pass
+                return canonical
+
+        except Exception as e:
+            print(f"[get_current_draft Warning] {e}", flush=True)
 
     return {}
 
 
-def _extract_payload(snapshot) -> dict:
-    """Converts a LangGraph snapshot into a clean frontend-ready payload."""
-    for task in getattr(snapshot, "tasks", []):
-        for intr in getattr(task, "interrupts", []):
-            val = getattr(intr, "value", {})
-            return {
-                "status": "awaiting_input",
-                "question": val.get("question"),
-                "field": val.get("field"),
-                "type": val.get("type"),
-            }
+def _extract_payload(snapshot: Any) -> dict:
+    """Converts a LangGraph snapshot or state dict into a clean frontend-ready payload."""
+    if isinstance(snapshot, dict):
+        values = snapshot
+    elif hasattr(snapshot, "values") and isinstance(snapshot.values, dict):
+        values = snapshot.values
+    else:
+        values = {}
 
-    values = getattr(snapshot, "values", {})
     if values.get("status") == "complete":
         return {"status": "complete", "question": None, "field": None, "type": None}
 
-    return {"status": "awaiting_input", "question": None, "field": None, "type": None}
+    question = values.get("semantic_note") or ""
+    return {
+        "status": values.get("status", "awaiting_input"),
+        "question": question,
+        "field": values.get("pending_field") or "",
+        "type": "semantic_review",
+    }

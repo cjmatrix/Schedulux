@@ -6,16 +6,24 @@ import {
   ResourceType,
 } from '../../../domain/entities/resource.entity.js';
 import { IResourceRepository } from '../../../domain/repositories/resource.repository.interface.js';
-import { RESOURCE_REPOSITORY } from '../../../domain/tokens.js';
-import { SchedulingEventsProducer } from '../../../infrastructure/messaging/scheduling-events.producer.js';
+import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
+import {
+  RESOURCE_REPOSITORY,
+  SCHEDULING_EVENTS_PRODUCER,
+  UNIT_OF_WORK,
+} from '../../../domain/tokens.js';
 import { IUpdateResourceUseCase } from '../../interfaces/resource-use-cases.interface.js';
+import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-events-producer.interface.js';
 
 @Injectable()
 export class UpdateResourceUseCase implements IUpdateResourceUseCase {
   constructor(
     @Inject(RESOURCE_REPOSITORY)
     private readonly resourceRepository: IResourceRepository,
-    private readonly eventsProducer: SchedulingEventsProducer,
+    @Inject(SCHEDULING_EVENTS_PRODUCER)
+    private readonly eventsProducer: ISchedulingEventsProducer,
+    @Inject(UNIT_OF_WORK)
+    private readonly unitOfWork: IUnitOfWork,
   ) {}
 
   async execute(dto: UpdateResourceRequest): Promise<ResourceEntity> {
@@ -37,12 +45,16 @@ export class UpdateResourceUseCase implements IUpdateResourceUseCase {
       customShiftOverridesJson: dto.custom_shift_overrides_json,
     });
 
-    const updated = await this.resourceRepository.update(existing);
-    if (!updated) {
-      throw new NotFoundException(`Failed to update resource ${dto.resource_id}`);
-    }
+    const { updated, outbox } = await this.unitOfWork.withTransaction(async () => {
+      const updatedEntity = await this.resourceRepository.update(existing);
+      if (!updatedEntity) {
+        throw new NotFoundException(`Failed to update resource ${dto.resource_id}`);
+      }
+      const outboxDoc = await this.eventsProducer.createResourceUpdatedOutboxEvent(updatedEntity);
+      return { updated: updatedEntity, outbox: outboxDoc };
+    });
 
-    await this.eventsProducer.emitResourceUpdated(updated);
+    await this.eventsProducer.publishOutboxEvent(outbox);
 
     return updated;
   }

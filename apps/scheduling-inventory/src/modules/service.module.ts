@@ -13,7 +13,6 @@ import { ListServicesUseCase } from '../application/use-cases/service/list-servi
 import { UpdateServiceUseCase } from '../application/use-cases/service/update-service.use-case.js';
 import { SERVICE_REPOSITORY } from '../domain/tokens.js';
 import { MongoServiceRepository } from '../infrastructure/database/repositories/mongo-service.repository.js';
-import { SchedulingEventsProducer } from '../infrastructure/messaging/scheduling-events.producer.js';
 
 @Module({
   providers: [
@@ -23,9 +22,7 @@ import { SchedulingEventsProducer } from '../infrastructure/messaging/scheduling
     },
     {
       provide: CREATE_SERVICE_USE_CASE,
-      useFactory: (repo: MongoServiceRepository, producer: SchedulingEventsProducer) =>
-        new CreateServiceUseCase(repo, producer),
-      inject: [SERVICE_REPOSITORY, SchedulingEventsProducer],
+      useClass: CreateServiceUseCase,
     },
     {
       provide: GET_SERVICE_USE_CASE,
@@ -37,15 +34,11 @@ import { SchedulingEventsProducer } from '../infrastructure/messaging/scheduling
     },
     {
       provide: UPDATE_SERVICE_USE_CASE,
-      useFactory: (repo: MongoServiceRepository, producer: SchedulingEventsProducer) =>
-        new UpdateServiceUseCase(repo, producer),
-      inject: [SERVICE_REPOSITORY, SchedulingEventsProducer],
+      useClass: UpdateServiceUseCase,
     },
     {
       provide: DELETE_SERVICE_USE_CASE,
-      useFactory: (repo: MongoServiceRepository, producer: SchedulingEventsProducer) =>
-        new DeleteServiceUseCase(repo, producer),
-      inject: [SERVICE_REPOSITORY, SchedulingEventsProducer],
+      useClass: DeleteServiceUseCase,
     },
   ],
   exports: [

@@ -1,8 +1,13 @@
-import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { ClientKafka } from '@nestjs/microservices';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
 import type { DepositInfo, PriceInfo, ServiceVerificationInfo } from '@repo/proto/scheduling';
+import type { ClientSession } from 'mongoose';
+import type { ISchedulingEventsProducer } from '../../application/interfaces/scheduling-events-producer.interface.js';
 import { ResourceEntity } from '../../domain/entities/resource.entity.js';
 import { ServiceEntity } from '../../domain/entities/service.entity.js';
+import type { IOutboxRepository } from '../../domain/repositories/outbox.repository.interface.js';
+import { MESSAGING_SERVICE, OUTBOX_REPOSITORY } from '../../domain/tokens.js';
+import { IOutboxDoc } from '../database/schemas/outbox.schema.js';
 
 export const KAFKA_SERVICE_TOPIC_SERVICES = 'scheduling.service.events';
 export const KAFKA_SERVICE_TOPIC_RESOURCES = 'scheduling.resource.events';
@@ -16,9 +21,11 @@ export type SchedulingEventType =
   | 'resource.deleted';
 
 export interface BaseSchedulingEventPayload {
+  event_id: string;
   event_type: SchedulingEventType;
   tenant_id: string;
   agent_id: string;
+  version: number;
   timestamp: string;
 }
 
@@ -62,105 +69,249 @@ export interface ResourceEventPayload extends BaseSchedulingEventPayload {
 }
 
 @Injectable()
-export class SchedulingEventsProducer implements OnModuleInit, OnModuleDestroy {
+export class SchedulingEventsProducer implements ISchedulingEventsProducer {
   private readonly logger = new Logger(SchedulingEventsProducer.name);
 
   constructor(
-    @Inject('KAFKA_SERVICE')
-    private readonly kafkaClient: ClientKafka,
+    @Inject(MESSAGING_SERVICE)
+    private readonly messagingClient: ClientProxy,
+    @Inject(OUTBOX_REPOSITORY)
+    private readonly outboxRepository: IOutboxRepository,
   ) {}
 
-  async onModuleInit() {
-    try {
-      await this.kafkaClient.connect();
-      this.logger.log('[Kafka] Successfully connected to Kafka brokers');
-    } catch (err) {
-      this.logger.error(`[Kafka] Failed to connect to Kafka brokers: ${(err as Error).message}`);
-    }
-  }
-
-  async onModuleDestroy() {
-    try {
-      await this.kafkaClient.close();
-    } catch {}
-  }
-
-  async emitServiceCreated(entity: ServiceEntity): Promise<void> {
-    await this.emit<ServiceEventPayload>(KAFKA_SERVICE_TOPIC_SERVICES, {
+  async createServiceCreatedOutboxEvent(
+    entity: ServiceEntity,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc> {
+    const version = entity.updatedAt ? entity.updatedAt.getTime() : Date.now();
+    const eventId = `evt_srv_${entity.id}_${version}`;
+    const payload: ServiceEventPayload = {
+      event_id: eventId,
       event_type: 'service.created',
       tenant_id: entity.tenantId,
       agent_id: entity.agentId,
       service_id: entity.id,
+      version,
       timestamp: new Date().toISOString(),
       data: this.buildServiceSnapshot(entity),
-    });
+    };
+
+    return this.outboxRepository.saveEvent(
+      {
+        eventId,
+        aggregateType: 'service',
+        aggregateId: entity.id,
+        eventType: 'service.created',
+        topic: KAFKA_SERVICE_TOPIC_SERVICES,
+        partitionKey: entity.agentId || entity.tenantId,
+        payload,
+      },
+      session,
+    );
   }
 
-  async emitServiceUpdated(entity: ServiceEntity): Promise<void> {
-    await this.emit<ServiceEventPayload>(KAFKA_SERVICE_TOPIC_SERVICES, {
+  async createServiceUpdatedOutboxEvent(
+    entity: ServiceEntity,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc> {
+    const version = entity.updatedAt ? entity.updatedAt.getTime() : Date.now();
+    const eventId = `evt_srv_${entity.id}_${version}`;
+    const payload: ServiceEventPayload = {
+      event_id: eventId,
       event_type: 'service.updated',
       tenant_id: entity.tenantId,
       agent_id: entity.agentId,
       service_id: entity.id,
+      version,
       timestamp: new Date().toISOString(),
       data: this.buildServiceSnapshot(entity),
-    });
+    };
+
+    return this.outboxRepository.saveEvent(
+      {
+        eventId,
+        aggregateType: 'service',
+        aggregateId: entity.id,
+        eventType: 'service.updated',
+        topic: KAFKA_SERVICE_TOPIC_SERVICES,
+        partitionKey: entity.agentId || entity.tenantId,
+        payload,
+      },
+      session,
+    );
   }
 
-  async emitServiceDeleted(tenantId: string, agentId: string, serviceId: string): Promise<void> {
-    await this.emit<ServiceEventPayload>(KAFKA_SERVICE_TOPIC_SERVICES, {
+  async createServiceDeletedOutboxEvent(
+    tenantId: string,
+    agentId: string,
+    serviceId: string,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc> {
+    const version = Date.now();
+    const eventId = `evt_srv_${serviceId}_del_${version}`;
+    const payload: ServiceEventPayload = {
+      event_id: eventId,
       event_type: 'service.deleted',
       tenant_id: tenantId,
       agent_id: agentId,
       service_id: serviceId,
+      version,
       timestamp: new Date().toISOString(),
-    });
+    };
+
+    return this.outboxRepository.saveEvent(
+      {
+        eventId,
+        aggregateType: 'service',
+        aggregateId: serviceId,
+        eventType: 'service.deleted',
+        topic: KAFKA_SERVICE_TOPIC_SERVICES,
+        partitionKey: agentId || tenantId,
+        payload,
+      },
+      session,
+    );
   }
 
-  async emitResourceCreated(entity: ResourceEntity): Promise<void> {
-    await this.emit<ResourceEventPayload>(KAFKA_SERVICE_TOPIC_RESOURCES, {
+  async createResourceCreatedOutboxEvent(
+    entity: ResourceEntity,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc> {
+    const version = entity.updatedAt ? entity.updatedAt.getTime() : Date.now();
+    const eventId = `evt_res_${entity.id}_${version}`;
+    const payload: ResourceEventPayload = {
+      event_id: eventId,
       event_type: 'resource.created',
       tenant_id: entity.tenantId,
       agent_id: entity.agentId,
       resource_id: entity.id,
+      version,
       timestamp: new Date().toISOString(),
       data: this.buildResourceSnapshot(entity),
-    });
+    };
+
+    return this.outboxRepository.saveEvent(
+      {
+        eventId,
+        aggregateType: 'resource',
+        aggregateId: entity.id,
+        eventType: 'resource.created',
+        topic: KAFKA_SERVICE_TOPIC_RESOURCES,
+        partitionKey: entity.agentId || entity.tenantId,
+        payload,
+      },
+      session,
+    );
   }
 
-  async emitResourceUpdated(entity: ResourceEntity): Promise<void> {
-    await this.emit<ResourceEventPayload>(KAFKA_SERVICE_TOPIC_RESOURCES, {
+  async createResourceUpdatedOutboxEvent(
+    entity: ResourceEntity,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc> {
+    const version = entity.updatedAt ? entity.updatedAt.getTime() : Date.now();
+    const eventId = `evt_res_${entity.id}_${version}`;
+    const payload: ResourceEventPayload = {
+      event_id: eventId,
       event_type: 'resource.updated',
       tenant_id: entity.tenantId,
       agent_id: entity.agentId,
       resource_id: entity.id,
+      version,
       timestamp: new Date().toISOString(),
       data: this.buildResourceSnapshot(entity),
-    });
+    };
+
+    return this.outboxRepository.saveEvent(
+      {
+        eventId,
+        aggregateType: 'resource',
+        aggregateId: entity.id,
+        eventType: 'resource.updated',
+        topic: KAFKA_SERVICE_TOPIC_RESOURCES,
+        partitionKey: entity.agentId || entity.tenantId,
+        payload,
+      },
+      session,
+    );
   }
 
-  async emitResourceDeleted(tenantId: string, agentId: string, resourceId: string): Promise<void> {
-    await this.emit<ResourceEventPayload>(KAFKA_SERVICE_TOPIC_RESOURCES, {
+  async createResourceDeletedOutboxEvent(
+    tenantId: string,
+    agentId: string,
+    resourceId: string,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc> {
+    const version = Date.now();
+    const eventId = `evt_res_${resourceId}_del_${version}`;
+    const payload: ResourceEventPayload = {
+      event_id: eventId,
       event_type: 'resource.deleted',
       tenant_id: tenantId,
       agent_id: agentId,
       resource_id: resourceId,
+      version,
       timestamp: new Date().toISOString(),
-    });
+    };
+
+    return this.outboxRepository.saveEvent(
+      {
+        eventId,
+        aggregateType: 'resource',
+        aggregateId: resourceId,
+        eventType: 'resource.deleted',
+        topic: KAFKA_SERVICE_TOPIC_RESOURCES,
+        partitionKey: agentId || tenantId,
+        payload,
+      },
+      session,
+    );
   }
 
-  private async emit<T extends BaseSchedulingEventPayload>(
-    topic: string,
-    payload: T,
-  ): Promise<void> {
+  async publishOutboxEvent(outboxDoc: IOutboxDoc): Promise<void> {
     try {
-      const key = payload.agent_id || payload.tenant_id;
-      this.kafkaClient.emit(topic, { key, value: JSON.stringify(payload) });
-      this.logger.log(`[Kafka] Emitted to ${topic}: ${payload.event_type}`);
+      const key = outboxDoc.partition_key;
+      const value = JSON.stringify(outboxDoc.payload);
+      this.messagingClient.emit(outboxDoc.topic, { key, value });
+      await this.outboxRepository.markPublished([outboxDoc._id]);
+      this.logger.log(
+        `[Messaging] Emitted and marked PUBLISHED: ${outboxDoc._id} (${outboxDoc.event_type})`,
+      );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`[Kafka] Failed to emit to ${topic}: ${msg}`);
+      this.logger.error(
+        `[Messaging] Immediate publish failed for ${outboxDoc._id}: ${msg}. Retrying in background recovery sweep.`,
+      );
     }
+  }
+
+  async emitServiceCreated(entity: ServiceEntity): Promise<void> {
+    const outbox = await this.createServiceCreatedOutboxEvent(entity);
+    await this.publishOutboxEvent(outbox);
+  }
+
+  async emitServiceUpdated(entity: ServiceEntity): Promise<void> {
+    const outbox = await this.createServiceUpdatedOutboxEvent(entity);
+    await this.publishOutboxEvent(outbox);
+  }
+
+  async emitServiceDeleted(tenantId: string, agentId: string, serviceId: string): Promise<void> {
+    const outbox = await this.createServiceDeletedOutboxEvent(tenantId, agentId, serviceId);
+    await this.publishOutboxEvent(outbox);
+  }
+
+  async emitResourceCreated(entity: ResourceEntity): Promise<void> {
+    const outbox = await this.createResourceCreatedOutboxEvent(entity);
+    await this.publishOutboxEvent(outbox);
+  }
+
+  async emitResourceUpdated(entity: ResourceEntity): Promise<void> {
+    const outbox = await this.createResourceUpdatedOutboxEvent(entity);
+    await this.publishOutboxEvent(outbox);
+  }
+
+  async emitResourceDeleted(tenantId: string, agentId: string, resourceId: string): Promise<void> {
+    const outbox = await this.createResourceDeletedOutboxEvent(tenantId, agentId, resourceId);
+    await this.publishOutboxEvent(outbox);
   }
 
   private buildServiceSnapshot(entity: ServiceEntity): NonNullable<ServiceEventPayload['data']> {

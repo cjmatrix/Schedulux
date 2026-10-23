@@ -2,11 +2,16 @@ import { Inject, Injectable } from '@nestjs/common';
 import { CreateServiceRequest } from '@repo/proto/scheduling';
 import { ServiceEntity } from '../../../domain/entities/service.entity.js';
 import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
-import { SERVICE_REPOSITORY } from '../../../domain/tokens.js';
+import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
+import {
+  SCHEDULING_EVENTS_PRODUCER,
+  SERVICE_REPOSITORY,
+  UNIT_OF_WORK,
+} from '../../../domain/tokens.js';
 import { generateSemanticId } from '../../../domain/utils/id-generator.js';
 import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
 import { PriceVO } from '../../../domain/value-objects/price.vo.js';
-import { SchedulingEventsProducer } from '../../../infrastructure/messaging/scheduling-events.producer.js';
+import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-events-producer.interface.js';
 import { ICreateServiceUseCase } from '../../interfaces/service-use-cases.interface.js';
 
 @Injectable()
@@ -14,7 +19,10 @@ export class CreateServiceUseCase implements ICreateServiceUseCase {
   constructor(
     @Inject(SERVICE_REPOSITORY)
     private readonly serviceRepository: IServiceRepository,
-    private readonly eventsProducer: SchedulingEventsProducer,
+    @Inject(SCHEDULING_EVENTS_PRODUCER)
+    private readonly eventsProducer: ISchedulingEventsProducer,
+    @Inject(UNIT_OF_WORK)
+    private readonly unitOfWork: IUnitOfWork,
   ) {}
 
   async execute(dto: CreateServiceRequest): Promise<ServiceEntity> {
@@ -51,9 +59,13 @@ export class CreateServiceUseCase implements ICreateServiceUseCase {
       recallIntervalDays: dto.recall_interval_days || 0,
     });
 
-    const created = await this.serviceRepository.create(service);
+    const { created, outbox } = await this.unitOfWork.withTransaction(async () => {
+      const createdEntity = await this.serviceRepository.create(service);
+      const outboxDoc = await this.eventsProducer.createServiceCreatedOutboxEvent(createdEntity);
+      return { created: createdEntity, outbox: outboxDoc };
+    });
 
-    await this.eventsProducer.emitServiceCreated(created);
+    await this.eventsProducer.publishOutboxEvent(outbox);
 
     return created;
   }

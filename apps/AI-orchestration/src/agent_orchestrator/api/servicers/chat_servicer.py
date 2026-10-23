@@ -3,11 +3,11 @@ from __future__ import annotations
 import grpc
 
 import agent_orchestrator.proto.knowledge_pb2 as knowledge_pb2
-from agent_orchestrator.services.chat_service import ChatService
+from agent_orchestrator.services.protocols import ChatServiceProtocol
 
 
 class ChatRPCHandler:
-    def __init__(self, chat_service: ChatService):
+    def __init__(self, chat_service: ChatServiceProtocol):
         self.chat_service = chat_service
 
     async def get_agent_messages(

@@ -21,6 +21,14 @@ class MessageRepository(Protocol):
         self, tenant_id: str, agent_id: str
     ) -> AgentMessage | None: ...
 
+    async def get_messages_after_seq(
+        self, tenant_id: str, agent_id: str, seq: int, limit: int | None = None
+    ) -> list[AgentMessage]: ...
+
+    async def get_messages_between_seq(
+        self, tenant_id: str, agent_id: str, start_seq: int, end_seq: int
+    ) -> list[AgentMessage]: ...
+
 
 class DraftRepository(Protocol):
     async def get_agent_draft(self, tenant_id: str, agent_id: str) -> AgentDraft | None: ...
@@ -49,7 +57,7 @@ class CacheRepository(Protocol):
     async def get_cached_draft(self, tenant_id: str, agent_id: str) -> dict[str, Any] | None: ...
 
     async def set_cached_draft(
-        self, tenant_id: str, agent_id: str, draft: dict[str, Any]
+        self, tenant_id: str, agent_id: str, draft: dict[str, Any], ttl: int = 86400 * 3
     ) -> None: ...
 
     async def get_raw_crawl_draft(self, tenant_id: str) -> str | None: ...

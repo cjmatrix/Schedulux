@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from agent_orchestrator.domain.protocols import AgentOrchestrator
 from agent_orchestrator.workflows.tenant_agent import (
     get_current_draft,
     resume_onboarding_session,
@@ -9,7 +10,7 @@ from agent_orchestrator.workflows.tenant_agent import (
 )
 
 
-class LangGraphAgentOrchestrator:
+class LangGraphAgentOrchestrator(AgentOrchestrator):
     async def start_session(
         self, tenant_id: str, initial_draft: dict[str, Any], agent_id: str
     ) -> dict[str, Any]:

@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 import copy
 import json
-from dataclasses import dataclass
 from typing import Any
 
 from agent_orchestrator.domain.exceptions import AgentNotFoundException
@@ -12,19 +13,14 @@ from agent_orchestrator.domain.protocols import (
     RuntimeConfigRepository,
 )
 from agent_orchestrator.models import AgentRuntimeConfig, canonicalize_agent_schema
+from agent_orchestrator.services.protocols import (
+    MemoryServiceProtocol,
+    OnboardingResult,
+    OnboardingServiceProtocol,
+)
 
 
-@dataclass
-class OnboardingResult:
-    status: str
-    question: str
-    field: str
-    type: str
-    draft_schema_json: str
-    live_schema_json: str = "{}"
-
-
-class OnboardingService:
+class OnboardingService(OnboardingServiceProtocol):
     def __init__(
         self,
         draft_repo: DraftRepository,
@@ -32,7 +28,7 @@ class OnboardingService:
         cache_repo: CacheRepository,
         message_repo: MessageRepository,
         orchestrator: AgentOrchestrator,
-        memory_service: Any | None = None,
+        memory_service: MemoryServiceProtocol | None = None,
     ):
         self.draft_repo = draft_repo
         self.runtime_repo = runtime_repo
@@ -49,80 +45,81 @@ class OnboardingService:
     async def start_session(
         self, tenant_id: str, agent_id: str, initial_draft_json: str | None = None
     ) -> OnboardingResult:
-        initial_draft: dict[str, Any] | None = None
+        if not agent_id:
+            raise AgentNotFoundException("agent_id is required to start onboarding session")
 
-        live_cfg = (
-            await self.runtime_repo.get_runtime_config(tenant_id, agent_id) if agent_id else None
+        initial_draft: dict[str, Any] | None = await self.cache_repo.get_cached_draft(
+            tenant_id, agent_id
         )
-        live_schema_dict = self._format_runtime_config(live_cfg)
-        live_schema_json = json.dumps(live_schema_dict)
-
-        if agent_id:
-            initial_draft = await self.cache_repo.get_cached_draft(tenant_id, agent_id)
-
-        if not initial_draft and agent_id:
-            agent_draft = await self.draft_repo.get_agent_draft(tenant_id, agent_id)
-            if agent_draft:
-                initial_draft = dict(agent_draft.current_draft) if agent_draft.current_draft else {}
-
-        if not initial_draft and agent_id and live_cfg:
-            initial_draft = copy.deepcopy(live_schema_dict)
 
         if not initial_draft:
-            if initial_draft_json and initial_draft_json != "{}":
+            agent_draft_doc = await self.draft_repo.get_agent_draft(tenant_id, agent_id)
+            if agent_draft_doc and agent_draft_doc.current_draft:
+                initial_draft = dict(agent_draft_doc.current_draft)
+                if agent_draft_doc.status in ("complete", "created") and initial_draft.get(
+                    "status"
+                ) not in (
+                    "complete",
+                    "created",
+                    "live",
+                ):
+                    initial_draft["status"] = agent_draft_doc.status
+            elif initial_draft_json and initial_draft_json.strip() not in ("", "{}"):
                 try:
                     initial_draft = json.loads(initial_draft_json)
                 except Exception:
-                    initial_draft = {}
-            else:
-                if agent_id:
-                    raise AgentNotFoundException(f"Agent draft not found for agent_id: {agent_id}")
-                initial_draft = {}
+                    initial_draft = None
 
-        if agent_id:
-            initial_draft["agent_id"] = agent_id
-        if tenant_id:
-            initial_draft["tenant_id"] = tenant_id
+            if not initial_draft:
+                live_cfg = await self.runtime_repo.get_runtime_config(tenant_id, agent_id)
+                if live_cfg:
+                    initial_draft = copy.deepcopy(self._format_runtime_config(live_cfg))
 
-        initial_draft = canonicalize_agent_schema(initial_draft, status="draft")
+            if not initial_draft:
+                raise AgentNotFoundException(f"Agent draft not found for agent_id: {agent_id}")
 
-        if agent_id:
-            msg_count = await self.message_repo.count_messages(tenant_id, agent_id)
-            agent_draft_doc = await self.draft_repo.get_agent_draft(tenant_id, agent_id)
-            is_completed = agent_draft_doc and agent_draft_doc.status in ("complete", "created")
+            try:
+                await self.cache_repo.set_cached_draft(tenant_id, agent_id, initial_draft)
+            except Exception as ce:
+                print(f"[OnboardingService] Warning: Cache warm failed: {ce}", flush=True)
 
-            if msg_count > 0 or is_completed:
-                resumed_draft = (
-                    await self.orchestrator.get_current_draft(tenant_id, agent_id) or initial_draft
-                )
-                canonical_draft = canonicalize_agent_schema(
-                    resumed_draft or initial_draft or {}, status="draft"
-                )
-                draft_json = json.dumps(canonical_draft)
-                last_msg = await self.message_repo.get_latest_agent_message(tenant_id, agent_id)
-                last_q = (
-                    last_msg.content
-                    if last_msg
-                    else "Configuration loaded. What would you like to update?"
-                )
-                return OnboardingResult(
-                    status="complete" if is_completed else "awaiting_input",
-                    question=last_q,
-                    field="",
-                    type="",
-                    draft_schema_json=draft_json,
-                    live_schema_json=live_schema_json,
-                )
+        existing_status = str(initial_draft.get("status") or "draft")
+        is_completed = existing_status in ("complete", "created", "live")
+
+        initial_draft["agent_id"] = agent_id
+        initial_draft["tenant_id"] = tenant_id
+        initial_draft = canonicalize_agent_schema(initial_draft, status=existing_status)
+
+        if is_completed:
+            live_cfg = await self.runtime_repo.get_runtime_config(tenant_id, agent_id)
+            live_schema_json = json.dumps(self._format_runtime_config(live_cfg))
+        else:
+            live_schema_json = "{}"
+
+        draft_json = json.dumps(initial_draft)
+
+        msg_count = await self.message_repo.count_messages(tenant_id, agent_id)
+
+        if msg_count > 0 or is_completed:
+            last_msg = await self.message_repo.get_latest_agent_message(tenant_id, agent_id)
+            question = (
+                last_msg.content
+                if last_msg
+                else "Configuration loaded. What would you like to update?"
+            )
+            return OnboardingResult(
+                status="complete" if is_completed else "awaiting_input",
+                question=question,
+                field="",
+                type="",
+                draft_schema_json=draft_json,
+                live_schema_json=live_schema_json,
+            )
 
         payload = await self.orchestrator.start_session(tenant_id, initial_draft, agent_id)
-        active_draft = await self.orchestrator.get_current_draft(tenant_id, agent_id)
-        canonical_draft = canonicalize_agent_schema(
-            active_draft or initial_draft or {}, status="draft"
-        )
-        draft_json = json.dumps(canonical_draft)
 
         question = payload.get("question") or ""
-        if question and agent_id:
+        if question:
             try:
                 await self.message_repo.save_message(
                     tenant_id=tenant_id, agent_id=agent_id, role="agent", content=question

@@ -13,7 +13,6 @@ import { ListResourcesUseCase } from '../application/use-cases/resource/list-res
 import { UpdateResourceUseCase } from '../application/use-cases/resource/update-resource.use-case.js';
 import { RESOURCE_REPOSITORY } from '../domain/tokens.js';
 import { MongoResourceRepository } from '../infrastructure/database/repositories/mongo-resource.repository.js';
-import { SchedulingEventsProducer } from '../infrastructure/messaging/scheduling-events.producer.js';
 
 @Module({
   providers: [
@@ -23,9 +22,7 @@ import { SchedulingEventsProducer } from '../infrastructure/messaging/scheduling
     },
     {
       provide: CREATE_RESOURCE_USE_CASE,
-      useFactory: (repo: MongoResourceRepository, producer: SchedulingEventsProducer) =>
-        new CreateResourceUseCase(repo, producer),
-      inject: [RESOURCE_REPOSITORY, SchedulingEventsProducer],
+      useClass: CreateResourceUseCase,
     },
     {
       provide: GET_RESOURCE_USE_CASE,
@@ -37,15 +34,11 @@ import { SchedulingEventsProducer } from '../infrastructure/messaging/scheduling
     },
     {
       provide: UPDATE_RESOURCE_USE_CASE,
-      useFactory: (repo: MongoResourceRepository, producer: SchedulingEventsProducer) =>
-        new UpdateResourceUseCase(repo, producer),
-      inject: [RESOURCE_REPOSITORY, SchedulingEventsProducer],
+      useClass: UpdateResourceUseCase,
     },
     {
       provide: DELETE_RESOURCE_USE_CASE,
-      useFactory: (repo: MongoResourceRepository, producer: SchedulingEventsProducer) =>
-        new DeleteResourceUseCase(repo, producer),
-      inject: [RESOURCE_REPOSITORY, SchedulingEventsProducer],
+      useClass: DeleteResourceUseCase,
     },
   ],
   exports: [

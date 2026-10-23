@@ -6,9 +6,10 @@ import os
 import aio_pika
 
 from agent_orchestrator.config import AGENT_MEMORY_QUEUE_NAME
+from agent_orchestrator.domain.protocols import MemoryQueue
 
 
-class RabbitMQMemoryQueue:
+class RabbitMQMemoryQueue(MemoryQueue):
     def __init__(self, rabbitmq_uri: str | None = None):
         self.uri = rabbitmq_uri or os.environ.get(
             "RABBITMQ_URI", "amqp://guest:guest@localhost:5672"

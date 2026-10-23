@@ -4,10 +4,11 @@ import secrets
 from datetime import datetime
 from typing import Any
 
+from agent_orchestrator.domain.protocols import DraftRepository
 from agent_orchestrator.models import AgentDraft
 
 
-class MongoDraftRepository:
+class MongoDraftRepository(DraftRepository):
     async def get_agent_draft(self, tenant_id: str, agent_id: str) -> AgentDraft | None:
         return await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
 

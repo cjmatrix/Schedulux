@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import secrets
-from dataclasses import dataclass
 from typing import Any
 
 from agent_orchestrator.domain.exceptions import InvalidDraftException
@@ -12,20 +11,13 @@ from agent_orchestrator.domain.protocols import (
     RuntimeConfigRepository,
 )
 from agent_orchestrator.domain.templates import build_default_agent_template
+from agent_orchestrator.services.protocols import (
+    AgentManagementServiceProtocol,
+    AgentSummaryDTO,
+)
 
 
-@dataclass
-class AgentSummaryDTO:
-    agent_id: str
-    name: str
-    status: str
-    creation_source: str
-    services_count: int
-    updated_at: str
-    created_at: str
-
-
-class AgentManagementService:
+class AgentManagementService(AgentManagementServiceProtocol):
     def __init__(
         self,
         draft_repo: DraftRepository,

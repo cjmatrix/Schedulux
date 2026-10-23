@@ -1,17 +1,29 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ResourceEntity } from '../../../domain/entities/resource.entity.js';
 import {
   FindResourcesFilter,
   IResourceRepository,
   ResourceSummary,
 } from '../../../domain/repositories/resource.repository.interface.js';
+import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
+import { UNIT_OF_WORK } from '../../../domain/tokens.js';
 import { ResourceMapper } from '../mappers/resource.mapper.js';
 import { ResourceModel } from '../schemas/resource.schema.js';
 
 @Injectable()
 export class MongoResourceRepository implements IResourceRepository {
+  constructor(
+    @Inject(UNIT_OF_WORK)
+    private readonly unitOfWork: IUnitOfWork,
+  ) {}
+
   async create(resource: ResourceEntity): Promise<ResourceEntity> {
+    const session = this.unitOfWork?.getSession();
     const persistenceData = ResourceMapper.toPersistence(resource);
+    if (session) {
+      const [created] = await ResourceModel.create([persistenceData], { session });
+      return ResourceMapper.toDomain(created);
+    }
     const created = await ResourceModel.create(persistenceData);
     return ResourceMapper.toDomain(created);
   }
@@ -106,11 +118,12 @@ export class MongoResourceRepository implements IResourceRepository {
   }
 
   async update(resource: ResourceEntity): Promise<ResourceEntity | null> {
+    const session = this.unitOfWork?.getSession();
     const persistenceData = ResourceMapper.toPersistence(resource);
     const updated = await ResourceModel.findOneAndUpdate(
       { _id: resource.id, tenant_id: resource.tenantId, is_deleted: { $ne: true } },
       { $set: persistenceData },
-      { new: true },
+      { new: true, session },
     ).exec();
 
     if (!updated) return null;
@@ -118,9 +131,11 @@ export class MongoResourceRepository implements IResourceRepository {
   }
 
   async delete(tenantId: string, resourceId: string): Promise<boolean> {
+    const session = this.unitOfWork?.getSession();
     const result = await ResourceModel.updateOne(
       { _id: resourceId, tenant_id: tenantId, is_deleted: { $ne: true } },
       { $set: { is_deleted: true, deleted_at: new Date() } },
+      { session },
     ).exec();
     return (result.modifiedCount ?? 0) > 0;
   }

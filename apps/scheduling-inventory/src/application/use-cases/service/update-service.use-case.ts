@@ -2,10 +2,15 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { UpdateServiceRequest } from '@repo/proto/scheduling';
 import { ServiceEntity } from '../../../domain/entities/service.entity.js';
 import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
-import { SERVICE_REPOSITORY } from '../../../domain/tokens.js';
+import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
+import {
+  SCHEDULING_EVENTS_PRODUCER,
+  SERVICE_REPOSITORY,
+  UNIT_OF_WORK,
+} from '../../../domain/tokens.js';
 import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
 import { PriceVO } from '../../../domain/value-objects/price.vo.js';
-import { SchedulingEventsProducer } from '../../../infrastructure/messaging/scheduling-events.producer.js';
+import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-events-producer.interface.js';
 import { IUpdateServiceUseCase } from '../../interfaces/service-use-cases.interface.js';
 
 @Injectable()
@@ -13,7 +18,10 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
   constructor(
     @Inject(SERVICE_REPOSITORY)
     private readonly serviceRepository: IServiceRepository,
-    private readonly eventsProducer: SchedulingEventsProducer,
+    @Inject(SCHEDULING_EVENTS_PRODUCER)
+    private readonly eventsProducer: ISchedulingEventsProducer,
+    @Inject(UNIT_OF_WORK)
+    private readonly unitOfWork: IUnitOfWork,
   ) {}
 
   async execute(dto: UpdateServiceRequest): Promise<ServiceEntity> {
@@ -58,12 +66,16 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
       recallIntervalDays: dto.recall_interval_days,
     });
 
-    const updated = await this.serviceRepository.update(existing);
-    if (!updated) {
-      throw new NotFoundException(`Failed to update service ${dto.service_id}`);
-    }
+    const { updated, outbox } = await this.unitOfWork.withTransaction(async () => {
+      const updatedEntity = await this.serviceRepository.update(existing);
+      if (!updatedEntity) {
+        throw new NotFoundException(`Failed to update service ${dto.service_id}`);
+      }
+      const outboxDoc = await this.eventsProducer.createServiceUpdatedOutboxEvent(updatedEntity);
+      return { updated: updatedEntity, outbox: outboxDoc };
+    });
 
-    await this.eventsProducer.emitServiceUpdated(updated);
+    await this.eventsProducer.publishOutboxEvent(outbox);
 
     return updated;
   }

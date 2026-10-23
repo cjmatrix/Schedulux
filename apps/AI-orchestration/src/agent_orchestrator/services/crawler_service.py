@@ -1,22 +1,16 @@
 from __future__ import annotations
 
 import secrets
-from dataclasses import dataclass
-from typing import Any
 
 from agent_orchestrator.domain.exceptions import CrawlJobNotFoundException
 from agent_orchestrator.domain.protocols import CrawlerQueue
+from agent_orchestrator.services.protocols import (
+    CrawlerServiceProtocol,
+    CrawlResultDTO,
+)
 
 
-@dataclass
-class CrawlResultDTO:
-    job_id: str
-    status: str
-    pages_crawled: int
-    pages: list[dict[str, Any]]
-
-
-class CrawlerService:
+class CrawlerService(CrawlerServiceProtocol):
     def __init__(self, queue: CrawlerQueue):
         self.queue = queue
 

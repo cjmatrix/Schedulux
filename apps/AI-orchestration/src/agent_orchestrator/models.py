@@ -5,39 +5,56 @@ import os
 import urllib.parse
 from datetime import datetime
 from enum import StrEnum
+from typing import Any, Literal
 
 from beanie import Document, init_beanie
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic_core import PydanticUndefined
 from pymongo import AsyncMongoClient, IndexModel
 
 
-class ContactEmbed(BaseModel):
+class TolerantBaseModel(BaseModel):
+  
     model_config = ConfigDict(extra="ignore")
 
+    @model_validator(mode="before")
+    @classmethod
+    def drop_nulls_for_defaulted_fields(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        cleaned = {}
+        for k, v in data.items():
+            field_info = cls.model_fields.get(k)
+            if v is None and field_info is not None:
+                has_default = (
+                    field_info.default is not PydanticUndefined and field_info.default is not ...
+                )
+                has_default_factory = field_info.default_factory is not None
+                if has_default or has_default_factory:
+                    continue
+            cleaned[k] = v
+        return cleaned
+
+
+class ContactEmbed(TolerantBaseModel):
     support_email: str | None = None
     public_phone: str | None = None
     escalation_phone: str | None = None
 
 
-class TerminologyEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class TerminologyEmbed(TolerantBaseModel):
     customer_singular: str | None = None
     customer_plural: str | None = None
     primary_metric: str | None = None
     action_metric: str | None = None
 
 
-class BrandEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class BrandEmbed(TolerantBaseModel):
     primary_color: str | None = None
     logo_url: str | None = None
 
 
-class BusinessProfileEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class BusinessProfileEmbed(TolerantBaseModel):
     name: str = ""
     vertical: str = ""
     timezone: str | None = None
@@ -49,9 +66,7 @@ class BusinessProfileEmbed(BaseModel):
     brand: BrandEmbed | None = None
 
 
-class WidgetConfigEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class WidgetConfigEmbed(TolerantBaseModel):
     agent_name: str | None = None
     avatar_url: str | None = None
     initial_greeting: str | None = None
@@ -64,17 +79,14 @@ class WidgetConfigEmbed(BaseModel):
     whitelisted_domains: list[str] = Field(default_factory=list)
 
 
-class LlmEngineEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+class LlmEngineEmbed(TolerantBaseModel):
     fallback_trigger_latency_ms: int | None = None
     temperature: float = 0.1
     semantic_caching: bool = True
     prompt_compiler_token_limit: int | None = None
 
 
-class KnowledgeAssetEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class KnowledgeAssetEmbed(TolerantBaseModel):
     asset_id: str
     title: str | None = None
     asset_type: str | None = None
@@ -83,17 +95,13 @@ class KnowledgeAssetEmbed(BaseModel):
     last_synced_at: datetime | None = None
 
 
-class KnowledgeBaseEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class KnowledgeBaseEmbed(TolerantBaseModel):
     namespace: str | None = None
     qdrant_collection: str | None = None
     sources: list[KnowledgeAssetEmbed] = Field(default_factory=list)
 
 
-class SchedulingEngineEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class SchedulingEngineEmbed(TolerantBaseModel):
     allocation_model: str = "time_slot"
     default_booking_mode: str = "time_slot"
     default_lead_time_hours: int = 2
@@ -102,24 +110,18 @@ class SchedulingEngineEmbed(BaseModel):
     hold_duration_minutes: int = 10
 
 
-class BlackoutDateEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class BlackoutDateEmbed(TolerantBaseModel):
     date: str
     reason: str | None = None
     is_closed: bool = True
 
 
-class TimeSlotEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class TimeSlotEmbed(TolerantBaseModel):
     start: str
     end: str
 
 
-class OperatingHoursEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class OperatingHoursEmbed(TolerantBaseModel):
     monday: list[TimeSlotEmbed] = Field(default_factory=list)
     tuesday: list[TimeSlotEmbed] = Field(default_factory=list)
     wednesday: list[TimeSlotEmbed] = Field(default_factory=list)
@@ -168,23 +170,26 @@ class PriceType(StrEnum):
     CUSTOM = "custom"
 
 
-class ResourceEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class ResourceEmbed(TolerantBaseModel):
     resource_id: str
     resource_type: ResourceType = ResourceType.STAFF
     name: str
-    title: str = ""
+    title: str | None = ""
     category: str = "General"
-    description: str = ""
+    description: str | None = ""
     is_bookable: bool = True
     dispatch_status: DispatchStatus = DispatchStatus.ACTIVE
     custom_shift_overrides: dict[str, object] = Field(default_factory=dict)
 
+    @field_validator("category", mode="before")
+    @classmethod
+    def parse_category(cls, v: object) -> str:
+        if not v or not str(v).strip():
+            return "General"
+        return str(v).strip()
 
-class PriceEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
 
+class PriceEmbed(TolerantBaseModel):
     type: PriceType = PriceType.FIXED
     amount: float = 0.0
     currency: str = "USD"
@@ -200,9 +205,7 @@ class PriceEmbed(BaseModel):
             return 0.0
 
 
-class DepositEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class DepositEmbed(TolerantBaseModel):
     required: bool = False
     amount: float = 0.0
     processor: str = "upi_direct"
@@ -221,32 +224,23 @@ class DepositEmbed(BaseModel):
         except (ValueError, TypeError):
             return 0.0
 
-    @field_validator("required", mode="before")
-    @classmethod
-    def parse_required(cls, v: object) -> bool:
-        return False if v is None else bool(v)
 
-
-class ServiceVerificationEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class ServiceVerificationEmbed(TolerantBaseModel):
     require_otp: bool | None = None
 
 
-class ServiceEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class ServiceEmbed(TolerantBaseModel):
     service_id: str
     name: str
     category: str = "General"
-    description: str = ""
+    description: str | None = ""
     duration_minutes: int | None = 30
     buffer_minutes: int | None = 0
     allocation_model: ServiceAllocationModel = ServiceAllocationModel.SINGLE_RESOURCE
     booking_mode: BookingMode = BookingMode.TIME_SLOT
     price: PriceEmbed = Field(default_factory=PriceEmbed)
     deposit: DepositEmbed = Field(default_factory=DepositEmbed)
-    verification: ServiceVerificationEmbed = Field(default_factory=ServiceVerificationEmbed)
+    verification: ServiceVerificationEmbed | None = None
     eligible_resource_ids: list[str] = Field(default_factory=list)
     required_asset_ids: list[str] = Field(default_factory=list)
     recall_interval_days: int | None = 0
@@ -278,77 +272,48 @@ class ServiceEmbed(BaseModel):
         except (ValueError, TypeError):
             return 30
 
-    @field_validator("price", mode="before")
-    @classmethod
-    def parse_price(cls, v: object) -> object:
-        return {} if v is None else v
 
-    @field_validator("deposit", mode="before")
-    @classmethod
-    def parse_deposit(cls, v: object) -> object:
-        return {} if v is None else v
-
-    @field_validator("eligible_resource_ids", "required_asset_ids", mode="before")
-    @classmethod
-    def parse_lists(cls, v: object) -> object:
-        return [] if v is None else v
-
-
-class VerificationPolicyEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class VerificationPolicyEmbed(TolerantBaseModel):
     require_otp_for_new_booking: bool = False
     require_otp_for_reschedule: bool = True
     require_otp_for_cancel: bool = True
 
 
-class PatientFieldEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class PatientFieldEmbed(TolerantBaseModel):
     field_name: str
     data_type: str | None = None
     is_required: bool = True
     prompt_if_missing: str | None = None
 
 
-class PhiScrubEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class PhiScrubEmbed(TolerantBaseModel):
     enabled: bool = True
     policy: str | None = None
     description: str | None = None
     hipaa_compliant: bool = True
 
 
-class TriageEmergencyEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class TriageEmergencyEmbed(TolerantBaseModel):
     enabled: bool = True
     keywords: list[str] = Field(default_factory=list)
     response_override: str | None = None
 
 
-class HumanHandoffEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class HumanHandoffEmbed(TolerantBaseModel):
     enabled: bool = True
     trigger_topics: list[str] = Field(default_factory=list)
     reception_contact: str | None = None
     handoff_message: str | None = None
 
 
-class GuardrailsEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class GuardrailsEmbed(TolerantBaseModel):
     verification_policy: VerificationPolicyEmbed | None = None
     phi_scrubbing: PhiScrubEmbed | None = None
     triage_emergency: TriageEmergencyEmbed | None = None
     human_handoff: HumanHandoffEmbed | None = None
 
 
-class StateVariableEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class StateVariableEmbed(TolerantBaseModel):
     variable_key: str
     data_type: str | None = None
     description: str | None = None
@@ -356,9 +321,7 @@ class StateVariableEmbed(BaseModel):
     prompt_if_missing: str | None = None
 
 
-class SubAgentEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class SubAgentEmbed(TolerantBaseModel):
     agent_id: str
     agent_type: str
     routing_trigger_description: str | None = None
@@ -367,18 +330,14 @@ class SubAgentEmbed(BaseModel):
     required_state_variables: list[StateVariableEmbed] = Field(default_factory=list)
 
 
-class UpiConfigEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class UpiConfigEmbed(TolerantBaseModel):
     upi_id: str | None = None
     display_name: str | None = None
     qr_code_url: str | None = None
     accepted_apps: list[str] = Field(default_factory=list)
 
 
-class PaymentGatewayEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class PaymentGatewayEmbed(TolerantBaseModel):
     model: str | None = "pass_through"
     supported_processors: list[str] = Field(default_factory=lambda: ["upi_direct"])
     active_processor: str | None = "upi_direct"
@@ -387,17 +346,13 @@ class PaymentGatewayEmbed(BaseModel):
     refund_policy: str | None = "tenant_managed"
 
 
-class IntegrationsEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class IntegrationsEmbed(TolerantBaseModel):
     stripe: dict[str, object] = Field(default_factory=dict)
     payment_gateway: PaymentGatewayEmbed | None = None
     twilio: dict[str, object] = Field(default_factory=dict)
 
 
-class SubscriptionEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class SubscriptionEmbed(TolerantBaseModel):
     tier: str | None = "starter"
     tokens_used_this_month: int = 0
 
@@ -410,6 +365,24 @@ class AgentRuntimeConfig(Document):
     """
 
     model_config = ConfigDict(extra="ignore")
+
+    @model_validator(mode="before")
+    @classmethod
+    def drop_nulls_for_defaulted_fields(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        cleaned = {}
+        for k, v in data.items():
+            field_info = cls.model_fields.get(k)
+            if v is None and field_info is not None:
+                has_default = (
+                    field_info.default is not PydanticUndefined and field_info.default is not ...
+                )
+                has_default_factory = field_info.default_factory is not None
+                if has_default or has_default_factory:
+                    continue
+            cleaned[k] = v
+        return cleaned
 
     schema_version: str = "2.4"
     status: str = "draft"
@@ -447,8 +420,210 @@ class AgentRuntimeConfig(Document):
         ]
 
 
-def canonicalize_agent_schema(data: dict[str, object], status: str = "draft") -> dict[str, object]:
 
+class StrictContactSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    support_email: str | None = None
+    public_phone: str | None = None
+    escalation_phone: str | None = None
+
+
+class StrictTerminologySchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    customer_singular: str | None = None
+    customer_plural: str | None = None
+    primary_metric: str | None = None
+    action_metric: str | None = None
+
+
+class StrictBrandSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    primary_color: str | None = None
+    logo_url: str | None = None
+
+
+class StrictBusinessProfileSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str | None = None
+    vertical: str | None = None
+    timezone: str | None = None
+    locale: str | None = None
+    currency: str | None = None
+    address: str | None = None
+    contact: StrictContactSchema | None = None
+    terminology: StrictTerminologySchema | None = None
+    brand: StrictBrandSchema | None = None
+
+
+class StrictPriceSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    type: PriceType | None = None
+    amount: float | None = None
+    currency: str | None = None
+
+
+class StrictDepositSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    required: bool | None = None
+    amount: float | None = None
+    processor: Literal["upi_direct"] | None = None
+    upi_id: str | None = None
+    qr_code_url: str | None = None
+    confirmation_method: str | None = None
+    payment_instructions: str | None = None
+
+
+class StrictServiceVerificationSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    require_otp: bool | None = None
+
+
+class StrictServiceSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    service_id: str | None = None
+    name: str | None = None
+    category: str | None = None
+    description: str | None = None
+    duration_minutes: int | None = None
+    buffer_minutes: int | None = None
+    allocation_model: ServiceAllocationModel | None = None
+    booking_mode: BookingMode | None = None
+    price: StrictPriceSchema | None = None
+    deposit: StrictDepositSchema | None = None
+    verification: StrictServiceVerificationSchema | None = None
+    eligible_resource_ids: list[str] | None = None
+    required_asset_ids: list[str] | None = None
+    recall_interval_days: int | None = None
+
+
+class StrictResourceSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    resource_id: str | None = None
+    resource_type: ResourceType | None = None
+    name: str | None = None
+    title: str | None = None
+    category: str | None = None
+    description: str | None = None
+    is_bookable: bool | None = None
+    dispatch_status: DispatchStatus | None = None
+    custom_shift_overrides: dict | None = None
+
+
+class StrictTimeSlotSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    start: str | None = None
+    end: str | None = None
+
+
+class StrictBlackoutDateSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    date: str | None = None
+    reason: str | None = None
+    is_closed: bool | None = None
+
+
+class StrictOperatingHoursSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    monday: list[StrictTimeSlotSchema] | None = None
+    tuesday: list[StrictTimeSlotSchema] | None = None
+    wednesday: list[StrictTimeSlotSchema] | None = None
+    thursday: list[StrictTimeSlotSchema] | None = None
+    friday: list[StrictTimeSlotSchema] | None = None
+    saturday: list[StrictTimeSlotSchema] | None = None
+    sunday: list[StrictTimeSlotSchema] | None = None
+    blackout_dates: list[StrictBlackoutDateSchema] | None = None
+
+
+class StrictSchedulingEngineSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    allocation_model: BookingMode | None = None
+    default_booking_mode: BookingMode | None = None
+    default_lead_time_hours: int | None = None
+    max_advance_booking_days: int | None = None
+    cancellation_window_hours: int | None = None
+    hold_duration_minutes: int | None = None
+
+
+class StrictWidgetConfigSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    agent_name: str | None = None
+    avatar_url: str | None = None
+    initial_greeting: str | None = None
+    fallback_message: str | None = None
+    position: str | None = None
+    launcher_style: str | None = None
+    sound_on_load: bool | None = None
+    auto_expand_delay_seconds: int | None = None
+    platform_sources: list[str] | None = None
+    whitelisted_domains: list[str] | None = None
+
+
+class StrictComplianceSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    hipaa_mode: bool | None = None
+    phi_scrubbing: bool | None = None
+    data_retention_policy: str | None = None
+    zero_hallucination_mode: bool | None = None
+    audit_trail_enabled: bool | None = None
+
+
+class StrictPhiScrubSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool | None = None
+    policy: str | None = None
+    description: str | None = None
+    hipaa_compliant: bool | None = None
+
+
+class StrictTriageEmergencySchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool | None = None
+    keywords: list[str] | None = None
+    response_override: str | None = None
+
+
+class StrictHumanHandoffSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool | None = None
+    trigger_topics: list[str] | None = None
+    reception_contact: str | None = None
+    handoff_message: str | None = None
+
+
+class StrictVerificationPolicySchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    require_otp_for_new_booking: bool | None = None
+    require_otp_for_reschedule: bool | None = None
+    require_otp_for_cancel: bool | None = None
+
+
+class StrictGuardrailsSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    verification_policy: StrictVerificationPolicySchema | None = None
+    phi_scrubbing: StrictPhiScrubSchema | None = None
+    triage_emergency: StrictTriageEmergencySchema | None = None
+    human_handoff: StrictHumanHandoffSchema | None = None
+
+
+class StrictDraftPatchValidator(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    schema_version: str | None = "2.4"
+    status: str | None = "draft"
+    tenant_id: str | None = None
+    agent_id: str | None = None
+    creation_source: str | None = "custom"
+    business_profile: StrictBusinessProfileSchema | None = None
+    services: list[StrictServiceSchema] | None = None
+    resources: list[StrictResourceSchema] | None = None
+    operating_hours: StrictOperatingHoursSchema | None = None
+    scheduling_engine: StrictSchedulingEngineSchema | None = None
+    widget_config: StrictWidgetConfigSchema | None = None
+    compliance: StrictComplianceSchema | None = None
+    guardrails: StrictGuardrailsSchema | None = None
+    supervisor_prompt: str | None = None
+
+
+def canonicalize_agent_schema(data: dict[str, object], status: str = "draft") -> dict[str, object]:
     if not data:
         return {}
 
@@ -459,11 +634,44 @@ def canonicalize_agent_schema(data: dict[str, object], status: str = "draft") ->
     if "agent_id" not in clean_data:
         clean_data["agent_id"] = ""
 
-    if not clean_data.get("scheduling_engine"):
-        clean_data["scheduling_engine"] = SchedulingEngineEmbed().model_dump()
+    if status == "draft":
+        try:
+            validated = StrictDraftPatchValidator.model_validate(clean_data)
+            res_draft = validated.model_dump(exclude_unset=True)
+        except Exception:
+            res_draft = clean_data
 
-    if not clean_data.get("operating_hours"):
-        clean_data["operating_hours"] = OperatingHoursEmbed().model_dump()
+        res_draft.setdefault("schema_version", clean_data.get("schema_version", "2.4"))
+        res_draft.setdefault("status", "draft")
+        res_draft.setdefault("tenant_id", clean_data.get("tenant_id", ""))
+        res_draft.setdefault("agent_id", clean_data.get("agent_id", ""))
+        res_draft.setdefault("creation_source", clean_data.get("creation_source", "custom"))
+        res_draft.setdefault("business_profile", clean_data.get("business_profile") or {})
+        res_draft.setdefault("operating_hours", clean_data.get("operating_hours") or {})
+        res_draft.setdefault("scheduling_engine", clean_data.get("scheduling_engine") or {})
+        res_draft.setdefault("services", clean_data.get("services") or [])
+        res_draft.setdefault("resources", clean_data.get("resources") or [])
+        res_draft.setdefault("guardrails", clean_data.get("guardrails") or {})
+        res_draft.setdefault("widget_config", clean_data.get("widget_config") or {})
+        res_draft.setdefault("compliance", clean_data.get("compliance") or {})
+        if "supervisor_prompt" in clean_data:
+            res_draft["supervisor_prompt"] = clean_data["supervisor_prompt"]
+        if "llm_engine" in clean_data:
+            res_draft["llm_engine"] = clean_data["llm_engine"]
+        if "knowledge_base" in clean_data:
+            res_draft["knowledge_base"] = clean_data["knowledge_base"]
+        if "sub_agents" in clean_data:
+            res_draft["sub_agents"] = clean_data["sub_agents"]
+        if "integrations" in clean_data:
+            res_draft["integrations"] = clean_data["integrations"]
+        if "subscription" in clean_data:
+            res_draft["subscription"] = clean_data["subscription"]
+        return res_draft
+
+    if isinstance(clean_data.get("resources"), list):
+        for r in clean_data["resources"]:
+            if isinstance(r, dict) and r.get("custom_shift_overrides") is None:
+                r["custom_shift_overrides"] = {}
 
     try:
         cfg = AgentRuntimeConfig(**clean_data)
@@ -578,9 +786,7 @@ def canonicalize_agent_schema(data: dict[str, object], status: str = "draft") ->
         return res_fallback
 
 
-class DraftCheckpointEmbed(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
+class DraftCheckpointEmbed(TolerantBaseModel):
     checkpoint_id: str
     message_id: str
     user_prompt: str | None = ""
@@ -680,8 +886,10 @@ class AgentMessage(Document):
 
     tenant_id: str
     agent_id: str
+    seq: int = 0
     role: str  # "agent" or "tenant"
     content: str
+    token_count: int = 0
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:
@@ -695,6 +903,10 @@ class AgentMessage(Document):
                 [("tenant_id", 1), ("agent_id", 1)],
                 name="idx_tenant_agent",
             ),
+            IndexModel(
+                [("tenant_id", 1), ("agent_id", 1), ("seq", 1)],
+                name="idx_tenant_agent_seq",
+            ),
         ]
 
 
@@ -703,7 +915,6 @@ _db_initialized = False
 
 
 async def init_db(mongo_uri: str | None = None):
-
     global _client, _db_initialized
     if _db_initialized:
         return

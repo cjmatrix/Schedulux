@@ -7,21 +7,21 @@ from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from agent_orchestrator.config import (
-    MEMORY_CHUNK_SIZE,
+    MEMORY_CHUNK_TOKEN_SIZE,
     MEMORY_SUMMARIZER_MODEL,
-    MEMORY_TRIGGER_THRESHOLD,
+    MEMORY_TRIGGER_TOKEN_THRESHOLD,
 )
 from agent_orchestrator.domain.protocols import (
     DraftRepository,
     MemoryQueue,
     MessageRepository,
 )
-from agent_orchestrator.models import AgentMessage
+from agent_orchestrator.services.protocols import MemoryServiceProtocol
 from agent_orchestrator.utils.embedding_util import embed_query, embed_texts
 from agent_orchestrator.utils.qdrant_util import get_qdrant_store
 
 
-class MemoryService:
+class MemoryService(MemoryServiceProtocol):
     def __init__(
         self,
         message_repo: MessageRepository,
@@ -40,18 +40,44 @@ class MemoryService:
         agent_draft = await self.draft_repo.get_agent_draft(tenant_id, agent_id)
         last_summarized = agent_draft.last_summarized_seq if agent_draft else 0
 
-        total_count = await self.message_repo.count_messages(tenant_id, agent_id)
-        unsummarized_count = total_count - last_summarized
+        unsummarized = await self.message_repo.get_messages_after_seq(
+            tenant_id, agent_id, last_summarized
+        )
+        if not unsummarized:
+            return False
 
-        if unsummarized_count >= MEMORY_TRIGGER_THRESHOLD:
-            # Cut off the oldest MEMORY_CHUNK_SIZE (e.g. 8) unsummarized messages for compression
-            cutoff_seq = last_summarized + MEMORY_CHUNK_SIZE
-            if cutoff_seq <= total_count:
+        total_tokens = 0
+        for m in unsummarized:
+            t = getattr(m, "token_count", 0) or 0
+            if t <= 0:
+                t = max(1, len(m.content) // 4)
+            total_tokens += t
+
+        if total_tokens >= MEMORY_TRIGGER_TOKEN_THRESHOLD:
+            accumulated_tokens = 0
+            cutoff_seq = last_summarized
+            for m in unsummarized:
+                t = getattr(m, "token_count", 0) or 0
+                if t <= 0:
+                    t = max(1, len(m.content) // 4)
+                accumulated_tokens += t
+                cutoff_seq = m.seq
+                if accumulated_tokens >= MEMORY_CHUNK_TOKEN_SIZE:
+                    break
+
+            total_count = await self.message_repo.count_messages(tenant_id, agent_id)
+            if cutoff_seq <= total_count and cutoff_seq > last_summarized:
                 await self.memory_queue.enqueue_summarization_job(
                     tenant_id=tenant_id,
                     agent_id=agent_id,
                     total_count=total_count,
                     cutoff_seq=cutoff_seq,
+                )
+                print(
+                    f"[MemoryService] Triggered by token count: {total_tokens} unsummarized tokens "
+                    f"(>= {MEMORY_TRIGGER_TOKEN_THRESHOLD} threshold). "
+                    f"Enqueued compression for oldest {accumulated_tokens} tokens (up to seq {cutoff_seq}).",
+                    flush=True,
                 )
                 return True
         return False
@@ -66,14 +92,9 @@ class MemoryService:
         last_seq = agent_draft.last_summarized_seq or 0
         existing_summary = agent_draft.conversation_summary or ""
 
-        # Fetch messages up to cutoff_seq
-        all_msgs = (
-            await AgentMessage.find({"tenant_id": tenant_id, "agent_id": agent_id})
-            .sort("created_at")
-            .to_list()
+        unprocessed = await self.message_repo.get_messages_between_seq(
+            tenant_id, agent_id, last_seq, cutoff_seq
         )
-
-        unprocessed = all_msgs[last_seq:cutoff_seq]
         if not unprocessed:
             return {"status": "skipped", "reason": "no_new_messages"}
 
@@ -128,7 +149,6 @@ Transcript to analyze:
             else:
                 raw_text = str(content).strip()
 
-            # Clean possible markdown fencing
             if raw_text.startswith("```json"):
                 raw_text = raw_text[7:]
             if raw_text.startswith("```"):
@@ -144,7 +164,6 @@ Transcript to analyze:
             agent_draft.last_summarized_seq = cutoff_seq
             await agent_draft.save()
 
-            # Batch embed extracted facts via Voyage AI and store in Qdrant
             if extracted_facts:
                 fact_texts = [f["fact"] for f in extracted_facts if f.get("fact")]
                 if fact_texts:

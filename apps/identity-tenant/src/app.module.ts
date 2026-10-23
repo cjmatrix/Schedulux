@@ -30,9 +30,6 @@ import { TenantService } from './services/tenantService.js';
     { provide: 'ITenantService', useClass: TenantService },
     { provide: 'ISuperAdminService', useClass: SuperAdminService },
     { provide: 'IDashboardUserService', useClass: DashboardUserService },
-    TenantService,
-    SuperAdminService,
-    DashboardUserService,
   ],
 })
 export class AppModule {}

@@ -49,13 +49,19 @@ export class CreateServiceUseCase implements ICreateServiceUseCase {
       description: dto.description || '',
       durationMinutes: dto.duration_minutes || 30,
       bufferMinutes: dto.buffer_minutes || 0,
-      allocationModel: dto.allocation_model || 'single_resource',
       bookingMode: dto.booking_mode || 'time_slot',
       price,
       deposit,
       verification: dto.verification ? { require_otp: dto.verification.require_otp } : undefined,
-      eligibleResourceIds: dto.eligible_resource_ids ?? [],
-      requiredAssetIds: dto.required_asset_ids ?? [],
+      resourceRequirements: (dto.resource_requirements ?? []).map((r) => ({
+        role: r.role || 'Staff',
+        resourceType: r.resource_type || 'staff',
+        count: r.count || 1,
+        eligibleResourceIds: r.eligible_resource_ids ?? [],
+        selectionMode:
+          (r.selection_mode as 'user_selectable' | 'auto_assign') ||
+          (r.resource_type === 'staff' ? 'user_selectable' : 'auto_assign'),
+      })),
       recallIntervalDays: dto.recall_interval_days || 0,
     });
 

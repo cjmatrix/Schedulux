@@ -167,4 +167,25 @@ export class MongoResourceRepository implements IResourceRepository {
     const docs = await ResourceModel.find(query).exec();
     return docs.map((doc) => ResourceMapper.toDomain(doc));
   }
+
+  async findActiveBookableByIds(
+    tenantId: string,
+    resourceIds: string[],
+    agentId?: string,
+  ): Promise<ResourceEntity[]> {
+    if (!resourceIds || resourceIds.length === 0) return [];
+    const query: Record<string, unknown> = {
+      _id: { $in: resourceIds },
+      tenant_id: tenantId,
+      is_deleted: { $ne: true },
+      is_bookable: true,
+      dispatch_status: 'active',
+    };
+    if (agentId) {
+      query.agent_id = agentId;
+    }
+    const docs = await ResourceModel.find(query).exec();
+    return docs.map((doc) => ResourceMapper.toDomain(doc));
+  }
 }
+

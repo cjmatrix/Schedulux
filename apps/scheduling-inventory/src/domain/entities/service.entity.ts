@@ -10,18 +10,24 @@ export interface ServiceEntityProps {
   description: string;
   durationMinutes: number;
   bufferMinutes: number;
-  allocationModel: string;
   bookingMode?: string;
   price: PriceVO;
   deposit: DepositVO;
   verification?: { require_otp?: boolean | null };
-  eligibleResourceIds: string[];
-  requiredAssetIds: string[];
+  resourceRequirements?: ResourceRequirement[];
   recallIntervalDays: number;
   isDeleted?: boolean;
   deletedAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
+}
+
+export interface ResourceRequirement {
+  role: string;
+  resourceType: string;
+  count: number;
+  eligibleResourceIds: string[];
+  selectionMode?: 'user_selectable' | 'auto_assign';
 }
 
 export class ServiceEntity {
@@ -33,13 +39,11 @@ export class ServiceEntity {
   private _description: string;
   private _durationMinutes: number;
   private _bufferMinutes: number;
-  private _allocationModel: string;
   private _bookingMode: string;
   private _price: PriceVO;
   private _deposit: DepositVO;
   private _verification?: { require_otp?: boolean | null };
-  private _eligibleResourceIds: string[];
-  private _requiredAssetIds: string[];
+  private _resourceRequirements: ResourceRequirement[];
   private _recallIntervalDays: number;
   private _isDeleted: boolean;
   private _deletedAt: Date | null;
@@ -68,13 +72,16 @@ export class ServiceEntity {
     this._description = props.description?.trim() ?? '';
     this._durationMinutes = props.durationMinutes;
     this._bufferMinutes = props.bufferMinutes;
-    this._allocationModel = props.allocationModel ?? 'single_resource';
     this._bookingMode = props.bookingMode ?? 'time_slot';
     this._price = props.price ?? PriceVO.create();
     this._deposit = props.deposit ?? DepositVO.create();
     this._verification = props.verification;
-    this._eligibleResourceIds = props.eligibleResourceIds ?? [];
-    this._requiredAssetIds = props.requiredAssetIds ?? [];
+    this._resourceRequirements = (props.resourceRequirements ?? []).map((r) => ({
+      role: r.role?.trim() || 'Staff',
+      resourceType: r.resourceType?.trim() || 'staff',
+      count: Math.max(1, r.count || 1),
+      eligibleResourceIds: [...(r.eligibleResourceIds ?? [])],
+    }));
     this._recallIntervalDays = props.recallIntervalDays ?? 0;
     this._isDeleted = props.isDeleted ?? false;
     this._deletedAt = props.deletedAt ?? null;
@@ -106,9 +113,6 @@ export class ServiceEntity {
   get bufferMinutes(): number {
     return this._bufferMinutes;
   }
-  get allocationModel(): string {
-    return this._allocationModel;
-  }
   get bookingMode(): string {
     return this._bookingMode;
   }
@@ -121,12 +125,27 @@ export class ServiceEntity {
   get verification(): { require_otp?: boolean | null } | undefined {
     return this._verification;
   }
-  get eligibleResourceIds(): string[] {
-    return [...this._eligibleResourceIds];
+  get resourceRequirements(): ResourceRequirement[] {
+    return this._resourceRequirements.map((r) => ({
+      role: r.role,
+      resourceType: r.resourceType,
+      count: r.count,
+      eligibleResourceIds: [...r.eligibleResourceIds],
+      selectionMode: r.selectionMode,
+    }));
   }
-  get requiredAssetIds(): string[] {
-    return [...this._requiredAssetIds];
+
+  getEffectiveResourceRequirements(): ResourceRequirement[] {
+    return this._resourceRequirements.map((r) => ({
+      role: r.role,
+      resourceType: r.resourceType,
+      count: Math.max(1, r.count || 1),
+      eligibleResourceIds: [...r.eligibleResourceIds],
+      selectionMode:
+        r.selectionMode || (r.resourceType === 'staff' ? 'user_selectable' : 'auto_assign'),
+    }));
   }
+
   get recallIntervalDays(): number {
     return this._recallIntervalDays;
   }
@@ -155,13 +174,11 @@ export class ServiceEntity {
     description?: string;
     durationMinutes?: number;
     bufferMinutes?: number;
-    allocationModel?: string;
     bookingMode?: string;
     price?: PriceVO;
     deposit?: DepositVO;
     verification?: { require_otp?: boolean | null };
-    eligibleResourceIds?: string[];
-    requiredAssetIds?: string[];
+    resourceRequirements?: ResourceRequirement[];
     recallIntervalDays?: number;
   }): void {
     if (details.name !== undefined) {
@@ -188,9 +205,6 @@ export class ServiceEntity {
       }
       this._bufferMinutes = details.bufferMinutes;
     }
-    if (details.allocationModel !== undefined) {
-      this._allocationModel = details.allocationModel;
-    }
     if (details.bookingMode !== undefined) {
       this._bookingMode = details.bookingMode;
     }
@@ -203,11 +217,13 @@ export class ServiceEntity {
     if (details.verification !== undefined) {
       this._verification = details.verification;
     }
-    if (details.eligibleResourceIds !== undefined) {
-      this._eligibleResourceIds = details.eligibleResourceIds;
-    }
-    if (details.requiredAssetIds !== undefined) {
-      this._requiredAssetIds = details.requiredAssetIds;
+    if (details.resourceRequirements !== undefined) {
+      this._resourceRequirements = details.resourceRequirements.map((r) => ({
+        role: r.role?.trim() || 'Staff',
+        resourceType: r.resourceType?.trim() || 'staff',
+        count: Math.max(1, r.count || 1),
+        eligibleResourceIds: [...(r.eligibleResourceIds ?? [])],
+      }));
     }
     if (details.recallIntervalDays !== undefined) {
       this._recallIntervalDays = details.recallIntervalDays;

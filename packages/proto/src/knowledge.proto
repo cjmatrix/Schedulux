@@ -10,6 +10,8 @@ service KnowledgeService {
   rpc SaveInitialAgentDraft (SaveInitialAgentDraftRequest) returns (SaveInitialAgentDraftResponse);
   rpc ListTenantAgents (ListTenantAgentsRequest) returns (ListTenantAgentsResponse);
   rpc GetAgentMessages (GetAgentMessagesRequest) returns (GetAgentMessagesResponse);
+  rpc CustomerChat (CustomerChatRequest) returns (CustomerChatResponse);
+  rpc GetCustomerMessages (GetCustomerMessagesRequest) returns (GetCustomerMessagesResponse);
 }
 
 message CrawlSiteRequest {
@@ -115,3 +117,44 @@ message GetAgentMessagesResponse {
   optional string next_cursor = 2;
   bool has_more = 3;
 }
+
+message CustomerChatMessageInfo {
+  string id = 1;
+  string session_id = 2;
+  string tenant_id = 3;
+  string agent_id = 4;
+  string role = 5;
+  string content = 6;
+  string created_at = 7;
+}
+
+message CustomerChatRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+  string session_id = 3;
+  string message = 4;
+  optional string customer_id = 5;
+  optional string customer_phone = 6;
+  optional string customer_name = 7;
+}
+
+message CustomerChatResponse {
+  string session_id = 1;
+  string response = 2;
+  repeated CustomerChatMessageInfo history = 3;
+  optional string booking_id = 4;
+  optional string booking_reference = 5;
+  optional string status = 6;
+}
+
+message GetCustomerMessagesRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+  string session_id = 3;
+  optional int32 limit = 4;
+}
+
+message GetCustomerMessagesResponse {
+  repeated CustomerChatMessageInfo messages = 1;
+}
+

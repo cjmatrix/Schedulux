@@ -483,15 +483,21 @@ DOMAIN INTEGRITY & DEPENDENCY RULES:
        {{"resource_id": "res_<sanitized_name>", "resource_type": "staff" (or "room" / "chair" / "bay" / "equipment" if physical), "name": "<Resource Name>", "title": "Specialist", "category": "General", "description": "", "is_bookable": true, "dispatch_status": "active", "custom_shift_overrides": {{}}}}
      * DO NOT ask the user for `resource_id`, title, or category as a blocker. Add the resource to the canvas first, and let the user refine optional details later if they want.
    - AT LEAST ONE RESOURCE IS MANDATORY: `resources[]` MUST contain at least one bookable resource (a staff member or a physical asset like a room, chair, or bay). If `resources[]` is empty, you CANNOT finalize; you MUST choose 'ask_user' and ask who or what delivers their service.
-   - RESOURCE-TO-SERVICE LINKING (MANDATORY — DO NOT SKIP):
-     * `services[].eligible_resource_ids` MUST be populated for every service. An empty `eligible_resource_ids: []` means the service has NO provider and CANNOT be booked.
-     * WHENEVER you add or modify resources, you MUST ALSO emit `replace` patches to update `eligible_resource_ids` on the matching service(s) IN THE SAME PATCH BATCH.
-     * Match resources to services by type/category/name context (e.g. AC rooms → AC Homestay service, Non-AC rooms → Non-AC Homestay service, staff doctor → consultation service).
-     * EXAMPLE: User says "I have 3 AC rooms: 300, 301, 302 and 2 Non-AC rooms: 400, 401":
-       - Patches to add resources: `add /resources/- {{res_room_300...}}`, `add /resources/- {{res_room_301...}}`, etc.
-       - ALSO add patches to link: `replace /services/0/eligible_resource_ids ["res_room_300","res_room_301","res_room_302"]` (for AC Homestay at index 0)
-       - AND: `replace /services/1/eligible_resource_ids ["res_room_400","res_room_401"]` (for Non-AC Homestay at index 1)
-     * NEVER leave `eligible_resource_ids` as `[]` on any service that has corresponding resources in `resources[]`.
+    - RESOURCE-TO-SERVICE LINKING & RESOURCE REQUIREMENTS (ENTERPRISE MODEL):
+      * `services[].resource_requirements` is the ONLY place where required resources and providers are defined. Each requirement item contains:
+        {{"role": "<Role Name e.g. Lead Doctor, Room, Bay, Therapist>", "resource_type": "staff"|"room"|"chair"|"bay"|"equipment"|"asset", "count": 1, "eligible_resource_ids": ["res_..."], "selection_mode": "user_selectable"|"auto_assign"}}
+      * INTELLIGENT SELECTION MODE (`selection_mode`):
+        - Set `selection_mode: "user_selectable"` for human specialists (Doctors, Stylists, Consultants) where clients can pick a preferred person, OR for bookable spaces/units (Hotel Rooms, Conference Rooms).
+        - Set `selection_mode: "auto_assign"` for internal clinic equipment, dental chairs, operation bays, or vehicles that the system should automatically lock behind the scenes without asking the client.
+        - DO NOT interrogate the user with tedious questions for internal equipment like chairs or bays; deduce it automatically! Only ask if truly ambiguous (e.g., "Do guests select their specific cabin, or is it auto-assigned upon arrival?").
+      * `count` indicates how many simultaneous resources are required from that pool (e.g. `count: 2` for a couples massage requiring 2 therapists from a pool of 5). Default is 1.
+      * WHENEVER you add or modify resources, you MUST ALSO emit patches to update `resource_requirements` on the matching service(s) IN THE SAME PATCH BATCH.
+      * Match resources to services by type/category/name context (e.g. AC rooms → AC Homestay service, Non-AC rooms → Non-AC Homestay service, staff doctor → consultation service).
+      * EXAMPLE: User says "I have 3 AC rooms: 300, 301, 302 and 2 Non-AC rooms: 400, 401":
+        - Patches to add resources: `add /resources/- {{res_room_300...}}`, `add /resources/- {{res_room_301...}}`, etc.
+        - ALSO add patches to link: `replace /services/0/resource_requirements [{{"role": "Room", "resource_type": "room", "count": 1, "eligible_resource_ids": ["res_room_300","res_room_301","res_room_302"], "selection_mode": "user_selectable"}}]` (for AC Homestay at index 0)
+        - AND: `replace /services/1/resource_requirements [{{"role": "Room", "resource_type": "room", "count": 1, "eligible_resource_ids": ["res_room_400","res_room_401"], "selection_mode": "user_selectable"}}]` (for Non-AC Homestay at index 1)
+      * NEVER leave `resource_requirements` empty or with empty `eligible_resource_ids` on any service that has corresponding resources in `resources[]`.
    - INTELLIGENT BOOKING MODE DETERMINATION (`booking_mode`):
      Every service MUST have `booking_mode` set to EXACTLY one of these two lowercase string enums:
        * "time_slot"
@@ -518,8 +524,8 @@ DOMAIN INTEGRITY & DEPENDENCY RULES:
          • Event Spaces & Venues: Multi-day conference hall hire, exhibition booths, wedding venue daily booking.
        - Requirement: `duration_minutes` is 0 or 1440 (full day); booking availability is calculated by calendar dates.
 
-     * SCHEDULING ENGINE ALLOCATION SYNCHRONIZATION:
-       - Keep `scheduling_engine.allocation_model` synchronized:
+     * SCHEDULING ENGINE BOOKING MODE SYNCHRONIZATION:
+       - Keep `scheduling_engine.booking_mode` synchronized:
          • Set to "date_range" if the business primarily offers overnight stays or multi-day rentals (hotels, car rental agencies).
          • Set to "time_slot" if the business primarily offers slot-based appointments (auto shops, clinics, salons, consulting).
 6. PER-SERVICE OTP VERIFICATION (`services[].verification.require_otp`):
@@ -540,13 +546,14 @@ CRITICAL: When generating JSON patches, you MUST use ONLY these exact fields:
 - business_profile.contact: support_email, public_phone, escalation_phone
 - business_profile.terminology: customer_singular, customer_plural, primary_metric, action_metric
 - business_profile.brand: primary_color, logo_url
-- services[]: service_id, name, category, description, duration_minutes, buffer_minutes, booking_mode ("time_slot"|"date_range"), allocation_model (single_resource|multi_resource|pooled|asset_only), eligible_resource_ids, required_asset_ids, recall_interval_days
+- services[]: service_id, name, category, description, duration_minutes, buffer_minutes, booking_mode ("time_slot"|"date_range"), resource_requirements, recall_interval_days
+- services[].resource_requirements[]: role, resource_type, count, eligible_resource_ids, selection_mode ("user_selectable"|"auto_assign")
 - services[].price: type (fixed|starting_at|hourly|free|custom), amount, currency
 - services[].deposit: required, amount, processor ("upi_direct"), upi_id, qr_code_url, confirmation_method ("utr_reference"), payment_instructions
 - services[].verification: require_otp (boolean|null)
 - resources[]: resource_id, resource_type (staff|room|chair|bay|equipment|asset|vehicle), name, title, category, description, is_bookable, dispatch_status (active|on_leave|maintenance|retired|inactive), custom_shift_overrides
 - operating_hours: monday, tuesday, wednesday, thursday, friday, saturday, sunday (each is list of {{start: "HH:MM", end: "HH:MM"}}), blackout_dates (list of {{date: "YYYY-MM-DD", reason, is_closed}})
-- scheduling_engine: allocation_model ("time_slot"|"date_range"), default_booking_mode ("time_slot"|"date_range"), default_lead_time_hours, max_advance_booking_days, cancellation_window_hours, hold_duration_minutes
+- scheduling_engine: booking_mode ("time_slot"|"date_range"), default_lead_time_hours, max_advance_booking_days, cancellation_window_hours, hold_duration_minutes
 - widget_config: agent_name, avatar_url, initial_greeting, fallback_message, position, launcher_style, sound_on_load, auto_expand_delay_seconds, platform_sources, whitelisted_domains
 - compliance: hipaa_mode, phi_scrubbing, data_retention_policy, zero_hallucination_mode, audit_trail_enabled
 - guardrails.verification_policy: require_otp_for_new_booking, require_otp_for_reschedule, require_otp_for_cancel
@@ -702,10 +709,14 @@ def _prepare_draft_for_patches(draft: dict, patches: list[dict]) -> tuple[dict, 
         parts = [s for s in p_norm.get("path", "").split("/") if s]
         if parts:
             curr = d
-            for seg in parts[:-1]:
+            for i, seg in enumerate(parts[:-1]):
                 if isinstance(curr, dict):
                     if curr.get(seg) is None:
-                        curr[seg] = {}
+                        next_seg = parts[i + 1]
+                        if next_seg == "-" or next_seg.isdigit():
+                            curr[seg] = []
+                        else:
+                            curr[seg] = {}
                     curr = curr[seg]
                 elif isinstance(curr, list) and seg.isdigit():
                     idx = int(seg)
@@ -713,8 +724,11 @@ def _prepare_draft_for_patches(draft: dict, patches: list[dict]) -> tuple[dict, 
                         curr = curr[idx]
 
             leaf = parts[-1]
-            if p_norm.get("op") == "replace" and isinstance(curr, dict) and leaf not in curr:
-                p_norm["op"] = "add"
+            if p_norm.get("op") == "replace":
+                if isinstance(curr, dict) and leaf not in curr:
+                    p_norm["op"] = "add"
+                elif isinstance(curr, list) and leaf == "-":
+                    p_norm["op"] = "add"
 
         normalized_patches.append(p_norm)
     return d, normalized_patches
@@ -1146,7 +1160,7 @@ async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: 
                 .to_list()
             )
 
-            # If active messages accumulate past token threshold (e.g. worker delayed), cap by token budget
+           
             from agent_orchestrator.config import MEMORY_TRIGGER_TOKEN_THRESHOLD
 
             total_active_tokens = sum(

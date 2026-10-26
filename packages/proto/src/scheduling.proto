@@ -19,6 +19,10 @@ service SchedulingInventoryService {
 
   // Batch / Bulk Operations
   rpc BatchSyncInventory (BatchSyncInventoryRequest) returns (BatchSyncInventoryResponse);
+
+  // Booking Operations
+  rpc CreateBooking (CreateBookingRequest) returns (BookingResponse);
+  rpc GetAvailability (GetAvailabilityRequest) returns (GetAvailabilityResponse);
 }
 
 message PriceInfo {
@@ -41,6 +45,14 @@ message ServiceVerificationInfo {
   optional bool require_otp = 1;
 }
 
+message ResourceRequirementInfo {
+  string role = 1;
+  string resource_type = 2;
+  int32 count = 3;
+  repeated string eligible_resource_ids = 4;
+  optional string selection_mode = 5;
+}
+
 message ServiceInfo {
   string service_id = 1;
   string tenant_id = 2;
@@ -49,17 +61,15 @@ message ServiceInfo {
   string description = 5;
   int32 duration_minutes = 6;
   int32 buffer_minutes = 7;
-  string allocation_model = 8;
   PriceInfo price = 9;
   DepositInfo deposit = 10;
-  repeated string eligible_resource_ids = 11;
-  repeated string required_asset_ids = 12;
   int32 recall_interval_days = 13;
   string created_at = 14;
   string updated_at = 15;
   string booking_mode = 16;
   string agent_id = 17;
   optional ServiceVerificationInfo verification = 18;
+  repeated ResourceRequirementInfo resource_requirements = 19;
 }
 
 message CreateServiceRequest {
@@ -69,16 +79,14 @@ message CreateServiceRequest {
   string description = 4;
   int32 duration_minutes = 5;
   int32 buffer_minutes = 6;
-  string allocation_model = 7;
   PriceInfo price = 8;
   DepositInfo deposit = 9;
-  repeated string eligible_resource_ids = 10;
-  repeated string required_asset_ids = 11;
   int32 recall_interval_days = 12;
   optional string booking_mode = 13;
   optional string agent_id = 14;
   optional string service_id = 15;
   optional ServiceVerificationInfo verification = 16;
+  repeated ResourceRequirementInfo resource_requirements = 17;
 }
 
 message GetServiceRequest {
@@ -118,15 +126,13 @@ message UpdateServiceRequest {
   optional string description = 5;
   optional int32 duration_minutes = 6;
   optional int32 buffer_minutes = 7;
-  optional string allocation_model = 8;
   PriceInfo price = 9;
   DepositInfo deposit = 10;
-  repeated string eligible_resource_ids = 11;
-  repeated string required_asset_ids = 12;
   optional int32 recall_interval_days = 13;
   optional string booking_mode = 14;
   optional string agent_id = 15;
   optional ServiceVerificationInfo verification = 16;
+  repeated ResourceRequirementInfo resource_requirements = 17;
 }
 
 message DeleteServiceRequest {
@@ -234,11 +240,52 @@ message ResourceResponse {
   string message = 2;
 }
 
+message TimeIntervalInfo {
+  string start = 1;
+  string end = 2;
+}
+
+message OperatingHoursInfo {
+  repeated TimeIntervalInfo monday = 1;
+  repeated TimeIntervalInfo tuesday = 2;
+  repeated TimeIntervalInfo wednesday = 3;
+  repeated TimeIntervalInfo thursday = 4;
+  repeated TimeIntervalInfo friday = 5;
+  repeated TimeIntervalInfo saturday = 6;
+  repeated TimeIntervalInfo sunday = 7;
+}
+
+message BlackoutDateInfo {
+  string date = 1;
+  optional string reason = 2;
+  bool is_closed = 3;
+}
+
+message SchedulingEngineConfigInfo {
+  string booking_mode = 1;
+  int32 default_lead_time_hours = 2;
+  int32 max_advance_booking_days = 3;
+  int32 cancellation_window_hours = 4;
+  int32 hold_duration_minutes = 5;
+}
+
+message VerificationPolicyConfigInfo {
+  bool require_otp_for_new_booking = 1;
+  bool require_otp_for_reschedule = 2;
+  bool require_otp_for_cancel = 3;
+}
+
 message BatchSyncInventoryRequest {
   string tenant_id = 1;
   string agent_id = 2;
   repeated CreateResourceRequest resources = 3;
   repeated CreateServiceRequest services = 4;
+  optional string timezone = 5;
+  optional string currency = 6;
+  optional OperatingHoursInfo operating_hours = 7;
+  repeated BlackoutDateInfo blackout_dates = 8;
+  optional SchedulingEngineConfigInfo scheduling_engine = 9;
+  optional VerificationPolicyConfigInfo verification_policy = 10;
 }
 
 message BatchSyncInventoryResponse {
@@ -247,4 +294,105 @@ message BatchSyncInventoryResponse {
   bool success = 3;
   string message = 4;
 }
+
+message CustomerSnapshotInfo {
+  string name = 1;
+  string phone = 2;
+  optional string email = 3;
+}
+
+message BookingInfo {
+  string booking_id = 1;
+  string booking_reference = 2;
+  string tenant_id = 3;
+  string agent_id = 4;
+  string service_id = 5;
+  optional string resource_id = 6;
+  string customer_id = 7;
+  CustomerSnapshotInfo customer = 8;
+  string booking_mode = 9;
+  string start_time = 10;
+  string end_time = 11;
+  int32 duration_minutes = 12;
+  string source = 13;
+  string status = 14;
+  string deposit_status = 15;
+  PriceInfo price = 16;
+  optional DepositInfo deposit = 17;
+  optional string notes = 18;
+  optional string created_by = 19;
+  string created_at = 20;
+  string updated_at = 21;
+  repeated string resource_ids = 22;
+  optional string effective_end_time = 23;
+  optional int32 buffer_minutes = 24;
+}
+
+message CreateBookingRequest {
+  string tenant_id = 1;
+  optional string agent_id = 2;
+  string service_id = 3;
+  optional string resource_id = 4;
+  string start_time = 5;
+  optional string end_time = 6;
+  string customer_name = 7;
+  string customer_phone = 8;
+  optional string customer_email = 9;
+  optional string notes = 10;
+  optional string source = 11;
+  optional string deposit_status = 12;
+  optional string created_by = 13;
+  repeated string resource_ids = 14;
+}
+
+message BookingResponse {
+  BookingInfo booking = 1;
+  string message = 2;
+}
+
+message GetAvailabilityRequest {
+  string tenant_id = 1;
+  optional string agent_id = 2;
+  string service_id = 3;
+  string start_date = 4;
+  optional string end_date = 5;
+  optional string resource_id = 6;
+  optional string timezone = 7;
+  repeated string resource_ids = 8;
+}
+
+message AvailableSlotInfo {
+  string start_time = 1;
+  string end_time = 2;
+  bool available = 3;
+  repeated string available_resource_ids = 4;
+  optional string reason = 5;
+}
+
+message ResourceAvailabilityInfo {
+  string resource_id = 1;
+  string name = 2;
+  string resource_type = 3;
+  bool is_available = 4;
+  repeated string busy_intervals = 5;
+}
+
+message DayAvailabilityInfo {
+  string date = 1;
+  bool is_closed = 2;
+  optional string closure_reason = 3;
+  bool has_availability = 4;
+  repeated AvailableSlotInfo slots = 5;
+}
+
+message GetAvailabilityResponse {
+  string service_id = 1;
+  string booking_mode = 2;
+  string timezone = 3;
+  repeated DayAvailabilityInfo days = 4;
+  repeated ResourceAvailabilityInfo resources = 5;
+  repeated string blocked_dates = 6;
+}
+
+
 

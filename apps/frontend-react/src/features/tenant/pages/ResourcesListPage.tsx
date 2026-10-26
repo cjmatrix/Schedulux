@@ -23,6 +23,8 @@ import { useDeleteResource, useResourcesList } from '../hooks/useResources';
 export default function ResourcesListPage() {
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId?: string }>();
+  const effectiveAgentId = agentId || undefined;
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -49,7 +51,7 @@ export default function ResourcesListPage() {
     limit,
     resource_type: selectedType === 'all' ? undefined : selectedType,
     dispatch_status: selectedStatus === 'all' ? undefined : selectedStatus,
-    agent_id: agentId,
+    agent_id: effectiveAgentId,
     search: debouncedSearch.trim() || undefined,
   });
 
@@ -120,7 +122,7 @@ export default function ResourcesListPage() {
       {/* Top Header */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-4">
         {/* Breadcrumb */}
-        {agentId ? (
+        {effectiveAgentId ? (
           <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3">
             <button
               onClick={() => navigate('/tenant/agents')}
@@ -130,10 +132,10 @@ export default function ResourcesListPage() {
             </button>
             <span>/</span>
             <button
-              onClick={() => navigate(`/tenant/agents/${agentId}/dashboard`)}
+              onClick={() => navigate(`/tenant/agents/${effectiveAgentId}/dashboard`)}
               className="hover:text-slate-900 font-bold transition cursor-pointer"
             >
-              {agentId}
+              {effectiveAgentId}
             </button>
             <span>/</span>
             <span className="text-slate-900 font-semibold">Resources & Inventory</span>
@@ -151,7 +153,7 @@ export default function ResourcesListPage() {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
-                {agentId ? 'Agent Resources & Inventory' : 'Resources & Inventory'}
+                {effectiveAgentId ? 'Agent Resources & Inventory' : 'Resources & Inventory'}
               </h1>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -159,8 +161,8 @@ export default function ResourcesListPage() {
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1 max-w-xl">
-              {agentId
-                ? `Configure team members, rooms, and equipment linked to AI agent: ${agentId}`
+              {effectiveAgentId
+                ? `Configure team members, rooms, and equipment linked to AI agent: ${effectiveAgentId}`
                 : 'Configure team members, meeting rooms, stations, and physical equipment available for autonomous AI booking.'}
             </p>
           </div>
@@ -177,7 +179,9 @@ export default function ResourcesListPage() {
             <button
               onClick={() =>
                 navigate(
-                  agentId ? `/tenant/agents/${agentId}/resources/new` : '/tenant/inventory/new',
+                  effectiveAgentId
+                    ? `/tenant/agents/${effectiveAgentId}/resources/new`
+                    : '/tenant/inventory/new',
                 )
               }
               className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-black transition-all shadow-sm cursor-pointer"
@@ -312,7 +316,9 @@ export default function ResourcesListPage() {
             <button
               onClick={() =>
                 navigate(
-                  agentId ? `/tenant/agents/${agentId}/resources/new` : '/tenant/inventory/new',
+                  effectiveAgentId
+                    ? `/tenant/agents/${effectiveAgentId}/resources/new`
+                    : '/tenant/inventory/new',
                 )
               }
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-black transition-all shadow-sm cursor-pointer"
@@ -444,8 +450,8 @@ export default function ResourcesListPage() {
                       <button
                         onClick={() =>
                           navigate(
-                            agentId
-                              ? `/tenant/agents/${agentId}/resources/${res.resource_id}`
+                            effectiveAgentId
+                              ? `/tenant/agents/${effectiveAgentId}/resources/${res.resource_id}`
                               : `/tenant/inventory/${res.resource_id}`,
                           )
                         }

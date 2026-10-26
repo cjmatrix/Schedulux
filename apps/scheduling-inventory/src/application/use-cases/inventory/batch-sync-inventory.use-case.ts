@@ -8,7 +8,12 @@ import {
 import { ServiceEntity } from '../../../domain/entities/service.entity.js';
 import { IResourceRepository } from '../../../domain/repositories/resource.repository.interface.js';
 import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
-import { RESOURCE_REPOSITORY, SERVICE_REPOSITORY } from '../../../domain/tokens.js';
+import { ITenantScheduleRepository } from '../../../domain/repositories/tenant-schedule.repository.interface.js';
+import {
+  RESOURCE_REPOSITORY,
+  SERVICE_REPOSITORY,
+  TENANT_SCHEDULE_REPOSITORY,
+} from '../../../domain/tokens.js';
 import { generateSemanticId } from '../../../domain/utils/id-generator.js';
 import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
 import { PriceVO } from '../../../domain/value-objects/price.vo.js';
@@ -25,6 +30,8 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
     private readonly resourceRepository: IResourceRepository,
     @Inject(SERVICE_REPOSITORY)
     private readonly serviceRepository: IServiceRepository,
+    @Inject(TENANT_SCHEDULE_REPOSITORY)
+    private readonly tenantScheduleRepository: ITenantScheduleRepository,
   ) {}
 
   async execute(dto: BatchSyncInventoryRequest): Promise<BatchSyncInventoryResponse> {
@@ -103,14 +110,25 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
         (s.service_id && existingSvcById.get(s.service_id)) || existingSvcByName.get(nameKey);
       const serviceId = existing ? existing.id : generateSemanticId('srv', s.name);
 
-      const canonicalEligible: string[] = [];
-      for (const rawRid of s.eligible_resource_ids || []) {
-        const mapped =
-          resourceIdMap.get(rawRid) || resourceIdMap.get(rawRid.trim().toLowerCase()) || rawRid;
-        if (!canonicalEligible.includes(mapped)) {
-          canonicalEligible.push(mapped);
+      const mappedRequirements = (s.resource_requirements || []).map((req) => {
+        const reqEligible: string[] = [];
+        for (const rawRid of req.eligible_resource_ids || []) {
+          const mapped =
+            resourceIdMap.get(rawRid) || resourceIdMap.get(rawRid.trim().toLowerCase()) || rawRid;
+          if (!reqEligible.includes(mapped)) {
+            reqEligible.push(mapped);
+          }
         }
-      }
+        return {
+          role: req.role || 'Staff',
+          resourceType: req.resource_type || 'staff',
+          count: req.count || 1,
+          eligibleResourceIds: reqEligible,
+          selectionMode:
+            (req.selection_mode as 'user_selectable' | 'auto_assign') ||
+            (req.resource_type === 'staff' ? 'user_selectable' : 'auto_assign'),
+        };
+      });
 
       const price = PriceVO.create(s.price?.type, s.price?.amount, s.price?.currency);
       const deposit = DepositVO.create({
@@ -132,13 +150,11 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
         description: s.description || '',
         durationMinutes: s.duration_minutes || 30,
         bufferMinutes: s.buffer_minutes || 0,
-        allocationModel: s.allocation_model || 'single_resource',
         bookingMode: s.booking_mode || 'time_slot',
         price,
         deposit,
         verification: s.verification ? { require_otp: s.verification.require_otp } : undefined,
-        eligibleResourceIds: canonicalEligible,
-        requiredAssetIds: s.required_asset_ids ?? [],
+        resourceRequirements: mappedRequirements,
         recallIntervalDays: s.recall_interval_days || 0,
       });
 
@@ -147,6 +163,71 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
 
     if (serviceEntities.length > 0) {
       await this.serviceRepository.bulkUpsert(serviceEntities);
+    }
+
+    if (dto.operating_hours || dto.timezone || dto.blackout_dates || dto.scheduling_engine) {
+      try {
+        await this.tenantScheduleRepository.upsertSchedule({
+          tenant_id: tenantId,
+          agent_id: agentId,
+          timezone: dto.timezone || 'UTC',
+          currency: dto.currency || 'USD',
+          operating_hours: dto.operating_hours
+            ? {
+                monday: dto.operating_hours.monday || [],
+                tuesday: dto.operating_hours.tuesday || [],
+                wednesday: dto.operating_hours.wednesday || [],
+                thursday: dto.operating_hours.thursday || [],
+                friday: dto.operating_hours.friday || [],
+                saturday: dto.operating_hours.saturday || [],
+                sunday: dto.operating_hours.sunday || [],
+              }
+            : {
+                monday: [],
+                tuesday: [],
+                wednesday: [],
+                thursday: [],
+                friday: [],
+                saturday: [],
+                sunday: [],
+              },
+          blackout_dates: (dto.blackout_dates || []).map((b) => ({
+            date: b.date,
+            reason: b.reason || '',
+            is_closed: b.is_closed,
+          })),
+          scheduling_engine: dto.scheduling_engine
+            ? {
+                booking_mode:
+                  (dto.scheduling_engine.booking_mode as 'time_slot' | 'date_range') || 'time_slot',
+                default_lead_time_hours: dto.scheduling_engine.default_lead_time_hours ?? 2,
+                max_advance_booking_days: dto.scheduling_engine.max_advance_booking_days ?? 60,
+                cancellation_window_hours: dto.scheduling_engine.cancellation_window_hours ?? 24,
+                hold_duration_minutes: dto.scheduling_engine.hold_duration_minutes ?? 10,
+              }
+            : {
+                booking_mode: 'time_slot',
+                default_lead_time_hours: 2,
+                max_advance_booking_days: 60,
+                cancellation_window_hours: 24,
+                hold_duration_minutes: 10,
+              },
+          verification_policy: dto.verification_policy
+            ? {
+                require_otp_for_new_booking: !!dto.verification_policy.require_otp_for_new_booking,
+                require_otp_for_reschedule: dto.verification_policy.require_otp_for_reschedule ?? true,
+                require_otp_for_cancel: dto.verification_policy.require_otp_for_cancel ?? true,
+              }
+            : {
+                require_otp_for_new_booking: false,
+                require_otp_for_reschedule: true,
+                require_otp_for_cancel: true,
+              },
+        });
+        this.logger.log(`Synced tenant schedule settings for agent ${agentId}`);
+      } catch (scheduleErr) {
+        this.logger.error('Failed to sync tenant schedule settings:', scheduleErr);
+      }
     }
 
     this.logger.log(

@@ -408,7 +408,7 @@ export default function SchedulingOnboarding() {
                           {srv.duration_minutes || 30} mins
                         </span>
                         <span>•</span>
-                        <span className="capitalize">{srv.allocation_model || 'time_slot'}</span>
+                        <span className="capitalize">{srv.booking_mode || 'time_slot'}</span>
                       </div>
                     </div>
                   ))}

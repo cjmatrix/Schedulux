@@ -1,7 +1,13 @@
-import type { DepositInfo, PriceInfo, ResourceInfo, ServiceInfo } from '@repo/proto/scheduling';
+import type {
+  DepositInfo,
+  PriceInfo,
+  ResourceInfo,
+  ServiceInfo,
+  ResourceRequirementInfo,
+} from '@repo/proto/scheduling';
 import { type ApiResponse, axiosClient } from '../../../api/axiosClient';
 
-export type { DepositInfo, PriceInfo, ResourceInfo, ServiceInfo };
+export type { DepositInfo, PriceInfo, ResourceInfo, ServiceInfo, ResourceRequirementInfo };
 
 export interface ListServicesParams {
   page?: number;
@@ -36,7 +42,6 @@ export interface CreateServicePayload {
   description?: string;
   duration_minutes: number;
   buffer_minutes?: number;
-  allocation_model?: 'single_resource' | 'multi_resource' | 'pooled' | 'asset_only';
   booking_mode?: 'time_slot' | 'date_range';
   price?: {
     type: 'fixed' | 'starting_at' | 'hourly' | 'free' | 'custom';
@@ -55,8 +60,7 @@ export interface CreateServicePayload {
   verification?: {
     require_otp?: boolean | null;
   };
-  eligible_resource_ids?: string[];
-  required_asset_ids?: string[];
+  resource_requirements?: ResourceRequirementInfo[];
   recall_interval_days?: number;
 }
 

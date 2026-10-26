@@ -15,7 +15,6 @@ export class ServiceMapper {
       description: doc.description,
       durationMinutes: doc.duration_minutes,
       bufferMinutes: doc.buffer_minutes,
-      allocationModel: doc.allocation_model,
       bookingMode: doc.booking_mode ?? 'time_slot',
       price: PriceVO.create(doc.price?.type, doc.price?.amount, doc.price?.currency),
       deposit: DepositVO.create({
@@ -28,8 +27,13 @@ export class ServiceMapper {
         paymentInstructions: doc.deposit?.payment_instructions,
       }),
       verification: doc.verification ? { require_otp: doc.verification.require_otp } : undefined,
-      eligibleResourceIds: doc.eligible_resource_ids ?? [],
-      requiredAssetIds: doc.required_asset_ids ?? [],
+      resourceRequirements: (doc.resource_requirements ?? []).map((r) => ({
+        role: r.role,
+        resourceType: r.resource_type,
+        count: r.count,
+        eligibleResourceIds: r.eligible_resource_ids ?? [],
+        selectionMode: r.selection_mode,
+      })),
       recallIntervalDays: doc.recall_interval_days ?? 0,
       isDeleted: doc.is_deleted ?? false,
       deletedAt: doc.deleted_at ?? null,
@@ -48,7 +52,6 @@ export class ServiceMapper {
       description: entity.description,
       duration_minutes: entity.durationMinutes,
       buffer_minutes: entity.bufferMinutes,
-      allocation_model: entity.allocationModel,
       booking_mode: entity.bookingMode,
       price: {
         type: entity.price.type,
@@ -67,8 +70,13 @@ export class ServiceMapper {
       verification: entity.verification
         ? { require_otp: entity.verification.require_otp ?? null }
         : undefined,
-      eligible_resource_ids: entity.eligibleResourceIds,
-      required_asset_ids: entity.requiredAssetIds,
+      resource_requirements: entity.resourceRequirements.map((r) => ({
+        role: r.role,
+        resource_type: r.resourceType,
+        count: r.count,
+        eligible_resource_ids: r.eligibleResourceIds,
+        selection_mode: r.selectionMode,
+      })),
       recall_interval_days: entity.recallIntervalDays,
       is_deleted: entity.isDeleted,
       deleted_at: entity.deletedAt,
@@ -85,7 +93,6 @@ export class ServiceMapper {
       description: entity.description,
       duration_minutes: entity.durationMinutes,
       buffer_minutes: entity.bufferMinutes,
-      allocation_model: entity.allocationModel,
       booking_mode: entity.bookingMode,
       price: {
         type: entity.price.type,
@@ -104,8 +111,13 @@ export class ServiceMapper {
       verification: entity.verification
         ? { require_otp: entity.verification.require_otp ?? undefined }
         : undefined,
-      eligible_resource_ids: entity.eligibleResourceIds,
-      required_asset_ids: entity.requiredAssetIds,
+      resource_requirements: entity.resourceRequirements.map((r) => ({
+        role: r.role,
+        resource_type: r.resourceType,
+        count: r.count,
+        eligible_resource_ids: r.eligibleResourceIds,
+        selection_mode: r.selectionMode,
+      })),
       recall_interval_days: entity.recallIntervalDays,
       created_at: entity.createdAt.toISOString(),
       updated_at: entity.updatedAt.toISOString(),

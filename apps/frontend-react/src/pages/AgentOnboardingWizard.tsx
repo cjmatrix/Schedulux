@@ -48,6 +48,7 @@ export default function AgentOnboardingWizard() {
     setSandboxInput,
     isSandboxTyping,
     sendSandboxMessage,
+    resetSandbox,
   } = useAgentOnboarding({ agentId });
 
   const [showDiffDrawer, setShowDiffDrawer] = useState(false);
@@ -60,7 +61,7 @@ export default function AgentOnboardingWizard() {
   const timezone = businessProfile.timezone || '';
   const operatingHours = draftSchema?.operating_hours || {};
 
-  // Initialize sandbox greeting when clinic name is loaded
+
   useEffect(() => {
     if (sandboxMessages.length === 0) {
       setSandboxMessages([
@@ -107,11 +108,12 @@ export default function AgentOnboardingWizard() {
 
   const servicesList: OnboardingServiceItem[] = useMemo(() => {
     return rawServices.map((svc: Partial<ServiceInfo>, idx: number): OnboardingServiceItem => {
-      const assigned = rawResources.filter((r: Partial<ResourceInfo>) =>
-        Array.isArray(svc.eligible_resource_ids) && r.resource_id
-          ? svc.eligible_resource_ids.includes(r.resource_id)
-          : false,
-      );
+      const assigned = rawResources.filter((r: Partial<ResourceInfo>) => {
+        if (!r.resource_id) return false;
+        return svc.resource_requirements?.some((req) =>
+          req.eligible_resource_ids?.includes(r.resource_id!),
+        );
+      });
       return {
         ...svc,
         idx,
@@ -122,11 +124,12 @@ export default function AgentOnboardingWizard() {
 
   const resourcesList: OnboardingResourceItem[] = useMemo(() => {
     return rawResources.map((res: Partial<ResourceInfo>, idx: number): OnboardingResourceItem => {
-      const handled = rawServices.filter((s: Partial<ServiceInfo>) =>
-        Array.isArray(s.eligible_resource_ids) && res.resource_id
-          ? s.eligible_resource_ids.includes(res.resource_id)
-          : false,
-      );
+      const handled = rawServices.filter((s: Partial<ServiceInfo>) => {
+        if (!res.resource_id) return false;
+        return s.resource_requirements?.some((req) =>
+          req.eligible_resource_ids?.includes(res.resource_id!),
+        );
+      });
       return {
         ...res,
         idx,
@@ -252,6 +255,11 @@ export default function AgentOnboardingWizard() {
                 setSandboxInput={setSandboxInput}
                 isSandboxTyping={isSandboxTyping}
                 onSendSandboxMessage={handleSendSandboxMessage}
+                onResetSandbox={() =>
+                  resetSandbox(
+                    `Hello! Welcome to ${clinicName}. I'm your AI booking coordinator. How can I assist you with scheduling or consultations today?`,
+                  )
+                }
               />
             )}
 

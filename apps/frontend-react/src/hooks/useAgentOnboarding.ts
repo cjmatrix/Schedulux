@@ -45,6 +45,7 @@ export function useAgentOnboarding({
   >([]);
   const [sandboxInput, setSandboxInput] = useState('');
   const [isSandboxTyping, setIsSandboxTyping] = useState(false);
+  const [sandboxSessionId, setSandboxSessionId] = useState<string>(() => `sandbox_${Date.now()}`);
 
   const hasStartedRef = useRef(false);
   const currentAgentIdRef = useRef<string | null>(null);
@@ -475,28 +476,43 @@ export function useAgentOnboarding({
         const res = await onboardingApi.sendSandboxMessage({
           tenant_id: tenantId,
           agent_id: agentId,
+          session_id: sandboxSessionId,
           message: userText,
         });
 
         const reply =
           res.data?.reply ||
-          `I would be happy to help you with that at ${clinicName}! According to our current scheduling policy, appointments are booked based on provider availability.`;
+          `I would be happy to help you with that at ${clinicName}!`;
 
         setSandboxMessages((prev) => [...prev, { role: 'agent', text: reply }]);
-      } catch {
+      } catch (err) {
+        console.error('Failed to send sandbox message:', err);
         setSandboxMessages((prev) => [
           ...prev,
           {
             role: 'agent',
-            text: `I'd be happy to assist you! For ${clinicName}, please let me know your preferred day and time.`,
+            text: `I apologize, I encountered an issue connecting to the AI agent runtime. Please verify the agent draft or try again.`,
           },
         ]);
       } finally {
         setIsSandboxTyping(false);
       }
     },
-    [sandboxInput, isSandboxTyping, tenantId, agentId],
+    [sandboxInput, isSandboxTyping, tenantId, agentId, sandboxSessionId],
   );
+
+  const resetSandbox = useCallback((greeting?: string) => {
+    setSandboxSessionId(`sandbox_${Date.now()}`);
+    setSandboxMessages([
+      {
+        role: 'agent',
+        text:
+          greeting ||
+          `Hello! I'm your AI booking coordinator. How can I assist you with scheduling or consultations today?`,
+      },
+    ]);
+    setSandboxInput('');
+  }, []);
 
   return {
     messages,
@@ -527,6 +543,8 @@ export function useAgentOnboarding({
     setSandboxInput,
     isSandboxTyping,
     sendSandboxMessage,
+    resetSandbox,
+    sandboxSessionId,
 
     refetchMessages: () => queryClient.invalidateQueries({ queryKey }),
   };

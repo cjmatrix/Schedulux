@@ -4,7 +4,7 @@ export type OutboxStatus = 'PENDING' | 'PUBLISHED' | 'FAILED';
 
 export interface IOutboxDoc extends Document<string> {
   _id: string;
-  aggregate_type: 'service' | 'resource';
+  aggregate_type: 'service' | 'resource' | 'booking';
   aggregate_id: string;
   event_type: string;
   topic: string;
@@ -20,7 +20,12 @@ export interface IOutboxDoc extends Document<string> {
 export const OutboxMongooseSchema = new Schema<IOutboxDoc>(
   {
     _id: { type: String, required: true },
-    aggregate_type: { type: String, required: true, enum: ['service', 'resource'], index: true },
+    aggregate_type: {
+      type: String,
+      required: true,
+      enum: ['service', 'resource', 'booking'],
+      index: true,
+    },
     aggregate_id: { type: String, required: true, index: true },
     event_type: { type: String, required: true, index: true },
     topic: { type: String, required: true },

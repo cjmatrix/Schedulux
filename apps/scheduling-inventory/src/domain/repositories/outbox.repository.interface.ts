@@ -3,7 +3,7 @@ import type { IOutboxDoc } from '../../infrastructure/database/schemas/outbox.sc
 
 export interface CreateOutboxEventParams {
   eventId: string;
-  aggregateType: 'service' | 'resource';
+  aggregateType: 'service' | 'resource' | 'booking';
   aggregateId: string;
   eventType: string;
   topic: string;

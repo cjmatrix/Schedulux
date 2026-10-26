@@ -1,8 +1,12 @@
 import { customAlphabet } from 'nanoid';
 
 const generateSuffix = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 10);
+const generateBookingCode = customAlphabet('23456789ABCDEFGHJKLMNPQRSTUVWXYZ', 6);
 
-export function generateSemanticId(prefix: 'srv' | 'res', name: string): string {
+export function generateSemanticId(
+  prefix: 'srv' | 'res' | 'cus' | 'bk',
+  name: string,
+): string {
   const slug = (name || '')
     .toLowerCase()
     .trim()
@@ -14,3 +18,8 @@ export function generateSemanticId(prefix: 'srv' | 'res', name: string): string 
 
   return slug ? `${prefix}_${slug}_${suffix}` : `${prefix}_${suffix}`;
 }
+
+export function generateBookingReference(): string {
+  return `BK-${generateBookingCode()}`;
+}
+

@@ -26,6 +26,8 @@ import { lastValueFrom } from 'rxjs';
 import { Roles } from '../../decorators/roles.decorator.js';
 import { RolesGuard } from '../../guards/roles.guard.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
+import { GetAvailabilityQueryDto } from './dtos/availability.dto.js';
+import { CreateBookingDto } from './dtos/booking.dto.js';
 import {
   CreateResourceDto,
   ListResourcesQueryDto,
@@ -69,15 +71,13 @@ export class SchedulingController implements OnModuleInit {
         description: body.description,
         duration_minutes: body.duration_minutes,
         buffer_minutes: body.buffer_minutes,
-        allocation_model: body.allocation_model,
         booking_mode: body.booking_mode,
         price: body.price,
         deposit: body.deposit,
         verification: body.verification
           ? { require_otp: body.verification.require_otp ?? undefined }
           : undefined,
-        eligible_resource_ids: body.eligible_resource_ids,
-        required_asset_ids: body.required_asset_ids,
+        resource_requirements: body.resource_requirements ?? [],
         recall_interval_days: body.recall_interval_days,
       }),
     );
@@ -148,15 +148,13 @@ export class SchedulingController implements OnModuleInit {
         description: body.description,
         duration_minutes: body.duration_minutes,
         buffer_minutes: body.buffer_minutes,
-        allocation_model: body.allocation_model,
         booking_mode: body.booking_mode,
         price: body.price,
         deposit: body.deposit,
         verification: body.verification
           ? { require_otp: body.verification.require_otp ?? undefined }
           : undefined,
-        eligible_resource_ids: body.eligible_resource_ids ?? [],
-        required_asset_ids: body.required_asset_ids ?? [],
+        resource_requirements: body.resource_requirements ?? [],
         recall_interval_days: body.recall_interval_days,
       }),
     );
@@ -301,4 +299,62 @@ export class SchedulingController implements OnModuleInit {
       success: response.success,
     };
   }
+
+  @Post('bookings')
+  @HttpCode(HttpStatus.CREATED)
+  @UsePipes(ZodValidationPipe)
+  async createBooking(@Req() req: AuthenticatedTenantRequest, @Body() body: CreateBookingDto) {
+    const tenantId = this.getTenantId(req);
+    const userId = req.dashboardUser?.id || req.tenant?.tenant_id || '';
+    const response = await lastValueFrom(
+      this.schedulingService.createBooking({
+        tenant_id: tenantId,
+        agent_id: body.agent_id,
+        service_id: body.service_id,
+        resource_id: body.resource_id,
+        resource_ids: body.resource_ids ?? (body.resource_id ? [body.resource_id] : []),
+        start_time: body.start_time,
+        end_time: body.end_time,
+        customer_name: body.customer_name,
+        customer_phone: body.customer_phone,
+        customer_email: body.customer_email || undefined,
+        notes: body.notes,
+        source: body.source,
+        deposit_status: body.deposit_status,
+        created_by: body.created_by || userId,
+      }),
+    );
+
+    return {
+      message: response.message,
+      data: response.booking,
+    };
+  }
+
+  @Get('availability')
+  @UsePipes(ZodValidationPipe)
+  async getAvailability(
+    @Req() req: AuthenticatedTenantRequest,
+    @Query() query: GetAvailabilityQueryDto,
+  ) {
+    const tenantId = this.getTenantId(req);
+    const response = await lastValueFrom(
+      this.schedulingService.getAvailability({
+        tenant_id: tenantId,
+        service_id: query.service_id,
+        start_date: query.start_date,
+        end_date: query.end_date,
+        agent_id: query.agent_id,
+        resource_id: query.resource_id,
+        resource_ids: query.resource_ids || [],
+        timezone: query.timezone,
+      }),
+    );
+
+    return {
+      message: 'Availability fetched successfully',
+      data: response,
+    };
+  }
 }
+

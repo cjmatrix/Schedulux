@@ -40,7 +40,9 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
     isCreateMode ? undefined : serviceIdFromParams,
   );
 
-  const { data: resourcesResponse } = useResourcesList(agentId ? { agent_id: agentId } : undefined);
+  const effectiveAgentId = agentId || serviceResponse?.data?.agent_id || '';
+
+  const { data: resourcesResponse } = useResourcesList(effectiveAgentId ? { agent_id: effectiveAgentId } : undefined);
   const allResources = resourcesResponse?.data || [];
 
   const createServiceMutation = useCreateService();
@@ -65,9 +67,6 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
   const [durationMinutes, setDurationMinutes] = useState<number>(60);
   const [bufferMinutes, setBufferMinutes] = useState<number>(20);
   const [recallIntervalDays, setRecallIntervalDays] = useState<number>(0);
-  const [allocationModel, setAllocationModel] = useState<
-    'single_resource' | 'multi_resource' | 'pooled' | 'asset_only'
-  >('single_resource');
   const [bookingMode, setBookingMode] = useState<'time_slot' | 'date_range'>('time_slot');
 
   const [eligibleResourceIds, setEligibleResourceIds] = useState<string[]>([]);
@@ -105,13 +104,27 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
       setDurationMinutes(s.duration_minutes || 30);
       setBufferMinutes(s.buffer_minutes ?? 0);
       setRecallIntervalDays(s.recall_interval_days ?? 0);
-      setAllocationModel(
-        (s.allocation_model as 'single_resource' | 'multi_resource' | 'pooled' | 'asset_only') ||
-          'single_resource',
-      );
       setBookingMode((s.booking_mode as 'time_slot' | 'date_range') || 'time_slot');
-      setEligibleResourceIds(s.eligible_resource_ids || []);
-      setRequiredAssetIds(s.required_asset_ids || []);
+      if (s.resource_requirements && s.resource_requirements.length > 0) {
+        const staffIds: string[] = [];
+        const assetIds: string[] = [];
+        for (const req of s.resource_requirements) {
+          if (!req.resource_type || req.resource_type === 'staff') {
+            for (const id of req.eligible_resource_ids || []) {
+              if (!staffIds.includes(id)) staffIds.push(id);
+            }
+          } else {
+            for (const id of req.eligible_resource_ids || []) {
+              if (!assetIds.includes(id)) assetIds.push(id);
+            }
+          }
+        }
+        setEligibleResourceIds(staffIds);
+        setRequiredAssetIds(assetIds);
+      } else {
+        setEligibleResourceIds([]);
+        setRequiredAssetIds([]);
+      }
     }
   }, [isCreateMode, serviceResponse]);
 
@@ -157,13 +170,12 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
     setFeedbackMessage(null);
 
     const payload: CreateServicePayload = {
-      agent_id: agentId || serviceResponse?.data?.agent_id || '',
+      agent_id: effectiveAgentId || serviceResponse?.data?.agent_id || '',
       name: name.trim(),
       category: category.trim() || 'General',
       description: description.trim(),
       duration_minutes: Number(durationMinutes) || 30,
       buffer_minutes: Number(bufferMinutes) || 0,
-      allocation_model: allocationModel,
       booking_mode: bookingMode,
       price: {
         type: priceType,
@@ -181,8 +193,28 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
       verification: {
         require_otp: requireOtp,
       },
-      eligible_resource_ids: eligibleResourceIds,
-      required_asset_ids: requiredAssetIds,
+      resource_requirements: [
+        ...(eligibleResourceIds.length > 0
+          ? [
+              {
+                role: 'Staff Provider',
+                resource_type: 'staff',
+                count: 1,
+                eligible_resource_ids: eligibleResourceIds,
+              },
+            ]
+          : []),
+        ...(requiredAssetIds.length > 0
+          ? [
+              {
+                role: 'Facility Asset',
+                resource_type: 'asset',
+                count: 1,
+                eligible_resource_ids: requiredAssetIds,
+              },
+            ]
+          : []),
+      ],
       recall_interval_days: Number(recallIntervalDays) || 0,
     };
 
@@ -192,8 +224,8 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
         setFeedbackMessage({ type: 'success', text: 'Service created successfully!' });
         setTimeout(() => {
           navigate(
-            agentId
-              ? `/tenant/agents/${agentId}/services/${res.data.service_id}`
+            effectiveAgentId
+              ? `/tenant/agents/${effectiveAgentId}/services/${res.data.service_id}`
               : `/tenant/services/${res.data.service_id}`,
           );
         }, 600);
@@ -215,7 +247,7 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
     if (!serviceIdFromParams) return;
     try {
       await deleteServiceMutation.mutateAsync(serviceIdFromParams);
-      navigate(agentId ? `/tenant/agents/${agentId}/services` : '/tenant/services');
+      navigate(effectiveAgentId ? `/tenant/agents/${effectiveAgentId}/services` : '/tenant/services');
     } catch (err: unknown) {
       setFeedbackMessage({
         type: 'error',
@@ -241,7 +273,7 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
     if (!newStaffName.trim()) return;
     try {
       const res = await createResourceMutation.mutateAsync({
-        agent_id: agentId || '',
+        agent_id: effectiveAgentId || '',
         resource_type: 'staff',
         name: newStaffName.trim(),
         title: newStaffTitle.trim() || 'Staff Practitioner',
@@ -273,7 +305,7 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
     if (!newAssetName.trim()) return;
     try {
       const res = await createResourceMutation.mutateAsync({
-        agent_id: agentId || '',
+        agent_id: effectiveAgentId || '',
         resource_type: 'room',
         name: newAssetName.trim(),
         category: newAssetCategory.trim() || 'Operatory Room',
@@ -311,7 +343,11 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
           <button
             type="button"
             onClick={() =>
-              navigate(agentId ? `/tenant/agents/${agentId}/services` : '/tenant/services')
+              navigate(
+                effectiveAgentId
+                  ? `/tenant/agents/${effectiveAgentId}/services`
+                  : '/tenant/services',
+              )
             }
             className="flex items-center gap-1.5 text-slate-700 hover:text-black font-semibold cursor-pointer transition"
           >
@@ -319,20 +355,24 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
             <span>Back</span>
           </button>
           <span>/</span>
-          {agentId && (
+          {effectiveAgentId && (
             <>
               <span
-                onClick={() => navigate(`/tenant/agents/${agentId}/dashboard`)}
+                onClick={() => navigate(`/tenant/agents/${effectiveAgentId}/dashboard`)}
                 className="hover:text-slate-600 cursor-pointer transition font-bold"
               >
-                {agentId}
+                {effectiveAgentId}
               </span>
               <span>/</span>
             </>
           )}
           <span
             onClick={() =>
-              navigate(agentId ? `/tenant/agents/${agentId}/services` : '/tenant/services')
+              navigate(
+                effectiveAgentId
+                  ? `/tenant/agents/${effectiveAgentId}/services`
+                  : '/tenant/services',
+              )
             }
             className="hover:text-slate-600 cursor-pointer transition"
           >
@@ -383,7 +423,11 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
             <button
               type="button"
               onClick={() =>
-                navigate(agentId ? `/tenant/agents/${agentId}/services` : '/tenant/services')
+                navigate(
+                  effectiveAgentId
+                    ? `/tenant/agents/${effectiveAgentId}/services`
+                    : '/tenant/services',
+                )
               }
               className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold rounded-full shadow-2xs transition active:scale-95 cursor-pointer"
             >
@@ -716,8 +760,8 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
               </div>
             </div>
 
-            {/* Booking Mode & Allocation Model */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-3 border-t border-slate-100">
+            {/* Booking Mode */}
+            <div className="pt-3 border-t border-slate-100">
               {/* Booking Mode */}
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
@@ -754,40 +798,6 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
                   {bookingMode === 'time_slot'
                     ? 'Appointments booked at specific clock hours/minutes within operating hours.'
                     : 'Bookings span full calendar days or nights (e.g. rentals or stays).'}
-                </p>
-              </div>
-
-              {/* Allocation Model */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-700">Allocation Model</label>
-                  <span className="text-[11px] text-slate-400 font-medium">Resource Strategy</span>
-                </div>
-                <select
-                  value={allocationModel}
-                  onChange={(e) =>
-                    setAllocationModel(
-                      e.target.value as
-                        | 'single_resource'
-                        | 'multi_resource'
-                        | 'pooled'
-                        | 'asset_only',
-                    )
-                  }
-                  className="w-full px-4 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 transition cursor-pointer"
-                >
-                  <option value="single_resource">
-                    Single Resource (1 Doctor / 1 Staff Member)
-                  </option>
-                  <option value="multi_resource">
-                    Multi-Resource (Simultaneous Staff + Room / Bay)
-                  </option>
-                  <option value="pooled">Pooled (Auto-Assign Any Available Provider)</option>
-                  <option value="asset_only">Asset Only (Room / Equipment, No Staff)</option>
-                </select>
-                <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                  Defines how the booking engine dispatches staff and equipment from your eligible
-                  pool.
                 </p>
               </div>
             </div>

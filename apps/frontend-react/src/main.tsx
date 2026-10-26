@@ -161,6 +161,10 @@ const router = createBrowserRouter([
             element: <AgentDashboardPage />,
           },
           {
+            path: 'agents/:agentId/bookings',
+            element: <BookingsPage />,
+          },
+          {
             path: 'agents/:agentId/services',
             element: <ServicesListPage />,
           },

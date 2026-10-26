@@ -32,4 +32,9 @@ export interface IResourceRepository {
   delete(tenantId: string, resourceId: string): Promise<boolean>;
   bulkUpsert(resources: ResourceEntity[]): Promise<ResourceEntity[]>;
   findByTenant(tenantId: string, agentId?: string): Promise<ResourceEntity[]>;
+  findActiveBookableByIds(
+    tenantId: string,
+    resourceIds: string[],
+    agentId?: string,
+  ): Promise<ResourceEntity[]>;
 }

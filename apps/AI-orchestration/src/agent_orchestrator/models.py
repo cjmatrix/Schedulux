@@ -101,9 +101,13 @@ class KnowledgeBaseEmbed(TolerantBaseModel):
     sources: list[KnowledgeAssetEmbed] = Field(default_factory=list)
 
 
+class BookingMode(StrEnum):
+    TIME_SLOT = "time_slot"
+    DATE_RANGE = "date_range"
+
+
 class SchedulingEngineEmbed(TolerantBaseModel):
-    allocation_model: str = "time_slot"
-    default_booking_mode: str = "time_slot"
+    booking_mode: BookingMode = BookingMode.TIME_SLOT
     default_lead_time_hours: int = 2
     max_advance_booking_days: int = 60
     cancellation_window_hours: int = 24
@@ -148,18 +152,6 @@ class DispatchStatus(StrEnum):
     MAINTENANCE = "maintenance"
     RETIRED = "retired"
     INACTIVE = "inactive"
-
-
-class ServiceAllocationModel(StrEnum):
-    SINGLE_RESOURCE = "single_resource"
-    MULTI_RESOURCE = "multi_resource"
-    POOLED = "pooled"
-    ASSET_ONLY = "asset_only"
-
-
-class BookingMode(StrEnum):
-    TIME_SLOT = "time_slot"
-    DATE_RANGE = "date_range"
 
 
 class PriceType(StrEnum):
@@ -229,6 +221,40 @@ class ServiceVerificationEmbed(TolerantBaseModel):
     require_otp: bool | None = None
 
 
+class SelectionMode(StrEnum):
+    USER_SELECTABLE = "user_selectable"
+    AUTO_ASSIGN = "auto_assign"
+
+
+class ResourceRequirementEmbed(TolerantBaseModel):
+    role: str | None = "Provider"
+    resource_type: ResourceType | str | None = ResourceType.STAFF
+    count: int = 1
+    eligible_resource_ids: list[str] = Field(default_factory=list)
+    selection_mode: SelectionMode = SelectionMode.AUTO_ASSIGN
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_default_selection_mode(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("selection_mode"):
+                r_type = str(data.get("resource_type") or "").lower()
+                data["selection_mode"] = (
+                    SelectionMode.USER_SELECTABLE if r_type == "staff" else SelectionMode.AUTO_ASSIGN
+                )
+        return data
+
+    @field_validator("count", mode="before")
+    @classmethod
+    def parse_count(cls, v: object) -> int:
+        if v is None:
+            return 1
+        try:
+            return max(1, int(v))  # type: ignore[call-overload,arg-type]
+        except (ValueError, TypeError):
+            return 1
+
+
 class ServiceEmbed(TolerantBaseModel):
     service_id: str
     name: str
@@ -236,13 +262,11 @@ class ServiceEmbed(TolerantBaseModel):
     description: str | None = ""
     duration_minutes: int | None = 30
     buffer_minutes: int | None = 0
-    allocation_model: ServiceAllocationModel = ServiceAllocationModel.SINGLE_RESOURCE
     booking_mode: BookingMode = BookingMode.TIME_SLOT
     price: PriceEmbed = Field(default_factory=PriceEmbed)
     deposit: DepositEmbed = Field(default_factory=DepositEmbed)
     verification: ServiceVerificationEmbed | None = None
-    eligible_resource_ids: list[str] = Field(default_factory=list)
-    required_asset_ids: list[str] = Field(default_factory=list)
+    resource_requirements: list[ResourceRequirementEmbed] = Field(default_factory=list)
     recall_interval_days: int | None = 0
 
     @field_validator("category", mode="before")
@@ -478,6 +502,15 @@ class StrictServiceVerificationSchema(BaseModel):
     require_otp: bool | None = None
 
 
+class StrictResourceRequirementSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    role: str | None = None
+    resource_type: ResourceType | str | None = None
+    count: int | None = None
+    eligible_resource_ids: list[str] | None = None
+    selection_mode: SelectionMode | None = None
+
+
 class StrictServiceSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     service_id: str | None = None
@@ -486,13 +519,11 @@ class StrictServiceSchema(BaseModel):
     description: str | None = None
     duration_minutes: int | None = None
     buffer_minutes: int | None = None
-    allocation_model: ServiceAllocationModel | None = None
     booking_mode: BookingMode | None = None
     price: StrictPriceSchema | None = None
     deposit: StrictDepositSchema | None = None
     verification: StrictServiceVerificationSchema | None = None
-    eligible_resource_ids: list[str] | None = None
-    required_asset_ids: list[str] | None = None
+    resource_requirements: list[StrictResourceRequirementSchema] | None = None
     recall_interval_days: int | None = None
 
 
@@ -536,8 +567,7 @@ class StrictOperatingHoursSchema(BaseModel):
 
 class StrictSchedulingEngineSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    allocation_model: BookingMode | None = None
-    default_booking_mode: BookingMode | None = None
+    booking_mode: BookingMode | None = None
     default_lead_time_hours: int | None = None
     max_advance_booking_days: int | None = None
     cancellation_window_hours: int | None = None
@@ -910,6 +940,50 @@ class AgentMessage(Document):
         ]
 
 
+class CustomerConversation(Document):
+    model_config = ConfigDict(extra="ignore")
+
+    session_id: str
+    tenant_id: str
+    agent_id: str
+    customer_id: str | None = None
+    customer_name: str | None = None
+    customer_phone: str | None = None
+    status: str = "active"  # "active", "completed", "abandoned"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "customer_conversations"
+        indexes = [
+            IndexModel([("session_id", 1)], unique=True, name="idx_customer_conv_session"),
+            IndexModel(
+                [("tenant_id", 1), ("agent_id", 1), ("updated_at", -1)],
+                name="idx_customer_conv_tenant_agent",
+            ),
+            IndexModel([("tenant_id", 1), ("customer_id", 1)], name="idx_customer_conv_customer"),
+        ]
+
+
+class CustomerMessage(Document):
+    model_config = ConfigDict(extra="ignore")
+
+    session_id: str
+    tenant_id: str
+    agent_id: str
+    role: str  # "user" or "assistant"
+    content: str
+    token_count: int = 0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "customer_messages"
+        indexes = [
+            IndexModel([("session_id", 1), ("created_at", 1)], name="idx_customer_msg_session_time"),
+            IndexModel([("tenant_id", 1), ("session_id", 1)], name="idx_customer_msg_tenant_session"),
+        ]
+
+
 _client: AsyncMongoClient | None = None
 _db_initialized = False
 
@@ -932,6 +1006,13 @@ async def init_db(mongo_uri: str | None = None):
     db = _client[db_name]
     await init_beanie(
         database=db,
-        document_models=[AgentDraft, AgentRuntimeConfig, AgentMessage],
+        document_models=[
+            AgentDraft,
+            AgentRuntimeConfig,
+            AgentMessage,
+            CustomerConversation,
+            CustomerMessage,
+        ],
     )
     _db_initialized = True
+

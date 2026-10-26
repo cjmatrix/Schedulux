@@ -20,6 +20,8 @@ const rxjs_1 = require("rxjs");
 const roles_decorator_js_1 = require("../../decorators/roles.decorator.js");
 const roles_guard_js_1 = require("../../guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
+const availability_dto_js_1 = require("./dtos/availability.dto.js");
+const booking_dto_js_1 = require("./dtos/booking.dto.js");
 const resource_dto_js_1 = require("./dtos/resource.dto.js");
 const service_dto_js_1 = require("./dtos/service.dto.js");
 let SchedulingController = class SchedulingController {
@@ -48,15 +50,13 @@ let SchedulingController = class SchedulingController {
             description: body.description,
             duration_minutes: body.duration_minutes,
             buffer_minutes: body.buffer_minutes,
-            allocation_model: body.allocation_model,
             booking_mode: body.booking_mode,
             price: body.price,
             deposit: body.deposit,
             verification: body.verification
                 ? { require_otp: body.verification.require_otp ?? undefined }
                 : undefined,
-            eligible_resource_ids: body.eligible_resource_ids,
-            required_asset_ids: body.required_asset_ids,
+            resource_requirements: body.resource_requirements ?? [],
             recall_interval_days: body.recall_interval_days,
         }));
         return {
@@ -106,15 +106,13 @@ let SchedulingController = class SchedulingController {
             description: body.description,
             duration_minutes: body.duration_minutes,
             buffer_minutes: body.buffer_minutes,
-            allocation_model: body.allocation_model,
             booking_mode: body.booking_mode,
             price: body.price,
             deposit: body.deposit,
             verification: body.verification
                 ? { require_otp: body.verification.require_otp ?? undefined }
                 : undefined,
-            eligible_resource_ids: body.eligible_resource_ids ?? [],
-            required_asset_ids: body.required_asset_ids ?? [],
+            resource_requirements: body.resource_requirements ?? [],
             recall_interval_days: body.recall_interval_days,
         }));
         return {
@@ -216,6 +214,47 @@ let SchedulingController = class SchedulingController {
             success: response.success,
         };
     }
+    async createBooking(req, body) {
+        const tenantId = this.getTenantId(req);
+        const userId = req.dashboardUser?.id || req.tenant?.tenant_id || '';
+        const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.createBooking({
+            tenant_id: tenantId,
+            agent_id: body.agent_id,
+            service_id: body.service_id,
+            resource_id: body.resource_id,
+            resource_ids: body.resource_ids ?? (body.resource_id ? [body.resource_id] : []),
+            start_time: body.start_time,
+            end_time: body.end_time,
+            customer_name: body.customer_name,
+            customer_phone: body.customer_phone,
+            customer_email: body.customer_email || undefined,
+            notes: body.notes,
+            source: body.source,
+            deposit_status: body.deposit_status,
+            created_by: body.created_by || userId,
+        }));
+        return {
+            message: response.message,
+            data: response.booking,
+        };
+    }
+    async getAvailability(req, query) {
+        const tenantId = this.getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.getAvailability({
+            tenant_id: tenantId,
+            service_id: query.service_id,
+            start_date: query.start_date,
+            end_date: query.end_date,
+            agent_id: query.agent_id,
+            resource_id: query.resource_id,
+            resource_ids: query.resource_ids || [],
+            timezone: query.timezone,
+        }));
+        return {
+            message: 'Availability fetched successfully',
+            data: response,
+        };
+    }
 };
 exports.SchedulingController = SchedulingController;
 __decorate([
@@ -308,6 +347,25 @@ __decorate([
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "deleteResource", null);
+__decorate([
+    (0, common_1.Post)('bookings'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, booking_dto_js_1.CreateBookingDto]),
+    __metadata("design:returntype", Promise)
+], SchedulingController.prototype, "createBooking", null);
+__decorate([
+    (0, common_1.Get)('availability'),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, availability_dto_js_1.GetAvailabilityQueryDto]),
+    __metadata("design:returntype", Promise)
+], SchedulingController.prototype, "getAvailability", null);
 exports.SchedulingController = SchedulingController = __decorate([
     (0, common_1.Controller)('api/v1/tenant/scheduling'),
     (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),

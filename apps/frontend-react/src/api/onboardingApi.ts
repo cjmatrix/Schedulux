@@ -39,11 +39,21 @@ export interface SendOnboardingMessageRequest {
 export interface SendSandboxMessageRequest {
   tenant_id?: string;
   agent_id?: string;
+  session_id?: string;
   message: string;
+  customer_name?: string;
+  customer_phone?: string;
 }
 
 export interface SendSandboxMessageResponse {
   reply: string;
+  session_id?: string;
+  history?: Array<{
+    id?: string;
+    role: string;
+    content: string;
+    created_at?: string;
+  }>;
 }
 
 export const onboardingApi = {
@@ -81,20 +91,10 @@ export const onboardingApi = {
   sendSandboxMessage: async (
     payload: SendSandboxMessageRequest,
   ): Promise<ApiResponse<SendSandboxMessageResponse>> => {
-    try {
-      const response = await axiosClient.post<ApiResponse<SendSandboxMessageResponse>>(
-        '/api/v1/tenant/knowledge/onboarding/sandbox',
-        payload,
-      );
-      return response.data;
-    } catch {
-      // Graceful fallback for sandbox testing simulation
-      return {
-        message: 'Sandbox simulation response',
-        data: {
-          reply: `I would be happy to help you with that! According to our current scheduling policy, appointments are booked based on provider availability.`,
-        },
-      };
-    }
+    const response = await axiosClient.post<ApiResponse<SendSandboxMessageResponse>>(
+      '/api/v1/tenant/knowledge/onboarding/sandbox',
+      payload,
+    );
+    return response.data;
   },
 };

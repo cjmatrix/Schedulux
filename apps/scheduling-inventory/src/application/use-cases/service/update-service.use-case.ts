@@ -54,15 +54,21 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
       description: dto.description,
       durationMinutes: dto.duration_minutes,
       bufferMinutes: dto.buffer_minutes,
-      allocationModel: dto.allocation_model,
       bookingMode: dto.booking_mode,
       price,
       deposit,
       verification: dto.verification ? { require_otp: dto.verification.require_otp } : undefined,
-      eligibleResourceIds: dto.eligible_resource_ids?.length
-        ? dto.eligible_resource_ids
+      resourceRequirements: dto.resource_requirements?.length
+        ? dto.resource_requirements.map((r) => ({
+            role: r.role || 'Staff',
+            resourceType: r.resource_type || 'staff',
+            count: r.count || 1,
+            eligibleResourceIds: r.eligible_resource_ids ?? [],
+            selectionMode:
+              (r.selection_mode as 'user_selectable' | 'auto_assign') ||
+              (r.resource_type === 'staff' ? 'user_selectable' : 'auto_assign'),
+          }))
         : undefined,
-      requiredAssetIds: dto.required_asset_ids?.length ? dto.required_asset_ids : undefined,
       recallIntervalDays: dto.recall_interval_days,
     });
 

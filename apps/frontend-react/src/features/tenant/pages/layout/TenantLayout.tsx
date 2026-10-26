@@ -5,6 +5,7 @@ import {
   Bot,
   Briefcase,
   Calendar,
+  ChevronDown,
   Code2,
   CreditCard,
   HelpCircle,
@@ -16,7 +17,9 @@ import {
   Tag,
   Users,
 } from 'lucide-react';
-import { Outlet, useLocation, useNavigate } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
+import { Outlet, useLocation, useNavigate, useParams } from 'react-router';
+import { knowledgeApi } from '../../../../api/knowledgeApi';
 import { useAuthStore } from '../../../../store/useAuthStore';
 import { useLogout, useTenantProfile } from '../../hooks/useAuth';
 
@@ -46,9 +49,21 @@ interface TenantLayoutProps {
 export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { agentId: routeAgentId } = useParams<{ agentId?: string }>();
   const { data: profileData } = useTenantProfile(isTenant);
   const logoutMutation = useLogout();
   const authUser = useAuthStore((state) => state.user);
+
+  const urlAgentId =
+    routeAgentId || location.pathname.match(/\/tenant\/agents\/([^/]+)/)?.[1] || null;
+
+  const { data: agentsData } = useQuery({
+    queryKey: ['tenant-agents-list'],
+    queryFn: () => knowledgeApi.listTenantAgents(),
+  });
+  const agents = agentsData?.data || [];
+  const currentAgent = agents.find((a) => a.agent_id === urlAgentId);
+  const currentAgentId = urlAgentId || (agents[0]?.agent_id ?? null);
 
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
@@ -100,10 +115,12 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
         : 'Tenant Owner';
   const userInitials = currentUserFullName.substring(0, 2).toUpperCase();
 
-  const currentAgentId = location.pathname.match(/\/tenant\/agents\/([^/]+)/)?.[1];
-
   const handleNavItemClick = (itemPath: string) => {
     if (currentAgentId) {
+      if (itemPath === '/tenant/bookings') {
+        navigate(`/tenant/agents/${currentAgentId}/bookings`);
+        return;
+      }
       if (itemPath === '/tenant/services') {
         navigate(`/tenant/agents/${currentAgentId}/services`);
         return;
@@ -114,6 +131,18 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
       }
     }
     navigate(itemPath);
+  };
+
+  const handleSwitchAgent = (newAgentId: string) => {
+    if (location.pathname.includes('/bookings')) {
+      navigate(`/tenant/agents/${newAgentId}/bookings`);
+    } else if (location.pathname.includes('/services')) {
+      navigate(`/tenant/agents/${newAgentId}/services`);
+    } else if (location.pathname.includes('/resources') || location.pathname.includes('/inventory')) {
+      navigate(`/tenant/agents/${newAgentId}/resources`);
+    } else {
+      navigate(`/tenant/agents/${newAgentId}/dashboard`);
+    }
   };
 
   return (
@@ -132,19 +161,36 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
               </div>
             </div>
 
-            <button
-              onClick={() => navigate('/tenant/agents')}
-              className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-100/90 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-semibold transition cursor-pointer border border-slate-200/60"
-              title="Return to AI Agents Dashboard"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <Bot className="w-4 h-4 text-slate-900 shrink-0" />
-                <span className="truncate">
-                  {currentAgentId ? `Agent: ${currentAgentId}` : 'All Agents Hub'}
-                </span>
+            {agents.length > 1 ? (
+              <div className="relative">
+                <select
+                  value={currentAgentId || ''}
+                  onChange={(e) => handleSwitchAgent(e.target.value)}
+                  className="w-full appearance-none flex items-center justify-between px-3 py-2 pr-7 rounded-xl bg-slate-100/90 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition cursor-pointer border border-slate-200/60 focus:outline-none"
+                >
+                  {agents.map((a) => (
+                    <option key={a.agent_id} value={a.agent_id}>
+                      {a.name} ({a.agent_id.slice(-6)})
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
-              <span className="text-[10px] text-slate-500 font-medium shrink-0 ml-1">Switch</span>
-            </button>
+            ) : (
+              <button
+                onClick={() => navigate('/tenant/agents')}
+                className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-100/90 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-semibold transition cursor-pointer border border-slate-200/60 w-full"
+                title="Return to AI Agents Dashboard"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <Bot className="w-4 h-4 text-slate-900 shrink-0" />
+                  <span className="truncate">
+                    {currentAgent?.name || (currentAgentId ? `Agent: ${currentAgentId}` : 'All Agents Hub')}
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-500 font-medium shrink-0 ml-1">Switch</span>
+              </button>
+            )}
           </div>
 
           <nav className="p-3 flex flex-col gap-0.5">
@@ -168,11 +214,20 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
 
             {NAV_ITEMS.map((item) => {
               const isAgentsTab = item.path === '/tenant/agents';
+              const isBookingsTab = item.path === '/tenant/bookings';
+              const isServicesTab = item.path === '/tenant/services';
+              const isInventoryTab = item.path === '/tenant/inventory';
+
               const isActive =
-                (!isAgentsTab && location.pathname === item.path) ||
+                (!isAgentsTab &&
+                  !isBookingsTab &&
+                  !isServicesTab &&
+                  !isInventoryTab &&
+                  location.pathname === item.path) ||
                 (isAgentsTab && location.pathname === '/tenant/agents') ||
-                (item.path === '/tenant/services' && location.pathname.includes('/services')) ||
-                (item.path === '/tenant/inventory' &&
+                (isBookingsTab && location.pathname.includes('/bookings')) ||
+                (isServicesTab && location.pathname.includes('/services')) ||
+                (isInventoryTab &&
                   (location.pathname.includes('/inventory') ||
                     location.pathname.includes('/resources'))) ||
                 (item.path === '/tenant/users' &&

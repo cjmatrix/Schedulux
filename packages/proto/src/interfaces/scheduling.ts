@@ -30,6 +30,14 @@ export interface ServiceVerificationInfo {
   require_otp?: boolean | undefined;
 }
 
+export interface ResourceRequirementInfo {
+  role: string;
+  resource_type: string;
+  count: number;
+  eligible_resource_ids: string[];
+  selection_mode?: string | undefined;
+}
+
 export interface ServiceInfo {
   service_id: string;
   tenant_id: string;
@@ -38,17 +46,15 @@ export interface ServiceInfo {
   description: string;
   duration_minutes: number;
   buffer_minutes: number;
-  allocation_model: string;
   price: PriceInfo | undefined;
   deposit: DepositInfo | undefined;
-  eligible_resource_ids: string[];
-  required_asset_ids: string[];
   recall_interval_days: number;
   created_at: string;
   updated_at: string;
   booking_mode: string;
   agent_id: string;
   verification?: ServiceVerificationInfo | undefined;
+  resource_requirements: ResourceRequirementInfo[];
 }
 
 export interface CreateServiceRequest {
@@ -58,16 +64,14 @@ export interface CreateServiceRequest {
   description: string;
   duration_minutes: number;
   buffer_minutes: number;
-  allocation_model: string;
   price: PriceInfo | undefined;
   deposit: DepositInfo | undefined;
-  eligible_resource_ids: string[];
-  required_asset_ids: string[];
   recall_interval_days: number;
   booking_mode?: string | undefined;
   agent_id?: string | undefined;
   service_id?: string | undefined;
   verification?: ServiceVerificationInfo | undefined;
+  resource_requirements: ResourceRequirementInfo[];
 }
 
 export interface GetServiceRequest {
@@ -107,15 +111,13 @@ export interface UpdateServiceRequest {
   description?: string | undefined;
   duration_minutes?: number | undefined;
   buffer_minutes?: number | undefined;
-  allocation_model?: string | undefined;
   price: PriceInfo | undefined;
   deposit: DepositInfo | undefined;
-  eligible_resource_ids: string[];
-  required_asset_ids: string[];
   recall_interval_days?: number | undefined;
   booking_mode?: string | undefined;
   agent_id?: string | undefined;
   verification?: ServiceVerificationInfo | undefined;
+  resource_requirements: ResourceRequirementInfo[];
 }
 
 export interface DeleteServiceRequest {
@@ -223,11 +225,52 @@ export interface ResourceResponse {
   message: string;
 }
 
+export interface TimeIntervalInfo {
+  start: string;
+  end: string;
+}
+
+export interface OperatingHoursInfo {
+  monday: TimeIntervalInfo[];
+  tuesday: TimeIntervalInfo[];
+  wednesday: TimeIntervalInfo[];
+  thursday: TimeIntervalInfo[];
+  friday: TimeIntervalInfo[];
+  saturday: TimeIntervalInfo[];
+  sunday: TimeIntervalInfo[];
+}
+
+export interface BlackoutDateInfo {
+  date: string;
+  reason?: string | undefined;
+  is_closed: boolean;
+}
+
+export interface SchedulingEngineConfigInfo {
+  booking_mode: string;
+  default_lead_time_hours: number;
+  max_advance_booking_days: number;
+  cancellation_window_hours: number;
+  hold_duration_minutes: number;
+}
+
+export interface VerificationPolicyConfigInfo {
+  require_otp_for_new_booking: boolean;
+  require_otp_for_reschedule: boolean;
+  require_otp_for_cancel: boolean;
+}
+
 export interface BatchSyncInventoryRequest {
   tenant_id: string;
   agent_id: string;
   resources: CreateResourceRequest[];
   services: CreateServiceRequest[];
+  timezone?: string | undefined;
+  currency?: string | undefined;
+  operating_hours?: OperatingHoursInfo | undefined;
+  blackout_dates: BlackoutDateInfo[];
+  scheduling_engine?: SchedulingEngineConfigInfo | undefined;
+  verification_policy?: VerificationPolicyConfigInfo | undefined;
 }
 
 export interface BatchSyncInventoryResponse {
@@ -235,6 +278,105 @@ export interface BatchSyncInventoryResponse {
   services: ServiceInfo[];
   success: boolean;
   message: string;
+}
+
+export interface CustomerSnapshotInfo {
+  name: string;
+  phone: string;
+  email?: string | undefined;
+}
+
+export interface BookingInfo {
+  booking_id: string;
+  booking_reference: string;
+  tenant_id: string;
+  agent_id: string;
+  service_id: string;
+  resource_id?: string | undefined;
+  customer_id: string;
+  customer: CustomerSnapshotInfo | undefined;
+  booking_mode: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  source: string;
+  status: string;
+  deposit_status: string;
+  price: PriceInfo | undefined;
+  deposit?: DepositInfo | undefined;
+  notes?: string | undefined;
+  created_by?: string | undefined;
+  created_at: string;
+  updated_at: string;
+  resource_ids: string[];
+  effective_end_time?: string | undefined;
+  buffer_minutes?: number | undefined;
+}
+
+export interface CreateBookingRequest {
+  tenant_id: string;
+  agent_id?: string | undefined;
+  service_id: string;
+  resource_id?: string | undefined;
+  start_time: string;
+  end_time?: string | undefined;
+  customer_name: string;
+  customer_phone: string;
+  customer_email?: string | undefined;
+  notes?: string | undefined;
+  source?: string | undefined;
+  deposit_status?: string | undefined;
+  created_by?: string | undefined;
+  resource_ids: string[];
+}
+
+export interface BookingResponse {
+  booking: BookingInfo | undefined;
+  message: string;
+}
+
+export interface GetAvailabilityRequest {
+  tenant_id: string;
+  agent_id?: string | undefined;
+  service_id: string;
+  start_date: string;
+  end_date?: string | undefined;
+  resource_id?: string | undefined;
+  timezone?: string | undefined;
+  resource_ids: string[];
+}
+
+export interface AvailableSlotInfo {
+  start_time: string;
+  end_time: string;
+  available: boolean;
+  available_resource_ids: string[];
+  reason?: string | undefined;
+}
+
+export interface ResourceAvailabilityInfo {
+  resource_id: string;
+  name: string;
+  resource_type: string;
+  is_available: boolean;
+  busy_intervals: string[];
+}
+
+export interface DayAvailabilityInfo {
+  date: string;
+  is_closed: boolean;
+  closure_reason?: string | undefined;
+  has_availability: boolean;
+  slots: AvailableSlotInfo[];
+}
+
+export interface GetAvailabilityResponse {
+  service_id: string;
+  booking_mode: string;
+  timezone: string;
+  days: DayAvailabilityInfo[];
+  resources: ResourceAvailabilityInfo[];
+  blocked_dates: string[];
 }
 
 export const SCHEDULING_PACKAGE_NAME = "scheduling";
@@ -267,6 +409,12 @@ export interface SchedulingInventoryServiceClient {
   /** Batch / Bulk Operations */
 
   batchSyncInventory(request: BatchSyncInventoryRequest): Observable<BatchSyncInventoryResponse>;
+
+  /** Booking Operations */
+
+  createBooking(request: CreateBookingRequest): Observable<BookingResponse>;
+
+  getAvailability(request: GetAvailabilityRequest): Observable<GetAvailabilityResponse>;
 }
 
 export interface SchedulingInventoryServiceController {
@@ -315,6 +463,16 @@ export interface SchedulingInventoryServiceController {
   batchSyncInventory(
     request: BatchSyncInventoryRequest,
   ): Promise<BatchSyncInventoryResponse> | Observable<BatchSyncInventoryResponse> | BatchSyncInventoryResponse;
+
+  /** Booking Operations */
+
+  createBooking(
+    request: CreateBookingRequest,
+  ): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
+
+  getAvailability(
+    request: GetAvailabilityRequest,
+  ): Promise<GetAvailabilityResponse> | Observable<GetAvailabilityResponse> | GetAvailabilityResponse;
 }
 
 export function SchedulingInventoryServiceControllerMethods() {
@@ -331,6 +489,8 @@ export function SchedulingInventoryServiceControllerMethods() {
       "updateResource",
       "deleteResource",
       "batchSyncInventory",
+      "createBooking",
+      "getAvailability",
     ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

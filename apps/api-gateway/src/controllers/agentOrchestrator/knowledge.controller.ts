@@ -28,6 +28,7 @@ import {
   GetCrawlStatusDto,
   ResumeOnboardingDto,
   SaveInitialAgentDraftDto,
+  SendSandboxMessageDto,
   StartOnboardingDto,
 } from './dtos/knowledge.dto.js';
 
@@ -152,6 +153,42 @@ export class KnowledgeController implements OnModuleInit {
         type: response.type,
         draft_schema: JSON.parse(response.draft_schema_json || '{}'),
         live_schema: JSON.parse(response.live_schema_json || '{}'),
+      },
+    };
+  }
+
+  @Post('onboarding/sandbox')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(ZodValidationPipe)
+  async sandboxChat(
+    @Req() req: AuthenticatedTenantRequest,
+    @Body() body: SendSandboxMessageDto,
+  ) {
+    const tenantId = body.tenant_id || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant ID is required');
+    }
+    const agentId = body.agent_id || 'default';
+    const sessionId = body.session_id || `sandbox_${tenantId}_${agentId}`;
+
+    const response = await lastValueFrom(
+      this.knowledgeService.customerChat({
+        tenant_id: tenantId,
+        agent_id: agentId,
+        session_id: sessionId,
+        message: body.message,
+        customer_id: body.customer_id || '',
+        customer_phone: body.customer_phone || '',
+        customer_name: body.customer_name || 'Sandbox Tester',
+      }),
+    );
+
+    return {
+      message: 'Sandbox chat processed successfully',
+      data: {
+        reply: response.response,
+        session_id: response.session_id,
+        history: response.history || [],
       },
     };
   }

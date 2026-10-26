@@ -3,19 +3,9 @@ from typing import Optional, Any
 import copy
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-class AllocationModel(str, Enum):
-    TIME_SLOT = "time_slot"
-    DATE_RANGE = "date_range"
-
 class BookingMode(str, Enum):
     TIME_SLOT = "time_slot"
     DATE_RANGE = "date_range"
-
-class ServiceAllocationModel(str, Enum):
-    SINGLE_RESOURCE = "single_resource"
-    MULTI_RESOURCE = "multi_resource"
-    POOLED = "pooled"
-    ASSET_ONLY = "asset_only"
 
 class ResourceType(str, Enum):
     STAFF = "staff"
@@ -90,6 +80,18 @@ class StrictServiceVerificationSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
     require_otp: Optional[bool] = None
 
+class SelectionMode(str, Enum):
+    USER_SELECTABLE = "user_selectable"
+    AUTO_ASSIGN = "auto_assign"
+
+class StrictResourceRequirementSchema(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    role: Optional[str] = None
+    resource_type: Optional[ResourceType] = None
+    count: Optional[int] = None
+    eligible_resource_ids: Optional[list[str]] = None
+    selection_mode: Optional[SelectionMode] = None
+
 class StrictServiceSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
     service_id: Optional[str] = None
@@ -98,13 +100,11 @@ class StrictServiceSchema(BaseModel):
     description: Optional[str] = None
     duration_minutes: Optional[int] = None
     buffer_minutes: Optional[int] = None
-    allocation_model: Optional[ServiceAllocationModel] = None
     booking_mode: Optional[BookingMode] = None
     price: Optional[StrictPriceSchema] = None
     deposit: Optional[StrictDepositSchema] = None
     verification: Optional[StrictServiceVerificationSchema] = None
-    eligible_resource_ids: Optional[list[str]] = None
-    required_asset_ids: Optional[list[str]] = None
+    resource_requirements: Optional[list[StrictResourceRequirementSchema]] = None
     recall_interval_days: Optional[int] = None
 
 class StrictResourceSchema(BaseModel):
@@ -143,11 +143,12 @@ class StrictOperatingHoursSchema(BaseModel):
 
 class StrictSchedulingEngineSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    allocation_model: Optional[AllocationModel] = None
+    booking_mode: Optional[BookingMode] = None
     default_booking_mode: Optional[BookingMode] = None
     default_lead_time_hours: Optional[int] = None
     max_advance_booking_days: Optional[int] = None
     cancellation_window_hours: Optional[int] = None
+    hold_duration_minutes: Optional[int] = None
 
 class StrictWidgetConfigSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -240,6 +241,8 @@ class GeneratedAgentDraftSchema(BaseModel):
     operating_hours: Optional[StrictOperatingHoursSchema] = None
     services: Optional[list[StrictServiceSchema]] = None
     resources: Optional[list[StrictResourceSchema]] = None
+    scheduling_engine: Optional[StrictSchedulingEngineSchema] = None
+    guardrails: Optional[StrictGuardrailsSchema] = None
     runtime_meta: Optional[StrictRuntimeMetaSchema] = None
 
 

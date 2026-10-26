@@ -116,6 +116,31 @@ let KnowledgeController = class KnowledgeController {
             },
         };
     }
+    async sandboxChat(req, body) {
+        const tenantId = body.tenant_id || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException('Tenant ID is required');
+        }
+        const agentId = body.agent_id || 'default';
+        const sessionId = body.session_id || `sandbox_${tenantId}_${agentId}`;
+        const response = await (0, rxjs_1.lastValueFrom)(this.knowledgeService.customerChat({
+            tenant_id: tenantId,
+            agent_id: agentId,
+            session_id: sessionId,
+            message: body.message,
+            customer_id: body.customer_id || '',
+            customer_phone: body.customer_phone || '',
+            customer_name: body.customer_name || 'Sandbox Tester',
+        }));
+        return {
+            message: 'Sandbox chat processed successfully',
+            data: {
+                reply: response.response,
+                session_id: response.session_id,
+                history: response.history || [],
+            },
+        };
+    }
     async saveInitialDraft(req, body) {
         const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id || body.tenant_id;
         if (!tenantId) {
@@ -238,6 +263,16 @@ __decorate([
     __metadata("design:paramtypes", [knowledge_dto_js_1.ResumeOnboardingDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "resumeOnboarding", null);
+__decorate([
+    (0, common_1.Post)('onboarding/sandbox'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.SendSandboxMessageDto]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "sandboxChat", null);
 __decorate([
     (0, common_1.Post)('agents/draft'),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),

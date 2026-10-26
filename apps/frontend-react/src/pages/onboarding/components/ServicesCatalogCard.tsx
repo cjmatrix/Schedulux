@@ -136,7 +136,7 @@ export const ServicesCatalogCard: React.FC<ServicesCatalogCardProps> = ({
                         <span className="text-[9px] text-slate-400">No OTP</span>
                       )}
                       <span className="text-[10px] text-slate-400 font-mono">
-                        {srv.allocation_model?.replace('_', ' ') || 'single resource'}
+                        {srv.booking_mode?.replace('_', ' ') || 'time slot'}
                       </span>
                     </div>
                   </td>

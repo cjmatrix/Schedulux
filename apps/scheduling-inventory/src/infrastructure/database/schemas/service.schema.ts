@@ -9,7 +9,6 @@ export interface IServiceDoc extends Document<string> {
   description: string;
   duration_minutes: number;
   buffer_minutes: number;
-  allocation_model: string;
   booking_mode: string;
   price: {
     type: string;
@@ -28,13 +27,20 @@ export interface IServiceDoc extends Document<string> {
   verification?: {
     require_otp?: boolean | null;
   };
-  eligible_resource_ids: string[];
-  required_asset_ids: string[];
+  resource_requirements?: IResourceRequirementDoc[];
   recall_interval_days: number;
   is_deleted: boolean;
   deleted_at: Date | null;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface IResourceRequirementDoc {
+  role: string;
+  resource_type: string;
+  count: number;
+  eligible_resource_ids: string[];
+  selection_mode?: 'user_selectable' | 'auto_assign';
 }
 
 export const ServiceMongooseSchema = new Schema<IServiceDoc>(
@@ -47,11 +53,6 @@ export const ServiceMongooseSchema = new Schema<IServiceDoc>(
     description: { type: String, default: '', trim: true },
     duration_minutes: { type: Number, required: true, min: 1, default: 30 },
     buffer_minutes: { type: Number, default: 0, min: 0 },
-    allocation_model: {
-      type: String,
-      enum: ['single_resource', 'multi_resource', 'pooled', 'asset_only'],
-      default: 'single_resource',
-    },
     booking_mode: {
       type: String,
       enum: ['time_slot', 'date_range'],
@@ -78,8 +79,22 @@ export const ServiceMongooseSchema = new Schema<IServiceDoc>(
     verification: {
       require_otp: { type: Boolean, default: null },
     },
-    eligible_resource_ids: { type: [String], default: [] },
-    required_asset_ids: { type: [String], default: [] },
+    resource_requirements: {
+      type: [
+        {
+          role: { type: String, default: 'Staff', trim: true },
+          resource_type: { type: String, default: 'staff', trim: true },
+          count: { type: Number, default: 1, min: 1 },
+          eligible_resource_ids: { type: [String], default: [] },
+          selection_mode: {
+            type: String,
+            enum: ['user_selectable', 'auto_assign'],
+            default: 'auto_assign',
+          },
+        },
+      ],
+      default: [],
+    },
     recall_interval_days: { type: Number, default: 0 },
     is_deleted: { type: Boolean, default: false, index: true },
     deleted_at: { type: Date, default: null },

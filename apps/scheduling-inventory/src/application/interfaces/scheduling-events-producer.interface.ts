@@ -1,4 +1,5 @@
 import type { ClientSession } from 'mongoose';
+import type { BookingEntity } from '../../domain/entities/booking.entity.js';
 import type { ResourceEntity } from '../../domain/entities/resource.entity.js';
 import type { ServiceEntity } from '../../domain/entities/service.entity.js';
 import type { IOutboxDoc } from '../../infrastructure/database/schemas/outbox.schema.js';
@@ -34,6 +35,11 @@ export interface ISchedulingEventsProducer {
     session?: ClientSession,
   ): Promise<IOutboxDoc>;
 
+  createBookingCreatedOutboxEvent(
+    entity: BookingEntity,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc>;
+
   publishOutboxEvent(outboxDoc: IOutboxDoc): Promise<void>;
 
   emitServiceCreated(entity: ServiceEntity): Promise<void>;
@@ -43,4 +49,7 @@ export interface ISchedulingEventsProducer {
   emitResourceCreated(entity: ResourceEntity): Promise<void>;
   emitResourceUpdated(entity: ResourceEntity): Promise<void>;
   emitResourceDeleted(tenantId: string, agentId: string, resourceId: string): Promise<void>;
+
+  emitBookingCreated(entity: BookingEntity): Promise<void>;
 }
+

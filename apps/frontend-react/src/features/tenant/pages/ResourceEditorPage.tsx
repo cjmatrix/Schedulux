@@ -133,6 +133,8 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
     isCreateMode ? undefined : resourceIdFromParams,
   );
 
+  const effectiveAgentId = agentId || resourceResponse?.data?.agent_id || '';
+
   const createResourceMutation = useCreateResource();
   const updateResourceMutation = useUpdateResource();
   const deleteResourceMutation = useDeleteResource();
@@ -304,7 +306,7 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
     }
 
     const payload: CreateResourcePayload | UpdateResourcePayload = {
-      agent_id: agentId || resourceResponse?.data?.agent_id || '',
+      agent_id: effectiveAgentId || resourceResponse?.data?.agent_id || '',
       name: name.trim(),
       title: title.trim(),
       category: category.trim() || 'General',
@@ -321,8 +323,8 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
         setSaveSuccess(true);
         setTimeout(() => {
           navigate(
-            agentId
-              ? `/tenant/agents/${agentId}/resources/${created.data.resource_id}`
+            effectiveAgentId
+              ? `/tenant/agents/${effectiveAgentId}/resources/${created.data.resource_id}`
               : `/tenant/inventory/${created.data.resource_id}`,
           );
         }, 600);
@@ -345,7 +347,9 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
     if (!resourceIdFromParams) return;
     try {
       await deleteResourceMutation.mutateAsync(resourceIdFromParams);
-      navigate(agentId ? `/tenant/agents/${agentId}/resources` : '/tenant/inventory');
+      navigate(
+        effectiveAgentId ? `/tenant/agents/${effectiveAgentId}/resources` : '/tenant/inventory',
+      );
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to delete resource.';
       setErrorMsg(message);
@@ -380,7 +384,11 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
           <button
             type="button"
             onClick={() =>
-              navigate(agentId ? `/tenant/agents/${agentId}/resources` : '/tenant/inventory')
+              navigate(
+                effectiveAgentId
+                  ? `/tenant/agents/${effectiveAgentId}/resources`
+                  : '/tenant/inventory',
+              )
             }
             className="flex items-center gap-1 hover:text-slate-900 transition-colors cursor-pointer"
           >
@@ -388,14 +396,14 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
             <span>Back</span>
           </button>
           <span>/</span>
-          {agentId && (
+          {effectiveAgentId && (
             <>
               <button
                 type="button"
-                onClick={() => navigate(`/tenant/agents/${agentId}/dashboard`)}
+                onClick={() => navigate(`/tenant/agents/${effectiveAgentId}/dashboard`)}
                 className="hover:text-slate-900 font-bold transition-colors cursor-pointer"
               >
-                {agentId}
+                {effectiveAgentId}
               </button>
               <span>/</span>
             </>
@@ -403,7 +411,11 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
           <button
             type="button"
             onClick={() =>
-              navigate(agentId ? `/tenant/agents/${agentId}/resources` : '/tenant/inventory')
+              navigate(
+                effectiveAgentId
+                  ? `/tenant/agents/${effectiveAgentId}/resources`
+                  : '/tenant/inventory',
+              )
             }
             className="hover:text-slate-900 transition-colors cursor-pointer"
           >
@@ -429,7 +441,11 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
             <button
               type="button"
               onClick={() =>
-                navigate(agentId ? `/tenant/agents/${agentId}/resources` : '/tenant/inventory')
+                navigate(
+                  effectiveAgentId
+                    ? `/tenant/agents/${effectiveAgentId}/resources`
+                    : '/tenant/inventory',
+                )
               }
               className="px-4 py-2 rounded-full border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
             >

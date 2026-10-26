@@ -1,7 +1,7 @@
+import type { BookingInfo } from '@repo/proto/scheduling';
 import {
   AlertCircle,
   CalendarDays,
-  Calendar as CalendarIcon,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -19,6 +19,9 @@ import {
   X,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useParams } from 'react-router';
+import { CreateBookingModal } from '../components/CreateBookingModal';
+import { useResourcesList, useServicesList } from '../hooks/useServices';
 
 interface BookingItem {
   id: string;
@@ -123,20 +126,24 @@ const INITIAL_BOOKINGS: BookingItem[] = [
 ];
 
 export default function BookingsPage() {
+  const { agentId } = useParams<{ agentId?: string }>();
+
   const [bookings, setBookings] = useState<BookingItem[]>(INITIAL_BOOKINGS);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [isNewBookingModalOpen, setIsNewBookingModalOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<BookingItem | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const [newCustomerName, setNewCustomerName] = useState('');
-  const [newCustomerEmail, setNewCustomerEmail] = useState('');
-  const [newCustomerPhone, setNewCustomerPhone] = useState('');
-  const [newService, setNewService] = useState('Executive Strategy Consultation');
-  const [newDate, setNewDate] = useState('2026-10-06');
-  const [newTime, setNewTime] = useState('10:00 AM - 11:00 AM');
-  const [newStaff, setNewStaff] = useState('Dr. Alex Rivera');
+  const { data: servicesResponse } = useServicesList({
+    agent_id: agentId,
+    limit: 100,
+  });
+  const { data: resourcesResponse } = useResourcesList({
+    agent_id: agentId,
+    limit: 100,
+  });
 
   const filteredBookings = bookings.filter((item) => {
     const matchesSearch =
@@ -149,31 +156,64 @@ export default function BookingsPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const handleCreateBooking = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCustomerName || !newCustomerEmail) return;
+  const handleBookingCreated = (created: BookingInfo) => {
+    const sDate = created.start_time ? new Date(created.start_time) : new Date();
+    const eDate = created.end_time ? new Date(created.end_time) : sDate;
+    const dateFormatted = sDate.toISOString().split('T')[0];
+    const timeSlotFormatted = `${sDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${eDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
-    const newBooking: BookingItem = {
-      id: `BK-${Math.floor(8000 + Math.random() * 1000)}`,
-      customerName: newCustomerName,
-      customerEmail: newCustomerEmail,
-      customerPhone: newCustomerPhone || '+1 (555) 000-0000',
-      serviceName: newService,
-      date: newDate,
-      timeSlot: newTime,
-      duration: '60 mins',
-      status: 'confirmed',
-      source: 'Manual',
-      assignedStaff: newStaff,
-      price: '$150.00',
+    let sourceLabel: BookingItem['source'] = 'Manual';
+    if (created.source === 'customer_agent') sourceLabel = 'AI Voice Agent';
+    else if (created.source === 'web_portal') sourceLabel = 'Web Embed';
+
+    const matchedService = servicesResponse?.data?.find(
+      (s) => s.service_id === created.service_id,
+    );
+    const serviceName = matchedService?.name || 'Scheduled Service';
+
+    let assignedStaff = 'Auto-assigned Provider';
+    if (created.resource_ids && created.resource_ids.length > 0) {
+      const matchedRes = resourcesResponse?.data?.find(
+        (r) => r.resource_id === created.resource_ids[0],
+      );
+      if (matchedRes) {
+        assignedStaff = matchedRes.name;
+      }
+    } else if (created.resource_id) {
+      const matchedRes = resourcesResponse?.data?.find(
+        (r) => r.resource_id === created.resource_id,
+      );
+      if (matchedRes) {
+        assignedStaff = matchedRes.name;
+      }
+    }
+
+    const priceFormatted = created.price
+      ? `$${(created.price.amount || 0).toFixed(2)}`
+      : '$150.00';
+
+    const newBookingItem: BookingItem = {
+      id: created.booking_reference || `BK-${created.booking_id.slice(-4).toUpperCase()}`,
+      customerName: created.customer?.name || 'Customer',
+      customerEmail: created.customer?.email || 'N/A',
+      customerPhone: created.customer?.phone || '',
+      serviceName,
+      date: dateFormatted,
+      timeSlot: timeSlotFormatted,
+      duration: created.buffer_minutes
+        ? `${created.duration_minutes || 60}m (+${created.buffer_minutes}m buffer)`
+        : `${created.duration_minutes || 60} mins`,
+      status: (created.status as BookingItem['status']) || 'confirmed',
+      source: sourceLabel,
+      assignedStaff,
+      price: priceFormatted,
     };
 
-    setBookings([newBooking, ...bookings]);
-    setIsNewBookingModalOpen(false);
-    // Reset form
-    setNewCustomerName('');
-    setNewCustomerEmail('');
-    setNewCustomerPhone('');
+    setBookings((prev) => [newBookingItem, ...prev]);
+    setToastMessage(`Booking ${newBookingItem.id} confirmed for ${newBookingItem.customerName}!`);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 5000);
   };
 
   const updateBookingStatus = (id: string, newStatus: BookingItem['status']) => {
@@ -191,6 +231,22 @@ export default function BookingsPage() {
         <span>/</span>
         <span className="text-slate-800">Calendar & Bookings</span>
       </div>
+
+      {/* Success Notification Banner */}
+      {toastMessage && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200/80 rounded-2xl flex items-center justify-between text-xs text-emerald-800 font-semibold shadow-xs animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{toastMessage}</span>
+          </div>
+          <button
+            onClick={() => setToastMessage(null)}
+            className="text-emerald-500 hover:text-emerald-800 p-1 rounded-full cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Header & Main Action */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -630,151 +686,13 @@ export default function BookingsPage() {
         </div>
       )}
 
-      {/* New Booking Modal */}
-      {isNewBookingModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-7 shadow-2xl border border-slate-100 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-black text-white flex items-center justify-center font-bold text-xs">
-                  <CalendarIcon className="w-4 h-4" />
-                </div>
-                <h3 className="font-bold text-slate-900 text-base">Create New Booking</h3>
-              </div>
-              <button
-                onClick={() => setIsNewBookingModalOpen(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-800 hover:bg-slate-100 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateBooking} className="py-4 space-y-4 text-xs">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
-                  Customer Full Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newCustomerName}
-                  onChange={(e) => setNewCustomerName(e.target.value)}
-                  placeholder="e.g. Rachel Green"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={newCustomerEmail}
-                    onChange={(e) => setNewCustomerEmail(e.target.value)}
-                    placeholder="rachel@example.com"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
-                    Phone Number
-                  </label>
-                  <input
-                    type="text"
-                    value={newCustomerPhone}
-                    onChange={(e) => setNewCustomerPhone(e.target.value)}
-                    placeholder="+1 (555) 000-0000"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
-                  Select Service
-                </label>
-                <select
-                  value={newService}
-                  onChange={(e) => setNewService(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                >
-                  <option value="Executive Strategy Consultation">
-                    Executive Strategy Consultation ($150)
-                  </option>
-                  <option value="Initial Product Onboarding">
-                    Initial Product Onboarding ($95)
-                  </option>
-                  <option value="Technical Architecture Audit">
-                    Technical Architecture Audit ($275)
-                  </option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
-                  Assigned Staff / Provider
-                </label>
-                <select
-                  value={newStaff}
-                  onChange={(e) => setNewStaff(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                >
-                  <option value="Dr. Alex Rivera">Dr. Alex Rivera</option>
-                  <option value="Elena Rostova">Elena Rostova</option>
-                  <option value="Marcus Thorne">Marcus Thorne</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
-                    Date
-                  </label>
-                  <input
-                    type="date"
-                    value={newDate}
-                    onChange={(e) => setNewDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
-                    Time Slot
-                  </label>
-                  <select
-                    value={newTime}
-                    onChange={(e) => setNewTime(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                  >
-                    <option value="09:00 AM - 10:00 AM">09:00 AM - 10:00 AM</option>
-                    <option value="10:00 AM - 11:00 AM">10:00 AM - 11:00 AM</option>
-                    <option value="02:00 PM - 03:00 PM">02:00 PM - 03:00 PM</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsNewBookingModalOpen(false)}
-                  className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-full bg-black hover:bg-slate-900 text-white text-xs font-semibold shadow-md cursor-pointer"
-                >
-                  Create Booking
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Real Feature-Based Create Booking Modal */}
+      <CreateBookingModal
+        isOpen={isNewBookingModalOpen}
+        onClose={() => setIsNewBookingModalOpen(false)}
+        onBookingCreated={handleBookingCreated}
+        agentId={agentId}
+      />
     </div>
   );
 }

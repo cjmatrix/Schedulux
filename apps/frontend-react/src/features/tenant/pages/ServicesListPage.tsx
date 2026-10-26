@@ -24,6 +24,7 @@ import { useDeleteService, useServicesList } from '../hooks/useServices';
 export default function ServicesListPage() {
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId?: string }>();
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [serviceToDelete, setServiceToDelete] = useState<ServiceInfo | null>(null);
@@ -136,7 +137,11 @@ export default function ServicesListPage() {
           </button>
           <button
             onClick={() =>
-              navigate(agentId ? `/tenant/agents/${agentId}/services/new` : '/tenant/services/new')
+              navigate(
+                agentId
+                  ? `/tenant/agents/${agentId}/services/new`
+                  : '/tenant/services/new',
+              )
             }
             className="flex items-center gap-2 bg-slate-950 hover:bg-black text-white px-5 py-2.5 rounded-xl font-semibold text-xs shadow-xs transition active:scale-98 cursor-pointer"
           >
@@ -248,7 +253,13 @@ export default function ServicesListPage() {
             </p>
           </div>
           <button
-            onClick={() => navigate('/tenant/services/new')}
+            onClick={() =>
+              navigate(
+                agentId
+                  ? `/tenant/agents/${agentId}/services/new`
+                  : '/tenant/services/new',
+              )
+            }
             className="px-5 py-2.5 bg-slate-900 hover:bg-black text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-xs transition"
           >
             <Plus className="w-4 h-4" />
@@ -263,8 +274,13 @@ export default function ServicesListPage() {
             const depositRequired = service.deposit?.required;
             const depositAmount = service.deposit?.amount ?? 0;
 
-            const staffCount = service.eligible_resource_ids?.length || 0;
-            const assetCount = service.required_asset_ids?.length || 0;
+            const reqs = service.resource_requirements || [];
+            const staffCount = reqs
+              .filter((r) => !r.resource_type || r.resource_type === 'staff')
+              .reduce((acc, r) => acc + (r.eligible_resource_ids?.length || 0), 0);
+            const assetCount = reqs
+              .filter((r) => r.resource_type && r.resource_type !== 'staff')
+              .reduce((acc, r) => acc + (r.eligible_resource_ids?.length || 0), 0);
 
             return (
               <div

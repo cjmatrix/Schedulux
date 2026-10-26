@@ -1,14 +1,19 @@
-import { Controller, Inject } from '@nestjs/common';
+import { Controller, Inject, UseFilters } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
+import { GrpcExceptionFilter } from './grpc-exception.filter.js';
 import {
   BatchSyncInventoryRequest,
   BatchSyncInventoryResponse,
+  BookingResponse,
+  CreateBookingRequest,
   CreateResourceRequest,
   CreateServiceRequest,
   DeleteResourceRequest,
   DeleteResourceResponse,
   DeleteServiceRequest,
   DeleteServiceResponse,
+  GetAvailabilityRequest,
+  GetAvailabilityResponse,
   GetResourceRequest,
   GetServiceRequest,
   ListResourcesRequest,
@@ -49,10 +54,18 @@ import {
   LIST_SERVICES_USE_CASE,
   UPDATE_SERVICE_USE_CASE,
 } from '../../application/interfaces/service-use-cases.interface.js';
+import {
+  CREATE_BOOKING_USE_CASE,
+  GET_AVAILABILITY_USE_CASE,
+  ICreateBookingUseCase,
+  IGetAvailabilityUseCase,
+} from '../../application/interfaces/booking-use-cases.interface.js';
+import { BookingMapper } from '../../infrastructure/database/mappers/booking.mapper.js';
 import { ResourceMapper } from '../../infrastructure/database/mappers/resource.mapper.js';
 import { ServiceMapper } from '../../infrastructure/database/mappers/service.mapper.js';
 
 @Controller()
+@UseFilters(new GrpcExceptionFilter())
 export class SchedulingInventoryGrpcController {
   constructor(
     @Inject(CREATE_SERVICE_USE_CASE)
@@ -77,6 +90,10 @@ export class SchedulingInventoryGrpcController {
     private readonly deleteResourceUseCase: IDeleteResourceUseCase,
     @Inject(BATCH_SYNC_INVENTORY_USE_CASE)
     private readonly batchSyncInventoryUseCase: IBatchSyncInventoryUseCase,
+    @Inject(CREATE_BOOKING_USE_CASE)
+    private readonly createBookingUseCase: ICreateBookingUseCase,
+    @Inject(GET_AVAILABILITY_USE_CASE)
+    private readonly getAvailabilityUseCase: IGetAvailabilityUseCase,
   ) {}
 
   @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'CreateService')
@@ -195,4 +212,19 @@ export class SchedulingInventoryGrpcController {
   ): Promise<BatchSyncInventoryResponse> {
     return this.batchSyncInventoryUseCase.execute(request);
   }
+
+  @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'CreateBooking')
+  async createBooking(request: CreateBookingRequest): Promise<BookingResponse> {
+    const booking = await this.createBookingUseCase.execute(request);
+    return {
+      booking: BookingMapper.toProto(booking),
+      message: 'Booking created successfully',
+    };
+  }
+
+  @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'GetAvailability')
+  async getAvailability(request: GetAvailabilityRequest): Promise<GetAvailabilityResponse> {
+    return this.getAvailabilityUseCase.execute(request);
+  }
 }
+

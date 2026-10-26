@@ -188,3 +188,79 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"LIST_AGENTS_ERROR: {str(e)}")
             return knowledge_pb2.ListTenantAgentsResponse()
+
+    async def CustomerChat(
+        self, request: knowledge_pb2.CustomerChatRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.CustomerChatResponse:
+        print(
+            f"[gRPC] CustomerChat for tenant: {request.tenant_id}, agent: {request.agent_id}, session: {request.session_id}"
+        )
+        try:
+            from agent_orchestrator.workflows.customer_agent import process_customer_chat
+
+            result = await process_customer_chat(
+                tenant_id=request.tenant_id,
+                agent_id=request.agent_id,
+                session_id=request.session_id,
+                message=request.message,
+                customer_id=request.customer_id if request.customer_id else None,
+                customer_phone=request.customer_phone if request.customer_phone else None,
+                customer_name=request.customer_name if request.customer_name else None,
+            )
+            history_proto = [
+                knowledge_pb2.CustomerChatMessageInfo(
+                    id=h["id"],
+                    session_id=h["session_id"],
+                    tenant_id=h["tenant_id"],
+                    agent_id=h["agent_id"],
+                    role=h["role"],
+                    content=h["content"],
+                    created_at=h["created_at"],
+                )
+                for h in result.get("history", [])
+            ]
+            return knowledge_pb2.CustomerChatResponse(
+                session_id=result["session_id"],
+                response=result["response"],
+                history=history_proto,
+            )
+        except Exception as e:
+            print(f"[gRPC Error] CustomerChat failed: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"CUSTOMER_CHAT_ERROR: {str(e)}")
+            return knowledge_pb2.CustomerChatResponse(
+                session_id=request.session_id,
+                response="An error occurred processing your request. Please try again.",
+            )
+
+    async def GetCustomerMessages(
+        self, request: knowledge_pb2.GetCustomerMessagesRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.GetCustomerMessagesResponse:
+        try:
+            from agent_orchestrator.repositories.customer_message_repository import (
+                CustomerMessageRepository,
+            )
+
+            repo = CustomerMessageRepository()
+            limit = request.limit if request.limit > 0 else 10
+            msgs = await repo.get_recent_messages(request.session_id, limit=limit)
+            return knowledge_pb2.GetCustomerMessagesResponse(
+                messages=[
+                    knowledge_pb2.CustomerChatMessageInfo(
+                        id=str(m.id),
+                        session_id=m.session_id,
+                        tenant_id=m.tenant_id,
+                        agent_id=m.agent_id,
+                        role=m.role,
+                        content=m.content,
+                        created_at=m.created_at.isoformat(),
+                    )
+                    for m in msgs
+                ]
+            )
+        except Exception as e:
+            print(f"[gRPC Error] GetCustomerMessages failed: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"GET_CUSTOMER_MESSAGES_ERROR: {str(e)}")
+            return knowledge_pb2.GetCustomerMessagesResponse()
+

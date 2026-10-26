@@ -90,6 +90,41 @@ export interface GetAgentMessagesResponse {
     next_cursor?: string | undefined;
     has_more: boolean;
 }
+export interface CustomerChatMessageInfo {
+    id: string;
+    session_id: string;
+    tenant_id: string;
+    agent_id: string;
+    role: string;
+    content: string;
+    created_at: string;
+}
+export interface CustomerChatRequest {
+    tenant_id: string;
+    agent_id: string;
+    session_id: string;
+    message: string;
+    customer_id?: string | undefined;
+    customer_phone?: string | undefined;
+    customer_name?: string | undefined;
+}
+export interface CustomerChatResponse {
+    session_id: string;
+    response: string;
+    history: CustomerChatMessageInfo[];
+    booking_id?: string | undefined;
+    booking_reference?: string | undefined;
+    status?: string | undefined;
+}
+export interface GetCustomerMessagesRequest {
+    tenant_id: string;
+    agent_id: string;
+    session_id: string;
+    limit?: number | undefined;
+}
+export interface GetCustomerMessagesResponse {
+    messages: CustomerChatMessageInfo[];
+}
 export declare const KNOWLEDGE_PACKAGE_NAME = "knowledge";
 export interface KnowledgeServiceClient {
     crawlSite(request: CrawlSiteRequest): Observable<CrawlSiteResponse>;
@@ -99,6 +134,8 @@ export interface KnowledgeServiceClient {
     saveInitialAgentDraft(request: SaveInitialAgentDraftRequest): Observable<SaveInitialAgentDraftResponse>;
     listTenantAgents(request: ListTenantAgentsRequest): Observable<ListTenantAgentsResponse>;
     getAgentMessages(request: GetAgentMessagesRequest): Observable<GetAgentMessagesResponse>;
+    customerChat(request: CustomerChatRequest): Observable<CustomerChatResponse>;
+    getCustomerMessages(request: GetCustomerMessagesRequest): Observable<GetCustomerMessagesResponse>;
 }
 export interface KnowledgeServiceController {
     crawlSite(request: CrawlSiteRequest): Promise<CrawlSiteResponse> | Observable<CrawlSiteResponse> | CrawlSiteResponse;
@@ -108,6 +145,8 @@ export interface KnowledgeServiceController {
     saveInitialAgentDraft(request: SaveInitialAgentDraftRequest): Promise<SaveInitialAgentDraftResponse> | Observable<SaveInitialAgentDraftResponse> | SaveInitialAgentDraftResponse;
     listTenantAgents(request: ListTenantAgentsRequest): Promise<ListTenantAgentsResponse> | Observable<ListTenantAgentsResponse> | ListTenantAgentsResponse;
     getAgentMessages(request: GetAgentMessagesRequest): Promise<GetAgentMessagesResponse> | Observable<GetAgentMessagesResponse> | GetAgentMessagesResponse;
+    customerChat(request: CustomerChatRequest): Promise<CustomerChatResponse> | Observable<CustomerChatResponse> | CustomerChatResponse;
+    getCustomerMessages(request: GetCustomerMessagesRequest): Promise<GetCustomerMessagesResponse> | Observable<GetCustomerMessagesResponse> | GetCustomerMessagesResponse;
 }
 export declare function KnowledgeServiceControllerMethods(): (constructor: Function) => void;
 export declare const KNOWLEDGE_SERVICE_NAME = "KnowledgeService";

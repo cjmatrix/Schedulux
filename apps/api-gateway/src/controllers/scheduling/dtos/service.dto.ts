@@ -21,6 +21,16 @@ export const ServiceVerificationDtoSchema = z.object({
   require_otp: z.boolean().nullable().optional(),
 });
 
+export const ResourceRequirementDtoSchema = z.object({
+  role: z.string().default('Staff'),
+  resource_type: z.string().default('staff'),
+  count: z.number().int().min(1).default(1),
+  eligible_resource_ids: z.array(z.string()).default([]),
+  selection_mode: z.enum(['user_selectable', 'auto_assign']).optional().default('auto_assign'),
+});
+
+export class ResourceRequirementDto extends createZodDto(ResourceRequirementDtoSchema) {}
+
 export const CreateServiceDtoSchema = z.object({
   agent_id: z.string().min(1, 'agent_id is required'),
   name: z.string().min(1, 'Service name is required').trim(),
@@ -28,9 +38,6 @@ export const CreateServiceDtoSchema = z.object({
   description: z.string().optional().default(''),
   duration_minutes: z.number().int().min(1, 'Duration must be at least 1 minute').default(30),
   buffer_minutes: z.number().int().min(0).default(0),
-  allocation_model: z
-    .enum(['single_resource', 'multi_resource', 'pooled', 'asset_only'])
-    .default('single_resource'),
   booking_mode: z.enum(['time_slot', 'date_range']).default('time_slot'),
   price: PriceDtoSchema.optional().default({ type: 'fixed', amount: 0, currency: 'USD' }),
   deposit: DepositDtoSchema.optional().default({
@@ -43,8 +50,7 @@ export const CreateServiceDtoSchema = z.object({
     payment_instructions: '',
   }),
   verification: ServiceVerificationDtoSchema.optional(),
-  eligible_resource_ids: z.array(z.string()).optional().default([]),
-  required_asset_ids: z.array(z.string()).optional().default([]),
+  resource_requirements: z.array(ResourceRequirementDtoSchema).optional().default([]),
   recall_interval_days: z.number().int().min(0).optional().default(0),
 });
 
@@ -57,15 +63,11 @@ export const UpdateServiceDtoSchema = z.object({
   description: z.string().optional(),
   duration_minutes: z.number().int().min(1).optional(),
   buffer_minutes: z.number().int().min(0).optional(),
-  allocation_model: z
-    .enum(['single_resource', 'multi_resource', 'pooled', 'asset_only'])
-    .optional(),
   booking_mode: z.enum(['time_slot', 'date_range']).optional(),
   price: PriceDtoSchema.optional(),
   deposit: DepositDtoSchema.optional(),
   verification: ServiceVerificationDtoSchema.optional(),
-  eligible_resource_ids: z.array(z.string()).optional(),
-  required_asset_ids: z.array(z.string()).optional(),
+  resource_requirements: z.array(ResourceRequirementDtoSchema).optional(),
   recall_interval_days: z.number().int().min(0).optional(),
 });
 

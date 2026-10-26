@@ -3,6 +3,7 @@ import { ClientProxy } from '@nestjs/microservices';
 import type { DepositInfo, PriceInfo, ServiceVerificationInfo } from '@repo/proto/scheduling';
 import type { ClientSession } from 'mongoose';
 import type { ISchedulingEventsProducer } from '../../application/interfaces/scheduling-events-producer.interface.js';
+import { BookingEntity } from '../../domain/entities/booking.entity.js';
 import { ResourceEntity } from '../../domain/entities/resource.entity.js';
 import { ServiceEntity } from '../../domain/entities/service.entity.js';
 import type { IOutboxRepository } from '../../domain/repositories/outbox.repository.interface.js';
@@ -11,6 +12,7 @@ import { IOutboxDoc } from '../database/schemas/outbox.schema.js';
 
 export const KAFKA_SERVICE_TOPIC_SERVICES = 'scheduling.service.events';
 export const KAFKA_SERVICE_TOPIC_RESOURCES = 'scheduling.resource.events';
+export const KAFKA_SERVICE_TOPIC_BOOKINGS = 'scheduling.booking.events';
 
 export type SchedulingEventType =
   | 'service.created'
@@ -18,7 +20,9 @@ export type SchedulingEventType =
   | 'service.deleted'
   | 'resource.created'
   | 'resource.updated'
-  | 'resource.deleted';
+  | 'resource.deleted'
+  | 'booking.created';
+
 
 export interface BaseSchedulingEventPayload {
   event_id: string;
@@ -38,13 +42,17 @@ export interface ServiceEventPayload extends BaseSchedulingEventPayload {
     description: string;
     duration_minutes: number;
     buffer_minutes: number;
-    allocation_model: string;
     booking_mode: string;
     price: PriceInfo;
     deposit: DepositInfo;
     verification?: ServiceVerificationInfo;
-    eligible_resource_ids: string[];
-    required_asset_ids: string[];
+    resource_requirements?: Array<{
+      role: string;
+      resource_type: string;
+      count: number;
+      eligible_resource_ids: string[];
+      selection_mode?: string;
+    }>;
     recall_interval_days: number;
     created_at: string;
     updated_at: string;
@@ -65,6 +73,31 @@ export interface ResourceEventPayload extends BaseSchedulingEventPayload {
     custom_shift_overrides: Record<string, unknown>;
     created_at: string;
     updated_at: string;
+  };
+}
+
+export interface BookingEventPayload extends BaseSchedulingEventPayload {
+  booking_id: string;
+  data?: {
+    booking_reference: string;
+    service_id: string;
+    resource_id?: string | null;
+    resource_ids?: string[];
+    assigned_asset_ids?: string[];
+    customer_id: string;
+    customer_name: string;
+    customer_phone: string;
+    booking_mode: string;
+    start_time: string;
+    end_time: string;
+    effective_end_time?: string;
+    buffer_minutes?: number;
+    duration_minutes: number;
+    source: string;
+    status: string;
+    deposit_status: string;
+    price: { amount: number; currency: string };
+    created_at: string;
   };
 }
 
@@ -321,7 +354,6 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
       description: entity.description,
       duration_minutes: entity.durationMinutes,
       buffer_minutes: entity.bufferMinutes,
-      allocation_model: entity.allocationModel,
       booking_mode: entity.bookingMode,
       price: {
         type: entity.price.type,
@@ -340,8 +372,13 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
       verification: entity.verification
         ? { require_otp: entity.verification.require_otp ?? undefined }
         : undefined,
-      eligible_resource_ids: entity.eligibleResourceIds,
-      required_asset_ids: entity.requiredAssetIds,
+      resource_requirements: entity.resourceRequirements.map((r) => ({
+        role: r.role,
+        resource_type: r.resourceType,
+        count: r.count,
+        eligible_resource_ids: r.eligibleResourceIds,
+        selection_mode: r.selectionMode,
+      })),
       recall_interval_days: entity.recallIntervalDays,
       created_at: entity.createdAt.toISOString(),
       updated_at: entity.updatedAt.toISOString(),
@@ -368,4 +405,64 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
       updated_at: entity.updatedAt.toISOString(),
     };
   }
+
+  async createBookingCreatedOutboxEvent(
+    entity: BookingEntity,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc> {
+    const version = entity.updatedAt ? entity.updatedAt.getTime() : Date.now();
+    const eventId = `evt_bk_${entity.id}_${version}`;
+    const payload: BookingEventPayload = {
+      event_id: eventId,
+      event_type: 'booking.created',
+      tenant_id: entity.tenantId,
+      agent_id: entity.agentId,
+      booking_id: entity.id,
+      version,
+      timestamp: new Date().toISOString(),
+      data: {
+        booking_reference: entity.bookingReference,
+        service_id: entity.serviceId,
+        resource_id: entity.resourceId,
+        resource_ids: entity.resourceIds,
+        assigned_asset_ids: entity.assignedAssetIds,
+        customer_id: entity.customerId,
+        customer_name: entity.customerSnapshot.name,
+        customer_phone: entity.customerSnapshot.phone,
+        booking_mode: entity.bookingMode,
+        start_time: entity.startTime.toISOString(),
+        end_time: entity.endTime.toISOString(),
+        effective_end_time: entity.effectiveEndTime.toISOString(),
+        buffer_minutes: entity.bufferMinutes,
+        duration_minutes: entity.durationMinutes,
+        source: entity.source,
+        status: entity.status,
+        deposit_status: entity.depositStatus,
+        price: {
+          amount: entity.price.amount,
+          currency: entity.price.currency,
+        },
+        created_at: entity.createdAt.toISOString(),
+      },
+    };
+
+    return this.outboxRepository.saveEvent(
+      {
+        eventId,
+        aggregateType: 'booking',
+        aggregateId: entity.id,
+        eventType: 'booking.created',
+        topic: KAFKA_SERVICE_TOPIC_BOOKINGS,
+        partitionKey: entity.tenantId,
+        payload: payload as unknown as Record<string, any>,
+      },
+      session,
+    );
+  }
+
+  async emitBookingCreated(entity: BookingEntity): Promise<void> {
+    const outboxDoc = await this.createBookingCreatedOutboxEvent(entity);
+    await this.publishOutboxEvent(outboxDoc);
+  }
 }
+

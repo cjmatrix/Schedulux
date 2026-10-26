@@ -12,6 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import mongoose from 'mongoose';
+import { GrpcExceptionFilter } from './presentation/grpc/grpc-exception.filter.js';
 import { AppModule } from './app.module.js';
 
 const require = createRequire(import.meta.url);
@@ -32,6 +33,8 @@ async function bootstrap() {
       },
     },
   });
+
+  app.useGlobalFilters(new GrpcExceptionFilter());
 
   const configService = app.get(ConfigService);
 

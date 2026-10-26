@@ -39,8 +39,8 @@ from agent_orchestrator.models import (
     PriceEmbed,
     PriceType,
     ResourceEmbed,
+    ResourceRequirementEmbed,
     ResourceType,
-    ServiceAllocationModel,
     ServiceEmbed,
     ServiceVerificationEmbed,
     init_db,
@@ -115,15 +115,19 @@ async def handle_service_event(payload: dict[str, Any]) -> None:
                 description=data.get("description", ""),
                 duration_minutes=int(data.get("duration_minutes") or 30),
                 buffer_minutes=int(data.get("buffer_minutes") or 0),
-                allocation_model=ServiceAllocationModel(
-                    data.get("allocation_model", "single_resource")
-                ),
                 booking_mode=BookingMode(data.get("booking_mode", "time_slot")),
                 price=price,
                 deposit=deposit,
                 verification=verification,
-                eligible_resource_ids=data.get("eligible_resource_ids", []),
-                required_asset_ids=data.get("required_asset_ids", []),
+                resource_requirements=[
+                    ResourceRequirementEmbed(
+                        role=req.get("role", "Staff"),
+                        resource_type=req.get("resource_type", "staff"),
+                        count=int(req.get("count") or 1),
+                        eligible_resource_ids=req.get("eligible_resource_ids", []),
+                    )
+                    for req in (data.get("resource_requirements") or [])
+                ],
                 recall_interval_days=int(data.get("recall_interval_days") or 0),
             )
             config.services = [s for s in config.services if s.service_id != service_id]
@@ -159,13 +163,11 @@ async def handle_service_event(payload: dict[str, Any]) -> None:
                 "description": data.get("description", ""),
                 "duration_minutes": int(data.get("duration_minutes") or 30),
                 "buffer_minutes": int(data.get("buffer_minutes") or 0),
-                "allocation_model": data.get("allocation_model", "single_resource"),
                 "booking_mode": data.get("booking_mode", "time_slot"),
                 "price": price_raw,
                 "deposit": deposit_raw,
                 "verification": verif_dict,
-                "eligible_resource_ids": data.get("eligible_resource_ids", []),
-                "required_asset_ids": data.get("required_asset_ids", []),
+                "resource_requirements": data.get("resource_requirements", []),
                 "recall_interval_days": int(data.get("recall_interval_days") or 0),
             }
             updated_svcs = [s for s in svcs if s.get("service_id") != service_id]

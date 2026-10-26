@@ -27,7 +27,7 @@
     "dev": "concurrently --kill-others --names \"RABBITMQ,GATEWAY,IDENTITY,SCHEDULING,FRONTEND,WORKER-TS,WORKER-PY,AI-GRPC\" -c \"gray,blue,green,magenta,yellow,cyan,white,red\" \"pnpm dev:rabbitmq\" \"pnpm dev:gateway\" \"pnpm dev:identity\" \"pnpm dev:scheduling\" \"pnpm dev:frontend\" \"pnpm dev:worker\" \"pnpm dev:worker:python\" \"pnpm dev:ai:grpc\"",
     "rabbitmq:up": "docker compose up -d rabbitmq",
     "rabbitmq:down": "docker compose down",
-    "rabbitmq:logs": "docker compose logs -f rabbitmq",
+    "build:proto:py": "cd apps/AI-orchestration && uv run python -m grpc_tools.protoc --proto_path=../../packages/proto/src --python_out=src/agent_orchestrator/proto --pyi_out=src/agent_orchestrator/proto --grpc_python_out=src/agent_orchestrator/proto ../../packages/proto/src/*.proto",
     "build": "pnpm -r run build"
   },
   "devDependencies": {

@@ -70,7 +70,6 @@ async def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) ->
                     "description": "Initial consultation and evaluation",
                     "duration_minutes": 30,
                     "buffer_minutes": 0,
-                    "allocation_model": "single_resource",
                     "booking_mode": "time_slot",
                     "price": {"type": "fixed", "amount": 100.0, "currency": "USD"},
                     "deposit": {
@@ -85,17 +84,32 @@ async def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) ->
                     "verification": {
                         "require_otp": False
                     },
-                    "eligible_resource_ids": ["res_staff_default"],
-                    "required_asset_ids": [],
+                    "resource_requirements": [
+                        {
+                            "role": "Provider",
+                            "resource_type": "staff",
+                            "count": 1,
+                            "eligible_resource_ids": ["res_staff_default"],
+                            "selection_mode": "user_selectable"
+                        }
+                    ],
                     "recall_interval_days": 0
                 }
             ],
             "scheduling_engine": {
-                "allocation_model": "time_slot",
+                "booking_mode": "time_slot",
                 "default_booking_mode": "time_slot",
                 "default_lead_time_hours": 2,
                 "max_advance_booking_days": 60,
-                "cancellation_window_hours": 24
+                "cancellation_window_hours": 24,
+                "hold_duration_minutes": 10
+            },
+            "guardrails": {
+                "verification_policy": {
+                    "require_otp_for_new_booking": False,
+                    "require_otp_for_reschedule": True,
+                    "require_otp_for_cancel": True
+                }
             },
             "resources": [
                 {
@@ -150,10 +164,9 @@ async def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) ->
 Your task is to extract and generate a comprehensive AI booking agent configuration from website crawl data for tenant: {tenant_id} (website URL: {url}).
 
 CRITICAL DOMAIN INSTRUCTIONS:
-1. SERVICES BOOKING MODE, ALLOCATION MODEL & ATTRIBUTES:
-   - For every service, specify both the time dimension (booking_mode) and resource dispatch strategy (allocation_model):
+1. SERVICES BOOKING MODE & ATTRIBUTES:
+   - For every service, specify the time dimension (booking_mode):
      * "booking_mode": MUST be "time_slot" for services booked at clock hours/minutes (e.g. consultations, appointments, dental/medical procedures) or "date_range" for services booked over days/dates (e.g. hotel stays, car/equipment rentals). Default: "time_slot".
-     * "allocation_model": MUST be "single_resource" (1 staff or room), "multi_resource" (multiple staff/assets simultaneously), "pooled" (any available provider from team), or "asset_only" (room/equipment with no staff). Default: "single_resource".
    - For every service, include:
      * "service_id": Unique identifier string (e.g. srv_consultation)
      * "name": Name of the service
@@ -162,12 +175,10 @@ CRITICAL DOMAIN INSTRUCTIONS:
      * "duration_minutes": Duration in minutes (must be >= 1, default 30)
      * "buffer_minutes": Post-service buffer time in minutes (default 0)
      * "booking_mode": "time_slot" or "date_range"
-     * "allocation_model": "single_resource", "multi_resource", "pooled", or "asset_only"
      * "price": {{"type": "fixed"|"starting_at"|"hourly"|"free"|"custom", "amount": float, "currency": "USD"}}
      * "deposit": {{"required": bool, "amount": float, "processor": "upi_direct", "upi_id": str, "qr_code_url": str, "confirmation_method": "utr_reference", "payment_instructions": str}} (Schedulux only supports direct UPI deposits via upi_id or qr_code_url)
      * "verification": {{"require_otp": bool|null}} (Optional per-service OTP verification override: true for high-value/sensitive/exclusive services or date-range stays with deposits; false for low-friction/routine services; null to inherit global verification policy)
-     * "eligible_resource_ids": list of resource_id strings that can perform this service
-     * "required_asset_ids": list of asset resource_id strings required
+     * "resource_requirements": list of required resource specs, e.g. [{{"role": "Provider", "resource_type": "staff", "count": 1, "eligible_resource_ids": ["res_..."], "selection_mode": "user_selectable"|"auto_assign"}}] (use "user_selectable" for human specialists/practitioners or bookable hotel/meeting rooms; "auto_assign" for internal facility chairs, operation bays, equipment, or assets that the system assigns automatically)
      * "recall_interval_days": days until next recall/follow-up (default 0)
 
 2. RESOURCES ATTRIBUTES & ENUMS:
@@ -181,10 +192,12 @@ CRITICAL DOMAIN INSTRUCTIONS:
      * "is_bookable": bool (default true)
      * "dispatch_status": MUST be one of: "active", "on_leave", "maintenance", "retired", "inactive" (default: "active")
      * "custom_shift_overrides": dict (default empty object)
-   - Ensure every service in services[] has eligible_resource_ids pointing to these resources.
+   - Ensure every service in services[] defines resource_requirements pointing to these resources.
 
-3. SCHEDULING ENGINE ALLOCATION MODEL & DEFAULT BOOKING MODE:
-   - Set scheduling_engine.allocation_model and scheduling_engine.default_booking_mode to "time_slot" for slot-based appointments (clinics, salons, etc.) or "date_range" for multi-day bookings (rentals, hotels). Individual services in services[] can override this with their own "booking_mode".
+3. SCHEDULING ENGINE & GUARDRAILS:
+   - Set scheduling_engine.booking_mode and scheduling_engine.default_booking_mode to "time_slot" for slot-based appointments (clinics, salons, etc.) or "date_range" for multi-day bookings (rentals, hotels). Individual services in services[] can override this with their own "booking_mode".
+   - Include default_lead_time_hours (default 2), max_advance_booking_days (default 60), cancellation_window_hours (default 24), and hold_duration_minutes (default 10).
+   - Set guardrails.verification_policy with require_otp_for_new_booking (default false), require_otp_for_reschedule (default true), require_otp_for_cancel (default true).
 
 4. OPERATING HOURS & SERVICE DURATIONS:
    - If operating hours or service durations are not explicitly found in the crawled data, use your parametric knowledge to make accurate industry-standard guesses based on the vertical (e.g., Dental consults are 30 min, Dental offices open Mon-Fri 08:00 to 17:00).

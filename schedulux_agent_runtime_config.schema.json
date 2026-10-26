@@ -95,7 +95,7 @@
   },
 
   "scheduling_engine": {
-    "allocation_model": "time_slot",
+    "booking_mode": "time_slot",
     "default_booking_mode": "time_slot",
     "slot_granularity_minutes": 15,
     "default_lead_time_hours": 2,
@@ -189,7 +189,6 @@
       "description": "Standard clinical examination. AI will inform new patients about arrival paperwork requirements.",
       "duration_minutes": 20,
       "buffer_minutes": 15,
-      "allocation_model": "single_resource",
       "booking_mode": "time_slot",
       "price": {
         "type": "fixed",
@@ -208,8 +207,15 @@
       "verification": {
         "require_otp": false
       },
-      "eligible_resource_ids": ["res_dr_aris_smith", "res_dr_elena_vance"],
-      "required_asset_ids": [],
+      "resource_requirements": [
+        {
+          "role": "Dentist",
+          "resource_type": "staff",
+          "count": 1,
+          "eligible_resource_ids": ["res_dr_aris_smith", "res_dr_elena_vance"],
+          "selection_mode": "user_selectable"
+        }
+      ],
       "recall_interval_days": 180
     },
     {
@@ -219,7 +225,6 @@
       "description": "Endodontic therapy for infected pulp. Mandatory 15-minute room sterilization after procedure.",
       "duration_minutes": 60,
       "buffer_minutes": 15,
-      "allocation_model": "single_resource",
       "booking_mode": "time_slot",
       "price": {
         "type": "fixed",
@@ -238,8 +243,22 @@
       "verification": {
         "require_otp": true
       },
-      "eligible_resource_ids": ["res_dr_aris_smith"],
-      "required_asset_ids": ["res_xray_room"],
+      "resource_requirements": [
+        {
+          "role": "Endodontist",
+          "resource_type": "staff",
+          "count": 1,
+          "eligible_resource_ids": ["res_dr_aris_smith"],
+          "selection_mode": "user_selectable"
+        },
+        {
+          "role": "X-Ray Room",
+          "resource_type": "room",
+          "count": 1,
+          "eligible_resource_ids": ["res_xray_room"],
+          "selection_mode": "auto_assign"
+        }
+      ],
       "recall_interval_days": 0
     },
     {
@@ -249,7 +268,6 @@
       "description": "Surgical removal of impacted third molars with local anesthesia and post-op suture protocol.",
       "duration_minutes": 60,
       "buffer_minutes": 20,
-      "allocation_model": "single_resource",
       "booking_mode": "time_slot",
       "price": {
         "type": "fixed",
@@ -268,8 +286,22 @@
       "verification": {
         "require_otp": true
       },
-      "eligible_resource_ids": ["res_dr_aris_smith"],
-      "required_asset_ids": ["res_xray_room"],
+      "resource_requirements": [
+        {
+          "role": "Surgeon",
+          "resource_type": "staff",
+          "count": 1,
+          "eligible_resource_ids": ["res_dr_aris_smith"],
+          "selection_mode": "user_selectable"
+        },
+        {
+          "role": "X-Ray Room",
+          "resource_type": "room",
+          "count": 1,
+          "eligible_resource_ids": ["res_xray_room"],
+          "selection_mode": "auto_assign"
+        }
+      ],
       "recall_interval_days": 0
     },
     {
@@ -279,7 +311,6 @@
       "description": "Full-mouth scaling and root planing. Recommended every 6 months.",
       "duration_minutes": 45,
       "buffer_minutes": 15,
-      "allocation_model": "single_resource",
       "booking_mode": "time_slot",
       "price": {
         "type": "fixed",
@@ -295,8 +326,15 @@
         "confirmation_method": "automatic",
         "payment_instructions": ""
       },
-      "eligible_resource_ids": ["res_dr_aris_smith", "res_dr_elena_vance"],
-      "required_asset_ids": [],
+      "resource_requirements": [
+        {
+          "role": "Hygienist",
+          "resource_type": "staff",
+          "count": 1,
+          "eligible_resource_ids": ["res_dr_aris_smith", "res_dr_elena_vance"],
+          "selection_mode": "user_selectable"
+        }
+      ],
       "recall_interval_days": 180
     },
     {
@@ -306,7 +344,6 @@
       "description": "Priority triage slot for acute pain, trauma, or urgent dental emergencies. Reserved in Operatory Bay 3.",
       "duration_minutes": 30,
       "buffer_minutes": 10,
-      "allocation_model": "single_resource",
       "booking_mode": "time_slot",
       "price": {
         "type": "fixed",
@@ -322,8 +359,22 @@
         "confirmation_method": "automatic",
         "payment_instructions": ""
       },
-      "eligible_resource_ids": ["res_dr_aris_smith"],
-      "required_asset_ids": ["res_operatory_bay_3"],
+      "resource_requirements": [
+        {
+          "role": "Emergency Dentist",
+          "resource_type": "staff",
+          "count": 1,
+          "eligible_resource_ids": ["res_dr_aris_smith"],
+          "selection_mode": "user_selectable"
+        },
+        {
+          "role": "Operatory Bay 3",
+          "resource_type": "bay",
+          "count": 1,
+          "eligible_resource_ids": ["res_operatory_bay_3"],
+          "selection_mode": "auto_assign"
+        }
+      ],
       "recall_interval_days": 0
     }
   ],

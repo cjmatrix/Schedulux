@@ -19,15 +19,15 @@ import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-even
 export class UpdateResourceUseCase implements IUpdateResourceUseCase {
   constructor(
     @Inject(RESOURCE_REPOSITORY)
-    private readonly resourceRepository: IResourceRepository,
+    private readonly _resourceRepository: IResourceRepository,
     @Inject(SCHEDULING_EVENTS_PRODUCER)
-    private readonly eventsProducer: ISchedulingEventsProducer,
+    private readonly _eventsProducer: ISchedulingEventsProducer,
     @Inject(UNIT_OF_WORK)
-    private readonly unitOfWork: IUnitOfWork,
+    private readonly _unitOfWork: IUnitOfWork,
   ) {}
 
   async execute(dto: UpdateResourceRequest): Promise<ResourceEntity> {
-    const existing = await this.resourceRepository.findById(dto.tenant_id, dto.resource_id);
+    const existing = await this._resourceRepository.findById(dto.tenant_id, dto.resource_id);
     if (!existing) {
       throw new NotFoundException(
         `Resource ${dto.resource_id} not found for tenant ${dto.tenant_id}`,
@@ -45,16 +45,16 @@ export class UpdateResourceUseCase implements IUpdateResourceUseCase {
       customShiftOverridesJson: dto.custom_shift_overrides_json,
     });
 
-    const { updated, outbox } = await this.unitOfWork.withTransaction(async () => {
-      const updatedEntity = await this.resourceRepository.update(existing);
+    const { updated, outbox } = await this._unitOfWork.withTransaction(async () => {
+      const updatedEntity = await this._resourceRepository.update(existing);
       if (!updatedEntity) {
         throw new NotFoundException(`Failed to update resource ${dto.resource_id}`);
       }
-      const outboxDoc = await this.eventsProducer.createResourceUpdatedOutboxEvent(updatedEntity);
+      const outboxDoc = await this._eventsProducer.createResourceUpdatedOutboxEvent(updatedEntity);
       return { updated: updatedEntity, outbox: outboxDoc };
     });
 
-    await this.eventsProducer.publishOutboxEvent(outbox);
+    await this._eventsProducer.publishOutboxEvent(outbox);
 
     return updated;
   }

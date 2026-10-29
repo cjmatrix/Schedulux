@@ -8,11 +8,11 @@ export type { IUnitOfWork };
 
 @Injectable()
 export class UnitOfWork implements IUnitOfWork {
-  private readonly logger = new Logger(UnitOfWork.name);
-  private readonly asyncLocalStorage = new AsyncLocalStorage<ClientSession>();
+  private readonly _logger = new Logger(UnitOfWork.name);
+  private readonly _asyncLocalStorage = new AsyncLocalStorage<ClientSession>();
 
   getSession(): ClientSession | undefined {
-    return this.asyncLocalStorage.getStore();
+    return this._asyncLocalStorage.getStore();
   }
 
   async withTransaction<T>(work: () => Promise<T>): Promise<T> {
@@ -22,7 +22,7 @@ export class UnitOfWork implements IUnitOfWork {
     try {
       try {
         await session.withTransaction(async () => {
-          result = await this.asyncLocalStorage.run(session, work);
+          result = await this._asyncLocalStorage.run(session, work);
         });
         if (result === undefined) {
           throw new Error('[UnitOfWork] Transaction completed without a result');
@@ -33,7 +33,7 @@ export class UnitOfWork implements IUnitOfWork {
         if (
           msg.includes('Transaction numbers are only allowed on a replica set member or mongos')
         ) {
-          this.logger.warn(
+          this._logger.warn(
             '[UnitOfWork] MongoDB is standalone (no replica set). Falling back to non-transactional execution.',
           );
           return await work();

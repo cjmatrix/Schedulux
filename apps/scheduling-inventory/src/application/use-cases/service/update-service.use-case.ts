@@ -17,15 +17,15 @@ import { IUpdateServiceUseCase } from '../../interfaces/service-use-cases.interf
 export class UpdateServiceUseCase implements IUpdateServiceUseCase {
   constructor(
     @Inject(SERVICE_REPOSITORY)
-    private readonly serviceRepository: IServiceRepository,
+    private readonly _serviceRepository: IServiceRepository,
     @Inject(SCHEDULING_EVENTS_PRODUCER)
-    private readonly eventsProducer: ISchedulingEventsProducer,
+    private readonly _eventsProducer: ISchedulingEventsProducer,
     @Inject(UNIT_OF_WORK)
-    private readonly unitOfWork: IUnitOfWork,
+    private readonly _unitOfWork: IUnitOfWork,
   ) {}
 
   async execute(dto: UpdateServiceRequest): Promise<ServiceEntity> {
-    const existing = await this.serviceRepository.findById(dto.tenant_id, dto.service_id);
+    const existing = await this._serviceRepository.findById(dto.tenant_id, dto.service_id);
     if (!existing) {
       throw new NotFoundException(
         `Service ${dto.service_id} not found for tenant ${dto.tenant_id}`,
@@ -72,16 +72,16 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
       recallIntervalDays: dto.recall_interval_days,
     });
 
-    const { updated, outbox } = await this.unitOfWork.withTransaction(async () => {
-      const updatedEntity = await this.serviceRepository.update(existing);
+    const { updated, outbox } = await this._unitOfWork.withTransaction(async () => {
+      const updatedEntity = await this._serviceRepository.update(existing);
       if (!updatedEntity) {
         throw new NotFoundException(`Failed to update service ${dto.service_id}`);
       }
-      const outboxDoc = await this.eventsProducer.createServiceUpdatedOutboxEvent(updatedEntity);
+      const outboxDoc = await this._eventsProducer.createServiceUpdatedOutboxEvent(updatedEntity);
       return { updated: updatedEntity, outbox: outboxDoc };
     });
 
-    await this.eventsProducer.publishOutboxEvent(outbox);
+    await this._eventsProducer.publishOutboxEvent(outbox);
 
     return updated;
   }

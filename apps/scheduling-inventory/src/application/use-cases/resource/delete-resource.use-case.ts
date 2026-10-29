@@ -14,29 +14,29 @@ import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-even
 export class DeleteResourceUseCase implements IDeleteResourceUseCase {
   constructor(
     @Inject(RESOURCE_REPOSITORY)
-    private readonly resourceRepository: IResourceRepository,
+    private readonly _resourceRepository: IResourceRepository,
     @Inject(SCHEDULING_EVENTS_PRODUCER)
-    private readonly eventsProducer: ISchedulingEventsProducer,
+    private readonly _eventsProducer: ISchedulingEventsProducer,
     @Inject(UNIT_OF_WORK)
-    private readonly unitOfWork: IUnitOfWork,
+    private readonly _unitOfWork: IUnitOfWork,
   ) {}
 
   async execute(dto: DeleteResourceRequest): Promise<boolean> {
-    const existing = await this.resourceRepository.findById(dto.tenant_id, dto.resource_id);
+    const existing = await this._resourceRepository.findById(dto.tenant_id, dto.resource_id);
     if (!existing) {
       throw new NotFoundException(
         `Resource ${dto.resource_id} not found for tenant ${dto.tenant_id}`,
       );
     }
 
-    const { outbox } = await this.unitOfWork.withTransaction(async () => {
-      const deleted = await this.resourceRepository.delete(dto.tenant_id, dto.resource_id);
+    const { outbox } = await this._unitOfWork.withTransaction(async () => {
+      const deleted = await this._resourceRepository.delete(dto.tenant_id, dto.resource_id);
       if (!deleted) {
         throw new NotFoundException(
           `Resource ${dto.resource_id} not found for tenant ${dto.tenant_id}`,
         );
       }
-      const outboxDoc = await this.eventsProducer.createResourceDeletedOutboxEvent(
+      const outboxDoc = await this._eventsProducer.createResourceDeletedOutboxEvent(
         existing.tenantId,
         existing.agentId,
         existing.id,
@@ -44,7 +44,7 @@ export class DeleteResourceUseCase implements IDeleteResourceUseCase {
       return { outbox: outboxDoc };
     });
 
-    await this.eventsProducer.publishOutboxEvent(outbox);
+    await this._eventsProducer.publishOutboxEvent(outbox);
 
     return true;
   }

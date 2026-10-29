@@ -23,6 +23,8 @@ import {
 } from '@repo/proto/scheduling';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { lastValueFrom } from 'rxjs';
+import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
+import { API_ROUTES } from '../../constants/routes.constant.js';
 import { Roles } from '../../decorators/roles.decorator.js';
 import { RolesGuard } from '../../guards/roles.guard.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
@@ -35,35 +37,35 @@ import {
 } from './dtos/resource.dto.js';
 import { CreateServiceDto, ListServicesQueryDto, UpdateServiceDto } from './dtos/service.dto.js';
 
-@Controller('api/v1/tenant/scheduling')
+@Controller(API_ROUTES.SCHEDULING.BASE)
 @UseGuards(TenantAuthGuard, RolesGuard)
 @Roles('tenant_owner', 'root', 'manager', 'dashboard_user')
 export class SchedulingController implements OnModuleInit {
-  private schedulingService!: SchedulingInventoryServiceClient;
+  private _schedulingService!: SchedulingInventoryServiceClient;
 
-  constructor(@Inject('SCHEDULING_PACKAGE') private readonly client: ClientGrpc) {}
+  constructor(@Inject('SCHEDULING_PACKAGE') private readonly _client: ClientGrpc) {}
 
   onModuleInit() {
-    this.schedulingService = this.client.getService<SchedulingInventoryServiceClient>(
+    this._schedulingService = this._client.getService<SchedulingInventoryServiceClient>(
       SCHEDULING_INVENTORY_SERVICE_NAME,
     );
   }
 
-  private getTenantId(req: AuthenticatedTenantRequest): string {
+  private _getTenantId(req: AuthenticatedTenantRequest): string {
     const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
     if (!tenantId) {
-      throw new UnauthorizedException('Tenant context missing from token');
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_CONTEXT_MISSING);
     }
     return tenantId;
   }
 
-  @Post('services')
+  @Post(API_ROUTES.SCHEDULING.SERVICES)
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(ZodValidationPipe)
   async createService(@Req() req: AuthenticatedTenantRequest, @Body() body: CreateServiceDto) {
-    const tenantId = this.getTenantId(req);
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
-      this.schedulingService.createService({
+      this._schedulingService.createService({
         tenant_id: tenantId,
         agent_id: body.agent_id,
         name: body.name,
@@ -88,12 +90,12 @@ export class SchedulingController implements OnModuleInit {
     };
   }
 
-  @Get('services')
+  @Get(API_ROUTES.SCHEDULING.SERVICES)
   @UsePipes(ZodValidationPipe)
   async listServices(@Req() req: AuthenticatedTenantRequest, @Query() query: ListServicesQueryDto) {
-    const tenantId = this.getTenantId(req);
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
-      this.schedulingService.listServices({
+      this._schedulingService.listServices({
         tenant_id: tenantId,
         page: query.page,
         limit: query.limit,
@@ -104,7 +106,7 @@ export class SchedulingController implements OnModuleInit {
     );
 
     return {
-      message: 'Services retrieved successfully',
+      message: RESPONSE_MESSAGES.SCHEDULING.SERVICES_RETRIEVED,
       data: response.services,
       pagination: {
         total: response.total,
@@ -115,11 +117,11 @@ export class SchedulingController implements OnModuleInit {
     };
   }
 
-  @Get('services/:id')
+  @Get(API_ROUTES.SCHEDULING.SERVICE_BY_ID)
   async getService(@Req() req: AuthenticatedTenantRequest, @Param('id') serviceId: string) {
-    const tenantId = this.getTenantId(req);
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
-      this.schedulingService.getService({
+      this._schedulingService.getService({
         tenant_id: tenantId,
         service_id: serviceId,
       }),
@@ -131,16 +133,16 @@ export class SchedulingController implements OnModuleInit {
     };
   }
 
-  @Put('services/:id')
+  @Put(API_ROUTES.SCHEDULING.SERVICE_BY_ID)
   @UsePipes(ZodValidationPipe)
   async updateService(
     @Req() req: AuthenticatedTenantRequest,
     @Param('id') serviceId: string,
     @Body() body: UpdateServiceDto,
   ) {
-    const tenantId = this.getTenantId(req);
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
-      this.schedulingService.updateService({
+      this._schedulingService.updateService({
         tenant_id: tenantId,
         service_id: serviceId,
         name: body.name,
@@ -165,11 +167,11 @@ export class SchedulingController implements OnModuleInit {
     };
   }
 
-  @Delete('services/:id')
+  @Delete(API_ROUTES.SCHEDULING.SERVICE_BY_ID)
   async deleteService(@Req() req: AuthenticatedTenantRequest, @Param('id') serviceId: string) {
-    const tenantId = this.getTenantId(req);
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
-      this.schedulingService.deleteService({
+      this._schedulingService.deleteService({
         tenant_id: tenantId,
         service_id: serviceId,
       }),
@@ -181,13 +183,13 @@ export class SchedulingController implements OnModuleInit {
     };
   }
 
-  @Post('resources')
+  @Post(API_ROUTES.SCHEDULING.RESOURCES)
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(ZodValidationPipe)
   async createResource(@Req() req: AuthenticatedTenantRequest, @Body() body: CreateResourceDto) {
-    const tenantId = this.getTenantId(req);
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
-      this.schedulingService.createResource({
+      this._schedulingService.createResource({
         tenant_id: tenantId,
         agent_id: body.agent_id,
         resource_type: body.resource_type,
@@ -207,15 +209,15 @@ export class SchedulingController implements OnModuleInit {
     };
   }
 
-  @Get('resources')
+  @Get(API_ROUTES.SCHEDULING.RESOURCES)
   @UsePipes(ZodValidationPipe)
   async listResources(
     @Req() req: AuthenticatedTenantRequest,
     @Query() query: ListResourcesQueryDto,
   ) {
-    const tenantId = this.getTenantId(req);
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
-      this.schedulingService.listResources({
+      this._schedulingService.listResources({
         tenant_id: tenantId,
         page: query.page,
         limit: query.limit,
@@ -228,7 +230,7 @@ export class SchedulingController implements OnModuleInit {
     );
 
     return {
-      message: 'Resources retrieved successfully',
+      message: RESPONSE_MESSAGES.SCHEDULING.RESOURCES_RETRIEVED,
       data: response.resources,
       pagination: {
         total: response.total,
@@ -239,11 +241,11 @@ export class SchedulingController implements OnModuleInit {
     };
   }
 
-  @Get('resources/:id')
+  @Get(API_ROUTES.SCHEDULING.RESOURCE_BY_ID)
   async getResource(@Req() req: AuthenticatedTenantRequest, @Param('id') resourceId: string) {
-    const tenantId = this.getTenantId(req);
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
-      this.schedulingService.getResource({
+      this._schedulingService.getResource({
         tenant_id: tenantId,
         resource_id: resourceId,
       }),
@@ -255,16 +257,16 @@ export class SchedulingController implements OnModuleInit {
     };
   }
 
-  @Put('resources/:id')
+  @Put(API_ROUTES.SCHEDULING.RESOURCE_BY_ID)
   @UsePipes(ZodValidationPipe)
   async updateResource(
     @Req() req: AuthenticatedTenantRequest,
     @Param('id') resourceId: string,
     @Body() body: UpdateResourceDto,
   ) {
-    const tenantId = this.getTenantId(req);
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
-      this.schedulingService.updateResource({
+      this._schedulingService.updateResource({
         tenant_id: tenantId,
         resource_id: resourceId,
         resource_type: body.resource_type,
@@ -284,11 +286,11 @@ export class SchedulingController implements OnModuleInit {
     };
   }
 
-  @Delete('resources/:id')
+  @Delete(API_ROUTES.SCHEDULING.RESOURCE_BY_ID)
   async deleteResource(@Req() req: AuthenticatedTenantRequest, @Param('id') resourceId: string) {
-    const tenantId = this.getTenantId(req);
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
-      this.schedulingService.deleteResource({
+      this._schedulingService.deleteResource({
         tenant_id: tenantId,
         resource_id: resourceId,
       }),
@@ -300,14 +302,14 @@ export class SchedulingController implements OnModuleInit {
     };
   }
 
-  @Post('bookings')
+  @Post(API_ROUTES.SCHEDULING.BOOKINGS)
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(ZodValidationPipe)
   async createBooking(@Req() req: AuthenticatedTenantRequest, @Body() body: CreateBookingDto) {
-    const tenantId = this.getTenantId(req);
-    const userId = req.dashboardUser?.id || req.tenant?.tenant_id || '';
+    const tenantId = this._getTenantId(req);
+    const userId = req.dashboardUser?.user_id || req.tenant?.tenant_id || '';
     const response = await lastValueFrom(
-      this.schedulingService.createBooking({
+      this._schedulingService.createBooking({
         tenant_id: tenantId,
         agent_id: body.agent_id,
         service_id: body.service_id,
@@ -331,15 +333,15 @@ export class SchedulingController implements OnModuleInit {
     };
   }
 
-  @Get('availability')
+  @Get(API_ROUTES.SCHEDULING.AVAILABILITY)
   @UsePipes(ZodValidationPipe)
   async getAvailability(
     @Req() req: AuthenticatedTenantRequest,
     @Query() query: GetAvailabilityQueryDto,
   ) {
-    const tenantId = this.getTenantId(req);
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
-      this.schedulingService.getAvailability({
+      this._schedulingService.getAvailability({
         tenant_id: tenantId,
         service_id: query.service_id,
         start_date: query.start_date,
@@ -352,9 +354,10 @@ export class SchedulingController implements OnModuleInit {
     );
 
     return {
-      message: 'Availability fetched successfully',
+      message: RESPONSE_MESSAGES.SCHEDULING.AVAILABILITY_FETCHED,
       data: response,
     };
   }
 }
+
 

@@ -9,6 +9,7 @@ var GlobalExceptionFilter_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GlobalExceptionFilter = void 0;
 const common_1 = require("@nestjs/common");
+const messages_constant_js_1 = require("../constants/messages.constant.js");
 const GRPC_TO_HTTP_STATUS = {
     1: 499, // CANCELLED
     2: common_1.HttpStatus.INTERNAL_SERVER_ERROR, // UNKNOWN
@@ -28,13 +29,13 @@ const GRPC_TO_HTTP_STATUS = {
     16: common_1.HttpStatus.UNAUTHORIZED, // UNAUTHENTICATED
 };
 let GlobalExceptionFilter = GlobalExceptionFilter_1 = class GlobalExceptionFilter {
-    logger = new common_1.Logger(GlobalExceptionFilter_1.name);
+    _logger = new common_1.Logger(GlobalExceptionFilter_1.name);
     catch(exception, host) {
         const ctx = host.switchToHttp();
         const response = ctx.getResponse();
         const request = ctx.getRequest();
         let status = common_1.HttpStatus.INTERNAL_SERVER_ERROR;
-        let message = 'Internal Server Error';
+        let message = messages_constant_js_1.RESPONSE_MESSAGES.ERROR.INTERNAL_SERVER_ERROR;
         if (exception instanceof common_1.HttpException) {
             status = exception.getStatus();
             message = exception.getResponse();
@@ -42,23 +43,25 @@ let GlobalExceptionFilter = GlobalExceptionFilter_1 = class GlobalExceptionFilte
         else if (exception &&
             typeof exception === 'object' &&
             ('code' in exception || 'details' in exception)) {
-            if (typeof exception.code === 'number' && GRPC_TO_HTTP_STATUS[exception.code]) {
-                status = GRPC_TO_HTTP_STATUS[exception.code];
+            const grpcErr = exception;
+            if (typeof grpcErr.code === 'number' && GRPC_TO_HTTP_STATUS[grpcErr.code]) {
+                status = GRPC_TO_HTTP_STATUS[grpcErr.code];
             }
             else {
                 status = common_1.HttpStatus.BAD_REQUEST;
             }
-            message = exception.details || exception.message || 'Microservice error';
+            message = grpcErr.details || grpcErr.message || messages_constant_js_1.RESPONSE_MESSAGES.ERROR.MICROSERVICE_ERROR;
         }
         else if (exception instanceof Error) {
             message = exception.message;
         }
         const errorDetails = typeof message === 'string' ? { error: message } : message;
         if (status >= common_1.HttpStatus.INTERNAL_SERVER_ERROR) {
-            this.logger.error(`[${request.method} ${request.url}] status=${status}`, exception?.stack || exception);
+            const stack = exception instanceof Error ? exception.stack : exception;
+            this._logger.error(`[${request.method} ${request.url}] status=${status}`, stack);
         }
         else {
-            this.logger.warn(`[${request.method} ${request.url}] status=${status} error=${JSON.stringify(errorDetails)}`);
+            this._logger.warn(`[${request.method} ${request.url}] status=${status} error=${JSON.stringify(errorDetails)}`);
         }
         response.status(status).json({
             statusCode: status,

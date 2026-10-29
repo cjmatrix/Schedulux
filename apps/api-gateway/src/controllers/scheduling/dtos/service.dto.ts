@@ -77,7 +77,7 @@ export const ListServicesQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   category: z.string().optional(),
-  agent_id: z.string().optional(),
+  agent_id: z.string().min(1, 'agent_id is required'),
   search: z.string().optional(),
 });
 

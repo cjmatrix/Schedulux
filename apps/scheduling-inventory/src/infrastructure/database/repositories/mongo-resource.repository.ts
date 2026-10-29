@@ -14,11 +14,11 @@ import { ResourceModel } from '../schemas/resource.schema.js';
 export class MongoResourceRepository implements IResourceRepository {
   constructor(
     @Inject(UNIT_OF_WORK)
-    private readonly unitOfWork: IUnitOfWork,
+    private readonly _unitOfWork: IUnitOfWork,
   ) {}
 
   async create(resource: ResourceEntity): Promise<ResourceEntity> {
-    const session = this.unitOfWork?.getSession();
+    const session = this._unitOfWork?.getSession();
     const persistenceData = ResourceMapper.toPersistence(resource);
     if (session) {
       const [created] = await ResourceModel.create([persistenceData], { session });
@@ -118,7 +118,7 @@ export class MongoResourceRepository implements IResourceRepository {
   }
 
   async update(resource: ResourceEntity): Promise<ResourceEntity | null> {
-    const session = this.unitOfWork?.getSession();
+    const session = this._unitOfWork?.getSession();
     const persistenceData = ResourceMapper.toPersistence(resource);
     const updated = await ResourceModel.findOneAndUpdate(
       { _id: resource.id, tenant_id: resource.tenantId, is_deleted: { $ne: true } },
@@ -131,7 +131,7 @@ export class MongoResourceRepository implements IResourceRepository {
   }
 
   async delete(tenantId: string, resourceId: string): Promise<boolean> {
-    const session = this.unitOfWork?.getSession();
+    const session = this._unitOfWork?.getSession();
     const result = await ResourceModel.updateOne(
       { _id: resourceId, tenant_id: tenantId, is_deleted: { $ne: true } },
       { $set: { is_deleted: true, deleted_at: new Date() } },

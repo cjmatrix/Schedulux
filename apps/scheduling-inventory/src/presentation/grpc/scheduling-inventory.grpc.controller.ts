@@ -21,11 +21,15 @@ import {
   ListServicesRequest,
   ListServicesResponse,
   ResourceResponse,
-  SCHEDULING_INVENTORY_SERVICE_NAME,
   ServiceResponse,
   UpdateResourceRequest,
   UpdateServiceRequest,
 } from '@repo/proto/scheduling';
+import {
+  GRPC_METHODS,
+  GRPC_SERVICES,
+  RESPONSE_MESSAGES,
+} from '../../constants/index.js';
 import {
   BATCH_SYNC_INVENTORY_USE_CASE,
   IBatchSyncInventoryUseCase,
@@ -69,54 +73,63 @@ import { ServiceMapper } from '../../infrastructure/database/mappers/service.map
 export class SchedulingInventoryGrpcController {
   constructor(
     @Inject(CREATE_SERVICE_USE_CASE)
-    private readonly createServiceUseCase: ICreateServiceUseCase,
+    private readonly _createServiceUseCase: ICreateServiceUseCase,
     @Inject(GET_SERVICE_USE_CASE)
-    private readonly getServiceUseCase: IGetServiceUseCase,
+    private readonly _getServiceUseCase: IGetServiceUseCase,
     @Inject(LIST_SERVICES_USE_CASE)
-    private readonly listServicesUseCase: IListServicesUseCase,
+    private readonly _listServicesUseCase: IListServicesUseCase,
     @Inject(UPDATE_SERVICE_USE_CASE)
-    private readonly updateServiceUseCase: IUpdateServiceUseCase,
+    private readonly _updateServiceUseCase: IUpdateServiceUseCase,
     @Inject(DELETE_SERVICE_USE_CASE)
-    private readonly deleteServiceUseCase: IDeleteServiceUseCase,
+    private readonly _deleteServiceUseCase: IDeleteServiceUseCase,
     @Inject(CREATE_RESOURCE_USE_CASE)
-    private readonly createResourceUseCase: ICreateResourceUseCase,
+    private readonly _createResourceUseCase: ICreateResourceUseCase,
     @Inject(GET_RESOURCE_USE_CASE)
-    private readonly getResourceUseCase: IGetResourceUseCase,
+    private readonly _getResourceUseCase: IGetResourceUseCase,
     @Inject(LIST_RESOURCES_USE_CASE)
-    private readonly listResourcesUseCase: IListResourcesUseCase,
+    private readonly _listResourcesUseCase: IListResourcesUseCase,
     @Inject(UPDATE_RESOURCE_USE_CASE)
-    private readonly updateResourceUseCase: IUpdateResourceUseCase,
+    private readonly _updateResourceUseCase: IUpdateResourceUseCase,
     @Inject(DELETE_RESOURCE_USE_CASE)
-    private readonly deleteResourceUseCase: IDeleteResourceUseCase,
+    private readonly _deleteResourceUseCase: IDeleteResourceUseCase,
     @Inject(BATCH_SYNC_INVENTORY_USE_CASE)
-    private readonly batchSyncInventoryUseCase: IBatchSyncInventoryUseCase,
+    private readonly _batchSyncInventoryUseCase: IBatchSyncInventoryUseCase,
     @Inject(CREATE_BOOKING_USE_CASE)
-    private readonly createBookingUseCase: ICreateBookingUseCase,
+    private readonly _createBookingUseCase: ICreateBookingUseCase,
     @Inject(GET_AVAILABILITY_USE_CASE)
-    private readonly getAvailabilityUseCase: IGetAvailabilityUseCase,
+    private readonly _getAvailabilityUseCase: IGetAvailabilityUseCase,
   ) {}
 
-  @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'CreateService')
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.CREATE_SERVICE,
+  )
   async createService(request: CreateServiceRequest): Promise<ServiceResponse> {
-    const service = await this.createServiceUseCase.execute(request);
+    const service = await this._createServiceUseCase.execute(request);
     return {
       service: ServiceMapper.toProto(service),
-      message: 'Service created successfully',
+      message: RESPONSE_MESSAGES.SERVICE.CREATED,
     };
   }
 
-  @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'GetService')
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.GET_SERVICE,
+  )
   async getService(request: GetServiceRequest): Promise<ServiceResponse> {
-    const service = await this.getServiceUseCase.execute(request);
+    const service = await this._getServiceUseCase.execute(request);
     return {
       service: ServiceMapper.toProto(service),
-      message: 'Service retrieved successfully',
+      message: RESPONSE_MESSAGES.SERVICE.RETRIEVED,
     };
   }
 
-  @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'ListServices')
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.LIST_SERVICES,
+  )
   async listServices(request: ListServicesRequest): Promise<ListServicesResponse> {
-    const result = await this.listServicesUseCase.execute(request);
+    const result = await this._listServicesUseCase.execute(request);
     return {
       services: result.services.map((s) => ServiceMapper.toProto(s)),
       total: result.total,
@@ -133,45 +146,60 @@ export class SchedulingInventoryGrpcController {
     };
   }
 
-  @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'UpdateService')
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.UPDATE_SERVICE,
+  )
   async updateService(request: UpdateServiceRequest): Promise<ServiceResponse> {
-    const service = await this.updateServiceUseCase.execute(request);
+    const service = await this._updateServiceUseCase.execute(request);
     return {
       service: ServiceMapper.toProto(service),
-      message: 'Service updated successfully',
+      message: RESPONSE_MESSAGES.SERVICE.UPDATED,
     };
   }
 
-  @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'DeleteService')
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.DELETE_SERVICE,
+  )
   async deleteService(request: DeleteServiceRequest): Promise<DeleteServiceResponse> {
-    const success = await this.deleteServiceUseCase.execute(request);
+    const success = await this._deleteServiceUseCase.execute(request);
     return {
       success,
-      message: 'Service deleted successfully',
+      message: RESPONSE_MESSAGES.SERVICE.DELETED,
     };
   }
 
-  @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'CreateResource')
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.CREATE_RESOURCE,
+  )
   async createResource(request: CreateResourceRequest): Promise<ResourceResponse> {
-    const resource = await this.createResourceUseCase.execute(request);
+    const resource = await this._createResourceUseCase.execute(request);
     return {
       resource: ResourceMapper.toProto(resource),
-      message: 'Resource created successfully',
+      message: RESPONSE_MESSAGES.RESOURCE.CREATED,
     };
   }
 
-  @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'GetResource')
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.GET_RESOURCE,
+  )
   async getResource(request: GetResourceRequest): Promise<ResourceResponse> {
-    const resource = await this.getResourceUseCase.execute(request);
+    const resource = await this._getResourceUseCase.execute(request);
     return {
       resource: ResourceMapper.toProto(resource),
-      message: 'Resource retrieved successfully',
+      message: RESPONSE_MESSAGES.RESOURCE.RETRIEVED,
     };
   }
 
-  @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'ListResources')
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.LIST_RESOURCES,
+  )
   async listResources(request: ListResourcesRequest): Promise<ListResourcesResponse> {
-    const result = await this.listResourcesUseCase.execute(request);
+    const result = await this._listResourcesUseCase.execute(request);
     return {
       resources: result.resources.map((r) => ResourceMapper.toProto(r)),
       total: result.total,
@@ -188,43 +216,57 @@ export class SchedulingInventoryGrpcController {
     };
   }
 
-  @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'UpdateResource')
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.UPDATE_RESOURCE,
+  )
   async updateResource(request: UpdateResourceRequest): Promise<ResourceResponse> {
-    const resource = await this.updateResourceUseCase.execute(request);
+    const resource = await this._updateResourceUseCase.execute(request);
     return {
       resource: ResourceMapper.toProto(resource),
-      message: 'Resource updated successfully',
+      message: RESPONSE_MESSAGES.RESOURCE.UPDATED,
     };
   }
 
-  @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'DeleteResource')
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.DELETE_RESOURCE,
+  )
   async deleteResource(request: DeleteResourceRequest): Promise<DeleteResourceResponse> {
-    const success = await this.deleteResourceUseCase.execute(request);
+    const success = await this._deleteResourceUseCase.execute(request);
     return {
       success,
-      message: 'Resource deleted successfully',
+      message: RESPONSE_MESSAGES.RESOURCE.DELETED,
     };
   }
 
-  @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'BatchSyncInventory')
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.BATCH_SYNC_INVENTORY,
+  )
   async batchSyncInventory(
     request: BatchSyncInventoryRequest,
   ): Promise<BatchSyncInventoryResponse> {
-    return this.batchSyncInventoryUseCase.execute(request);
+    return this._batchSyncInventoryUseCase.execute(request);
   }
 
-  @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'CreateBooking')
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.CREATE_BOOKING,
+  )
   async createBooking(request: CreateBookingRequest): Promise<BookingResponse> {
-    const booking = await this.createBookingUseCase.execute(request);
+    const booking = await this._createBookingUseCase.execute(request);
     return {
       booking: BookingMapper.toProto(booking),
-      message: 'Booking created successfully',
+      message: RESPONSE_MESSAGES.BOOKING.CREATED,
     };
   }
 
-  @GrpcMethod(SCHEDULING_INVENTORY_SERVICE_NAME, 'GetAvailability')
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.GET_AVAILABILITY,
+  )
   async getAvailability(request: GetAvailabilityRequest): Promise<GetAvailabilityResponse> {
-    return this.getAvailabilityUseCase.execute(request);
+    return this._getAvailabilityUseCase.execute(request);
   }
 }
-

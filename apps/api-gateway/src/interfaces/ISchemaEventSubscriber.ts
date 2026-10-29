@@ -3,7 +3,7 @@ export interface SchemaGeneratedEvent {
   tenant_id: string;
   job_id: string;
   url: string;
-  schema?: any;
+  schema?: Record<string, unknown>;
   error?: string;
   timestamp?: string;
 }
@@ -13,5 +13,6 @@ export interface ISchemaEventSubscriber {
 }
 
 export interface ISchemaCacheService {
-  getDraftSchema(tenantId: string, jobId?: string): Promise<any | null>;
+  getDraftSchema(tenantId: string, jobId?: string): Promise<Record<string, unknown> | null>;
 }
+

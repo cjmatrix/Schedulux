@@ -6,15 +6,16 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
 import { ROLES_KEY } from '../decorators/roles.decorator.js';
 import { AuthenticatedTenantRequest } from './tenant-auth.guard.js';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(@Inject(Reflector) private readonly reflector: Reflector) {}
+  constructor(@Inject(Reflector) private readonly _reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
+    const requiredRoles = this._reflector.getAllAndOverride<string[]>(ROLES_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
@@ -28,7 +29,7 @@ export class RolesGuard implements CanActivate {
     const user = request.tenant || request.dashboardUser;
 
     if (!user) {
-      throw new ForbiddenException('User not authenticated');
+      throw new ForbiddenException(RESPONSE_MESSAGES.AUTH.USER_NOT_AUTHENTICATED);
     }
 
     const hasRole = requiredRoles.includes(user.role);
@@ -42,3 +43,4 @@ export class RolesGuard implements CanActivate {
     return true;
   }
 }
+

@@ -17,6 +17,8 @@ const common_1 = require("@nestjs/common");
 const scheduling_1 = require("@repo/proto/scheduling");
 const nestjs_zod_1 = require("nestjs-zod");
 const rxjs_1 = require("rxjs");
+const messages_constant_js_1 = require("../../constants/messages.constant.js");
+const routes_constant_js_1 = require("../../constants/routes.constant.js");
 const roles_decorator_js_1 = require("../../decorators/roles.decorator.js");
 const roles_guard_js_1 = require("../../guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
@@ -25,24 +27,24 @@ const booking_dto_js_1 = require("./dtos/booking.dto.js");
 const resource_dto_js_1 = require("./dtos/resource.dto.js");
 const service_dto_js_1 = require("./dtos/service.dto.js");
 let SchedulingController = class SchedulingController {
-    client;
-    schedulingService;
-    constructor(client) {
-        this.client = client;
+    _client;
+    _schedulingService;
+    constructor(_client) {
+        this._client = _client;
     }
     onModuleInit() {
-        this.schedulingService = this.client.getService(scheduling_1.SCHEDULING_INVENTORY_SERVICE_NAME);
+        this._schedulingService = this._client.getService(scheduling_1.SCHEDULING_INVENTORY_SERVICE_NAME);
     }
-    getTenantId(req) {
+    _getTenantId(req) {
         const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
         if (!tenantId) {
-            throw new common_1.UnauthorizedException('Tenant context missing from token');
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_CONTEXT_MISSING);
         }
         return tenantId;
     }
     async createService(req, body) {
-        const tenantId = this.getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.createService({
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.createService({
             tenant_id: tenantId,
             agent_id: body.agent_id,
             name: body.name,
@@ -65,8 +67,8 @@ let SchedulingController = class SchedulingController {
         };
     }
     async listServices(req, query) {
-        const tenantId = this.getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.listServices({
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.listServices({
             tenant_id: tenantId,
             page: query.page,
             limit: query.limit,
@@ -75,7 +77,7 @@ let SchedulingController = class SchedulingController {
             search: query.search || undefined,
         }));
         return {
-            message: 'Services retrieved successfully',
+            message: messages_constant_js_1.RESPONSE_MESSAGES.SCHEDULING.SERVICES_RETRIEVED,
             data: response.services,
             pagination: {
                 total: response.total,
@@ -86,8 +88,8 @@ let SchedulingController = class SchedulingController {
         };
     }
     async getService(req, serviceId) {
-        const tenantId = this.getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.getService({
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.getService({
             tenant_id: tenantId,
             service_id: serviceId,
         }));
@@ -97,8 +99,8 @@ let SchedulingController = class SchedulingController {
         };
     }
     async updateService(req, serviceId, body) {
-        const tenantId = this.getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.updateService({
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.updateService({
             tenant_id: tenantId,
             service_id: serviceId,
             name: body.name,
@@ -121,8 +123,8 @@ let SchedulingController = class SchedulingController {
         };
     }
     async deleteService(req, serviceId) {
-        const tenantId = this.getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.deleteService({
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.deleteService({
             tenant_id: tenantId,
             service_id: serviceId,
         }));
@@ -132,8 +134,8 @@ let SchedulingController = class SchedulingController {
         };
     }
     async createResource(req, body) {
-        const tenantId = this.getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.createResource({
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.createResource({
             tenant_id: tenantId,
             agent_id: body.agent_id,
             resource_type: body.resource_type,
@@ -151,8 +153,8 @@ let SchedulingController = class SchedulingController {
         };
     }
     async listResources(req, query) {
-        const tenantId = this.getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.listResources({
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.listResources({
             tenant_id: tenantId,
             page: query.page,
             limit: query.limit,
@@ -163,7 +165,7 @@ let SchedulingController = class SchedulingController {
             search: query.search || undefined,
         }));
         return {
-            message: 'Resources retrieved successfully',
+            message: messages_constant_js_1.RESPONSE_MESSAGES.SCHEDULING.RESOURCES_RETRIEVED,
             data: response.resources,
             pagination: {
                 total: response.total,
@@ -174,8 +176,8 @@ let SchedulingController = class SchedulingController {
         };
     }
     async getResource(req, resourceId) {
-        const tenantId = this.getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.getResource({
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.getResource({
             tenant_id: tenantId,
             resource_id: resourceId,
         }));
@@ -185,8 +187,8 @@ let SchedulingController = class SchedulingController {
         };
     }
     async updateResource(req, resourceId, body) {
-        const tenantId = this.getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.updateResource({
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.updateResource({
             tenant_id: tenantId,
             resource_id: resourceId,
             resource_type: body.resource_type,
@@ -204,8 +206,8 @@ let SchedulingController = class SchedulingController {
         };
     }
     async deleteResource(req, resourceId) {
-        const tenantId = this.getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.deleteResource({
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.deleteResource({
             tenant_id: tenantId,
             resource_id: resourceId,
         }));
@@ -215,9 +217,9 @@ let SchedulingController = class SchedulingController {
         };
     }
     async createBooking(req, body) {
-        const tenantId = this.getTenantId(req);
-        const userId = req.dashboardUser?.id || req.tenant?.tenant_id || '';
-        const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.createBooking({
+        const tenantId = this._getTenantId(req);
+        const userId = req.dashboardUser?.user_id || req.tenant?.tenant_id || '';
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.createBooking({
             tenant_id: tenantId,
             agent_id: body.agent_id,
             service_id: body.service_id,
@@ -239,8 +241,8 @@ let SchedulingController = class SchedulingController {
         };
     }
     async getAvailability(req, query) {
-        const tenantId = this.getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this.schedulingService.getAvailability({
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.getAvailability({
             tenant_id: tenantId,
             service_id: query.service_id,
             start_date: query.start_date,
@@ -251,14 +253,14 @@ let SchedulingController = class SchedulingController {
             timezone: query.timezone,
         }));
         return {
-            message: 'Availability fetched successfully',
+            message: messages_constant_js_1.RESPONSE_MESSAGES.SCHEDULING.AVAILABILITY_FETCHED,
             data: response,
         };
     }
 };
 exports.SchedulingController = SchedulingController;
 __decorate([
-    (0, common_1.Post)('services'),
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.SCHEDULING.SERVICES),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Req)()),
@@ -268,7 +270,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "createService", null);
 __decorate([
-    (0, common_1.Get)('services'),
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.SCHEDULING.SERVICES),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Query)()),
@@ -277,7 +279,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "listServices", null);
 __decorate([
-    (0, common_1.Get)('services/:id'),
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.SCHEDULING.SERVICE_BY_ID),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
@@ -285,7 +287,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "getService", null);
 __decorate([
-    (0, common_1.Put)('services/:id'),
+    (0, common_1.Put)(routes_constant_js_1.API_ROUTES.SCHEDULING.SERVICE_BY_ID),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Param)('id')),
@@ -295,7 +297,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "updateService", null);
 __decorate([
-    (0, common_1.Delete)('services/:id'),
+    (0, common_1.Delete)(routes_constant_js_1.API_ROUTES.SCHEDULING.SERVICE_BY_ID),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
@@ -303,7 +305,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "deleteService", null);
 __decorate([
-    (0, common_1.Post)('resources'),
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.SCHEDULING.RESOURCES),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Req)()),
@@ -313,7 +315,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "createResource", null);
 __decorate([
-    (0, common_1.Get)('resources'),
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.SCHEDULING.RESOURCES),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Query)()),
@@ -322,7 +324,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "listResources", null);
 __decorate([
-    (0, common_1.Get)('resources/:id'),
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.SCHEDULING.RESOURCE_BY_ID),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
@@ -330,7 +332,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "getResource", null);
 __decorate([
-    (0, common_1.Put)('resources/:id'),
+    (0, common_1.Put)(routes_constant_js_1.API_ROUTES.SCHEDULING.RESOURCE_BY_ID),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Param)('id')),
@@ -340,7 +342,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "updateResource", null);
 __decorate([
-    (0, common_1.Delete)('resources/:id'),
+    (0, common_1.Delete)(routes_constant_js_1.API_ROUTES.SCHEDULING.RESOURCE_BY_ID),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
@@ -348,7 +350,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "deleteResource", null);
 __decorate([
-    (0, common_1.Post)('bookings'),
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.SCHEDULING.BOOKINGS),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Req)()),
@@ -358,7 +360,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "createBooking", null);
 __decorate([
-    (0, common_1.Get)('availability'),
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.SCHEDULING.AVAILABILITY),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Query)()),
@@ -367,7 +369,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "getAvailability", null);
 exports.SchedulingController = SchedulingController = __decorate([
-    (0, common_1.Controller)('api/v1/tenant/scheduling'),
+    (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.SCHEDULING.BASE),
     (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),
     (0, roles_decorator_js_1.Roles)('tenant_owner', 'root', 'manager', 'dashboard_user'),
     __param(0, (0, common_1.Inject)('SCHEDULING_PACKAGE')),

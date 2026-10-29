@@ -107,8 +107,8 @@ async def sync_agent_inventory(
         }
 
     target_url = SCHEDULING_SERVICE_URL
-    raw_resources = draft.get("resources", [])
-    raw_services = draft.get("services", [])
+    raw_resources = [r for r in draft.get("resources", []) if isinstance(r, dict)]
+    raw_services = [s for s in draft.get("services", []) if isinstance(s, dict)]
 
     logger.info(
         "[SchedulingClient] Initiating atomic BatchSyncInventory to %s (tenant: %s, agent: %s, %d resources, %d services)",
@@ -141,6 +141,8 @@ async def sync_agent_inventory(
                     is_bookable=res.get("is_bookable", True),
                     dispatch_status=res.get("dispatch_status") or "active",
                     custom_shift_overrides_json=shifts_json,
+                    is_deleted=bool(res.get("is_deleted", False)),
+                    deleted_at=str(res.get("deleted_at")) if res.get("deleted_at") else None,
                 )
             )
 
@@ -199,6 +201,8 @@ async def sync_agent_inventory(
                         for req in (svc.get("resource_requirements") or [])
                     ],
                     recall_interval_days=int(svc.get("recall_interval_days") or 0),
+                    is_deleted=bool(svc.get("is_deleted", False)),
+                    deleted_at=str(svc.get("deleted_at")) if svc.get("deleted_at") else None,
                 )
             )
 
@@ -213,7 +217,9 @@ async def sync_agent_inventory(
             if not isinstance(day_slots, list):
                 return []
             return [
-                scheduling_pb2.TimeIntervalInfo(start=s.get("start", "08:00"), end=s.get("end", "17:00"))
+                scheduling_pb2.TimeIntervalInfo(
+                    start=s.get("start", "08:00"), end=s.get("end", "17:00")
+                )
                 for s in day_slots
                 if isinstance(s, dict) and s.get("start") and s.get("end")
             ]
@@ -250,7 +256,9 @@ async def sync_agent_inventory(
         guard_raw = draft.get("guardrails") or {}
         verif_pol_raw = guard_raw.get("verification_policy") or {}
         proto_verification_policy = scheduling_pb2.VerificationPolicyConfigInfo(
-            require_otp_for_new_booking=bool(verif_pol_raw.get("require_otp_for_new_booking", False)),
+            require_otp_for_new_booking=bool(
+                verif_pol_raw.get("require_otp_for_new_booking", False)
+            ),
             require_otp_for_reschedule=bool(verif_pol_raw.get("require_otp_for_reschedule", True)),
             require_otp_for_cancel=bool(verif_pol_raw.get("require_otp_for_cancel", True)),
         )
@@ -354,19 +362,19 @@ async def sync_agent_inventory(
 
 async def get_availability(
     tenant_id: str,
+    agent_id: str,
     service_id: str,
     start_date: str,
     end_date: str | None = None,
     resource_id: str | None = None,
     resource_ids: list[str] | None = None,
     timezone: str | None = None,
-    agent_id: str | None = None,
 ) -> dict[str, Any]:
     """Query scheduling-inventory service for available slots."""
     target_url = SCHEDULING_SERVICE_URL
     req = scheduling_pb2.GetAvailabilityRequest(
         tenant_id=tenant_id,
-        agent_id=agent_id or None,
+        agent_id=agent_id,
         service_id=service_id,
         start_date=start_date,
         end_date=end_date or None,
@@ -422,6 +430,7 @@ async def get_availability(
 
 async def create_booking(
     tenant_id: str,
+    agent_id: str,
     service_id: str,
     start_time: str,
     customer_name: str,
@@ -431,13 +440,12 @@ async def create_booking(
     resource_id: str | None = None,
     resource_ids: list[str] | None = None,
     notes: str | None = None,
-    agent_id: str | None = None,
 ) -> dict[str, Any]:
     """Execute booking creation in scheduling-inventory service."""
     target_url = SCHEDULING_SERVICE_URL
     req = scheduling_pb2.CreateBookingRequest(
         tenant_id=tenant_id,
-        agent_id=agent_id or None,
+        agent_id=agent_id,
         service_id=service_id,
         resource_id=resource_id or None,
         start_time=start_time,
@@ -486,4 +494,3 @@ async def create_booking(
     except Exception as e:
         logger.error("[SchedulingClient Error] Unexpected CreateBooking error: %s", e)
         return {"success": False, "error": str(e)}
-

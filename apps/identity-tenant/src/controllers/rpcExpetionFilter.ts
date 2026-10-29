@@ -2,64 +2,78 @@ import * as grpc from '@grpc/grpc-js';
 import { ArgumentsHost, Catch, RpcExceptionFilter } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { Observable, throwError } from 'rxjs';
+import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
 
 @Catch()
 export class AllExceptionsFilter implements RpcExceptionFilter<RpcException> {
   catch(exception: unknown, _host: ArgumentsHost): Observable<never> {
     let code = grpc.status.INTERNAL;
-    let message = 'Internal server error';
+    let message: string = RESPONSE_MESSAGES.ERRORS.INTERNAL_SERVER_ERROR;
     const errMessage =
       exception instanceof Error
         ? exception.message
         : typeof exception === 'object' && exception !== null && 'message' in exception
           ? String((exception as { message: unknown }).message)
           : '';
+
     switch (errMessage) {
-      case 'Missing required fields':
-      case 'Email and password are required':
-      case 'Verification token is required':
-      case 'Refresh token is required':
+      case RESPONSE_MESSAGES.ERRORS.MISSING_REQUIRED_FIELDS:
+      case RESPONSE_MESSAGES.ERRORS.EMAIL_AND_PASSWORD_REQUIRED:
+      case RESPONSE_MESSAGES.ERRORS.VERIFICATION_TOKEN_REQUIRED:
+      case RESPONSE_MESSAGES.ERRORS.REFRESH_TOKEN_REQUIRED_INPUT:
+      case RESPONSE_MESSAGES.ERRORS.REFRESH_TOKEN_REQUIRED:
+      case RESPONSE_MESSAGES.ERRORS.EMAIL_REQUIRED:
+      case RESPONSE_MESSAGES.ERRORS.TENANT_ID_REQUIRED:
+      case RESPONSE_MESSAGES.ERRORS.SUPERADMIN_ID_REQUIRED:
+      case RESPONSE_MESSAGES.ERRORS.TOKEN_AND_NEW_PASSWORD_REQUIRED:
+      case RESPONSE_MESSAGES.ERRORS.GOOGLE_ID_TOKEN_REQUIRED_INPUT:
+      case RESPONSE_MESSAGES.ERRORS.GOOGLE_ID_TOKEN_REQUIRED:
+      case RESPONSE_MESSAGES.ERRORS.USER_ID_REQUIRED:
         code = grpc.status.INVALID_ARGUMENT;
         message = errMessage;
         break;
-      case 'EMAIL_ALREADY_EXISTS':
-      case 'USER_ALREADY_EXISTS':
+      case RESPONSE_MESSAGES.ERRORS.EMAIL_ALREADY_EXISTS:
+      case RESPONSE_MESSAGES.ERRORS.USER_ALREADY_EXISTS:
+      case RESPONSE_MESSAGES.ERRORS.SUPERADMIN_ALREADY_EXISTS:
         code = grpc.status.ALREADY_EXISTS;
-        message = 'An account or user with this email already exists';
+        message = RESPONSE_MESSAGES.ERRORS.ACCOUNT_ALREADY_EXISTS;
         break;
-      case 'INVALID_OR_EXPIRED_TOKEN':
+      case RESPONSE_MESSAGES.ERRORS.INVALID_OR_EXPIRED_TOKEN:
         code = grpc.status.INVALID_ARGUMENT;
-        message = 'Invalid or expired verification token';
+        message = RESPONSE_MESSAGES.ERRORS.INVALID_VERIFICATION_TOKEN;
         break;
-      case 'INVALID_CREDENTIALS':
+      case RESPONSE_MESSAGES.ERRORS.INVALID_CREDENTIALS:
         code = grpc.status.UNAUTHENTICATED;
-        message = 'Invalid email or password';
+        message = RESPONSE_MESSAGES.ERRORS.INVALID_EMAIL_OR_PASSWORD;
         break;
-      case 'EMAIL_NOT_VERIFIED':
+      case RESPONSE_MESSAGES.ERRORS.EMAIL_NOT_VERIFIED:
         code = grpc.status.PERMISSION_DENIED;
-        message = 'Please verify your email before logging in';
+        message = RESPONSE_MESSAGES.ERRORS.VERIFY_EMAIL_PROMPT;
         break;
-      case 'ACCOUNT_INACTIVE':
+      case RESPONSE_MESSAGES.ERRORS.ACCOUNT_INACTIVE:
         code = grpc.status.PERMISSION_DENIED;
-        message = 'Your account is not active. Please contact support.';
+        message = RESPONSE_MESSAGES.ERRORS.ACCOUNT_INACTIVE_PROMPT;
         break;
-      case 'INVALID_OR_EXPIRED_REFRESH_TOKEN':
-      case 'INVALID_OR_REVOKED_REFRESH_TOKEN':
-      case 'SUPERADMIN_NOT_FOUND':
+      case RESPONSE_MESSAGES.ERRORS.INVALID_OR_EXPIRED_REFRESH_TOKEN:
+      case RESPONSE_MESSAGES.ERRORS.INVALID_OR_REVOKED_REFRESH_TOKEN:
+      case RESPONSE_MESSAGES.ERRORS.INVALID_REFRESH_TOKEN:
+      case RESPONSE_MESSAGES.ERRORS.SUPERADMIN_NOT_FOUND:
+      case RESPONSE_MESSAGES.ERRORS.USER_NOT_FOUND:
         code = grpc.status.UNAUTHENTICATED;
-        message = 'Session expired or invalid. Please log in again.';
+        message = RESPONSE_MESSAGES.ERRORS.SESSION_EXPIRED;
         break;
-      case 'TENANT_NOT_FOUND':
+      case RESPONSE_MESSAGES.ERRORS.TENANT_NOT_FOUND:
+      case RESPONSE_MESSAGES.ERRORS.TENANT_NOT_FOUND_OR_INACTIVE:
         code = grpc.status.NOT_FOUND;
-        message = 'Tenant not found';
+        message = RESPONSE_MESSAGES.ERRORS.TENANT_NOT_FOUND_MSG;
         break;
-      case 'ONLY_ACTIVE_TENANTS_CAN_BE_SUSPENDED':
+      case RESPONSE_MESSAGES.ERRORS.ONLY_ACTIVE_TENANTS_CAN_BE_SUSPENDED:
         code = grpc.status.FAILED_PRECONDITION;
-        message = 'Only active tenants can be suspended';
+        message = RESPONSE_MESSAGES.ERRORS.ONLY_ACTIVE_TENANTS_CAN_BE_SUSPENDED_MSG;
         break;
-      case 'CRAWL_JOB_NOT_FOUND':
+      case RESPONSE_MESSAGES.ERRORS.CRAWL_JOB_NOT_FOUND:
         code = grpc.status.NOT_FOUND;
-        message = 'Crawl job not found';
+        message = RESPONSE_MESSAGES.ERRORS.CRAWL_JOB_NOT_FOUND_MSG;
         break;
       default:
         console.error('Unhandled Microservice Error:', exception);
@@ -68,3 +82,4 @@ export class AllExceptionsFilter implements RpcExceptionFilter<RpcException> {
     return throwError(() => ({ code, message }));
   }
 }
+

@@ -14,14 +14,14 @@ export type { CreateOutboxEventParams };
 export class OutboxRepository implements IOutboxRepository {
   constructor(
     @Inject(UNIT_OF_WORK)
-    private readonly unitOfWork: IUnitOfWork,
+    private readonly _unitOfWork: IUnitOfWork,
   ) {}
 
   async saveEvent(
     params: CreateOutboxEventParams,
     explicitSession?: ClientSession,
   ): Promise<IOutboxDoc> {
-    const session = explicitSession || this.unitOfWork?.getSession();
+    const session = explicitSession || this._unitOfWork?.getSession();
     const docData = {
       _id: params.eventId,
       aggregate_type: params.aggregateType,

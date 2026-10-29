@@ -9,11 +9,11 @@ import { IGetResourceUseCase } from '../../interfaces/resource-use-cases.interfa
 export class GetResourceUseCase implements IGetResourceUseCase {
   constructor(
     @Inject(RESOURCE_REPOSITORY)
-    private readonly resourceRepository: IResourceRepository,
+    private readonly _resourceRepository: IResourceRepository,
   ) {}
 
   async execute(dto: GetResourceRequest): Promise<ResourceEntity> {
-    const resource = await this.resourceRepository.findById(dto.tenant_id, dto.resource_id);
+    const resource = await this._resourceRepository.findById(dto.tenant_id, dto.resource_id);
     if (!resource) {
       throw new NotFoundException(
         `Resource ${dto.resource_id} not found for tenant ${dto.tenant_id}`,

@@ -19,6 +19,8 @@ import { ClientGrpc } from '@nestjs/microservices';
 import { KnowledgeServiceClient } from '@repo/proto/knowledge';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { lastValueFrom } from 'rxjs';
+import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
+import { API_ROUTES } from '../../constants/routes.constant.js';
 import { Roles } from '../../decorators/roles.decorator.js';
 import { RolesGuard } from '../../guards/roles.guard.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
@@ -32,28 +34,27 @@ import {
   StartOnboardingDto,
 } from './dtos/knowledge.dto.js';
 
-@Controller('api/v1/tenant/knowledge')
+@Controller(API_ROUTES.KNOWLEDGE.BASE)
 @UseGuards(TenantAuthGuard, RolesGuard)
 @Roles('tenant_owner', 'root')
 export class KnowledgeController implements OnModuleInit {
-  private knowledgeService!: KnowledgeServiceClient;
+  private _knowledgeService!: KnowledgeServiceClient;
 
   constructor(
-    @Inject('KNOWLEDGE_PACKAGE') private client: ClientGrpc,
-    @Inject('ISchemaCacheService') private readonly schemaCacheService: ISchemaCacheService,
+    @Inject('KNOWLEDGE_PACKAGE') private readonly _client: ClientGrpc,
+    @Inject('ISchemaCacheService') private readonly _schemaCacheService: ISchemaCacheService,
   ) {}
 
   onModuleInit() {
-    this.knowledgeService = this.client.getService<KnowledgeServiceClient>('KnowledgeService');
+    this._knowledgeService = this._client.getService<KnowledgeServiceClient>('KnowledgeService');
   }
 
-  @Post('crawl')
+  @Post(API_ROUTES.KNOWLEDGE.CRAWL)
   @HttpCode(HttpStatus.ACCEPTED)
   @UsePipes(ZodValidationPipe)
   async crawlSite(@Body() body: CrawlSiteDto) {
-    console.log('crawling');
     const response = await lastValueFrom(
-      this.knowledgeService.crawlSite({
+      this._knowledgeService.crawlSite({
         tenant_id: body.tenant_id,
         url: body.url,
       }),
@@ -67,33 +68,33 @@ export class KnowledgeController implements OnModuleInit {
     };
   }
 
-  @Get('crawl/status')
+  @Get(API_ROUTES.KNOWLEDGE.CRAWL_STATUS)
   @UsePipes(ZodValidationPipe)
   async getCrawlStatus(@Query() query: GetCrawlStatusDto) {
     const response = await lastValueFrom(
-      this.knowledgeService.getCrawlStatus({
+      this._knowledgeService.getCrawlStatus({
         tenant_id: query.tenant_id,
         job_id: query.job_id,
       }),
     );
     return {
-      message: 'Crawl status retrieved successfully',
+      message: RESPONSE_MESSAGES.KNOWLEDGE.CRAWL_STATUS_RETRIEVED,
       data: response,
     };
   }
 
-  @Get('schema')
+  @Get(API_ROUTES.KNOWLEDGE.SCHEMA)
   async getSchema(@Query('tenant_id') tenantId: string, @Query('job_id') jobId?: string) {
     if (!tenantId) {
       return {
-        message: 'tenant_id is required',
+        message: RESPONSE_MESSAGES.KNOWLEDGE.TENANT_ID_REQUIRED,
         data: null,
       };
     }
-    const schema = await this.schemaCacheService.getDraftSchema(tenantId, jobId);
+    const schema = await this._schemaCacheService.getDraftSchema(tenantId, jobId);
     if (!schema) {
       return {
-        message: 'Draft schema is still being generated or not found',
+        message: RESPONSE_MESSAGES.KNOWLEDGE.SCHEMA_PENDING,
         data: {
           status: 'pending',
           schema: null,
@@ -101,7 +102,7 @@ export class KnowledgeController implements OnModuleInit {
       };
     }
     return {
-      message: 'Draft schema retrieved successfully',
+      message: RESPONSE_MESSAGES.KNOWLEDGE.SCHEMA_RETRIEVED,
       data: {
         status: 'completed',
         schema,
@@ -109,19 +110,19 @@ export class KnowledgeController implements OnModuleInit {
     };
   }
 
-  @Post('onboarding/start')
+  @Post(API_ROUTES.KNOWLEDGE.ONBOARDING_START)
   @HttpCode(HttpStatus.OK)
   @UsePipes(ZodValidationPipe)
   async startOnboarding(@Body() body: StartOnboardingDto) {
     const response = await lastValueFrom(
-      this.knowledgeService.startOnboardingSession({
+      this._knowledgeService.startOnboardingSession({
         tenant_id: body.tenant_id,
         initial_draft_json: body.initial_draft_json || '{}',
         agent_id: body.agent_id || '',
       }),
     );
     return {
-      message: 'Session started',
+      message: RESPONSE_MESSAGES.KNOWLEDGE.SESSION_STARTED,
       data: {
         status: response.status,
         question: response.question,
@@ -133,19 +134,19 @@ export class KnowledgeController implements OnModuleInit {
     };
   }
 
-  @Post('onboarding/message')
+  @Post(API_ROUTES.KNOWLEDGE.ONBOARDING_MESSAGE)
   @HttpCode(HttpStatus.OK)
   @UsePipes(ZodValidationPipe)
   async resumeOnboarding(@Body() body: ResumeOnboardingDto) {
     const response = await lastValueFrom(
-      this.knowledgeService.resumeOnboardingSession({
+      this._knowledgeService.resumeOnboardingSession({
         tenant_id: body.tenant_id,
         user_answer: body.user_answer,
         agent_id: body.agent_id || '',
       }),
     );
     return {
-      message: 'Message processed',
+      message: RESPONSE_MESSAGES.KNOWLEDGE.MESSAGE_PROCESSED,
       data: {
         status: response.status,
         question: response.question,
@@ -157,7 +158,7 @@ export class KnowledgeController implements OnModuleInit {
     };
   }
 
-  @Post('onboarding/sandbox')
+  @Post(API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX)
   @HttpCode(HttpStatus.OK)
   @UsePipes(ZodValidationPipe)
   async sandboxChat(
@@ -166,13 +167,13 @@ export class KnowledgeController implements OnModuleInit {
   ) {
     const tenantId = body.tenant_id || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
     if (!tenantId) {
-      throw new UnauthorizedException('Tenant ID is required');
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
     }
     const agentId = body.agent_id || 'default';
     const sessionId = body.session_id || `sandbox_${tenantId}_${agentId}`;
 
     const response = await lastValueFrom(
-      this.knowledgeService.customerChat({
+      this._knowledgeService.customerChat({
         tenant_id: tenantId,
         agent_id: agentId,
         session_id: sessionId,
@@ -184,7 +185,7 @@ export class KnowledgeController implements OnModuleInit {
     );
 
     return {
-      message: 'Sandbox chat processed successfully',
+      message: RESPONSE_MESSAGES.KNOWLEDGE.SANDBOX_CHAT_PROCESSED,
       data: {
         reply: response.response,
         session_id: response.session_id,
@@ -193,7 +194,7 @@ export class KnowledgeController implements OnModuleInit {
     };
   }
 
-  @Post('agents/draft')
+  @Post(API_ROUTES.KNOWLEDGE.AGENTS_DRAFT)
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(ZodValidationPipe)
   async saveInitialDraft(
@@ -202,11 +203,11 @@ export class KnowledgeController implements OnModuleInit {
   ) {
     const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id || body.tenant_id;
     if (!tenantId) {
-      throw new UnauthorizedException('Tenant ID is required');
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
     }
 
     const response = await lastValueFrom(
-      this.knowledgeService.saveInitialAgentDraft({
+      this._knowledgeService.saveInitialAgentDraft({
         tenant_id: tenantId,
         draft_json: body.draft_json || '',
         creation_source: body.creation_source || 'web_crawl',
@@ -223,26 +224,26 @@ export class KnowledgeController implements OnModuleInit {
     };
   }
 
-  @Get('agents')
+  @Get(API_ROUTES.KNOWLEDGE.AGENTS)
   async listAgents(@Req() req: AuthenticatedTenantRequest) {
     const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
     if (!tenantId) {
-      throw new UnauthorizedException('Tenant ID is required');
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
     }
 
     const response = await lastValueFrom(
-      this.knowledgeService.listTenantAgents({
+      this._knowledgeService.listTenantAgents({
         tenant_id: tenantId,
       }),
     );
 
     return {
-      message: 'Agents retrieved successfully',
+      message: RESPONSE_MESSAGES.KNOWLEDGE.AGENTS_RETRIEVED,
       data: response.agents || [],
     };
   }
 
-  @Get('agents/:agentId/messages')
+  @Get(API_ROUTES.KNOWLEDGE.AGENT_MESSAGES)
   async getAgentMessages(
     @Req() req: AuthenticatedTenantRequest,
     @Param('agentId') agentId: string,
@@ -251,12 +252,12 @@ export class KnowledgeController implements OnModuleInit {
   ) {
     const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
     if (!tenantId) {
-      throw new UnauthorizedException('Tenant ID is required');
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
     }
 
     const limit = limitStr ? parseInt(limitStr, 10) : 20;
     const response = await lastValueFrom(
-      this.knowledgeService.getAgentMessages({
+      this._knowledgeService.getAgentMessages({
         tenant_id: tenantId,
         agent_id: agentId,
         limit,
@@ -265,7 +266,7 @@ export class KnowledgeController implements OnModuleInit {
     );
 
     return {
-      message: 'Messages retrieved successfully',
+      message: RESPONSE_MESSAGES.CHAT.MESSAGES_RETRIEVED,
       data: {
         messages: response.messages || [],
         next_cursor: response.next_cursor || null,
@@ -274,7 +275,7 @@ export class KnowledgeController implements OnModuleInit {
     };
   }
 
-  @Get('onboarding/messages')
+  @Get(API_ROUTES.KNOWLEDGE.ONBOARDING_MESSAGES)
   async getOnboardingMessages(
     @Req() req: AuthenticatedTenantRequest,
     @Query('agent_id') agentIdQuery?: string,
@@ -283,16 +284,16 @@ export class KnowledgeController implements OnModuleInit {
   ) {
     const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
     if (!tenantId) {
-      throw new UnauthorizedException('Tenant ID is required');
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
     }
 
     if (!agentIdQuery) {
-      throw new BadRequestException('Agent ID is required');
+      throw new BadRequestException(RESPONSE_MESSAGES.AUTH.AGENT_ID_REQUIRED);
     }
 
     const limit = limitStr ? parseInt(limitStr, 10) : 50;
     const response = await lastValueFrom(
-      this.knowledgeService.getAgentMessages({
+      this._knowledgeService.getAgentMessages({
         tenant_id: tenantId,
         agent_id: agentIdQuery,
         limit,
@@ -301,7 +302,7 @@ export class KnowledgeController implements OnModuleInit {
     );
 
     return {
-      message: 'Messages retrieved successfully',
+      message: RESPONSE_MESSAGES.CHAT.MESSAGES_RETRIEVED,
       data: {
         messages: response.messages || [],
         next_cursor: response.next_cursor || null,
@@ -310,3 +311,4 @@ export class KnowledgeController implements OnModuleInit {
     };
   }
 }
+

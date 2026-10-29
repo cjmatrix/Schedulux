@@ -13,11 +13,11 @@ import { CustomerModel } from '../schemas/customer.schema.js';
 export class MongoCustomerRepository implements ICustomerRepository {
   constructor(
     @Inject(UNIT_OF_WORK)
-    private readonly unitOfWork: IUnitOfWork,
+    private readonly _unitOfWork: IUnitOfWork,
   ) {}
 
   async create(customer: CustomerEntity): Promise<CustomerEntity> {
-    const session = this.unitOfWork?.getSession();
+    const session = this._unitOfWork?.getSession();
     const persistenceData = CustomerMapper.toPersistence(customer);
     if (session) {
       const [created] = await CustomerModel.create([persistenceData], { session });
@@ -85,7 +85,7 @@ export class MongoCustomerRepository implements ICustomerRepository {
   }
 
   async update(customer: CustomerEntity): Promise<CustomerEntity | null> {
-    const session = this.unitOfWork?.getSession();
+    const session = this._unitOfWork?.getSession();
     const persistenceData = CustomerMapper.toPersistence(customer);
 
     const filter: Record<string, unknown> = {

@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
   AvailableSlotInfo,
   DayAvailabilityInfo,
@@ -25,29 +25,34 @@ const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'frid
 export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
   constructor(
     @Inject(SERVICE_REPOSITORY)
-    private readonly serviceRepository: IServiceRepository,
+    private readonly _serviceRepository: IServiceRepository,
     @Inject(RESOURCE_REPOSITORY)
-    private readonly resourceRepository: IResourceRepository,
+    private readonly _resourceRepository: IResourceRepository,
     @Inject(BOOKING_REPOSITORY)
-    private readonly bookingRepository: IBookingRepository,
+    private readonly _bookingRepository: IBookingRepository,
     @Inject(TENANT_SCHEDULE_REPOSITORY)
-    private readonly tenantScheduleRepository: ITenantScheduleRepository,
+    private readonly _tenantScheduleRepository: ITenantScheduleRepository,
   ) {}
 
   async execute(dto: GetAvailabilityRequest): Promise<GetAvailabilityResponse> {
-    const { tenant_id, agent_id, service_id } = dto;
+    if (!dto.tenant_id?.trim()) throw new BadRequestException('tenant_id is required');
+    if (!dto.agent_id?.trim()) throw new BadRequestException('agent_id is required');
+    if (!dto.service_id?.trim()) throw new BadRequestException('service_id is required');
 
-   
+    const tenantId = dto.tenant_id.trim();
+    const agentId = dto.agent_id.trim();
+    const serviceId = dto.service_id.trim();
+
     const [service, tenantSchedule] = await Promise.all([
-      this.serviceRepository.findById(tenant_id, service_id),
-      this.tenantScheduleRepository.findByTenantAndAgent(
-        tenant_id,
-        agent_id || undefined,
+      this._serviceRepository.findById(tenantId, serviceId),
+      this._tenantScheduleRepository.findByTenantAndAgent(
+        tenantId,
+        agentId,
       ),
     ]);
 
     if (!service) {
-      throw new NotFoundException(`Service not found: ${service_id}`);
+      throw new NotFoundException(`Service not found: ${serviceId}`);
     }
 
     const timezone = dto.timezone || tenantSchedule?.timezone || 'UTC';
@@ -104,15 +109,15 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
     
     const [rawEligibleResources, activeBookings] = await Promise.all([
       allEligibleIds.length > 0
-        ? this.resourceRepository.findActiveBookableByIds(
-            tenant_id,
+        ? this._resourceRepository.findActiveBookableByIds(
+            tenantId,
             allEligibleIds,
-            agent_id || undefined,
+            agentId,
           )
         : Promise.resolve([]),
       allEligibleIds.length > 0
-        ? this.bookingRepository.findActiveBookingsInRange(
-            tenant_id,
+        ? this._bookingRepository.findActiveBookingsInRange(
+            tenantId,
             allEligibleIds,
             totalStartDate,
             totalEndDate,
@@ -390,7 +395,7 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
     }));
 
     return {
-      service_id,
+      service_id: serviceId,
       booking_mode: bookingMode,
       timezone,
       days: daysList,

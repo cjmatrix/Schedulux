@@ -9,14 +9,15 @@ import {
 } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { Observable, throwError } from 'rxjs';
+import { RESPONSE_MESSAGES } from '../../constants/index.js';
 
 @Catch()
 export class GrpcExceptionFilter implements RpcExceptionFilter<RpcException> {
-  private readonly logger = new Logger(GrpcExceptionFilter.name);
+  private readonly _logger = new Logger(GrpcExceptionFilter.name);
 
   catch(exception: unknown, _host: ArgumentsHost): Observable<never> {
     let code: number = grpc.status.INTERNAL;
-    let message = 'Internal server error';
+    let message: string = RESPONSE_MESSAGES.ERRORS.INTERNAL_SERVER_ERROR;
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
@@ -61,21 +62,21 @@ export class GrpcExceptionFilter implements RpcExceptionFilter<RpcException> {
           break;
       }
 
-      this.logger.warn(`[gRPC HttpException] status=${status} code=${code} message="${message}"`);
+      this._logger.warn(`[gRPC HttpException] status=${status} code=${code} message="${message}"`);
     } else if (exception instanceof RpcException) {
       const err = exception.getError();
       if (typeof err === 'object' && err !== null) {
         code = (err as { code?: number }).code ?? grpc.status.INTERNAL;
-        message = (err as { message?: string }).message ?? 'Microservice error';
+        message = (err as { message?: string }).message ?? RESPONSE_MESSAGES.ERRORS.MICROSERVICE_ERROR;
       } else if (typeof err === 'string') {
         message = err;
       }
-      this.logger.warn(`[gRPC RpcException] code=${code} message="${message}"`);
+      this._logger.warn(`[gRPC RpcException] code=${code} message="${message}"`);
     } else if (exception instanceof Error) {
       message = exception.message;
-      this.logger.error(`[gRPC Unhandled Error] ${exception.message}`, exception.stack);
+      this._logger.error(`[gRPC Unhandled Error] ${exception.message}`, exception.stack);
     } else {
-      this.logger.error('[gRPC Unknown Error]', exception);
+      this._logger.error('[gRPC Unknown Error]', exception);
     }
 
     return throwError(() => ({

@@ -25,6 +25,7 @@ export type SchedulingEventType =
 
 
 export interface BaseSchedulingEventPayload {
+  [key: string]: unknown;
   event_id: string;
   event_type: SchedulingEventType;
   tenant_id: string;
@@ -103,13 +104,13 @@ export interface BookingEventPayload extends BaseSchedulingEventPayload {
 
 @Injectable()
 export class SchedulingEventsProducer implements ISchedulingEventsProducer {
-  private readonly logger = new Logger(SchedulingEventsProducer.name);
+  private readonly _logger = new Logger(SchedulingEventsProducer.name);
 
   constructor(
     @Inject(MESSAGING_SERVICE)
-    private readonly messagingClient: ClientProxy,
+    private readonly _messagingClient: ClientProxy,
     @Inject(OUTBOX_REPOSITORY)
-    private readonly outboxRepository: IOutboxRepository,
+    private readonly _outboxRepository: IOutboxRepository,
   ) {}
 
   async createServiceCreatedOutboxEvent(
@@ -126,10 +127,10 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
       service_id: entity.id,
       version,
       timestamp: new Date().toISOString(),
-      data: this.buildServiceSnapshot(entity),
+      data: this._buildServiceSnapshot(entity),
     };
 
-    return this.outboxRepository.saveEvent(
+    return this._outboxRepository.saveEvent(
       {
         eventId,
         aggregateType: 'service',
@@ -157,10 +158,10 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
       service_id: entity.id,
       version,
       timestamp: new Date().toISOString(),
-      data: this.buildServiceSnapshot(entity),
+      data: this._buildServiceSnapshot(entity),
     };
 
-    return this.outboxRepository.saveEvent(
+    return this._outboxRepository.saveEvent(
       {
         eventId,
         aggregateType: 'service',
@@ -192,7 +193,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
       timestamp: new Date().toISOString(),
     };
 
-    return this.outboxRepository.saveEvent(
+    return this._outboxRepository.saveEvent(
       {
         eventId,
         aggregateType: 'service',
@@ -220,10 +221,10 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
       resource_id: entity.id,
       version,
       timestamp: new Date().toISOString(),
-      data: this.buildResourceSnapshot(entity),
+      data: this._buildResourceSnapshot(entity),
     };
 
-    return this.outboxRepository.saveEvent(
+    return this._outboxRepository.saveEvent(
       {
         eventId,
         aggregateType: 'resource',
@@ -251,10 +252,10 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
       resource_id: entity.id,
       version,
       timestamp: new Date().toISOString(),
-      data: this.buildResourceSnapshot(entity),
+      data: this._buildResourceSnapshot(entity),
     };
 
-    return this.outboxRepository.saveEvent(
+    return this._outboxRepository.saveEvent(
       {
         eventId,
         aggregateType: 'resource',
@@ -286,7 +287,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
       timestamp: new Date().toISOString(),
     };
 
-    return this.outboxRepository.saveEvent(
+    return this._outboxRepository.saveEvent(
       {
         eventId,
         aggregateType: 'resource',
@@ -304,14 +305,14 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
     try {
       const key = outboxDoc.partition_key;
       const value = JSON.stringify(outboxDoc.payload);
-      this.messagingClient.emit(outboxDoc.topic, { key, value });
-      await this.outboxRepository.markPublished([outboxDoc._id]);
-      this.logger.log(
+      this._messagingClient.emit(outboxDoc.topic, { key, value });
+      await this._outboxRepository.markPublished([outboxDoc._id]);
+      this._logger.log(
         `[Messaging] Emitted and marked PUBLISHED: ${outboxDoc._id} (${outboxDoc.event_type})`,
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(
+      this._logger.error(
         `[Messaging] Immediate publish failed for ${outboxDoc._id}: ${msg}. Retrying in background recovery sweep.`,
       );
     }
@@ -347,7 +348,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
     await this.publishOutboxEvent(outbox);
   }
 
-  private buildServiceSnapshot(entity: ServiceEntity): NonNullable<ServiceEventPayload['data']> {
+  private _buildServiceSnapshot(entity: ServiceEntity): NonNullable<ServiceEventPayload['data']> {
     return {
       name: entity.name,
       category: entity.category,
@@ -385,7 +386,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
     };
   }
 
-  private buildResourceSnapshot(entity: ResourceEntity): NonNullable<ResourceEventPayload['data']> {
+  private _buildResourceSnapshot(entity: ResourceEntity): NonNullable<ResourceEventPayload['data']> {
     let overrides: Record<string, unknown> = {};
     try {
       overrides = JSON.parse(entity.customShiftOverridesJson || '{}');
@@ -446,7 +447,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
       },
     };
 
-    return this.outboxRepository.saveEvent(
+    return this._outboxRepository.saveEvent(
       {
         eventId,
         aggregateType: 'booking',
@@ -454,7 +455,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'booking.created',
         topic: KAFKA_SERVICE_TOPIC_BOOKINGS,
         partitionKey: entity.tenantId,
-        payload: payload as unknown as Record<string, any>,
+        payload,
       },
       session,
     );

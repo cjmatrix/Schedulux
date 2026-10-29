@@ -2,7 +2,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 export const CreateBookingDtoSchema = z.object({
-  agent_id: z.string().optional(),
+  agent_id: z.string().min(1, 'agent_id is required'),
   service_id: z.string().min(1, 'service_id is required'),
   resource_id: z.string().optional(),
   resource_ids: z.array(z.string()).optional(),

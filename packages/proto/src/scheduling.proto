@@ -70,6 +70,8 @@ message ServiceInfo {
   string agent_id = 17;
   optional ServiceVerificationInfo verification = 18;
   repeated ResourceRequirementInfo resource_requirements = 19;
+  optional bool is_deleted = 20;
+  optional string deleted_at = 21;
 }
 
 message CreateServiceRequest {
@@ -83,10 +85,12 @@ message CreateServiceRequest {
   DepositInfo deposit = 9;
   int32 recall_interval_days = 12;
   optional string booking_mode = 13;
-  optional string agent_id = 14;
+  string agent_id = 14;
   optional string service_id = 15;
   optional ServiceVerificationInfo verification = 16;
   repeated ResourceRequirementInfo resource_requirements = 17;
+  optional bool is_deleted = 18;
+  optional string deleted_at = 19;
 }
 
 message GetServiceRequest {
@@ -99,7 +103,7 @@ message ListServicesRequest {
   int32 page = 2;
   int32 limit = 3;
   string category = 4;
-  optional string agent_id = 5;
+  string agent_id = 5;
   optional string search = 6;
 }
 
@@ -133,6 +137,8 @@ message UpdateServiceRequest {
   optional string agent_id = 15;
   optional ServiceVerificationInfo verification = 16;
   repeated ResourceRequirementInfo resource_requirements = 17;
+  optional bool is_deleted = 18;
+  optional string deleted_at = 19;
 }
 
 message DeleteServiceRequest {
@@ -164,6 +170,8 @@ message ResourceInfo {
   string created_at = 11;
   string updated_at = 12;
   string agent_id = 13;
+  optional bool is_deleted = 14;
+  optional string deleted_at = 15;
 }
 
 message CreateResourceRequest {
@@ -176,8 +184,10 @@ message CreateResourceRequest {
   bool is_bookable = 7;
   string dispatch_status = 8;
   string custom_shift_overrides_json = 9;
-  optional string agent_id = 10;
+  string agent_id = 10;
   optional string resource_id = 11;
+  optional bool is_deleted = 12;
+  optional string deleted_at = 13;
 }
 
 message GetResourceRequest {
@@ -191,7 +201,7 @@ message ListResourcesRequest {
   int32 limit = 3;
   string resource_type = 4;
   string dispatch_status = 5;
-  optional string agent_id = 6;
+  string agent_id = 6;
   optional string search = 7;
   optional string category = 8;
 }
@@ -223,6 +233,8 @@ message UpdateResourceRequest {
   optional string dispatch_status = 9;
   optional string custom_shift_overrides_json = 10;
   optional string agent_id = 11;
+  optional bool is_deleted = 12;
+  optional string deleted_at = 13;
 }
 
 message DeleteResourceRequest {
@@ -330,7 +342,7 @@ message BookingInfo {
 
 message CreateBookingRequest {
   string tenant_id = 1;
-  optional string agent_id = 2;
+  string agent_id = 2;
   string service_id = 3;
   optional string resource_id = 4;
   string start_time = 5;
@@ -352,7 +364,7 @@ message BookingResponse {
 
 message GetAvailabilityRequest {
   string tenant_id = 1;
-  optional string agent_id = 2;
+  string agent_id = 2;
   string service_id = 3;
   string start_date = 4;
   optional string end_date = 5;

@@ -20,11 +20,11 @@ import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-even
 export class CreateResourceUseCase implements ICreateResourceUseCase {
   constructor(
     @Inject(RESOURCE_REPOSITORY)
-    private readonly resourceRepository: IResourceRepository,
+    private readonly _resourceRepository: IResourceRepository,
     @Inject(SCHEDULING_EVENTS_PRODUCER)
-    private readonly eventsProducer: ISchedulingEventsProducer,
+    private readonly _eventsProducer: ISchedulingEventsProducer,
     @Inject(UNIT_OF_WORK)
-    private readonly unitOfWork: IUnitOfWork,
+    private readonly _unitOfWork: IUnitOfWork,
   ) {}
 
   async execute(dto: CreateResourceRequest): Promise<ResourceEntity> {
@@ -44,13 +44,13 @@ export class CreateResourceUseCase implements ICreateResourceUseCase {
       customShiftOverridesJson: dto.custom_shift_overrides_json || '{}',
     });
 
-    const { created, outbox } = await this.unitOfWork.withTransaction(async () => {
-      const createdEntity = await this.resourceRepository.create(resource);
-      const outboxDoc = await this.eventsProducer.createResourceCreatedOutboxEvent(createdEntity);
+    const { created, outbox } = await this._unitOfWork.withTransaction(async () => {
+      const createdEntity = await this._resourceRepository.create(resource);
+      const outboxDoc = await this._eventsProducer.createResourceCreatedOutboxEvent(createdEntity);
       return { created: createdEntity, outbox: outboxDoc };
     });
 
-    await this.eventsProducer.publishOutboxEvent(outbox);
+    await this._eventsProducer.publishOutboxEvent(outbox);
 
     return created;
   }

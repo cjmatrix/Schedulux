@@ -263,4 +263,3 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"GET_CUSTOMER_MESSAGES_ERROR: {str(e)}")
             return knowledge_pb2.GetCustomerMessagesResponse()
-

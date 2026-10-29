@@ -8,7 +8,6 @@ from agent_orchestrator.repositories.message_repository import estimate_tokens
 
 
 class CustomerMessageRepository:
-   
     async def get_or_create_conversation(
         self,
         session_id: str,
@@ -46,7 +45,6 @@ class CustomerMessageRepository:
         )
         await msg.insert()
 
-       
         await CustomerConversation.find({"session_id": session_id}).update(
             {"$set": {"updated_at": datetime.utcnow()}}
         )
@@ -64,7 +62,7 @@ class CustomerMessageRepository:
             .limit(limit)
             .to_list()
         )
-        
+
         return list(reversed(messages))
 
     async def update_conversation_customer(

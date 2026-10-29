@@ -37,9 +37,6 @@ AppModule = __decorate([
             { provide: 'ITenantService', useClass: TenantService },
             { provide: 'ISuperAdminService', useClass: SuperAdminService },
             { provide: 'IDashboardUserService', useClass: DashboardUserService },
-            TenantService,
-            SuperAdminService,
-            DashboardUserService,
         ],
     })
 ], AppModule);

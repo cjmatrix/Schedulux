@@ -14,11 +14,11 @@ import { BookingModel } from '../schemas/booking.schema.js';
 export class MongoBookingRepository implements IBookingRepository {
   constructor(
     @Inject(UNIT_OF_WORK)
-    private readonly unitOfWork: IUnitOfWork,
+    private readonly _unitOfWork: IUnitOfWork,
   ) {}
 
   async create(booking: BookingEntity): Promise<BookingEntity> {
-    const session = this.unitOfWork?.getSession();
+    const session = this._unitOfWork?.getSession();
     const persistenceData = BookingMapper.toPersistence(booking);
     if (session) {
       const [created] = await BookingModel.create([persistenceData], { session });
@@ -230,7 +230,7 @@ export class MongoBookingRepository implements IBookingRepository {
   }
 
   async update(booking: BookingEntity): Promise<BookingEntity | null> {
-    const session = this.unitOfWork?.getSession();
+    const session = this._unitOfWork?.getSession();
     const persistenceData = BookingMapper.toPersistence(booking);
 
     const doc = await BookingModel.findOneAndUpdate(

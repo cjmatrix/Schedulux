@@ -18,11 +18,11 @@ import { ICreateServiceUseCase } from '../../interfaces/service-use-cases.interf
 export class CreateServiceUseCase implements ICreateServiceUseCase {
   constructor(
     @Inject(SERVICE_REPOSITORY)
-    private readonly serviceRepository: IServiceRepository,
+    private readonly _serviceRepository: IServiceRepository,
     @Inject(SCHEDULING_EVENTS_PRODUCER)
-    private readonly eventsProducer: ISchedulingEventsProducer,
+    private readonly _eventsProducer: ISchedulingEventsProducer,
     @Inject(UNIT_OF_WORK)
-    private readonly unitOfWork: IUnitOfWork,
+    private readonly _unitOfWork: IUnitOfWork,
   ) {}
 
   async execute(dto: CreateServiceRequest): Promise<ServiceEntity> {
@@ -65,13 +65,13 @@ export class CreateServiceUseCase implements ICreateServiceUseCase {
       recallIntervalDays: dto.recall_interval_days || 0,
     });
 
-    const { created, outbox } = await this.unitOfWork.withTransaction(async () => {
-      const createdEntity = await this.serviceRepository.create(service);
-      const outboxDoc = await this.eventsProducer.createServiceCreatedOutboxEvent(createdEntity);
+    const { created, outbox } = await this._unitOfWork.withTransaction(async () => {
+      const createdEntity = await this._serviceRepository.create(service);
+      const outboxDoc = await this._eventsProducer.createServiceCreatedOutboxEvent(createdEntity);
       return { created: createdEntity, outbox: outboxDoc };
     });
 
-    await this.eventsProducer.publishOutboxEvent(outbox);
+    await this._eventsProducer.publishOutboxEvent(outbox);
 
     return created;
   }

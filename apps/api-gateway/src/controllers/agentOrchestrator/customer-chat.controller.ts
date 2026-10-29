@@ -15,24 +15,26 @@ import { ClientGrpc } from '@nestjs/microservices';
 import { KnowledgeServiceClient } from '@repo/proto/knowledge';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { lastValueFrom } from 'rxjs';
+import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
+import { API_ROUTES } from '../../constants/routes.constant.js';
 import { CustomerChatDto } from './dtos/knowledge.dto.js';
 
-@Controller('api/v1/public/chat')
+@Controller(API_ROUTES.PUBLIC_CHAT.BASE)
 export class CustomerChatController implements OnModuleInit {
-  private knowledgeService!: KnowledgeServiceClient;
+  private _knowledgeService!: KnowledgeServiceClient;
 
-  constructor(@Inject('KNOWLEDGE_PACKAGE') private readonly client: ClientGrpc) {}
+  constructor(@Inject('KNOWLEDGE_PACKAGE') private readonly _client: ClientGrpc) {}
 
   onModuleInit() {
-    this.knowledgeService = this.client.getService<KnowledgeServiceClient>('KnowledgeService');
+    this._knowledgeService = this._client.getService<KnowledgeServiceClient>('KnowledgeService');
   }
 
-  @Post()
+  @Post(API_ROUTES.PUBLIC_CHAT.ROOT)
   @HttpCode(HttpStatus.OK)
   @UsePipes(ZodValidationPipe)
   async chat(@Body() body: CustomerChatDto) {
     const response = await lastValueFrom(
-      this.knowledgeService.customerChat({
+      this._knowledgeService.customerChat({
         tenant_id: body.tenant_id,
         agent_id: body.agent_id,
         session_id: body.session_id,
@@ -44,7 +46,7 @@ export class CustomerChatController implements OnModuleInit {
     );
 
     return {
-      message: 'Chat processed successfully',
+      message: RESPONSE_MESSAGES.CHAT.CHAT_PROCESSED,
       data: {
         session_id: response.session_id,
         response: response.response,
@@ -56,7 +58,7 @@ export class CustomerChatController implements OnModuleInit {
     };
   }
 
-  @Get('messages')
+  @Get(API_ROUTES.PUBLIC_CHAT.MESSAGES)
   async getMessages(
     @Query('tenant_id') tenantId: string,
     @Query('agent_id') agentId: string,
@@ -64,12 +66,12 @@ export class CustomerChatController implements OnModuleInit {
     @Query('limit') limitStr?: string,
   ) {
     if (!tenantId || !agentId || !sessionId) {
-      throw new BadRequestException('tenant_id, agent_id, and session_id are required');
+      throw new BadRequestException(RESPONSE_MESSAGES.CHAT.REQUIRED_FIELDS);
     }
 
     const limit = limitStr ? parseInt(limitStr, 10) : 10;
     const response = await lastValueFrom(
-      this.knowledgeService.getCustomerMessages({
+      this._knowledgeService.getCustomerMessages({
         tenant_id: tenantId,
         agent_id: agentId,
         session_id: sessionId,
@@ -78,10 +80,11 @@ export class CustomerChatController implements OnModuleInit {
     );
 
     return {
-      message: 'Messages retrieved successfully',
+      message: RESPONSE_MESSAGES.CHAT.MESSAGES_RETRIEVED,
       data: {
         messages: response.messages || [],
       },
     };
   }
 }
+

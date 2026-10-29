@@ -27,58 +27,55 @@ import {
   SERVICE_REPOSITORY,
   UNIT_OF_WORK,
 } from '../../../domain/tokens.js';
-import {
-  generateBookingReference,
-  generateSemanticId,
-} from '../../../domain/utils/id-generator.js';
+import { generateBookingReference, generateSemanticId } from '../../../domain/utils/id-generator.js';
 import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-events-producer.interface.js';
 import { ICreateBookingUseCase } from '../../interfaces/booking-use-cases.interface.js';
-import { TenantAuthServiceControllerMethods } from '@repo/proto';
+import { RESPONSE_MESSAGES } from '../../../constants/index.js';
 
 @Injectable()
 export class CreateBookingUseCase implements ICreateBookingUseCase {
   constructor(
     @Inject(BOOKING_REPOSITORY)
-    private readonly bookingRepository: IBookingRepository,
+    private readonly _bookingRepository: IBookingRepository,
     @Inject(CUSTOMER_REPOSITORY)
-    private readonly customerRepository: ICustomerRepository,
+    private readonly _customerRepository: ICustomerRepository,
     @Inject(SERVICE_REPOSITORY)
-    private readonly serviceRepository: IServiceRepository,
+    private readonly _serviceRepository: IServiceRepository,
     @Inject(RESOURCE_REPOSITORY)
-    private readonly resourceRepository: IResourceRepository,
+    private readonly _resourceRepository: IResourceRepository,
     @Inject(SCHEDULING_EVENTS_PRODUCER)
-    private readonly eventsProducer: ISchedulingEventsProducer,
+    private readonly _eventsProducer: ISchedulingEventsProducer,
     @Inject(UNIT_OF_WORK)
-    private readonly unitOfWork: IUnitOfWork,
+    private readonly _unitOfWork: IUnitOfWork,
   ) {}
 
   async execute(dto: CreateBookingRequest): Promise<BookingEntity> {
-    if (!dto.tenant_id?.trim()) throw new BadRequestException('tenant_id is required');
-    if (!dto.service_id?.trim()) throw new BadRequestException('service_id is required');
-    if (!dto.start_time) throw new BadRequestException('start_time is required');
-    if (!dto.customer_phone?.trim()) throw new BadRequestException('customer_phone is required');
+    if (!dto.tenant_id?.trim()) throw new BadRequestException(RESPONSE_MESSAGES.ERRORS.TENANT_ID_REQUIRED);
+    if (!dto.agent_id?.trim()) throw new BadRequestException('agent_id is required');
+    if (!dto.service_id?.trim()) throw new BadRequestException(RESPONSE_MESSAGES.ERRORS.SERVICE_ID_REQUIRED);
+    if (!dto.start_time) throw new BadRequestException(RESPONSE_MESSAGES.ERRORS.START_TIME_REQUIRED);
+    if (!dto.customer_phone?.trim()) throw new BadRequestException(RESPONSE_MESSAGES.ERRORS.CUSTOMER_PHONE_REQUIRED);
 
     const tenantId = dto.tenant_id.trim();
+    const agentId = dto.agent_id.trim();
     const customerPhone = dto.customer_phone.trim();
     const customerEmail = dto.customer_email?.trim() || '';
     const customerName = dto.customer_name?.trim() || 'Guest';
 
-
     const [service, existingCustomerByPhone] = await Promise.all([
-      this.serviceRepository.findById(tenantId, dto.service_id),
-      this.customerRepository.findByPhone(tenantId, customerPhone, dto.agent_id),
+      this._serviceRepository.findById(tenantId, dto.service_id),
+      this._customerRepository.findByPhone(tenantId, customerPhone, agentId),
     ]);
 
     if (!service) {
       throw new NotFoundException(`Service ${dto.service_id} not found for tenant ${tenantId}`);
     }
     if (
-      dto.agent_id?.trim() &&
       service.agentId?.trim() &&
-      dto.agent_id.trim() !== service.agentId.trim()
+      agentId !== service.agentId.trim()
     ) {
       throw new BadRequestException(
-        `Service "${service.name}" (${dto.service_id}) belongs to agent ${service.agentId}, but request specified agent ${dto.agent_id}`,
+        `Service "${service.name}" (${dto.service_id}) belongs to agent ${service.agentId}, but request specified agent ${agentId}`,
       );
     }
 
@@ -124,7 +121,6 @@ export class CreateBookingUseCase implements ICreateBookingUseCase {
       explicitResourceIds.push(dto.resource_id.trim());
     }
 
-    const agentId = dto.agent_id || service.agentId;
     const requirements = service.getEffectiveResourceRequirements();
     const allCandidateIdsSet = new Set<string>(explicitResourceIds);
     for (const req of requirements) {
@@ -136,13 +132,13 @@ export class CreateBookingUseCase implements ICreateBookingUseCase {
     
     const [rawActiveResources, busyResourceIds, existingCustomerByEmail] = await Promise.all([
       allCandidateIds.length > 0
-        ? this.resourceRepository.findActiveBookableByIds(tenantId, allCandidateIds, agentId)
+        ? this._resourceRepository.findActiveBookableByIds(tenantId, allCandidateIds, agentId)
         : Promise.resolve([]),
       allCandidateIds.length > 0
-        ? this.bookingRepository.findBusyResourceIds(tenantId, allCandidateIds, effectiveStartTime, effectiveEndTime)
+        ? this._bookingRepository.findBusyResourceIds(tenantId, allCandidateIds, effectiveStartTime, effectiveEndTime)
         : Promise.resolve(new Set<string>()),
       !existingCustomerByPhone && customerEmail
-        ? this.customerRepository.findByEmail(tenantId, customerEmail, agentId)
+        ? this._customerRepository.findByEmail(tenantId, customerEmail, agentId)
         : Promise.resolve(null),
     ]);
 
@@ -288,22 +284,20 @@ export class CreateBookingUseCase implements ICreateBookingUseCase {
     });
 
    
-    const { createdBooking, outboxDoc } = await this.unitOfWork.withTransaction(async () => {
+    const { createdBooking, outboxDoc } = await this._unitOfWork.withTransaction(async () => {
       if (isExistingCustomer) {
-        await this.customerRepository.update(customer);
+        await this._customerRepository.update(customer);
       } else {
-        await this.customerRepository.create(customer);
+        await this._customerRepository.create(customer);
       }
 
-      const createdEntity = await this.bookingRepository.create(booking);
-      const outbox = await this.eventsProducer.createBookingCreatedOutboxEvent(createdEntity);
+      const createdEntity = await this._bookingRepository.create(booking);
+      const outbox = await this._eventsProducer.createBookingCreatedOutboxEvent(createdEntity);
 
       return { createdBooking: createdEntity, outboxDoc: outbox };
     });
 
-    
-    this.eventsProducer.publishOutboxEvent(outboxDoc).catch((err) => {
-     
+    this._eventsProducer.publishOutboxEvent(outboxDoc).catch((err) => {
       console.error(`Async outbox publish failed for booking ${createdBooking.id}:`, err);
     });
 

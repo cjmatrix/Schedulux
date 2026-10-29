@@ -8,13 +8,15 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import jwt from 'jsonwebtoken';
+import { COOKIE_NAMES } from '../constants/cookies.constant.js';
+import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
 
 export interface AuthenticatedTenantRequest extends Request {
   tenant?: {
     tenant_id: string;
     email: string;
     role: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   dashboardUser?: {
     user_id: string;
@@ -22,52 +24,62 @@ export interface AuthenticatedTenantRequest extends Request {
     email: string;
     role: string;
     system_role: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
+}
+
+interface DecodedToken {
+  tenant_id?: string;
+  user_id?: string;
+  email?: string;
+  role?: string;
+  system_role?: string;
+  [key: string]: unknown;
 }
 
 @Injectable()
 export class TenantAuthGuard implements CanActivate {
-  constructor(@Inject(ConfigService) private readonly configService: ConfigService) {}
+  constructor(@Inject(ConfigService) private readonly _configService: ConfigService) {}
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<AuthenticatedTenantRequest>();
-    const tenantToken = request.cookies?.access_token;
-    const dashboardToken = request.cookies?.dashboarduser_access_token;
+    const tenantToken = request.cookies?.[COOKIE_NAMES.TENANT_ACCESS_TOKEN];
+    const dashboardToken = request.cookies?.[COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN];
 
     const token = tenantToken || dashboardToken;
 
     if (!token) {
-      throw new UnauthorizedException('Authentication token missing');
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TOKEN_MISSING);
     }
 
     try {
-      const secret = this.configService.get<string>('JWT_SECRET') || 'dev-secret-change-in-prod';
+      const secret = this._configService.get<string>('JWT_SECRET') || 'dev-secret-change-in-prod';
 
-      const decoded = jwt.verify(token, secret) as any;
+      const decoded = jwt.verify(token, secret) as DecodedToken;
 
       if (!decoded || !decoded.tenant_id) {
-        throw new UnauthorizedException('Invalid token structure');
+        throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.INVALID_TOKEN_STRUCTURE);
       }
 
       if (decoded.role === 'tenant_owner') {
-        request.tenant = decoded;
+        request.tenant = decoded as AuthenticatedTenantRequest['tenant'];
       } else if (
         decoded.role === 'root' ||
         decoded.role === 'manager' ||
         decoded.role === 'dashboard_user'
       ) {
-        request.dashboardUser = decoded;
+        request.dashboardUser = decoded as AuthenticatedTenantRequest['dashboardUser'];
       } else {
-        throw new UnauthorizedException('Unrecognized user role');
+        throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.UNRECOGNIZED_ROLE);
       }
 
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof UnauthorizedException) {
         throw err;
       }
-      throw new UnauthorizedException('Invalid or expired authentication token');
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.INVALID_TOKEN);
     }
   }
 }
+

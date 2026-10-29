@@ -9,62 +9,62 @@ import { Injectable, Logger } from '@nestjs/common';
 import amqp from 'amqplib';
 export const EMAIL_QUEUE_NAME = 'email-queue';
 let EmailProducer = EmailProducer_1 = class EmailProducer {
-    logger = new Logger(EmailProducer_1.name);
-    connection = null;
-    channel = null;
-    rabbitUri = process.env.RABBITMQ_URI || 'amqp://localhost:5672';
+    _logger = new Logger(EmailProducer_1.name);
+    _connection = null;
+    _channel = null;
+    _rabbitUri = process.env.RABBITMQ_URI || 'amqp://localhost:5672';
+    _connectionPromise = null;
+    _channelPromise = null;
     async onModuleInit() {
-        await this.ensureChannel();
+        await this._ensureChannel();
     }
     async onModuleDestroy() {
         try {
-            await this.channel?.close();
-            await this.connection?.close();
+            await this._channel?.close();
+            await this._connection?.close();
         }
         catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            this.logger.warn(`Error during RabbitMQ shutdown: ${msg}`);
+            this._logger.warn(`Error during RabbitMQ shutdown: ${msg}`);
         }
     }
-    connectionPromise = null;
-    channelPromise = null;
-    async ensureChannel() {
-        if (this.channel) {
-            return this.channel;
+    async _ensureChannel() {
+        if (this._channel) {
+            return this._channel;
         }
-        if (this.channelPromise) {
-            return this.channelPromise;
+        if (this._channelPromise) {
+            return this._channelPromise;
         }
-        this.channelPromise = (async () => {
+        this._channelPromise = (async () => {
             try {
-                if (!this.connectionPromise) {
-                    this.connectionPromise = amqp.connect(this.rabbitUri);
+                if (!this._connectionPromise) {
+                    this._connectionPromise = amqp.connect(this._rabbitUri);
                 }
-                this.connection = await this.connectionPromise;
-                this.channel = await this.connection.createChannel();
-                await this.channel.assertQueue(EMAIL_QUEUE_NAME, { durable: true });
-                this.channel.on('close', () => {
-                    this.logger.warn('[RabbitMQ] Channel closed. Resetting connection tokens.');
-                    this.channel = null;
-                    this.channelPromise = null;
-                    this.connectionPromise = null;
+                this._connection = await this._connectionPromise;
+                this._channel = await this._connection.createChannel();
+                await this._channel.assertQueue(EMAIL_QUEUE_NAME, { durable: true });
+                this._channel.on('close', () => {
+                    this._logger.warn('[RabbitMQ] Channel closed. Resetting connection tokens.');
+                    this._channel = null;
+                    this._channelPromise = null;
+                    this._connectionPromise = null;
                 });
-                this.logger.log(`[RabbitMQ] Connected and asserted queue '${EMAIL_QUEUE_NAME}'`);
-                return this.channel;
+                this._logger.log(`[RabbitMQ] Connected and asserted queue '${EMAIL_QUEUE_NAME}'`);
+                return this._channel;
             }
             catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                this.logger.error(`[RabbitMQ] Connection error: ${msg}`);
-                this.channelPromise = null;
-                this.connectionPromise = null;
+                this._logger.error(`[RabbitMQ] Connection error: ${msg}`);
+                this._channelPromise = null;
+                this._connectionPromise = null;
                 throw err;
             }
         })();
-        return this.channelPromise;
+        return this._channelPromise;
     }
-    async publish(jobName, data) {
+    async _publish(jobName, data) {
         try {
-            const channel = await this.ensureChannel();
+            const channel = await this._ensureChannel();
             const messageBuffer = Buffer.from(JSON.stringify({
                 name: jobName,
                 data,
@@ -74,22 +74,22 @@ let EmailProducer = EmailProducer_1 = class EmailProducer {
                 persistent: true,
                 headers: { 'job-name': jobName },
             });
-            this.logger.log(`[RabbitMQ] Enqueued '${jobName}' to '${EMAIL_QUEUE_NAME}'`);
+            this._logger.log(`[RabbitMQ] Enqueued '${jobName}' to '${EMAIL_QUEUE_NAME}'`);
         }
         catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            this.logger.error(`[RabbitMQ] Failed to publish '${jobName}': ${msg}`);
+            this._logger.error(`[RabbitMQ] Failed to publish '${jobName}': ${msg}`);
             throw err;
         }
     }
     async sendVerificationEmail(data) {
-        await this.publish('send-tenant-verification', data);
+        await this._publish('send-tenant-verification', data);
     }
     async sendUserInvitationEmail(data) {
-        await this.publish('send-user-invitation', data);
+        await this._publish('send-user-invitation', data);
     }
     async sendForgotPasswordEmail(data) {
-        await this.publish('send-forgot-password', data);
+        await this._publish('send-forgot-password', data);
     }
 };
 EmailProducer = EmailProducer_1 = __decorate([

@@ -13,36 +13,36 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 import { Inject, Injectable } from '@nestjs/common';
 import { Redis } from 'ioredis';
 let CacheRepository = class CacheRepository {
-    redisClient;
-    constructor(redisClient) {
-        this.redisClient = redisClient;
+    _redisClient;
+    constructor(_redisClient) {
+        this._redisClient = _redisClient;
     }
     async get(key) {
-        return await this.redisClient.get(key);
+        return await this._redisClient.get(key);
     }
     async set(key, value, options) {
         if (options?.EX) {
-            await this.redisClient.set(key, value, 'EX', options.EX);
+            await this._redisClient.set(key, value, 'EX', options.EX);
         }
         else if (options?.PX) {
-            await this.redisClient.set(key, value, 'PX', options.PX);
+            await this._redisClient.set(key, value, 'PX', options.PX);
         }
         else if (options?.ttlSeconds) {
-            await this.redisClient.set(key, value, 'EX', options.ttlSeconds);
+            await this._redisClient.set(key, value, 'EX', options.ttlSeconds);
         }
         else {
-            await this.redisClient.set(key, value);
+            await this._redisClient.set(key, value);
         }
     }
     async delete(key) {
-        const result = await this.redisClient.del(key);
+        const result = await this._redisClient.del(key);
         return result > 0;
     }
     async ttl(key) {
-        return await this.redisClient.ttl(key);
+        return await this._redisClient.ttl(key);
     }
     async exists(key) {
-        const result = await this.redisClient.exists(key);
+        const result = await this._redisClient.exists(key);
         return result > 0;
     }
 };

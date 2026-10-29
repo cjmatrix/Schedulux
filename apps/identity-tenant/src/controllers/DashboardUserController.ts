@@ -16,6 +16,8 @@ import {
   ListWorkspaceUsersRequest,
   ListWorkspaceUsersResponse,
 } from '@repo/proto/dashboard';
+import { GRPC_METHODS, GRPC_SERVICES } from '../constants/grpc.constant.js';
+import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
 import type { IDashboardUserService } from '../interfaces/IDashboardUserService.js';
 import type { ITenantService } from '../interfaces/ITenantService.js';
 import { AllExceptionsFilter } from './rpcExpetionFilter.js';
@@ -24,53 +26,53 @@ import { AllExceptionsFilter } from './rpcExpetionFilter.js';
 @UseFilters(new AllExceptionsFilter())
 export class DashboardUserController {
   constructor(
-    @Inject('IDashboardUserService') private readonly dashboardUserService: IDashboardUserService,
-    @Inject('ITenantService') private readonly tenantService: ITenantService,
+    @Inject('IDashboardUserService') private readonly _dashboardUserService: IDashboardUserService,
+    @Inject('ITenantService') private readonly _tenantService: ITenantService,
   ) {}
 
-  @GrpcMethod('DashboardAuthService', 'Login')
+  @GrpcMethod(GRPC_SERVICES.DASHBOARD_AUTH, GRPC_METHODS.DASHBOARD_AUTH.LOGIN)
   async login(data: DashboardUserLoginRequest): Promise<DashboardUserLoginResponse> {
     if (!data.email || !data.password) {
-      throw new Error('Email and password are required');
+      throw new Error(RESPONSE_MESSAGES.ERRORS.EMAIL_AND_PASSWORD_REQUIRED);
     }
-    return await this.dashboardUserService.login(data);
+    return await this._dashboardUserService.login(data);
   }
 
-  @GrpcMethod('DashboardAuthService', 'GetProfile')
+  @GrpcMethod(GRPC_SERVICES.DASHBOARD_AUTH, GRPC_METHODS.DASHBOARD_AUTH.GET_PROFILE)
   async getProfile(data: DashboardUserProfileRequest): Promise<DashboardUserProfileResponse> {
-    return await this.dashboardUserService.getProfile(data);
+    return await this._dashboardUserService.getProfile(data);
   }
 
-  @GrpcMethod('DashboardAuthService', 'RefreshToken')
+  @GrpcMethod(GRPC_SERVICES.DASHBOARD_AUTH, GRPC_METHODS.DASHBOARD_AUTH.REFRESH_TOKEN)
   async refreshToken(
     data: DashboardUserRefreshTokenRequest,
   ): Promise<DashboardUserRefreshTokenResponse> {
-    return await this.dashboardUserService.refreshToken(data);
+    return await this._dashboardUserService.refreshToken(data);
   }
 
-  @GrpcMethod('DashboardAuthService', 'ForgotPassword')
+  @GrpcMethod(GRPC_SERVICES.DASHBOARD_AUTH, GRPC_METHODS.DASHBOARD_AUTH.FORGOT_PASSWORD)
   async forgotPassword(
     data: DashboardUserForgotPasswordRequest,
   ): Promise<DashboardUserForgotPasswordResponse> {
-    if (!data.email) throw new Error('Email is required');
-    return await this.dashboardUserService.forgotPassword(data.email);
+    if (!data.email) throw new Error(RESPONSE_MESSAGES.ERRORS.EMAIL_REQUIRED);
+    return await this._dashboardUserService.forgotPassword(data.email);
   }
 
-  @GrpcMethod('DashboardAuthService', 'ResetPassword')
+  @GrpcMethod(GRPC_SERVICES.DASHBOARD_AUTH, GRPC_METHODS.DASHBOARD_AUTH.RESET_PASSWORD)
   async resetPassword(
     data: DashboardUserResetPasswordRequest,
   ): Promise<DashboardUserResetPasswordResponse> {
-    if (!data.token || !data.new_password) throw new Error('Token and new password are required');
-    return await this.dashboardUserService.resetPassword(data.token, data.new_password);
+    if (!data.token || !data.new_password) throw new Error(RESPONSE_MESSAGES.ERRORS.TOKEN_AND_NEW_PASSWORD_REQUIRED);
+    return await this._dashboardUserService.resetPassword(data.token, data.new_password);
   }
 
-  @GrpcMethod('DashboardUserService', 'InviteUser')
+  @GrpcMethod(GRPC_SERVICES.DASHBOARD_USER, GRPC_METHODS.DASHBOARD_USER.INVITE_USER)
   async inviteUser(data: InviteUserRequest): Promise<InviteUserResponse> {
     const { tenant_id, email, name, system_role } = data;
     if (!tenant_id || !email || !name) {
-      throw new Error('Missing required fields');
+      throw new Error(RESPONSE_MESSAGES.ERRORS.MISSING_REQUIRED_FIELDS);
     }
-    return await this.tenantService.inviteUser({
+    return await this._tenantService.inviteUser({
       tenant_id,
       email,
       name,
@@ -78,9 +80,10 @@ export class DashboardUserController {
     });
   }
 
-  @GrpcMethod('DashboardUserService', 'ListWorkspaceUsers')
+  @GrpcMethod(GRPC_SERVICES.DASHBOARD_USER, GRPC_METHODS.DASHBOARD_USER.LIST_WORKSPACE_USERS)
   async listWorkspaceUsers(data: ListWorkspaceUsersRequest): Promise<ListWorkspaceUsersResponse> {
-    if (!data.tenant_id) throw new Error('Tenant ID is required');
-    return await this.tenantService.listWorkspaceUsers(data);
+    if (!data.tenant_id) throw new Error(RESPONSE_MESSAGES.ERRORS.TENANT_ID_REQUIRED);
+    return await this._tenantService.listWorkspaceUsers(data);
   }
 }
+

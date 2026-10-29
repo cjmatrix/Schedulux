@@ -9,6 +9,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
 import {
   ISchemaEventSubscriber,
   SchemaGeneratedEvent,
@@ -24,25 +25,25 @@ export class SchemaGateway implements OnGatewayConnection, OnGatewayDisconnect, 
   @WebSocketServer()
   server!: Server;
 
-  private readonly logger = new Logger(SchemaGateway.name);
+  private readonly _logger = new Logger(SchemaGateway.name);
 
   constructor(
     @Inject('ISchemaEventSubscriber')
-    private readonly eventSubscriber: ISchemaEventSubscriber,
+    private readonly _eventSubscriber: ISchemaEventSubscriber,
   ) {}
 
   onModuleInit() {
-    this.eventSubscriber.onSchemaGenerated((event: SchemaGeneratedEvent) => {
-      this.handleSchemaGenerated(event);
+    this._eventSubscriber.onSchemaGenerated((event: SchemaGeneratedEvent) => {
+      this._handleSchemaGenerated(event);
     });
   }
 
   handleConnection(client: Socket) {
-    this.logger.log(`Client connected: ${client.id}`);
+    this._logger.log(`Client connected: ${client.id}`);
   }
 
   handleDisconnect(client: Socket) {
-    this.logger.log(`Client disconnected: ${client.id}`);
+    this._logger.log(`Client disconnected: ${client.id}`);
   }
 
   @SubscribeMessage('join:job')
@@ -50,10 +51,10 @@ export class SchemaGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     if (data?.job_id) {
       const room = `job:${data.job_id}`;
       client.join(room);
-      this.logger.log(`Client ${client.id} joined room ${room}`);
-      return { status: 'joined', room };
+      this._logger.log(`Client ${client.id} joined room ${room}`);
+      return { status: RESPONSE_MESSAGES.WEBSOCKET.JOINED, room };
     }
-    return { status: 'error', message: 'Missing job_id' };
+    return { status: RESPONSE_MESSAGES.WEBSOCKET.ERROR, message: RESPONSE_MESSAGES.WEBSOCKET.MISSING_JOB_ID };
   }
 
   @SubscribeMessage('join:tenant')
@@ -61,26 +62,26 @@ export class SchemaGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     if (data?.tenant_id) {
       const room = `tenant:${data.tenant_id}`;
       client.join(room);
-      this.logger.log(`Client ${client.id} joined room ${room}`);
-      return { status: 'joined', room };
+      this._logger.log(`Client ${client.id} joined room ${room}`);
+      return { status: RESPONSE_MESSAGES.WEBSOCKET.JOINED, room };
     }
-    return { status: 'error', message: 'Missing tenant_id' };
+    return { status: RESPONSE_MESSAGES.WEBSOCKET.ERROR, message: RESPONSE_MESSAGES.WEBSOCKET.MISSING_TENANT_ID };
   }
 
-  private handleSchemaGenerated(event: SchemaGeneratedEvent) {
+  private _handleSchemaGenerated(event: SchemaGeneratedEvent) {
     if (event.event === 'SCHEMA_GENERATION_FAILED' || event.error) {
-      this.logger.warn(`Broadcasting schema:failed for job ${event.job_id}: ${event.error}`);
+      this._logger.warn(`Broadcasting schema:failed for job ${event.job_id}: ${event.error}`);
       const payload = {
         job_id: event.job_id,
         tenant_id: event.tenant_id,
-        error: event.error || 'Failed to generate agent schema',
+        error: event.error || RESPONSE_MESSAGES.WEBSOCKET.SCHEMA_GENERATION_FAILED,
       };
       this.server.to(`job:${event.job_id}`).emit('schema:failed', payload);
       this.server.to(`tenant:${event.tenant_id}`).emit('schema:failed', payload);
       return;
     }
 
-    this.logger.log(
+    this._logger.log(
       `Broadcasting schema:ready for job ${event.job_id} / tenant ${event.tenant_id}`,
     );
 
@@ -88,3 +89,4 @@ export class SchemaGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     this.server.to(`tenant:${event.tenant_id}`).emit('schema:ready', event);
   }
 }
+

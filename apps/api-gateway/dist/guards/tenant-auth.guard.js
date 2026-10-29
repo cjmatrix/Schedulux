@@ -19,24 +19,26 @@ exports.TenantAuthGuard = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const cookies_constant_js_1 = require("../constants/cookies.constant.js");
+const messages_constant_js_1 = require("../constants/messages.constant.js");
 let TenantAuthGuard = class TenantAuthGuard {
-    configService;
-    constructor(configService) {
-        this.configService = configService;
+    _configService;
+    constructor(_configService) {
+        this._configService = _configService;
     }
     canActivate(context) {
         const request = context.switchToHttp().getRequest();
-        const tenantToken = request.cookies?.access_token;
-        const dashboardToken = request.cookies?.dashboarduser_access_token;
+        const tenantToken = request.cookies?.[cookies_constant_js_1.COOKIE_NAMES.TENANT_ACCESS_TOKEN];
+        const dashboardToken = request.cookies?.[cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN];
         const token = tenantToken || dashboardToken;
         if (!token) {
-            throw new common_1.UnauthorizedException('Authentication token missing');
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TOKEN_MISSING);
         }
         try {
-            const secret = this.configService.get('JWT_SECRET') || 'dev-secret-change-in-prod';
+            const secret = this._configService.get('JWT_SECRET') || 'dev-secret-change-in-prod';
             const decoded = jsonwebtoken_1.default.verify(token, secret);
             if (!decoded || !decoded.tenant_id) {
-                throw new common_1.UnauthorizedException('Invalid token structure');
+                throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.INVALID_TOKEN_STRUCTURE);
             }
             if (decoded.role === 'tenant_owner') {
                 request.tenant = decoded;
@@ -47,7 +49,7 @@ let TenantAuthGuard = class TenantAuthGuard {
                 request.dashboardUser = decoded;
             }
             else {
-                throw new common_1.UnauthorizedException('Unrecognized user role');
+                throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.UNRECOGNIZED_ROLE);
             }
             return true;
         }
@@ -55,7 +57,7 @@ let TenantAuthGuard = class TenantAuthGuard {
             if (err instanceof common_1.UnauthorizedException) {
                 throw err;
             }
-            throw new common_1.UnauthorizedException('Invalid or expired authentication token');
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.INVALID_TOKEN);
         }
     }
 };

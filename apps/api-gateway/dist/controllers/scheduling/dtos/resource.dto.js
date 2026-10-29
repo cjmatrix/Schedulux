@@ -43,7 +43,7 @@ exports.ListResourcesQuerySchema = zod_1.z.object({
     resource_type: zod_1.z.string().optional(),
     dispatch_status: zod_1.z.string().optional(),
     category: zod_1.z.string().optional(),
-    agent_id: zod_1.z.string().optional(),
+    agent_id: zod_1.z.string().min(1, 'agent_id is required'),
     search: zod_1.z.string().optional(),
 });
 class ListResourcesQueryDto extends (0, nestjs_zod_1.createZodDto)(exports.ListResourcesQuerySchema) {

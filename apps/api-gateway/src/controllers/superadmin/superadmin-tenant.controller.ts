@@ -13,25 +13,27 @@ import { ClientGrpc } from '@nestjs/microservices';
 import { TenantServiceClient } from '@repo/proto/tenant';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { lastValueFrom } from 'rxjs';
+import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
+import { API_ROUTES } from '../../constants/routes.constant.js';
 import { SuperAdminAuthGuard } from '../../guards/superadmin-auth.guard.js';
 import { ListTenantsDto, SuspendTenantParamDto } from './dtos/superAdmin.dto.js';
 
-@Controller(`api/v1/admin/tenants`)
+@Controller(API_ROUTES.SUPERADMIN.TENANTS.BASE)
 @UseGuards(SuperAdminAuthGuard)
 export class SuperAdminTenantController implements OnModuleInit {
-  private superAdminTenantClient!: TenantServiceClient;
+  private _superAdminTenantClient!: TenantServiceClient;
 
-  constructor(@Inject('TENANT_PACKAGE') private client: ClientGrpc) {}
+  constructor(@Inject('TENANT_PACKAGE') private readonly _client: ClientGrpc) {}
 
   onModuleInit() {
-    this.superAdminTenantClient = this.client.getService('TenantService');
+    this._superAdminTenantClient = this._client.getService('TenantService');
   }
 
-  @Get()
+  @Get(API_ROUTES.SUPERADMIN.TENANTS.ROOT)
   @UsePipes(ZodValidationPipe)
   async ListTenants(@Query() query: ListTenantsDto) {
     const lists = await lastValueFrom(
-      this.superAdminTenantClient.listTenants({
+      this._superAdminTenantClient.listTenants({
         page: query.page,
         limit: query.limit,
         search: query.search,
@@ -41,21 +43,22 @@ export class SuperAdminTenantController implements OnModuleInit {
     );
 
     return {
-      message: 'successfull',
+      message: RESPONSE_MESSAGES.TENANT.SUCCESS,
       data: lists,
     };
   }
 
-  @Patch(':id/suspend')
+  @Patch(API_ROUTES.SUPERADMIN.TENANTS.SUSPEND)
   @UsePipes(ZodValidationPipe)
   async SuspendTenant(@Param() params: SuspendTenantParamDto) {
     const result = await lastValueFrom(
-      this.superAdminTenantClient.suspendTenant({ tenant_id: params.id }),
+      this._superAdminTenantClient.suspendTenant({ tenant_id: params.id }),
     );
 
     return {
-      message: 'Tenant suspended successfully',
+      message: RESPONSE_MESSAGES.TENANT.TENANT_SUSPENDED,
       data: result,
     };
   }
 }
+

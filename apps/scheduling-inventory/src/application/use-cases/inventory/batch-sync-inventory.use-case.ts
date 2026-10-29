@@ -20,18 +20,19 @@ import { PriceVO } from '../../../domain/value-objects/price.vo.js';
 import { ResourceMapper } from '../../../infrastructure/database/mappers/resource.mapper.js';
 import { ServiceMapper } from '../../../infrastructure/database/mappers/service.mapper.js';
 import { IBatchSyncInventoryUseCase } from '../../interfaces/batch-sync-use-case.interface.js';
+import { RESPONSE_MESSAGES } from '../../../constants/index.js';
 
 @Injectable()
 export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
-  private readonly logger = new Logger(BatchSyncInventoryUseCase.name);
+  private readonly _logger = new Logger(BatchSyncInventoryUseCase.name);
 
   constructor(
     @Inject(RESOURCE_REPOSITORY)
-    private readonly resourceRepository: IResourceRepository,
+    private readonly _resourceRepository: IResourceRepository,
     @Inject(SERVICE_REPOSITORY)
-    private readonly serviceRepository: IServiceRepository,
+    private readonly _serviceRepository: IServiceRepository,
     @Inject(TENANT_SCHEDULE_REPOSITORY)
-    private readonly tenantScheduleRepository: ITenantScheduleRepository,
+    private readonly _tenantScheduleRepository: ITenantScheduleRepository,
   ) {}
 
   async execute(dto: BatchSyncInventoryRequest): Promise<BatchSyncInventoryResponse> {
@@ -43,17 +44,17 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
         resources: [],
         services: [],
         success: false,
-        message: 'Missing tenant_id',
+        message: RESPONSE_MESSAGES.ERRORS.MISSING_TENANT_ID,
       };
     }
 
-    this.logger.log(
+    this._logger.log(
       `Starting BatchSyncInventory for tenant: ${tenantId}, agent: ${agentId} (${dto.resources.length} resources, ${dto.services.length} services)`,
     );
 
     const [existingResources, existingServices] = await Promise.all([
-      this.resourceRepository.findByTenant(tenantId, agentId || undefined),
-      this.serviceRepository.findByTenant(tenantId, agentId || undefined),
+      this._resourceRepository.findByTenant(tenantId, agentId || undefined),
+      this._serviceRepository.findByTenant(tenantId, agentId || undefined),
     ]);
 
     const existingResById = new Map(existingResources.map((r) => [r.id, r]));
@@ -73,8 +74,10 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
       const nameKey = (r.name || '').trim().toLowerCase();
       const existing =
         (r.resource_id && existingResById.get(r.resource_id)) || existingResByName.get(nameKey);
-      const resourceId = existing ? existing.id : generateSemanticId('res', r.name);
+      const resourceId =
+        existing ? existing.id : r.resource_id?.trim() || generateSemanticId('res', r.name);
 
+      const isDel = r.is_deleted ?? false;
       const entity = new ResourceEntity({
         id: resourceId,
         tenantId,
@@ -84,9 +87,11 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
         title: r.title || '',
         category: r.category || 'General',
         description: r.description || '',
-        isBookable: r.is_bookable !== undefined ? r.is_bookable : true,
-        dispatchStatus: (r.dispatch_status as DispatchStatus) || 'active',
+        isBookable: isDel ? false : (r.is_bookable !== undefined ? r.is_bookable : true),
+        dispatchStatus: isDel ? 'retired' : ((r.dispatch_status as DispatchStatus) || 'active'),
         customShiftOverridesJson: r.custom_shift_overrides_json || '{}',
+        isDeleted: isDel,
+        deletedAt: isDel ? (r.deleted_at ? new Date(r.deleted_at) : new Date()) : null,
       });
 
       resourceEntities.push(entity);
@@ -99,7 +104,7 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
     }
 
     if (resourceEntities.length > 0) {
-      await this.resourceRepository.bulkUpsert(resourceEntities);
+      await this._resourceRepository.bulkUpsert(resourceEntities);
     }
 
     const serviceEntities: ServiceEntity[] = [];
@@ -108,7 +113,8 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
       const nameKey = (s.name || '').trim().toLowerCase();
       const existing =
         (s.service_id && existingSvcById.get(s.service_id)) || existingSvcByName.get(nameKey);
-      const serviceId = existing ? existing.id : generateSemanticId('srv', s.name);
+      const serviceId =
+        existing ? existing.id : s.service_id?.trim() || generateSemanticId('srv', s.name);
 
       const mappedRequirements = (s.resource_requirements || []).map((req) => {
         const reqEligible: string[] = [];
@@ -141,6 +147,7 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
         paymentInstructions: s.deposit?.payment_instructions,
       });
 
+      const isDelSvc = s.is_deleted ?? false;
       const entity = new ServiceEntity({
         id: serviceId,
         tenantId,
@@ -156,18 +163,20 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
         verification: s.verification ? { require_otp: s.verification.require_otp } : undefined,
         resourceRequirements: mappedRequirements,
         recallIntervalDays: s.recall_interval_days || 0,
+        isDeleted: isDelSvc,
+        deletedAt: isDelSvc ? (s.deleted_at ? new Date(s.deleted_at) : new Date()) : null,
       });
 
       serviceEntities.push(entity);
     }
 
     if (serviceEntities.length > 0) {
-      await this.serviceRepository.bulkUpsert(serviceEntities);
+      await this._serviceRepository.bulkUpsert(serviceEntities);
     }
 
     if (dto.operating_hours || dto.timezone || dto.blackout_dates || dto.scheduling_engine) {
       try {
-        await this.tenantScheduleRepository.upsertSchedule({
+        await this._tenantScheduleRepository.upsertSchedule({
           tenant_id: tenantId,
           agent_id: agentId,
           timezone: dto.timezone || 'UTC',
@@ -224,13 +233,13 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
                 require_otp_for_cancel: true,
               },
         });
-        this.logger.log(`Synced tenant schedule settings for agent ${agentId}`);
+        this._logger.log(`Synced tenant schedule settings for agent ${agentId}`);
       } catch (scheduleErr) {
-        this.logger.error('Failed to sync tenant schedule settings:', scheduleErr);
+        this._logger.error('Failed to sync tenant schedule settings:', scheduleErr);
       }
     }
 
-    this.logger.log(
+    this._logger.log(
       `BatchSyncInventory completed successfully: ${resourceEntities.length} resources, ${serviceEntities.length} services synced.`,
     );
 

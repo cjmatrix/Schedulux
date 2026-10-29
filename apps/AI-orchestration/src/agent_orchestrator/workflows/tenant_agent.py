@@ -3,12 +3,13 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
+import secrets
 from datetime import UTC, datetime
-from enum import StrEnum
 from typing import Annotated, Any, Literal, cast
 
-import jsonpatch
 from dotenv import load_dotenv
+from jsonmerge import Merger
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -16,8 +17,10 @@ from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr
 from typing_extensions import TypedDict
+
+from agent_orchestrator.models import StrictDraftPatchValidator
 
 _env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env"))
 load_dotenv(_env_path)
@@ -37,7 +40,7 @@ class GraphState(TypedDict):
     pending_field: str | None
     semantic_note: str | None
     decision: str | None
-    pending_patches: list[dict] | None
+    pending_draft_update: dict[str, Any] | None
     status: str
     patch_retries: int
 
@@ -107,6 +110,11 @@ STRUCTURAL_REQUIREMENTS: list[dict] = [
         "attr": "price.amount",
     },
     {
+        "field": "services[*].resource_requirements",
+        "question": "Who or what delivers '{service_name}'? (Please assign at least one staff member, doctor, room, or equipment so customers can book it)",
+        "type": "per_service_requirements",
+    },
+    {
         "field": "resources",
         "question": (
             "Who or what delivers your services? "
@@ -168,9 +176,9 @@ def _get_llm(temperature: float = 0.2) -> BaseChatModel:
                 max_tokens=8192,
             )
     else:
-        model_name = os.environ.get("GEMINI_MODEL") or _GEMINI_MODEL or "gemini-1.5-flash"
+        model_name = os.environ.get("GEMINI_MODEL") or _GEMINI_MODEL or "gemini-3.5-flash"
         if "gemma" in model_name.lower():
-            model_name = "gemini-1.5-flash"
+            model_name = "gemini-3.5-flash"
         print(
             f"[Tenant Agent] Initializing ChatGoogleGenerativeAI with model '{model_name}'.",
             flush=True,
@@ -201,16 +209,25 @@ def _compute_structural_gaps(draft: dict) -> list[dict]:
                 gaps.append(req)
 
         elif rtype == "services_present":
-            if not draft.get("services"):
+            active_svcs = [s for s in draft.get("services", []) if not s.get("is_deleted")]
+            if not active_svcs:
                 gaps.append(req)
 
         elif rtype == "resources_present":
-            if not draft.get("resources"):
+            active_res = [
+                r
+                for r in draft.get("resources", [])
+                if not r.get("is_deleted")
+                and r.get("dispatch_status") not in ("retired", "inactive")
+            ]
+            if not active_res:
                 gaps.append(req)
 
         elif rtype == "per_service":
             attr = req["attr"]
             for idx, svc in enumerate(draft.get("services", [])):
+                if svc.get("is_deleted"):
+                    continue
                 val = svc.get(attr)
                 if val is None or val == "":
                     svc_name = svc.get("name", f"Service #{idx + 1}")
@@ -224,8 +241,29 @@ def _compute_structural_gaps(draft: dict) -> list[dict]:
 
         elif rtype == "per_service_nested":
             for idx, svc in enumerate(draft.get("services", [])):
+                if svc.get("is_deleted"):
+                    continue
                 val = _get_nested(svc, req["attr"])
                 if val is None:
+                    svc_name = svc.get("name", f"Service #{idx + 1}")
+                    gaps.append(
+                        {
+                            **req,
+                            "service_idx": idx,
+                            "question": req["question"].format(service_name=svc_name),
+                        }
+                    )
+
+        elif rtype == "per_service_requirements":
+            for idx, svc in enumerate(draft.get("services", [])):
+                if svc.get("is_deleted"):
+                    continue
+                reqs = svc.get("resource_requirements") or []
+                has_assigned = any(
+                    isinstance(r, dict) and len(r.get("eligible_resource_ids", [])) > 0
+                    for r in reqs
+                )
+                if not has_assigned:
                     svc_name = svc.get("name", f"Service #{idx + 1}")
                     gaps.append(
                         {
@@ -275,7 +313,7 @@ async def node_load_draft(state: GraphState) -> dict:
         "pending_field": None,
         "semantic_note": None,
         "decision": None,
-        "pending_patches": None,
+        "pending_draft_update": None,
         "patch_retries": 0,
     }
 
@@ -295,16 +333,19 @@ class SemanticAction(BaseModel):
             "NEVER leave this field empty or null."
         ),
     )
-    patches: list[dict] | None = Field(
+    draft_update: StrictDraftPatchValidator | None = Field(
         default=None,
-        description="RFC 6902 JSON Patches to apply whenever user provides configuration details",
+        description=(
+            "Structured partial draft containing any configuration updates to merge into the draft. "
+            "Use this whenever the user provides services, staff/resources, hours, prices, or business details."
+        ),
     )
 
 
 async def node_llm_semantic_review(state: GraphState) -> dict:
     """
     Acts as the 'Main Brain' for the semantic phase.
-    Decides whether to apply JSON patches, ask the user a question, or finalize setup.
+    Decides whether to apply structured draft updates, ask the user a question, or finalize setup.
     """
     llm = _get_llm().with_structured_output(SemanticAction)
 
@@ -333,13 +374,13 @@ async def node_llm_semantic_review(state: GraphState) -> dict:
     post_patch_instruction = ""
     if is_system_feedback:
         post_patch_instruction = f"""
-*** SYSTEM EXECUTION FEEDBACK: PREVIOUS PATCH FAILED ***
+*** SYSTEM EXECUTION FEEDBACK: PREVIOUS UPDATE FAILED ***
 {system_feedback_text}
 
 CRITICAL RULES FOR RECOVERY:
-1. The draft was NOT updated with your patches.
+1. The draft was NOT updated with your previous update.
 2. You must NOT pretend or tell the user that any changes were applied.
-3. Analyze the error above, correct the invalid patch path, field name, or value, and output an 'update_schema' action with corrected patches now.
+3. Analyze the error above, correct the invalid field name, structure, or value, and output an 'update_schema' action with a corrected draft_update now.
 4. If a field was flagged as extra_forbidden, inspect the allowed schema specification below and use only valid allowed fields.
 """
 
@@ -389,9 +430,9 @@ REQUIRED MINIMUM DEPLOYMENT CHECKLIST (These must be configured before the agent
 CONVERSATIONAL GUIDANCE:
 - You are holding a natural, consultative setup conversation with the user.
 - The user may configure their business in ANY order (e.g. they might describe multiple services first, then set hours, then introduce staff/rooms). NEVER force the user into a rigid sequence.
-- INCREMENTAL UPDATES (CRITICAL): The REQUIRED MINIMUM DEPLOYMENT CHECKLIST above applies ONLY to 'finalize' (going live). It is NOT a requirement for 'update_schema'! You MUST apply patches incrementally as details are provided. For example, if the user gives services or business name, apply them immediately to the draft canvas even if phone number, timezone, or resources are still missing. NEVER withhold patches waiting for a "complete" configuration!
-- If the user provides service, staff, or business details, generate all required JSON patches immediately.
-- If you have just applied patches or if the user asks what to do next, proactively and conversationally prompt for 1 or 2 missing items from the checklist above.
+- INCREMENTAL UPDATES (CRITICAL): The REQUIRED MINIMUM DEPLOYMENT CHECKLIST above applies ONLY to 'finalize' (going live). It is NOT a requirement for 'update_schema'! You MUST apply updates incrementally in `draft_update` as details are provided. For example, if the user gives services or business name, apply them immediately to the draft canvas even if phone number, timezone, or resources are still missing. NEVER withhold updates waiting for a "complete" configuration!
+- If the user provides service, staff, or business details, generate all required updates in `draft_update` immediately.
+- If you have just applied an update or if the user asks what to do next, proactively and conversationally prompt for 1 or 2 missing items from the checklist above.
 - If there is no conversation history yet, greet the user warmly as their Schedulux AI setup assistant and ask for their business name and what services they provide.
 - NEVER guess external user details (phone number, prices, staff names).
 - CRITICAL: DO NOT choose 'finalize' if ANY items from the REQUIRED MINIMUM DEPLOYMENT CHECKLIST above are still missing. If the user asks to save/finalize while items are missing, choose 'ask_user' and politely explain what is still needed before going live.
@@ -447,13 +488,19 @@ Your job is to review the JSON draft, apply user changes, and converse with the 
 {summary_block}{facts_block}{gaps_block}{optional_features_block}
 
 CRITICAL RULES FOR REASONING & ACTIONS:
-1. GRAMMAR & CASING: Automatically correct spelling, casing, and grammar from user messages before generating patches (e.g., "tier punchuree repai" -> "Tire Puncture Repair").
-2. SINGLE-TURN PATCHES: If the user provides multiple updates, generate ALL required JSON patches in a SINGLE turn. Do not break them down into multiple turns.
+1. GRAMMAR & CASING: Automatically correct spelling, casing, and grammar from user messages before generating draft_update (e.g., "tier punchuree repai" -> "Tire Puncture Repair").
+2. SINGLE-TURN UPDATES: If the user provides multiple updates, generate ALL required draft updates in `draft_update` in a SINGLE turn. Do not break them down into multiple turns.
 3. ANTI-HALLUCINATION / NEVER GUESS DETAILS:
    - NEVER assume, default, or invent external user details that the user did not provide (specifically: UPI IDs (upi_id), phone numbers, email addresses, or business verticals).
    - Internal system slugs ('resource_id', 'service_id') are NOT user details—always auto-generate them from the name (e.g. "Dr. Shijisha" -> "res_shijisha"). NEVER ask the user for an ID!
 4. STRICT JSON FORMATTING (NO COMMENTS):
    - Never include comments (// or /* */) anywhere inside JSON tool arguments. All tool arguments must be 100% strict JSON.
+5. MINIMAL DELTA UPDATES ONLY (STRICT NO-ECHO):
+   - In `draft_update`, output ONLY the specific section and fields being added or modified in this turn.
+   - NEVER echo back unchanged sections. For example, if updating guardrails or operating hours, do NOT include `services` or `resources` in `draft_update`.
+   - In `services[]` or `resources[]`, ONLY include the single item being added or modified. NEVER re-emit the entire array of existing items.
+   - Omitting untouched fields is completely safe — the backend JSON merge engine preserves all unmentioned draft data automatically.
+   - NEVER output `services` or `resources` just because global policies (like OTP, timezone, or business profile) changed, unless the user explicitly requested a change on that specific service or resource.
 
 DOMAIN INTEGRITY & DEPENDENCY RULES:
 1. DEPOSITS & PAYMENTS (UPI ONLY):
@@ -477,26 +524,45 @@ DOMAIN INTEGRITY & DEPENDENCY RULES:
    - ALWAYS automatically derive IDs yourself from entity names:
      * For resources: "res_" + sanitized name (e.g., "Dr. Shijisha" -> `res_shijisha`, "Nurse Bob" -> `res_nurse_bob`, "Chair 1" -> `res_chair_1`).
      * For services: "srv_" + sanitized name (e.g., "Deep Cleaning" -> `srv_deep_cleaning`).
+   - RENAMING OR EDITING EXISTING ENTITIES (ID PRESERVATION):
+     * When the user asks to rename or modify an existing resource or service (e.g. "change Mithul name to Mithul Kumar", "rename Room 1 to Suite A", "rename Suit Stitching to Premium Suit Stitching"):
+       - You MUST find the existing entity in "Current Draft" and preserve its exact `resource_id` or `service_id`!
+       - In `draft_update`, set `resource_id: "<existing_res_id>"` (or `service_id: "<existing_srv_id>"`) and set `name` to the new name.
+       - NEVER generate a new ID when renaming an existing entity, otherwise it creates duplicate zombie records in the database!
    - WHEN THE USER SAYS TO ADD A RESOURCE (e.g. "Add Dr. Shijisha", "she is a staff add her", "Add Room 2"):
      * Choose 'update_schema' IMMEDIATELY.
-     * Generate an 'add' JSON patch appending to `/resources/-` with:
-       {{"resource_id": "res_<sanitized_name>", "resource_type": "staff" (or "room" / "chair" / "bay" / "equipment" if physical), "name": "<Resource Name>", "title": "Specialist", "category": "General", "description": "", "is_bookable": true, "dispatch_status": "active", "custom_shift_overrides": {{}}}}
+     * Include the resource in `draft_update.resources` with:
+       {{"name": "<Resource Name>", "resource_type": "staff" (or "room" / "chair" / "bay" / "equipment" if physical), "title": "Specialist", "category": "General", "description": "", "is_bookable": true, "dispatch_status": "active", "custom_shift_overrides": {{}}}}
      * DO NOT ask the user for `resource_id`, title, or category as a blocker. Add the resource to the canvas first, and let the user refine optional details later if they want.
-   - AT LEAST ONE RESOURCE IS MANDATORY: `resources[]` MUST contain at least one bookable resource (a staff member or a physical asset like a room, chair, or bay). If `resources[]` is empty, you CANNOT finalize; you MUST choose 'ask_user' and ask who or what delivers their service.
+   - AT LEAST ONE RESOURCE IS MANDATORY: `resources[]` MUST contain at least one bookable resource (a staff member or a physical asset like a room, chair, or bay). If all resources are deleted or `resources[]` is empty, you CANNOT finalize; you MUST choose 'ask_user' and ask who or what delivers their service.
+    - SOFT DELETIONS (REMOVING RESOURCES OR SERVICES):
+      * When the user asks to remove, delete, or retire a resource (e.g. "remove Manoj Kumar", "delete Dr. Bob", "remove Room 1"):
+        - DO NOT claim in conversational text that you removed it without emitting the update!
+        - Action MUST be 'update_schema'.
+        - In `draft_update.resources`, locate the resource and set:
+          {{"resource_id": "<res_id>", "name": "<name>", "is_deleted": true, "dispatch_status": "retired", "is_bookable": false}}
+        - In `draft_update.services`, remove `<res_id>` from all `resource_requirements[].eligible_resource_ids`.
+        - If any service is left with NO bookable resources as a result, WARN the user and explicitly ask who/what will deliver that service.
+      * When the user asks to remove or delete a service:
+        - Action MUST be 'update_schema'.
+        - In `draft_update.services`, set:
+          {{"service_id": "<srv_id>", "name": "<name>", "is_deleted": true}}
     - RESOURCE-TO-SERVICE LINKING & RESOURCE REQUIREMENTS (ENTERPRISE MODEL):
       * `services[].resource_requirements` is the ONLY place where required resources and providers are defined. Each requirement item contains:
         {{"role": "<Role Name e.g. Lead Doctor, Room, Bay, Therapist>", "resource_type": "staff"|"room"|"chair"|"bay"|"equipment"|"asset", "count": 1, "eligible_resource_ids": ["res_..."], "selection_mode": "user_selectable"|"auto_assign"}}
+      * MANDATORY WARNING FOR SERVICES WITHOUT REQUIREMENTS:
+        - Every active service MUST have at least 1 bookable resource in `resource_requirements`.
+        - If ANY service lacks `resource_requirements` or has empty `eligible_resource_ids`:
+          * You MUST actively WARN the user and EXPLICITLY ASK who or what delivers that service:
+            "⚠️ Service '{{service_name}}' currently has no assigned staff or equipment to deliver it. Who or what should deliver this service (e.g. a specific tailor, stylist, doctor, room, or machine) so customers can book appointments?"
+          * You CANNOT finalize while any active service has unassigned resource requirements.
       * INTELLIGENT SELECTION MODE (`selection_mode`):
         - Set `selection_mode: "user_selectable"` for human specialists (Doctors, Stylists, Consultants) where clients can pick a preferred person, OR for bookable spaces/units (Hotel Rooms, Conference Rooms).
         - Set `selection_mode: "auto_assign"` for internal clinic equipment, dental chairs, operation bays, or vehicles that the system should automatically lock behind the scenes without asking the client.
         - DO NOT interrogate the user with tedious questions for internal equipment like chairs or bays; deduce it automatically! Only ask if truly ambiguous (e.g., "Do guests select their specific cabin, or is it auto-assigned upon arrival?").
       * `count` indicates how many simultaneous resources are required from that pool (e.g. `count: 2` for a couples massage requiring 2 therapists from a pool of 5). Default is 1.
-      * WHENEVER you add or modify resources, you MUST ALSO emit patches to update `resource_requirements` on the matching service(s) IN THE SAME PATCH BATCH.
+      * WHENEVER you add or modify resources, update `resource_requirements` on the matching service(s) in `draft_update.services` IN THE SAME TURN.
       * Match resources to services by type/category/name context (e.g. AC rooms → AC Homestay service, Non-AC rooms → Non-AC Homestay service, staff doctor → consultation service).
-      * EXAMPLE: User says "I have 3 AC rooms: 300, 301, 302 and 2 Non-AC rooms: 400, 401":
-        - Patches to add resources: `add /resources/- {{res_room_300...}}`, `add /resources/- {{res_room_301...}}`, etc.
-        - ALSO add patches to link: `replace /services/0/resource_requirements [{{"role": "Room", "resource_type": "room", "count": 1, "eligible_resource_ids": ["res_room_300","res_room_301","res_room_302"], "selection_mode": "user_selectable"}}]` (for AC Homestay at index 0)
-        - AND: `replace /services/1/resource_requirements [{{"role": "Room", "resource_type": "room", "count": 1, "eligible_resource_ids": ["res_room_400","res_room_401"], "selection_mode": "user_selectable"}}]` (for Non-AC Homestay at index 1)
       * NEVER leave `resource_requirements` empty or with empty `eligible_resource_ids` on any service that has corresponding resources in `resources[]`.
    - INTELLIGENT BOOKING MODE DETERMINATION (`booking_mode`):
      Every service MUST have `booking_mode` set to EXACTLY one of these two lowercase string enums:
@@ -538,37 +604,23 @@ DOMAIN INTEGRITY & DEPENDENCY RULES:
 8. BUSINESS TIMEZONE (MANDATORY FOR CALENDAR ACCURACY):
    - Operating hours, service durations, and appointment slots are meaningless without an accurate business timezone.
    - Schedulux requires standard IANA timezone identifiers (e.g., "Asia/Kolkata", "America/New_York", "America/Los_Angeles", "Europe/London", "Asia/Dubai", etc.).
-   - If the user mentions a location, state, city, or local timezone acronym (e.g., "we're in California", "Mumbai", "London", "EST", "IST"), map it to the proper IANA timezone (e.g. "America/Los_Angeles", "Asia/Kolkata", "Europe/London", "America/New_York") and generate an update_schema patch for `/business_profile/timezone`.
+   - If the user mentions a location, state, city, or local timezone acronym (e.g., "we're in California", "Mumbai", "London", "EST", "IST"), map it to the proper IANA timezone (e.g. "America/Los_Angeles", "Asia/Kolkata", "Europe/London", "America/New_York") and include `business_profile: {{"timezone": "..."}}` in `draft_update`.
    - Timezone is a mandatory deployment item: if `business_profile.timezone` is missing from the checklist, actively ask the user what timezone their business operates in before finalizing.
 {post_patch_instruction}
-CRITICAL: When generating JSON patches, you MUST use ONLY these exact fields:
-- business_profile: name, vertical, timezone, locale, currency, address
-- business_profile.contact: support_email, public_phone, escalation_phone
-- business_profile.terminology: customer_singular, customer_plural, primary_metric, action_metric
-- business_profile.brand: primary_color, logo_url
-- services[]: service_id, name, category, description, duration_minutes, buffer_minutes, booking_mode ("time_slot"|"date_range"), resource_requirements, recall_interval_days
-- services[].resource_requirements[]: role, resource_type, count, eligible_resource_ids, selection_mode ("user_selectable"|"auto_assign")
-- services[].price: type (fixed|starting_at|hourly|free|custom), amount, currency
-- services[].deposit: required, amount, processor ("upi_direct"), upi_id, qr_code_url, confirmation_method ("utr_reference"), payment_instructions
-- services[].verification: require_otp (boolean|null)
-- resources[]: resource_id, resource_type (staff|room|chair|bay|equipment|asset|vehicle), name, title, category, description, is_bookable, dispatch_status (active|on_leave|maintenance|retired|inactive), custom_shift_overrides
-- operating_hours: monday, tuesday, wednesday, thursday, friday, saturday, sunday (each is list of {{start: "HH:MM", end: "HH:MM"}}), blackout_dates (list of {{date: "YYYY-MM-DD", reason, is_closed}})
-- scheduling_engine: booking_mode ("time_slot"|"date_range"), default_lead_time_hours, max_advance_booking_days, cancellation_window_hours, hold_duration_minutes
-- widget_config: agent_name, avatar_url, initial_greeting, fallback_message, position, launcher_style, sound_on_load, auto_expand_delay_seconds, platform_sources, whitelisted_domains
-- compliance: hipaa_mode, phi_scrubbing, data_retention_policy, zero_hallucination_mode, audit_trail_enabled
-- guardrails.verification_policy: require_otp_for_new_booking, require_otp_for_reschedule, require_otp_for_cancel
-- guardrails.phi_scrubbing: enabled, policy, description, hipaa_compliant
-- guardrails.triage_emergency: enabled, keywords, response_override
-- guardrails.human_handoff: enabled, trigger_topics, reception_contact, handoff_message
-- supervisor_prompt: (string)
+CRITICAL: When generating `draft_update`, adhere strictly to the MINIMAL DELTA rule (STRICT NO-ECHO).
+Provide a structured partial configuration using ONLY the specific section(s) being modified right now:
+- business_profile: (ONLY if modifying profile) name, vertical, timezone, locale, currency, address, contact, terminology, brand
+- services[]: (ONLY changed or newly added services) service_id, name, category, description, duration_minutes, buffer_minutes, booking_mode ("time_slot"|"date_range"), price, deposit, verification, resource_requirements, recall_interval_days, is_deleted
+- resources[]: (ONLY changed or newly added resources) resource_id, resource_type (staff|room|chair|bay|equipment|asset|vehicle), name, title, category, description, is_bookable, dispatch_status (active|on_leave|maintenance|retired|inactive), custom_shift_overrides, is_deleted
+- operating_hours: (ONLY if changing schedule) monday, tuesday, wednesday, thursday, friday, saturday, sunday (each is list of {{start: "HH:MM", end: "HH:MM"}}), blackout_dates (list of {{date: "YYYY-MM-DD", reason, is_closed}})
+- scheduling_engine: (ONLY if changing engine settings) booking_mode ("time_slot"|"date_range"), default_lead_time_hours, max_advance_booking_days, cancellation_window_hours, hold_duration_minutes
+- widget_config: (ONLY if changing widget styling) agent_name, avatar_url, initial_greeting, fallback_message, position, launcher_style, sound_on_load, auto_expand_delay_seconds, platform_sources, whitelisted_domains
+- compliance: (ONLY if modifying compliance) hipaa_mode, phi_scrubbing, data_retention_policy, zero_hallucination_mode, audit_trail_enabled
+- guardrails: (ONLY if modifying guardrails/OTP/handoff) verification_policy, phi_scrubbing, triage_emergency, human_handoff
+- supervisor_prompt: (ONLY if modifying supervisor prompt) (string)
 
 Current Draft (Token-Optimized TOON Notation):
 {_format_draft_toon(state["draft"])}
-
-NOTE ON TOON NOTATION:
-The draft above is formatted in TOON (Token-Oriented Object Notation) for optimal token efficiency.
-- Arrays (e.g. `services[N]`, `resources[N]`) declare keys in `{{...}}` headers followed by compact data rows, or YAML lists with `-`.
-- Array rows correspond to 0-indexed elements (row 1 is index 0, row 2 is index 1, etc.) for your RFC 6902 patch paths (e.g. `/services/0/price/amount`).
 
 Recent Conversation:
 {history}
@@ -576,12 +628,12 @@ Recent Conversation:
 Decide your next action:
 CRITICAL ACTION SELECTION RULES (STRICT PRIORITY):
 1. 'update_schema' (HIGHEST PRIORITY):
-   - Whenever the user provides ANY configuration detail (e.g. business name, vertical, timezone, hours, services, prices, resources/rooms/staff, phone number), you MUST choose 'update_schema' and output the RFC 6902 JSON patches.
+   - Whenever the user provides ANY configuration detail (e.g. business name, vertical, timezone, hours, services, prices, resources/rooms/staff, phone number), you MUST choose 'update_schema' and output the `draft_update` with the partial configuration.
    - You MUST NOT choose 'ask_user' when the user provides configuration details, even if other checklist items or mandatory fields are still missing!
-   - SINGLE-TURN DUAL OUTPUT: In the SAME turn that you emit patches, your 'question' field must BOTH:
+   - SINGLE-TURN DUAL OUTPUT: In the SAME turn that you emit `draft_update`, your 'question' field must BOTH:
      1) Confirm the update in 1 natural sentence (e.g., "I've added Dr. Shijisha as a resource and updated your business hours.").
      2) Proactively ask the user for the NEXT missing item from the REQUIRED MINIMUM DEPLOYMENT CHECKLIST (e.g., "What are your services or pricing?").
-   - NEVER pretend or say in text "I've set your business name to..." or "I've updated..." unless you are also generating the patches for it right now.
+   - NEVER pretend or say in text "I've set your business name to..." or "I've updated..." unless you are also providing the `draft_update` for it right now.
 2. 'ask_user':
    - Choose 'ask_user' if the user asked a question, sent a greeting, or if no new configuration details were provided in their message.
 3. 'finalize':
@@ -638,13 +690,13 @@ CRITICAL OUTPUT RULE — QUESTION FIELD IS MANDATORY:
                 print(f"[Semantic Agent Fallback Error] {fe}", flush=True)
                 return {
                     "decision": "ask_user",
-                    "pending_patches": None,
+                    "pending_draft_update": None,
                     "semantic_note": "I encountered an error processing that update. Would you like to try again?",
                 }
         else:
             return {
                 "decision": "ask_user",
-                "pending_patches": None,
+                "pending_draft_update": None,
                 "semantic_note": "I encountered an error processing that update. Would you like to try again?",
             }
 
@@ -655,99 +707,183 @@ CRITICAL OUTPUT RULE — QUESTION FIELD IS MANDATORY:
         else:
             follow_up = "Configuration updated. What would you like to configure next?"
 
-    if resp.patches:
+    update_dict = resp.draft_update.model_dump(exclude_unset=True) if resp.draft_update else None
+
+    if update_dict:
+        keys_summary = list(update_dict.keys())
         print(
-            f"[Semantic Agent Brain] Decided to update schema with {len(resp.patches)} patches.",
+            f"[Semantic Agent Brain] Decided to update schema with structured update: {keys_summary}.",
             flush=True,
         )
         return {
             "decision": "update_schema",
-            "pending_patches": resp.patches,
+            "pending_draft_update": update_dict,
             "semantic_note": follow_up,
         }
 
-    if resp.action == "ask_user":
+    if resp.action == "ask_user" or (resp.action == "update_schema" and not update_dict):
         print(f"[Semantic Agent Brain] Asking: {follow_up[:120]}", flush=True)
         return {
             "decision": "ask_user",
-            "pending_patches": None,
+            "pending_draft_update": None,
             "semantic_note": follow_up,
         }
     elif resp.action == "finalize":
         print("[Semantic Agent Brain] Finalizing setup.", flush=True)
         return {
             "decision": "finalize",
-            "pending_patches": None,
+            "pending_draft_update": None,
             "semantic_note": follow_up
             or "✅ Your agent configuration has been saved and deployed live!",
         }
     else:
         return {
             "decision": "ask_user",
-            "pending_patches": None,
+            "pending_draft_update": None,
             "semantic_note": follow_up,
         }
 
 
-from agent_orchestrator.models import StrictDraftPatchValidator
+_MERGE_SCHEMA = {
+    "properties": {
+        "services": {
+            "mergeStrategy": "arrayMergeById",
+            "mergeOptions": {"idRef": "service_id"},
+        },
+        "resources": {
+            "mergeStrategy": "arrayMergeById",
+            "mergeOptions": {"idRef": "resource_id"},
+        },
+        "operating_hours": {
+            "properties": {
+                "blackout_dates": {
+                    "mergeStrategy": "arrayMergeById",
+                    "mergeOptions": {"idRef": "date"},
+                }
+            }
+        },
+    }
+}
+_DRAFT_MERGER = Merger(_MERGE_SCHEMA)
 
 
-def _prepare_draft_for_patches(draft: dict, patches: list[dict]) -> tuple[dict, list[dict]]:
+def _slugify(val: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9]+", "_", val.strip().lower()).strip("_")
+    return cleaned or "item"
+
+
+def apply_draft_merge(base_draft: dict[str, Any], update_data: dict[str, Any]) -> dict[str, Any]:
     """
-    1. Auto-vivifies None parent objects into empty dicts along patch target paths.
-       Prevents jsonpatch from raising 'Document <class NoneType> does not support indexing'
-       when setting child fields like /business_profile/contact/public_phone where contact is None.
-    2. LLM-Tolerant Patch Normalization:
-       If the LLM emits op='replace' targeting an object property that does not exist yet,
-       auto-heals op to 'add' (which creates or updates in RFC 6902), preventing
-       'can't replace a non-existent object' exceptions.
+    Merges a structured partial draft update (RFC 7396 style) into base_draft.
+    - Resolves or generates service_id and resource_id matching existing names
+    - Merges services and resources by ID using arrayMergeById
+    - Replaces weekday operating hours if specified
+    - Merges nested dicts (business_profile, scheduling_engine, etc.) recursively
     """
-    d = copy.deepcopy(draft)
-    normalized_patches: list[dict] = []
-    for p in patches:
-        p_norm = copy.deepcopy(p)
-        parts = [s for s in p_norm.get("path", "").split("/") if s]
-        if parts:
-            curr = d
-            for i, seg in enumerate(parts[:-1]):
-                if isinstance(curr, dict):
-                    if curr.get(seg) is None:
-                        next_seg = parts[i + 1]
-                        if next_seg == "-" or next_seg.isdigit():
-                            curr[seg] = []
-                        else:
-                            curr[seg] = {}
-                    curr = curr[seg]
-                elif isinstance(curr, list) and seg.isdigit():
-                    idx = int(seg)
-                    if 0 <= idx < len(curr):
-                        curr = curr[idx]
 
-            leaf = parts[-1]
-            if p_norm.get("op") == "replace":
-                if isinstance(curr, dict) and leaf not in curr:
-                    p_norm["op"] = "add"
-                elif isinstance(curr, list) and leaf == "-":
-                    p_norm["op"] = "add"
+    print(update_data, flush=True)
+    if not update_data:
+        return base_draft
 
-        normalized_patches.append(p_norm)
-    return d, normalized_patches
+    up = copy.deepcopy(update_data)
+
+    if "services" in up and isinstance(up["services"], list):
+        base_services = {
+            s.get("name", "").strip().lower(): s.get("service_id")
+            for s in base_draft.get("services", [])
+            if s.get("name") and s.get("service_id")
+        }
+        base_services_by_id = {
+            s.get("service_id"): s for s in base_draft.get("services", []) if s.get("service_id")
+        }
+        for s in up["services"]:
+            if isinstance(s, dict):
+                name_key = s.get("name", "").strip().lower()
+
+                if name_key and name_key in base_services and base_services[name_key]:
+                    s["service_id"] = base_services[name_key]
+
+                elif s.get("service_id") and s.get("service_id") in base_services_by_id:
+                    pass
+
+                elif not s.get("service_id"):
+                    if name_key:
+                        s["service_id"] = f"srv_{_slugify(name_key)}"
+                    else:
+                        s["service_id"] = f"srv_{secrets.token_hex(4)}"
+                if s.get("is_deleted"):
+                    s.setdefault("deleted_at", datetime.now(UTC).isoformat())
+
+    if "resources" in up and isinstance(up["resources"], list):
+        base_resources = {
+            r.get("name", "").strip().lower(): r.get("resource_id")
+            for r in base_draft.get("resources", [])
+            if r.get("name") and r.get("resource_id")
+        }
+        base_resources_by_id = {
+            r.get("resource_id"): r for r in base_draft.get("resources", []) if r.get("resource_id")
+        }
+        for r in up["resources"]:
+            if isinstance(r, dict):
+                name_key = r.get("name", "").strip().lower()
+
+                if name_key and name_key in base_resources and base_resources[name_key]:
+                    r["resource_id"] = base_resources[name_key]
+
+                elif r.get("resource_id") and r.get("resource_id") in base_resources_by_id:
+                    pass
+
+                elif not r.get("resource_id"):
+                    if name_key:
+                        r["resource_id"] = f"res_{_slugify(name_key)}"
+                    else:
+                        r["resource_id"] = f"res_{secrets.token_hex(4)}"
+                if "custom_shift_overrides" in r and isinstance(r["custom_shift_overrides"], str):
+                    try:
+                        r["custom_shift_overrides"] = json.loads(r["custom_shift_overrides"])
+                    except Exception:
+                        r["custom_shift_overrides"] = {}
+                if r.get("is_deleted"):
+                    r.setdefault("deleted_at", datetime.now(UTC).isoformat())
+                    r["dispatch_status"] = "retired"
+                    r["is_bookable"] = False
+
+    merged = _DRAFT_MERGER.merge(base_draft, up)
+
+    deleted_res_ids = {
+        r.get("resource_id")
+        for r in merged.get("resources", [])
+        if isinstance(r, dict) and r.get("is_deleted") and r.get("resource_id")
+    }
+    if deleted_res_ids:
+        for svc in merged.get("services", []):
+            if isinstance(svc, dict) and "resource_requirements" in svc:
+                for rr in svc.get("resource_requirements") or []:
+                    if isinstance(rr, dict) and "eligible_resource_ids" in rr:
+                        rr["eligible_resource_ids"] = [
+                            rid for rid in rr["eligible_resource_ids"] if rid not in deleted_res_ids
+                        ]
+
+    return cast(dict[str, Any], merged)
 
 
-async def node_apply_json_patches(state: GraphState) -> dict:
+async def node_apply_draft_update(state: GraphState) -> dict:
     """
-    Execution / Tool Node: Applies RFC 6902 JSON patches to the draft.
+    Execution / Tool Node: Applies structured draft updates to the draft via JSON merge.
     Keeps mutation and side-effects strictly separate from LLM decision making.
-    Writes the patched draft directly to Redis cache and keeps state in LangGraph memory (0 MongoDB hits).
+    Writes the updated draft directly to Redis cache and keeps state in LangGraph memory (0 MongoDB hits).
     """
-    patches = state.get("pending_patches") or []
-    if not patches:
-        return {"decision": None, "pending_patches": None}
+    draft_update = state.get("pending_draft_update")
+    if not draft_update:
+        return {"decision": None, "pending_draft_update": None}
 
     try:
-        prepared_draft, normalized_patches = _prepare_draft_for_patches(state["draft"], patches)
-        patcher = jsonpatch.JsonPatch(normalized_patches)
-        updated_draft = patcher.apply(prepared_draft)
+        updated_draft = copy.deepcopy(state["draft"])
+        updated_draft = apply_draft_merge(updated_draft, draft_update)
+        print(
+            f"[Draft Merge Node] Successfully merged structured update: {list(draft_update.keys())}",
+            flush=True,
+        )
 
         StrictDraftPatchValidator.model_validate(updated_draft)
 
@@ -762,14 +898,10 @@ async def node_apply_json_patches(state: GraphState) -> dict:
             except Exception as re:
                 print(f"[Patch Node] Redis cache write warning: {re}", flush=True)
 
-        print(
-            f"[Patch Node] Applied {len(patches)} patches to draft and passed schema validation (cached in Redis).",
-            flush=True,
-        )
         return {
             "draft": updated_draft,
             "decision": "ask_user",
-            "pending_patches": None,
+            "pending_draft_update": None,
             "patch_retries": 0,
             "structural_gaps": _compute_structural_gaps(updated_draft),
             "semantic_note": state.get("semantic_note"),
@@ -777,17 +909,17 @@ async def node_apply_json_patches(state: GraphState) -> dict:
     except Exception as e:
         retries = state.get("patch_retries", 0) + 1
         print(
-            f"[Patch Node Error] Failed applying patches (or validation) [retry {retries}/3]: {e}",
+            f"[Draft Update Error] Failed applying draft update [retry {retries}/3]: {e}",
             flush=True,
         )
         if retries >= 3:
             print(
-                f"[Patch Node Error] Max retries reached ({retries}). Breaking loop to ask user.",
+                f"[Draft Update Error] Max retries reached ({retries}). Breaking loop to ask user.",
                 flush=True,
             )
             return {
                 "decision": "ask_user",
-                "pending_patches": None,
+                "pending_draft_update": None,
                 "patch_retries": 0,
                 "semantic_note": (
                     f"I encountered an error updating the draft configuration: {e}. "
@@ -796,11 +928,11 @@ async def node_apply_json_patches(state: GraphState) -> dict:
             }
         return {
             "decision": None,
-            "pending_patches": None,
+            "pending_draft_update": None,
             "patch_retries": retries,
             "messages": [
                 SystemMessage(
-                    content=f"Error applying JSON patches: {e}. The draft was NOT updated. Please generate a corrected patch."
+                    content=f"Error applying configuration update: {e}. The draft was NOT updated. Please provide a corrected draft_update."
                 )
             ],
         }
@@ -994,13 +1126,13 @@ async def node_block_incomplete_finalize(state: GraphState) -> dict:
 def route_semantic(state: GraphState) -> str:
     """
     Routes from semantic review based on the explicit decision state:
-      - 'update_schema' -> apply_json_patches
+      - 'update_schema' -> apply_draft_update
       - 'ask_user'      -> ask_human_semantic
       - 'finalize'      -> block_incomplete_finalize (if checklist gaps remain) else finalize_and_save
     """
     decision = state.get("decision")
     if decision == "update_schema":
-        return "apply_json_patches"
+        return "apply_draft_update"
     elif decision == "ask_user":
         return "ask_human_semantic"
     elif decision == "finalize":
@@ -1014,9 +1146,9 @@ def route_semantic(state: GraphState) -> str:
 
 def route_after_patch(state: GraphState) -> str:
     """
-    Routes from patch application node:
-      - If patches were applied or max retries were exceeded (decision == 'ask_user'), routes directly to ask_human_semantic.
-      - Otherwise (patch failed and retries < 3), returns to LLM semantic review for self-correction.
+    Routes from draft update node:
+      - If update was applied or max retries were exceeded (decision == 'ask_user'), routes directly to ask_human_semantic.
+      - Otherwise (update failed and retries < 3), returns to LLM semantic review for self-correction.
     """
     if state.get("decision") == "ask_user":
         return "ask_human_semantic"
@@ -1029,7 +1161,7 @@ def build_tenant_onboarding_graph():
 
     builder.add_node("load_draft", node_load_draft)
     builder.add_node("llm_semantic_review", node_llm_semantic_review)
-    builder.add_node("apply_json_patches", node_apply_json_patches)
+    builder.add_node("apply_draft_update", node_apply_draft_update)
     builder.add_node("ask_human_semantic", node_ask_human_semantic)
     builder.add_node("block_incomplete_finalize", node_block_incomplete_finalize)
     builder.add_node("finalize_and_save", node_finalize_and_save)
@@ -1041,7 +1173,7 @@ def build_tenant_onboarding_graph():
         "llm_semantic_review",
         route_semantic,
         {
-            "apply_json_patches": "apply_json_patches",
+            "apply_draft_update": "apply_draft_update",
             "ask_human_semantic": "ask_human_semantic",
             "block_incomplete_finalize": "block_incomplete_finalize",
             "finalize_and_save": "finalize_and_save",
@@ -1049,7 +1181,7 @@ def build_tenant_onboarding_graph():
     )
 
     builder.add_conditional_edges(
-        "apply_json_patches",
+        "apply_draft_update",
         route_after_patch,
         {
             "ask_human_semantic": "ask_human_semantic",
@@ -1095,7 +1227,7 @@ async def start_onboarding_session(tenant_id: str, draft: dict, agent_id: str = 
         "pending_field": None,
         "semantic_note": None,
         "decision": None,
-        "pending_patches": None,
+        "pending_draft_update": None,
         "status": "onboarding",
         "patch_retries": 0,
     }
@@ -1160,7 +1292,6 @@ async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: 
                 .to_list()
             )
 
-           
             from agent_orchestrator.config import MEMORY_TRIGGER_TOKEN_THRESHOLD
 
             total_active_tokens = sum(
@@ -1194,7 +1325,7 @@ async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: 
         "pending_field": None,
         "semantic_note": f"User requested change: {user_answer}",
         "decision": None,
-        "pending_patches": None,
+        "pending_draft_update": None,
         "status": "onboarding",
         "patch_retries": 0,
     }

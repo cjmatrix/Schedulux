@@ -41,6 +41,8 @@ export interface ServiceInfo {
     agent_id: string;
     verification?: ServiceVerificationInfo | undefined;
     resource_requirements: ResourceRequirementInfo[];
+    is_deleted?: boolean | undefined;
+    deleted_at?: string | undefined;
 }
 export interface CreateServiceRequest {
     tenant_id: string;
@@ -53,10 +55,12 @@ export interface CreateServiceRequest {
     deposit: DepositInfo | undefined;
     recall_interval_days: number;
     booking_mode?: string | undefined;
-    agent_id?: string | undefined;
+    agent_id: string;
     service_id?: string | undefined;
     verification?: ServiceVerificationInfo | undefined;
     resource_requirements: ResourceRequirementInfo[];
+    is_deleted?: boolean | undefined;
+    deleted_at?: string | undefined;
 }
 export interface GetServiceRequest {
     tenant_id: string;
@@ -67,7 +71,7 @@ export interface ListServicesRequest {
     page: number;
     limit: number;
     category: string;
-    agent_id?: string | undefined;
+    agent_id: string;
     search?: string | undefined;
 }
 export interface ServiceSummaryInfo {
@@ -98,6 +102,8 @@ export interface UpdateServiceRequest {
     agent_id?: string | undefined;
     verification?: ServiceVerificationInfo | undefined;
     resource_requirements: ResourceRequirementInfo[];
+    is_deleted?: boolean | undefined;
+    deleted_at?: string | undefined;
 }
 export interface DeleteServiceRequest {
     tenant_id: string;
@@ -125,6 +131,8 @@ export interface ResourceInfo {
     created_at: string;
     updated_at: string;
     agent_id: string;
+    is_deleted?: boolean | undefined;
+    deleted_at?: string | undefined;
 }
 export interface CreateResourceRequest {
     tenant_id: string;
@@ -136,8 +144,10 @@ export interface CreateResourceRequest {
     is_bookable: boolean;
     dispatch_status: string;
     custom_shift_overrides_json: string;
-    agent_id?: string | undefined;
+    agent_id: string;
     resource_id?: string | undefined;
+    is_deleted?: boolean | undefined;
+    deleted_at?: string | undefined;
 }
 export interface GetResourceRequest {
     tenant_id: string;
@@ -149,7 +159,7 @@ export interface ListResourcesRequest {
     limit: number;
     resource_type: string;
     dispatch_status: string;
-    agent_id?: string | undefined;
+    agent_id: string;
     search?: string | undefined;
     category?: string | undefined;
 }
@@ -178,6 +188,8 @@ export interface UpdateResourceRequest {
     dispatch_status?: string | undefined;
     custom_shift_overrides_json?: string | undefined;
     agent_id?: string | undefined;
+    is_deleted?: boolean | undefined;
+    deleted_at?: string | undefined;
 }
 export interface DeleteResourceRequest {
     tenant_id: string;
@@ -272,7 +284,7 @@ export interface BookingInfo {
 }
 export interface CreateBookingRequest {
     tenant_id: string;
-    agent_id?: string | undefined;
+    agent_id: string;
     service_id: string;
     resource_id?: string | undefined;
     start_time: string;
@@ -292,7 +304,7 @@ export interface BookingResponse {
 }
 export interface GetAvailabilityRequest {
     tenant_id: string;
-    agent_id?: string | undefined;
+    agent_id: string;
     service_id: string;
     start_date: string;
     end_date?: string | undefined;

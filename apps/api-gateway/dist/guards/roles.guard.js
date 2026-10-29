@@ -15,14 +15,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RolesGuard = void 0;
 const common_1 = require("@nestjs/common");
 const core_1 = require("@nestjs/core");
+const messages_constant_js_1 = require("../constants/messages.constant.js");
 const roles_decorator_js_1 = require("../decorators/roles.decorator.js");
 let RolesGuard = class RolesGuard {
-    reflector;
-    constructor(reflector) {
-        this.reflector = reflector;
+    _reflector;
+    constructor(_reflector) {
+        this._reflector = _reflector;
     }
     canActivate(context) {
-        const requiredRoles = this.reflector.getAllAndOverride(roles_decorator_js_1.ROLES_KEY, [
+        const requiredRoles = this._reflector.getAllAndOverride(roles_decorator_js_1.ROLES_KEY, [
             context.getHandler(),
             context.getClass(),
         ]);
@@ -32,7 +33,7 @@ let RolesGuard = class RolesGuard {
         const request = context.switchToHttp().getRequest();
         const user = request.tenant || request.dashboardUser;
         if (!user) {
-            throw new common_1.ForbiddenException('User not authenticated');
+            throw new common_1.ForbiddenException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.USER_NOT_AUTHENTICATED);
         }
         const hasRole = requiredRoles.includes(user.role);
         if (!hasRole) {

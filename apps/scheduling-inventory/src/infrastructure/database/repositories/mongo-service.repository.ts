@@ -14,11 +14,11 @@ import { ServiceModel } from '../schemas/service.schema.js';
 export class MongoServiceRepository implements IServiceRepository {
   constructor(
     @Inject(UNIT_OF_WORK)
-    private readonly unitOfWork: IUnitOfWork,
+    private readonly _unitOfWork: IUnitOfWork,
   ) {}
 
   async create(service: ServiceEntity): Promise<ServiceEntity> {
-    const session = this.unitOfWork?.getSession();
+    const session = this._unitOfWork?.getSession();
     const persistenceData = ServiceMapper.toPersistence(service);
     if (session) {
       const [created] = await ServiceModel.create([persistenceData], { session });
@@ -114,7 +114,7 @@ export class MongoServiceRepository implements IServiceRepository {
   }
 
   async update(service: ServiceEntity): Promise<ServiceEntity | null> {
-    const session = this.unitOfWork?.getSession();
+    const session = this._unitOfWork?.getSession();
     const persistenceData = ServiceMapper.toPersistence(service);
     const updated = await ServiceModel.findOneAndUpdate(
       { _id: service.id, tenant_id: service.tenantId, is_deleted: { $ne: true } },
@@ -127,7 +127,7 @@ export class MongoServiceRepository implements IServiceRepository {
   }
 
   async delete(tenantId: string, serviceId: string): Promise<boolean> {
-    const session = this.unitOfWork?.getSession();
+    const session = this._unitOfWork?.getSession();
     const result = await ServiceModel.updateOne(
       { _id: serviceId, tenant_id: tenantId, is_deleted: { $ne: true } },
       { $set: { is_deleted: true, deleted_at: new Date() } },

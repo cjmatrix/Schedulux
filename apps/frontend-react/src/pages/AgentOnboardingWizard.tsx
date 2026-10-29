@@ -103,8 +103,12 @@ export default function AgentOnboardingWizard() {
     dailyHoursText = `${totalDays} days/week`;
   }
 
-  const rawResources = Array.isArray(draftSchema?.resources) ? draftSchema.resources : [];
-  const rawServices = Array.isArray(draftSchema?.services) ? draftSchema.services : [];
+  const rawResources = (
+    Array.isArray(draftSchema?.resources) ? draftSchema.resources : []
+  ).filter((r: any) => !r.is_deleted);
+  const rawServices = (
+    Array.isArray(draftSchema?.services) ? draftSchema.services : []
+  ).filter((s: any) => !s.is_deleted);
 
   const servicesList: OnboardingServiceItem[] = useMemo(() => {
     return rawServices.map((svc: Partial<ServiceInfo>, idx: number): OnboardingServiceItem => {

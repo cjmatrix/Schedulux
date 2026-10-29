@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import urllib.parse
 from datetime import datetime
@@ -14,7 +15,6 @@ from pymongo import AsyncMongoClient, IndexModel
 
 
 class TolerantBaseModel(BaseModel):
-  
     model_config = ConfigDict(extra="ignore")
 
     @model_validator(mode="before")
@@ -172,6 +172,8 @@ class ResourceEmbed(TolerantBaseModel):
     is_bookable: bool = True
     dispatch_status: DispatchStatus = DispatchStatus.ACTIVE
     custom_shift_overrides: dict[str, object] = Field(default_factory=dict)
+    is_deleted: bool = False
+    deleted_at: str | None = None
 
     @field_validator("category", mode="before")
     @classmethod
@@ -179,6 +181,21 @@ class ResourceEmbed(TolerantBaseModel):
         if not v or not str(v).strip():
             return "General"
         return str(v).strip()
+
+    @field_validator("custom_shift_overrides", mode="before")
+    @classmethod
+    def parse_custom_shift_overrides(cls, v: object) -> dict[str, object]:
+        if not v:
+            return {}
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                return parsed if isinstance(parsed, dict) else {}
+            except Exception:
+                return {}
+        if isinstance(v, dict):
+            return v
+        return {}
 
 
 class PriceEmbed(TolerantBaseModel):
@@ -240,7 +257,9 @@ class ResourceRequirementEmbed(TolerantBaseModel):
             if not data.get("selection_mode"):
                 r_type = str(data.get("resource_type") or "").lower()
                 data["selection_mode"] = (
-                    SelectionMode.USER_SELECTABLE if r_type == "staff" else SelectionMode.AUTO_ASSIGN
+                    SelectionMode.USER_SELECTABLE
+                    if r_type == "staff"
+                    else SelectionMode.AUTO_ASSIGN
                 )
         return data
 
@@ -268,6 +287,8 @@ class ServiceEmbed(TolerantBaseModel):
     verification: ServiceVerificationEmbed | None = None
     resource_requirements: list[ResourceRequirementEmbed] = Field(default_factory=list)
     recall_interval_days: int | None = 0
+    is_deleted: bool = False
+    deleted_at: str | None = None
 
     @field_validator("category", mode="before")
     @classmethod
@@ -444,7 +465,6 @@ class AgentRuntimeConfig(Document):
         ]
 
 
-
 class StrictContactSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     support_email: str | None = None
@@ -525,6 +545,8 @@ class StrictServiceSchema(BaseModel):
     verification: StrictServiceVerificationSchema | None = None
     resource_requirements: list[StrictResourceRequirementSchema] | None = None
     recall_interval_days: int | None = None
+    is_deleted: bool | None = None
+    deleted_at: str | None = None
 
 
 class StrictResourceSchema(BaseModel):
@@ -538,6 +560,23 @@ class StrictResourceSchema(BaseModel):
     is_bookable: bool | None = None
     dispatch_status: DispatchStatus | None = None
     custom_shift_overrides: dict | None = None
+    is_deleted: bool | None = None
+    deleted_at: str | None = None
+
+    @field_validator("custom_shift_overrides", mode="before")
+    @classmethod
+    def parse_custom_shift_overrides(cls, v: object) -> dict:
+        if not v:
+            return {}
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                return parsed if isinstance(parsed, dict) else {}
+            except Exception:
+                return {}
+        if isinstance(v, dict):
+            return v
+        return {}
 
 
 class StrictTimeSlotSchema(BaseModel):
@@ -642,15 +681,42 @@ class StrictDraftPatchValidator(BaseModel):
     tenant_id: str | None = None
     agent_id: str | None = None
     creation_source: str | None = "custom"
-    business_profile: StrictBusinessProfileSchema | None = None
-    services: list[StrictServiceSchema] | None = None
-    resources: list[StrictResourceSchema] | None = None
-    operating_hours: StrictOperatingHoursSchema | None = None
-    scheduling_engine: StrictSchedulingEngineSchema | None = None
-    widget_config: StrictWidgetConfigSchema | None = None
-    compliance: StrictComplianceSchema | None = None
-    guardrails: StrictGuardrailsSchema | None = None
-    supervisor_prompt: str | None = None
+    business_profile: StrictBusinessProfileSchema | None = Field(
+        default=None,
+        description="ONLY include if actively modifying business profile details (name, timezone, etc.). Omit if unchanged.",
+    )
+    services: list[StrictServiceSchema] | None = Field(
+        default=None,
+        description="ONLY include if actively adding, editing, or deleting services. Omit completely if services are unchanged.",
+    )
+    resources: list[StrictResourceSchema] | None = Field(
+        default=None,
+        description="ONLY include if actively adding, editing, or deleting resources. Omit completely if resources are unchanged.",
+    )
+    operating_hours: StrictOperatingHoursSchema | None = Field(
+        default=None,
+        description="ONLY include if actively modifying weekly operating hours or blackout dates. Omit if unchanged.",
+    )
+    scheduling_engine: StrictSchedulingEngineSchema | None = Field(
+        default=None,
+        description="ONLY include if updating lead times, cancellation window, or booking mode. Omit if unchanged.",
+    )
+    widget_config: StrictWidgetConfigSchema | None = Field(
+        default=None,
+        description="ONLY include if customizing widget styling, greeting, or platforms. Omit if unchanged.",
+    )
+    compliance: StrictComplianceSchema | None = Field(
+        default=None,
+        description="ONLY include if updating HIPAA or compliance settings. Omit if unchanged.",
+    )
+    guardrails: StrictGuardrailsSchema | None = Field(
+        default=None,
+        description="ONLY include if updating verification policies (OTP), triage, or human handoff. Omit if unchanged.",
+    )
+    supervisor_prompt: str | None = Field(
+        default=None,
+        description="ONLY include if setting or modifying custom AI supervisor prompt instructions. Omit if unchanged.",
+    )
 
 
 def canonicalize_agent_schema(data: dict[str, object], status: str = "draft") -> dict[str, object]:
@@ -698,8 +764,9 @@ def canonicalize_agent_schema(data: dict[str, object], status: str = "draft") ->
             res_draft["subscription"] = clean_data["subscription"]
         return res_draft
 
-    if isinstance(clean_data.get("resources"), list):
-        for r in clean_data["resources"]:
+    resources_data = clean_data.get("resources")
+    if isinstance(resources_data, list):
+        for r in resources_data:
             if isinstance(r, dict) and r.get("custom_shift_overrides") is None:
                 r["custom_shift_overrides"] = {}
 
@@ -979,8 +1046,12 @@ class CustomerMessage(Document):
     class Settings:
         name = "customer_messages"
         indexes = [
-            IndexModel([("session_id", 1), ("created_at", 1)], name="idx_customer_msg_session_time"),
-            IndexModel([("tenant_id", 1), ("session_id", 1)], name="idx_customer_msg_tenant_session"),
+            IndexModel(
+                [("session_id", 1), ("created_at", 1)], name="idx_customer_msg_session_time"
+            ),
+            IndexModel(
+                [("tenant_id", 1), ("session_id", 1)], name="idx_customer_msg_tenant_session"
+            ),
         ]
 
 
@@ -1015,4 +1086,3 @@ async def init_db(mongo_uri: str | None = None):
         ],
     )
     _db_initialized = True
-

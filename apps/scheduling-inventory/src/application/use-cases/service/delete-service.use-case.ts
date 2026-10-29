@@ -14,29 +14,29 @@ import { IDeleteServiceUseCase } from '../../interfaces/service-use-cases.interf
 export class DeleteServiceUseCase implements IDeleteServiceUseCase {
   constructor(
     @Inject(SERVICE_REPOSITORY)
-    private readonly serviceRepository: IServiceRepository,
+    private readonly _serviceRepository: IServiceRepository,
     @Inject(SCHEDULING_EVENTS_PRODUCER)
-    private readonly eventsProducer: ISchedulingEventsProducer,
+    private readonly _eventsProducer: ISchedulingEventsProducer,
     @Inject(UNIT_OF_WORK)
-    private readonly unitOfWork: IUnitOfWork,
+    private readonly _unitOfWork: IUnitOfWork,
   ) {}
 
   async execute(dto: DeleteServiceRequest): Promise<boolean> {
-    const existing = await this.serviceRepository.findById(dto.tenant_id, dto.service_id);
+    const existing = await this._serviceRepository.findById(dto.tenant_id, dto.service_id);
     if (!existing) {
       throw new NotFoundException(
         `Service ${dto.service_id} not found for tenant ${dto.tenant_id}`,
       );
     }
 
-    const { outbox } = await this.unitOfWork.withTransaction(async () => {
-      const deleted = await this.serviceRepository.delete(dto.tenant_id, dto.service_id);
+    const { outbox } = await this._unitOfWork.withTransaction(async () => {
+      const deleted = await this._serviceRepository.delete(dto.tenant_id, dto.service_id);
       if (!deleted) {
         throw new NotFoundException(
           `Service ${dto.service_id} not found for tenant ${dto.tenant_id}`,
         );
       }
-      const outboxDoc = await this.eventsProducer.createServiceDeletedOutboxEvent(
+      const outboxDoc = await this._eventsProducer.createServiceDeletedOutboxEvent(
         existing.tenantId,
         existing.agentId,
         existing.id,
@@ -44,7 +44,7 @@ export class DeleteServiceUseCase implements IDeleteServiceUseCase {
       return { outbox: outboxDoc };
     });
 
-    await this.eventsProducer.publishOutboxEvent(outbox);
+    await this._eventsProducer.publishOutboxEvent(outbox);
 
     return true;
   }

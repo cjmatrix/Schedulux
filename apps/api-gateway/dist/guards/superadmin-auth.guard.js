@@ -19,24 +19,26 @@ exports.SuperAdminAuthGuard = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const cookies_constant_js_1 = require("../constants/cookies.constant.js");
+const messages_constant_js_1 = require("../constants/messages.constant.js");
 let SuperAdminAuthGuard = class SuperAdminAuthGuard {
-    configService;
-    constructor(configService) {
-        this.configService = configService;
+    _configService;
+    constructor(_configService) {
+        this._configService = _configService;
     }
     canActivate(context) {
         const request = context.switchToHttp().getRequest();
-        const token = request.cookies?.superadmin_access_token;
+        const token = request.cookies?.[cookies_constant_js_1.COOKIE_NAMES.SUPERADMIN_ACCESS_TOKEN];
         if (!token) {
-            throw new common_1.UnauthorizedException('SuperAdmin authentication token missing');
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.SUPERADMIN_TOKEN_MISSING);
         }
         try {
-            const globalSecret = this.configService.get('JWT_SECRET');
-            const secret = this.configService.get('SUPERADMIN_JWT_SECRET') ||
+            const globalSecret = this._configService.get('JWT_SECRET');
+            const secret = this._configService.get('SUPERADMIN_JWT_SECRET') ||
                 (globalSecret ? `${globalSecret}_superadmin` : 'superadmin_access_secret_2025');
             const decoded = jsonwebtoken_1.default.verify(token, secret);
             if (!decoded || decoded.role !== 'super_admin') {
-                throw new common_1.UnauthorizedException('Forbidden: SuperAdmin privileges required');
+                throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.SUPERADMIN_FORBIDDEN);
             }
             request.superAdmin = decoded;
             return true;
@@ -45,7 +47,7 @@ let SuperAdminAuthGuard = class SuperAdminAuthGuard {
             if (err instanceof common_1.UnauthorizedException) {
                 throw err;
             }
-            throw new common_1.UnauthorizedException('Invalid or expired superadmin authentication token');
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.INVALID_SUPERADMIN_TOKEN);
         }
     }
 };

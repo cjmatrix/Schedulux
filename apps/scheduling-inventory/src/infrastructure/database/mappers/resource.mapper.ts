@@ -60,6 +60,8 @@ export class ResourceMapper {
       custom_shift_overrides_json: entity.customShiftOverridesJson,
       created_at: entity.createdAt.toISOString(),
       updated_at: entity.updatedAt.toISOString(),
+      is_deleted: entity.isDeleted,
+      deleted_at: entity.deletedAt ? entity.deletedAt.toISOString() : undefined,
     };
   }
 }

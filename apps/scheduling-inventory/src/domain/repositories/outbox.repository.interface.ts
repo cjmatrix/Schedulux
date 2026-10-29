@@ -8,7 +8,7 @@ export interface CreateOutboxEventParams {
   eventType: string;
   topic: string;
   partitionKey: string;
-  payload: Record<string, any>;
+  payload: Record<string, unknown>;
 }
 
 export interface IOutboxRepository {

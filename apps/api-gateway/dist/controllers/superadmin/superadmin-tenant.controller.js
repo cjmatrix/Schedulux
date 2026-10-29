@@ -16,19 +16,21 @@ exports.SuperAdminTenantController = void 0;
 const common_1 = require("@nestjs/common");
 const nestjs_zod_1 = require("nestjs-zod");
 const rxjs_1 = require("rxjs");
+const messages_constant_js_1 = require("../../constants/messages.constant.js");
+const routes_constant_js_1 = require("../../constants/routes.constant.js");
 const superadmin_auth_guard_js_1 = require("../../guards/superadmin-auth.guard.js");
 const superAdmin_dto_js_1 = require("./dtos/superAdmin.dto.js");
 let SuperAdminTenantController = class SuperAdminTenantController {
-    client;
-    superAdminTenantClient;
-    constructor(client) {
-        this.client = client;
+    _client;
+    _superAdminTenantClient;
+    constructor(_client) {
+        this._client = _client;
     }
     onModuleInit() {
-        this.superAdminTenantClient = this.client.getService('TenantService');
+        this._superAdminTenantClient = this._client.getService('TenantService');
     }
     async ListTenants(query) {
-        const lists = await (0, rxjs_1.lastValueFrom)(this.superAdminTenantClient.listTenants({
+        const lists = await (0, rxjs_1.lastValueFrom)(this._superAdminTenantClient.listTenants({
             page: query.page,
             limit: query.limit,
             search: query.search,
@@ -36,21 +38,21 @@ let SuperAdminTenantController = class SuperAdminTenantController {
             status: query.status,
         }));
         return {
-            message: 'successfull',
+            message: messages_constant_js_1.RESPONSE_MESSAGES.TENANT.SUCCESS,
             data: lists,
         };
     }
     async SuspendTenant(params) {
-        const result = await (0, rxjs_1.lastValueFrom)(this.superAdminTenantClient.suspendTenant({ tenant_id: params.id }));
+        const result = await (0, rxjs_1.lastValueFrom)(this._superAdminTenantClient.suspendTenant({ tenant_id: params.id }));
         return {
-            message: 'Tenant suspended successfully',
+            message: messages_constant_js_1.RESPONSE_MESSAGES.TENANT.TENANT_SUSPENDED,
             data: result,
         };
     }
 };
 exports.SuperAdminTenantController = SuperAdminTenantController;
 __decorate([
-    (0, common_1.Get)(),
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.SUPERADMIN.TENANTS.ROOT),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Query)()),
     __metadata("design:type", Function),
@@ -58,7 +60,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SuperAdminTenantController.prototype, "ListTenants", null);
 __decorate([
-    (0, common_1.Patch)(':id/suspend'),
+    (0, common_1.Patch)(routes_constant_js_1.API_ROUTES.SUPERADMIN.TENANTS.SUSPEND),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Param)()),
     __metadata("design:type", Function),
@@ -66,7 +68,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SuperAdminTenantController.prototype, "SuspendTenant", null);
 exports.SuperAdminTenantController = SuperAdminTenantController = __decorate([
-    (0, common_1.Controller)(`api/v1/admin/tenants`),
+    (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.SUPERADMIN.TENANTS.BASE),
     (0, common_1.UseGuards)(superadmin_auth_guard_js_1.SuperAdminAuthGuard),
     __param(0, (0, common_1.Inject)('TENANT_PACKAGE')),
     __metadata("design:paramtypes", [Object])

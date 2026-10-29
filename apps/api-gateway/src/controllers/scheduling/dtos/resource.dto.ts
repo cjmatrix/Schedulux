@@ -41,7 +41,7 @@ export const ListResourcesQuerySchema = z.object({
   resource_type: z.string().optional(),
   dispatch_status: z.string().optional(),
   category: z.string().optional(),
-  agent_id: z.string().optional(),
+  agent_id: z.string().min(1, 'agent_id is required'),
   search: z.string().optional(),
 });
 

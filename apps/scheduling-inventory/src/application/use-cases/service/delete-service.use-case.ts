@@ -3,12 +3,15 @@ import { DeleteServiceRequest } from '@repo/proto/scheduling';
 import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
 import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
 import {
+  CACHE_REPOSITORY,
   SCHEDULING_EVENTS_PRODUCER,
   SERVICE_REPOSITORY,
   UNIT_OF_WORK,
 } from '../../../domain/tokens.js';
+import type { ICacheRepository } from '../../../infrastructure/cache/cache-repository.interface.js';
 import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-events-producer.interface.js';
 import { IDeleteServiceUseCase } from '../../interfaces/service-use-cases.interface.js';
+import { invalidateCachedService } from '../../utils/service-cache.helper.js';
 
 @Injectable()
 export class DeleteServiceUseCase implements IDeleteServiceUseCase {
@@ -19,6 +22,8 @@ export class DeleteServiceUseCase implements IDeleteServiceUseCase {
     private readonly _eventsProducer: ISchedulingEventsProducer,
     @Inject(UNIT_OF_WORK)
     private readonly _unitOfWork: IUnitOfWork,
+    @Inject(CACHE_REPOSITORY)
+    private readonly _cacheRepo: ICacheRepository,
   ) {}
 
   async execute(dto: DeleteServiceRequest): Promise<boolean> {
@@ -45,6 +50,8 @@ export class DeleteServiceUseCase implements IDeleteServiceUseCase {
     });
 
     await this._eventsProducer.publishOutboxEvent(outbox);
+
+    invalidateCachedService(this._cacheRepo, dto.tenant_id, dto.service_id);
 
     return true;
   }

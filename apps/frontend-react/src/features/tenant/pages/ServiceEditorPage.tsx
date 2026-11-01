@@ -42,7 +42,9 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
 
   const effectiveAgentId = agentId || serviceResponse?.data?.agent_id || '';
 
-  const { data: resourcesResponse } = useResourcesList(effectiveAgentId ? { agent_id: effectiveAgentId } : undefined);
+  const { data: resourcesResponse } = useResourcesList(
+    effectiveAgentId ? { agent_id: effectiveAgentId } : undefined,
+  );
   const allResources = resourcesResponse?.data || [];
 
   const createServiceMutation = useCreateService();
@@ -247,7 +249,9 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
     if (!serviceIdFromParams) return;
     try {
       await deleteServiceMutation.mutateAsync(serviceIdFromParams);
-      navigate(effectiveAgentId ? `/tenant/agents/${effectiveAgentId}/services` : '/tenant/services');
+      navigate(
+        effectiveAgentId ? `/tenant/agents/${effectiveAgentId}/services` : '/tenant/services',
+      );
     } catch (err: unknown) {
       setFeedbackMessage({
         type: 'error',

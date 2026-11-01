@@ -40,7 +40,6 @@ export function CreateBookingModal({
 }: CreateBookingModalProps) {
   const modalTitleId = useId();
 
-  
   const { data: servicesData } = useServicesList({
     limit: 100,
     agent_id: agentId,
@@ -53,13 +52,10 @@ export function CreateBookingModal({
   const services = useMemo(() => servicesData?.data || [], [servicesData]);
   const resources = useMemo(() => resourcesData?.data || [], [resourcesData]);
 
-
   const [selectedServiceId, setSelectedServiceId] = useState<string>('');
   const [selectedResourceId, setSelectedResourceId] = useState<string>('');
 
-
   const [viewMonthDate, setViewMonthDate] = useState<Date>(() => new Date());
-
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
@@ -82,7 +78,6 @@ export function CreateBookingModal({
   const [depositStatus, setDepositStatus] = useState<'pending' | 'verified' | 'waived'>('pending');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
-
   useEffect(() => {
     if (services.length > 0 && !selectedServiceId) {
       setSelectedServiceId(services[0].service_id);
@@ -95,7 +90,6 @@ export function CreateBookingModal({
 
   const bookingMode = selectedService?.booking_mode || 'time_slot';
 
-
   const eligibleResources = useMemo<ResourceInfo[]>(() => {
     if (!selectedService || !selectedService.resource_requirements?.length) {
       return resources.filter((r) => r.is_bookable);
@@ -106,7 +100,9 @@ export function CreateBookingModal({
         req.selection_mode === 'user_selectable' ||
         (!req.selection_mode && req.resource_type === 'staff');
       if (isUserSelectable) {
-        req.eligible_resource_ids?.forEach((id) => allEligibleIds.add(id));
+        req.eligible_resource_ids?.forEach((id) => {
+          allEligibleIds.add(id);
+        });
       }
     });
 
@@ -130,7 +126,6 @@ export function CreateBookingModal({
       };
     }
 
- 
     return {
       service_id: selectedServiceId,
       start_date: selectedDate,
@@ -147,23 +142,21 @@ export function CreateBookingModal({
 
   const availability = availabilityData?.data;
 
-
   const daysMap = useMemo(() => {
     const map = new Map<string, DayAvailabilityInfo>();
-    availability?.days?.forEach((d) => map.set(d.date, d));
+    availability?.days?.forEach((d) => {
+      map.set(d.date, d);
+    });
     return map;
   }, [availability]);
-
 
   const selectedDayInfo = useMemo(() => {
     return daysMap.get(selectedDate);
   }, [daysMap, selectedDate]);
 
-
   const slotsForSelectedDay = useMemo(() => {
     return selectedDayInfo?.slots || [];
   }, [selectedDayInfo]);
-
 
   const { morningSlots, afternoonSlots, eveningSlots } = useMemo(() => {
     const morning: AvailableSlotInfo[] = [];
@@ -185,7 +178,6 @@ export function CreateBookingModal({
     return { morningSlots: morning, afternoonSlots: afternoon, eveningSlots: evening };
   }, [slotsForSelectedDay]);
 
-
   const isResourceAvailableForSelectedDates = useCallback(
     (resourceId: string): boolean => {
       if (bookingMode === 'date_range') {
@@ -199,7 +191,6 @@ export function CreateBookingModal({
     [availability, bookingMode],
   );
 
-
   useEffect(() => {
     setSelectedSlot(null);
   }, [selectedServiceId, selectedDate, selectedResourceId]);
@@ -208,7 +199,6 @@ export function CreateBookingModal({
 
   if (!isOpen) return null;
 
- 
   const handlePrevMonth = () => {
     setViewMonthDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
   };
@@ -222,19 +212,17 @@ export function CreateBookingModal({
     year: 'numeric',
   });
 
-
   const calendarGrid = (() => {
     const year = viewMonthDate.getFullYear();
     const month = viewMonthDate.getMonth();
 
     const firstDayIndex = new Date(year, month, 1).getDay(); // 0 is Sunday
-  
+
     const startOffset = (firstDayIndex + 6) % 7;
     const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
 
     const cells: Array<{ dateStr: string; dayNum: number; isCurrentMonth: boolean }> = [];
 
-  
     const prevMonthTotalDays = new Date(year, month, 0).getDate();
     for (let i = startOffset - 1; i >= 0; i--) {
       const day = prevMonthTotalDays - i;
@@ -245,7 +233,6 @@ export function CreateBookingModal({
         isCurrentMonth: false,
       });
     }
-
 
     for (let day = 1; day <= totalDaysInMonth; day++) {
       const d = new Date(Date.UTC(year, month, day));
@@ -296,11 +283,21 @@ export function CreateBookingModal({
         setErrorMessage('Please select an available time slot.');
         return;
       }
+      if (new Date(selectedSlot.start_time).getTime() < Date.now()) {
+        setErrorMessage(
+          'The selected time slot has already passed. Please choose an upcoming slot.',
+        );
+        return;
+      }
       startTimeIso = selectedSlot.start_time;
       endTimeIso = selectedSlot.end_time;
     } else {
       if (!selectedDate || !checkOutDate) {
         setErrorMessage('Please choose both check-in and check-out dates.');
+        return;
+      }
+      if (selectedDate < todayStr) {
+        setErrorMessage('Check-in date cannot be in the past.');
         return;
       }
       if (checkOutDate <= selectedDate) {
@@ -410,7 +407,11 @@ export function CreateBookingModal({
                 >
                   {services.map((svc) => (
                     <option key={svc.service_id} value={svc.service_id}>
-                      {svc.name} — {svc.booking_mode === 'date_range' ? 'Daily / Nightly' : `${svc.duration_minutes} mins`} ({svc.price?.amount ? `$${svc.price.amount}` : 'Free'})
+                      {svc.name} —{' '}
+                      {svc.booking_mode === 'date_range'
+                        ? 'Daily / Nightly'
+                        : `${svc.duration_minutes} mins`}{' '}
+                      ({svc.price?.amount ? `$${svc.price.amount}` : 'Free'})
                     </option>
                   ))}
                 </select>
@@ -420,10 +421,17 @@ export function CreateBookingModal({
               {selectedService && (
                 <div className="flex items-center justify-between text-xs px-3 py-2 bg-slate-100/70 rounded-xl text-slate-600">
                   <span>
-                    Mode: <strong className="text-slate-900 capitalize">{bookingMode.replace('_', ' ')}</strong>
+                    Mode:{' '}
+                    <strong className="text-slate-900 capitalize">
+                      {bookingMode.replace('_', ' ')}
+                    </strong>
                   </span>
                   <span>
-                    Price: <strong className="text-slate-900">${selectedService.price?.amount || 0} {selectedService.price?.currency || 'USD'}</strong>
+                    Price:{' '}
+                    <strong className="text-slate-900">
+                      ${selectedService.price?.amount || 0}{' '}
+                      {selectedService.price?.currency || 'USD'}
+                    </strong>
                   </span>
                   {selectedService.deposit?.required && (
                     <span className="text-amber-700 font-medium">
@@ -552,7 +560,8 @@ export function CreateBookingModal({
                     </span>
                     {selectedSlot && (
                       <span className="text-emerald-700 font-bold flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5" /> Selected: {formatSlotTime(selectedSlot.start_time)}
+                        <Check className="w-3.5 h-3.5" /> Selected:{' '}
+                        {formatSlotTime(selectedSlot.start_time)}
                       </span>
                     )}
                   </div>
@@ -702,7 +711,11 @@ export function CreateBookingModal({
                   {availability?.resources && availability.resources.length > 0 && (
                     <div className="space-y-1.5 pt-1">
                       <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                        Unit / Room Status {selectedDate ? `(${selectedDate}${checkOutDate && checkOutDate !== selectedDate ? ` → ${checkOutDate}` : ''})` : ''}:
+                        Unit / Room Status{' '}
+                        {selectedDate
+                          ? `(${selectedDate}${checkOutDate && checkOutDate !== selectedDate ? ` → ${checkOutDate}` : ''})`
+                          : ''}
+                        :
                       </span>
                       <div className="grid grid-cols-2 gap-2">
                         {availability.resources.map((res) => {
@@ -804,7 +817,9 @@ export function CreateBookingModal({
                 <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl flex items-center justify-between text-xs">
                   <div>
                     <span className="font-bold text-amber-900">Deposit Status:</span>
-                    <span className="text-amber-700 ml-1.5">${selectedService.deposit.amount} required</span>
+                    <span className="text-amber-700 ml-1.5">
+                      ${selectedService.deposit.amount} required
+                    </span>
                   </div>
                   <select
                     value={depositStatus}
@@ -831,7 +846,9 @@ export function CreateBookingModal({
 
               <button
                 type="submit"
-                disabled={createBookingMutation.isPending || (bookingMode === 'time_slot' && !selectedSlot)}
+                disabled={
+                  createBookingMutation.isPending || (bookingMode === 'time_slot' && !selectedSlot)
+                }
                 className="px-6 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {createBookingMutation.isPending ? (

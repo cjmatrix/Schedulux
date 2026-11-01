@@ -12,6 +12,11 @@ service KnowledgeService {
   rpc GetAgentMessages (GetAgentMessagesRequest) returns (GetAgentMessagesResponse);
   rpc CustomerChat (CustomerChatRequest) returns (CustomerChatResponse);
   rpc GetCustomerMessages (GetCustomerMessagesRequest) returns (GetCustomerMessagesResponse);
+
+  rpc GetDocumentUploadUrl (GetDocumentUploadUrlRequest) returns (GetDocumentUploadUrlResponse);
+  rpc ConfirmDocumentUpload (ConfirmDocumentUploadRequest) returns (ConfirmDocumentUploadResponse);
+  rpc ListDocuments (ListDocumentsRequest) returns (ListDocumentsResponse);
+  rpc DeleteDocument (DeleteDocumentRequest) returns (DeleteDocumentResponse);
 }
 
 message CrawlSiteRequest {
@@ -156,5 +161,61 @@ message GetCustomerMessagesRequest {
 
 message GetCustomerMessagesResponse {
   repeated CustomerChatMessageInfo messages = 1;
+}
+
+message GetDocumentUploadUrlRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+  string file_name = 3;
+  int64 file_size_bytes = 4;
+}
+
+message GetDocumentUploadUrlResponse {
+  string upload_url = 1;
+  string document_id = 2;
+  string s3_key = 3;
+  int32 expires_in = 4;
+}
+
+message ConfirmDocumentUploadRequest {
+  string tenant_id = 1;
+  string document_id = 2;
+}
+
+message ConfirmDocumentUploadResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DocumentInfo {
+  string id = 1;
+  string tenant_id = 2;
+  string agent_id = 3;
+  string file_name = 4;
+  int64 file_size_bytes = 5;
+  string s3_key = 6;
+  string s3_bucket = 7;
+  string status = 8;
+  string created_at = 9;
+  string updated_at = 10;
+}
+
+message ListDocumentsRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+}
+
+message ListDocumentsResponse {
+  repeated DocumentInfo documents = 1;
+}
+
+message DeleteDocumentRequest {
+  string tenant_id = 1;
+  string document_id = 2;
+}
+
+message DeleteDocumentResponse {
+  bool success = 1;
+  string message = 2;
 }
 

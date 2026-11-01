@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft,
+  BookOpen,
   Bot,
   ChevronRight,
   Package,
@@ -10,20 +11,15 @@ import {
   Users,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router';
-import { knowledgeApi } from '../../../api/knowledgeApi';
 import { servicesApi } from '../api/servicesApi';
+import { useKnowledgeDocuments, useTenantAgents } from '../hooks/useKnowledgeDocuments';
 
 export default function AgentDashboardPage() {
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId: string }>();
 
-  const { data: agentsResponse, isLoading: agentsLoading } = useQuery({
-    queryKey: ['tenant-agents'],
-    queryFn: () => knowledgeApi.listTenantAgents(),
-    staleTime: 60_000,
-  });
-
-  const agentInfo = agentsResponse?.data?.find((a) => a.agent_id === agentId);
+  const { data: agents = [], isLoading: agentsLoading } = useTenantAgents();
+  const agentInfo = agents.find((a) => a.agent_id === agentId);
 
   const { data: servicesResponse, isLoading: servicesLoading } = useQuery({
     queryKey: ['scheduling-services', { agent_id: agentId }],
@@ -39,10 +35,13 @@ export default function AgentDashboardPage() {
     staleTime: 30_000,
   });
 
+  const { data: documents = [], isLoading: docsLoading } = useKnowledgeDocuments(agentId);
+
   const services = servicesResponse?.data || [];
   const resources = resourcesResponse?.data || [];
   const totalServices = servicesResponse?.pagination?.total ?? services.length;
   const totalResources = resourcesResponse?.pagination?.total ?? resources.length;
+  const totalDocuments = documents.length;
 
   const isLoading = agentsLoading;
   const isLive = agentInfo?.status === 'created';
@@ -106,6 +105,13 @@ export default function AgentDashboardPage() {
             Configure Agent
           </button>
           <button
+            onClick={() => navigate(`/tenant/agents/${agentId}/knowledge`)}
+            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
+            Knowledge Base
+          </button>
+          <button
             onClick={() => navigate(`/tenant/agents/${agentId}/services`)}
             className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer"
           >
@@ -116,7 +122,7 @@ export default function AgentDashboardPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div
           onClick={() => navigate(`/tenant/agents/${agentId}/services`)}
           className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs flex items-center justify-between hover:shadow-md hover:border-slate-300 transition cursor-pointer group"
@@ -146,6 +152,24 @@ export default function AgentDashboardPage() {
           </div>
           <div className="w-12 h-12 rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center text-slate-600 transition">
             <Package className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div
+          onClick={() => navigate(`/tenant/agents/${agentId}/knowledge`)}
+          className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs flex items-center justify-between hover:shadow-md hover:border-indigo-300 transition cursor-pointer group"
+        >
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              Knowledge Base
+            </p>
+            <p className="text-4xl font-black text-slate-900 mt-1">
+              {docsLoading ? '—' : totalDocuments}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1">Uploaded PDF documents & FAQs</p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 group-hover:bg-indigo-100 flex items-center justify-center text-indigo-600 transition">
+            <BookOpen className="w-6 h-6" />
           </div>
         </div>
       </div>

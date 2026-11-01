@@ -1,9 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { ITenantScheduleRepository } from '../../../domain/repositories/tenant-schedule.repository.interface.js';
-import {
-  ITenantScheduleDoc,
-  TenantScheduleModel,
-} from '../schemas/tenant-schedule.schema.js';
+import { ITenantScheduleDoc, TenantScheduleModel } from '../schemas/tenant-schedule.schema.js';
 
 @Injectable()
 export class MongoTenantScheduleRepository implements ITenantScheduleRepository {

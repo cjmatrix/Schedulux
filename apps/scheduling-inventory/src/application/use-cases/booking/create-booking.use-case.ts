@@ -3,9 +3,11 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { CreateBookingRequest } from '@repo/proto/scheduling';
+import { RESPONSE_MESSAGES } from '../../../constants/index.js';
 import {
   BookingDepositStatus,
   BookingEntity,
@@ -20,20 +22,29 @@ import { IResourceRepository } from '../../../domain/repositories/resource.repos
 import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
 import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
 import {
+  BOOKING_ALLOCATION_SERVICE,
   BOOKING_REPOSITORY,
+  CACHE_REPOSITORY,
   CUSTOMER_REPOSITORY,
   RESOURCE_REPOSITORY,
   SCHEDULING_EVENTS_PRODUCER,
   SERVICE_REPOSITORY,
   UNIT_OF_WORK,
 } from '../../../domain/tokens.js';
-import { generateBookingReference, generateSemanticId } from '../../../domain/utils/id-generator.js';
-import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-events-producer.interface.js';
+import {
+  generateBookingReference,
+  generateSemanticId,
+} from '../../../domain/utils/id-generator.js';
+import type { ICacheRepository } from '../../../infrastructure/cache/cache-repository.interface.js';
+import type { IBookingAllocationService } from '../../interfaces/booking-allocation-service.interface.js';
 import { ICreateBookingUseCase } from '../../interfaces/booking-use-cases.interface.js';
-import { RESPONSE_MESSAGES } from '../../../constants/index.js';
+import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-events-producer.interface.js';
+import { getCachedService } from '../../utils/service-cache.helper.js';
 
 @Injectable()
 export class CreateBookingUseCase implements ICreateBookingUseCase {
+  private readonly _logger = new Logger(CreateBookingUseCase.name);
+
   constructor(
     @Inject(BOOKING_REPOSITORY)
     private readonly _bookingRepository: IBookingRepository,
@@ -47,14 +58,22 @@ export class CreateBookingUseCase implements ICreateBookingUseCase {
     private readonly _eventsProducer: ISchedulingEventsProducer,
     @Inject(UNIT_OF_WORK)
     private readonly _unitOfWork: IUnitOfWork,
+    @Inject(BOOKING_ALLOCATION_SERVICE)
+    private readonly _bookingAllocationService: IBookingAllocationService,
+    @Inject(CACHE_REPOSITORY)
+    private readonly _cacheRepo: ICacheRepository,
   ) {}
 
   async execute(dto: CreateBookingRequest): Promise<BookingEntity> {
-    if (!dto.tenant_id?.trim()) throw new BadRequestException(RESPONSE_MESSAGES.ERRORS.TENANT_ID_REQUIRED);
+    if (!dto.tenant_id?.trim())
+      throw new BadRequestException(RESPONSE_MESSAGES.ERRORS.TENANT_ID_REQUIRED);
     if (!dto.agent_id?.trim()) throw new BadRequestException('agent_id is required');
-    if (!dto.service_id?.trim()) throw new BadRequestException(RESPONSE_MESSAGES.ERRORS.SERVICE_ID_REQUIRED);
-    if (!dto.start_time) throw new BadRequestException(RESPONSE_MESSAGES.ERRORS.START_TIME_REQUIRED);
-    if (!dto.customer_phone?.trim()) throw new BadRequestException(RESPONSE_MESSAGES.ERRORS.CUSTOMER_PHONE_REQUIRED);
+    if (!dto.service_id?.trim())
+      throw new BadRequestException(RESPONSE_MESSAGES.ERRORS.SERVICE_ID_REQUIRED);
+    if (!dto.start_time)
+      throw new BadRequestException(RESPONSE_MESSAGES.ERRORS.START_TIME_REQUIRED);
+    if (!dto.customer_phone?.trim())
+      throw new BadRequestException(RESPONSE_MESSAGES.ERRORS.CUSTOMER_PHONE_REQUIRED);
 
     const tenantId = dto.tenant_id.trim();
     const agentId = dto.agent_id.trim();
@@ -63,164 +82,48 @@ export class CreateBookingUseCase implements ICreateBookingUseCase {
     const customerName = dto.customer_name?.trim() || 'Guest';
 
     const [service, existingCustomerByPhone] = await Promise.all([
-      this._serviceRepository.findById(tenantId, dto.service_id),
+      getCachedService(this._serviceRepository, this._cacheRepo, tenantId, dto.service_id),
       this._customerRepository.findByPhone(tenantId, customerPhone, agentId),
     ]);
 
     if (!service) {
       throw new NotFoundException(`Service ${dto.service_id} not found for tenant ${tenantId}`);
     }
-    if (
-      service.agentId?.trim() &&
-      agentId !== service.agentId.trim()
-    ) {
+    if (service.agentId?.trim() && agentId !== service.agentId.trim()) {
       throw new BadRequestException(
         `Service "${service.name}" (${dto.service_id}) belongs to agent ${service.agentId}, but request specified agent ${agentId}`,
       );
     }
 
-    const startTime = new Date(dto.start_time);
-    if (isNaN(startTime.getTime())) throw new BadRequestException('Invalid start_time format');
+    const interval = this._bookingAllocationService.calculateBookingInterval(
+      service,
+      dto.start_time,
+      dto.end_time,
+    );
 
-    const bookingMode = (service.bookingMode as BookingMode) || 'time_slot';
-    let endTime: Date;
-    let durationMinutes: number;
-
-    if (bookingMode === 'date_range') {
-      if (!dto.end_time) {
-        throw new BadRequestException('end_time (check-out date) is required for date_range bookings');
-      }
-      endTime = new Date(dto.end_time);
-      if (isNaN(endTime.getTime())) throw new BadRequestException('Invalid end_time format for date_range');
-      if (startTime >= endTime) throw new BadRequestException('Check-out end_time must be after check-in start_time');
-      durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / (60 * 1000));
-    } else {
-      if (dto.end_time) {
-        endTime = new Date(dto.end_time);
-        if (isNaN(endTime.getTime())) throw new BadRequestException('Invalid end_time format');
-        durationMinutes = Math.max(1, Math.round((endTime.getTime() - startTime.getTime()) / (60 * 1000)));
-      } else {
-        durationMinutes = service.durationMinutes || 30;
-        endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
-      }
-      if (startTime >= endTime) throw new BadRequestException('Booking start time must be before end time');
-    }
-
-    const bufferMinutes = service.bufferMinutes || 0;
-    const effectiveStartTime = startTime;
-    const effectiveEndTime = new Date(endTime.getTime() + bufferMinutes * 60 * 1000);
-
-    
-    const explicitResourceIds: string[] = [];
-    if (dto.resource_ids?.length) {
-      for (const id of dto.resource_ids) {
-        const trimmed = id?.trim();
-        if (trimmed && !explicitResourceIds.includes(trimmed)) explicitResourceIds.push(trimmed);
-      }
-    } else if (dto.resource_id?.trim()) {
-      explicitResourceIds.push(dto.resource_id.trim());
-    }
-
-    const requirements = service.getEffectiveResourceRequirements();
-    const allCandidateIdsSet = new Set<string>(explicitResourceIds);
-    for (const req of requirements) {
-      if (req.eligibleResourceIds?.length) {
-        for (const id of req.eligibleResourceIds) allCandidateIdsSet.add(id);
-      }
-    }
-    const allCandidateIds = Array.from(allCandidateIdsSet);
-    
-    const [rawActiveResources, busyResourceIds, existingCustomerByEmail] = await Promise.all([
-      allCandidateIds.length > 0
-        ? this._resourceRepository.findActiveBookableByIds(tenantId, allCandidateIds, agentId)
-        : Promise.resolve([]),
-      allCandidateIds.length > 0
-        ? this._bookingRepository.findBusyResourceIds(tenantId, allCandidateIds, effectiveStartTime, effectiveEndTime)
-        : Promise.resolve(new Set<string>()),
+    const [allocation, existingCustomerByEmail] = await Promise.all([
+      this._bookingAllocationService.allocateResourcesForSlot({
+        tenantId,
+        agentId,
+        service,
+        effectiveStartTime: interval.effectiveStartTime,
+        effectiveEndTime: interval.effectiveEndTime,
+        explicitResourceIds: dto.resource_ids?.length
+          ? dto.resource_ids
+          : dto.resource_id
+            ? [dto.resource_id]
+            : [],
+        resourceRepository: this._resourceRepository,
+        bookingRepository: this._bookingRepository,
+      }),
       !existingCustomerByPhone && customerEmail
         ? this._customerRepository.findByEmail(tenantId, customerEmail, agentId)
         : Promise.resolve(null),
     ]);
 
-
-    const activeResourceMap = new Map<string, ResourceEntity>();
-    for (const res of rawActiveResources) {
-      if (res.isBookable && res.dispatchStatus === 'active') {
-        activeResourceMap.set(res.id, res);
-      }
-    }
-
-    const allocatedResourceIds: string[] = [];
-    const assignedAssetIds: string[] = [];
-    const usedResourceIds = new Set<string>();
-
-    for (const req of requirements) {
-      const requiredCount = Math.max(1, req.count || 1);
-      const eligiblePool = req.eligibleResourceIds || [];
-
-      const matchingExplicit = explicitResourceIds.filter(
-        (id) => eligiblePool.includes(id) && !usedResourceIds.has(id),
-      );
-
-      for (const id of matchingExplicit) {
-        const res = activeResourceMap.get(id);
-        if (!res) {
-          throw new BadRequestException(
-            `Selected resource (${id}) for role "${req.role}" is currently inactive, on leave, or not bookable`,
-          );
-        }
-        if (busyResourceIds.has(id)) {
-          throw new ConflictException(
-            `Resource "${res.name || 'Resource'}" for role "${req.role}" is already booked for this time slot`,
-          );
-        }
-        allocatedResourceIds.push(id);
-        usedResourceIds.add(id);
-        if (req.resourceType !== 'staff') assignedAssetIds.push(id);
-      }
-
-      const remainingNeeded = requiredCount - matchingExplicit.length;
-      if (remainingNeeded > 0) {
-        const candidates = eligiblePool.filter((id) => !usedResourceIds.has(id));
-        if (candidates.length === 0) {
-          throw new ConflictException(
-            `Not enough eligible resources configured to satisfy requirement for role "${req.role}" (requires ${requiredCount})`,
-          );
-        }
-
-        const activeCandidates = candidates
-          .map((id) => activeResourceMap.get(id))
-          .filter((res): res is ResourceEntity => res !== undefined);
-
-        if (activeCandidates.length < remainingNeeded) {
-          throw new ConflictException(
-            `Not enough active/bookable resources available for role "${req.role}". Required: ${requiredCount}, Available active: ${activeCandidates.length + matchingExplicit.length}`,
-          );
-        }
-
-        const freeCandidates = activeCandidates.filter((c) => !busyResourceIds.has(c.id));
-        if (freeCandidates.length < remainingNeeded) {
-          throw new ConflictException(
-            `Conflict: Not enough available resources for role "${req.role}" (${requiredCount} required, only ${freeCandidates.length + matchingExplicit.length} available for this slot)`,
-          );
-        }
-
-        for (let i = 0; i < remainingNeeded; i++) {
-          const chosen = freeCandidates[i];
-          allocatedResourceIds.push(chosen.id);
-          usedResourceIds.add(chosen.id);
-          if (req.resourceType !== 'staff') assignedAssetIds.push(chosen.id);
-        }
-      }
-    }
-
-    const leftoverExplicit = explicitResourceIds.filter((id) => !usedResourceIds.has(id));
-    if (leftoverExplicit.length > 0) {
-      throw new BadRequestException(
-        `Resource(s) not eligible for service "${service.name}" or requirement count exceeded: ${leftoverExplicit.join(', ')}`,
-      );
-    }
-
+    const { allocatedResourceIds, assignedAssetIds } = allocation;
+    const { startTime, endTime, effectiveEndTime, bufferMinutes, durationMinutes, bookingMode } =
+      interval;
 
     let customer = existingCustomerByPhone || existingCustomerByEmail;
     const isExistingCustomer = Boolean(customer);
@@ -283,7 +186,6 @@ export class CreateBookingUseCase implements ICreateBookingUseCase {
       createdBy: dto.created_by?.trim() || '',
     });
 
-   
     const { createdBooking, outboxDoc } = await this._unitOfWork.withTransaction(async () => {
       if (isExistingCustomer) {
         await this._customerRepository.update(customer);
@@ -297,8 +199,10 @@ export class CreateBookingUseCase implements ICreateBookingUseCase {
       return { createdBooking: createdEntity, outboxDoc: outbox };
     });
 
-    this._eventsProducer.publishOutboxEvent(outboxDoc).catch((err) => {
-      console.error(`Async outbox publish failed for booking ${createdBooking.id}:`, err);
+    this._eventsProducer.publishOutboxEvent(outboxDoc).catch((err: unknown) => {
+      this._logger.error(
+        `Immediate outbox dispatch failed for booking ${createdBooking.id}: ${err}. Recovery sweeper will retry.`,
+      );
     });
 
     return createdBooking;

@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
+import { firstValueFrom } from 'rxjs';
 import type { IOutboxRepository } from '../../domain/repositories/outbox.repository.interface.js';
 import { MESSAGING_SERVICE, OUTBOX_REPOSITORY } from '../../domain/tokens.js';
 import { OutboxModel } from '../database/schemas/outbox.schema.js';
@@ -59,7 +60,7 @@ export class OutboxRecoveryService implements OnModuleInit, OnModuleDestroy {
         try {
           const key = event.partition_key;
           const value = JSON.stringify(event.payload);
-          this._messagingClient.emit(event.topic, { key, value });
+          await firstValueFrom(this._messagingClient.emit(event.topic, { key, value }));
           await this._outboxRepository.markPublished([event._id]);
           this._logger.log(
             `[OutboxRecovery] Recovered and published event ${event._id} to ${event.topic}`,

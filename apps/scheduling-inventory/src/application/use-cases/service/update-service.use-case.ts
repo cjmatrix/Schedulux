@@ -4,14 +4,17 @@ import { ServiceEntity } from '../../../domain/entities/service.entity.js';
 import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
 import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
 import {
+  CACHE_REPOSITORY,
   SCHEDULING_EVENTS_PRODUCER,
   SERVICE_REPOSITORY,
   UNIT_OF_WORK,
 } from '../../../domain/tokens.js';
 import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
 import { PriceVO } from '../../../domain/value-objects/price.vo.js';
+import type { ICacheRepository } from '../../../infrastructure/cache/cache-repository.interface.js';
 import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-events-producer.interface.js';
 import { IUpdateServiceUseCase } from '../../interfaces/service-use-cases.interface.js';
+import { invalidateCachedService } from '../../utils/service-cache.helper.js';
 
 @Injectable()
 export class UpdateServiceUseCase implements IUpdateServiceUseCase {
@@ -22,6 +25,8 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
     private readonly _eventsProducer: ISchedulingEventsProducer,
     @Inject(UNIT_OF_WORK)
     private readonly _unitOfWork: IUnitOfWork,
+    @Inject(CACHE_REPOSITORY)
+    private readonly _cacheRepo: ICacheRepository,
   ) {}
 
   async execute(dto: UpdateServiceRequest): Promise<ServiceEntity> {
@@ -82,6 +87,8 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
     });
 
     await this._eventsProducer.publishOutboxEvent(outbox);
+
+    invalidateCachedService(this._cacheRepo, dto.tenant_id, dto.service_id);
 
     return updated;
   }

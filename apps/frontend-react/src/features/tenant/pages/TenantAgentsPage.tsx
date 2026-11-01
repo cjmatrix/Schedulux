@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRight,
   Bot,
@@ -21,9 +20,9 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { type AgentSummaryInfo, knowledgeApi } from '../../../api/knowledgeApi.js';
 import { useAuthStore } from '../../../store/useAuthStore.js';
 import { useLogout, useTenantProfile } from '../hooks/useAuth.js';
+import { useTenantAgents } from '../hooks/useKnowledgeDocuments.js';
 
 export default function TenantAgentsPage() {
   const navigate = useNavigate();
@@ -42,17 +41,7 @@ export default function TenantAgentsPage() {
     });
   };
 
-  const {
-    data: agentsResponse,
-    isLoading,
-    refetch,
-    isRefetching,
-  } = useQuery({
-    queryKey: ['tenant-agents'],
-    queryFn: () => knowledgeApi.listTenantAgents(),
-  });
-
-  const agents: AgentSummaryInfo[] = agentsResponse?.data || [];
+  const { data: agents = [], isLoading, refetch, isRefetching } = useTenantAgents();
 
   const filteredAgents = useMemo(() => {
     return agents.filter((agent) => {

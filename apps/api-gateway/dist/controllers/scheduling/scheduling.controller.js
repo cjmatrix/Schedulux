@@ -216,6 +216,30 @@ let SchedulingController = class SchedulingController {
             success: response.success,
         };
     }
+    async listBookings(req, query) {
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.listBookings({
+            tenant_id: tenantId,
+            page: query.page,
+            limit: query.limit,
+            agent_id: query.agent_id,
+            service_id: query.service_id,
+            resource_id: query.resource_id,
+            status: query.status,
+            start_date: query.start_date,
+            end_date: query.end_date,
+            search: query.search || undefined,
+        }));
+        return {
+            message: 'Bookings retrieved successfully',
+            data: response.bookings,
+            pagination: {
+                total: response.total,
+                page: response.page,
+                limit: response.limit,
+            },
+        };
+    }
     async createBooking(req, body) {
         const tenantId = this._getTenantId(req);
         const userId = req.dashboardUser?.user_id || req.tenant?.tenant_id || '';
@@ -234,6 +258,40 @@ let SchedulingController = class SchedulingController {
             source: body.source,
             deposit_status: body.deposit_status,
             created_by: body.created_by || userId,
+        }));
+        return {
+            message: response.message,
+            data: response.booking,
+        };
+    }
+    async cancelBooking(req, id, body) {
+        const tenantId = this._getTenantId(req);
+        const userId = req.dashboardUser?.user_id || req.tenant?.tenant_id || '';
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.cancelBooking({
+            tenant_id: tenantId,
+            booking_id: id,
+            agent_id: body.agent_id,
+            reason: body.reason,
+            cancelled_by: userId,
+        }));
+        return {
+            message: response.message,
+            data: response.booking,
+        };
+    }
+    async rescheduleBooking(req, id, body) {
+        const tenantId = this._getTenantId(req);
+        const userId = req.dashboardUser?.user_id || req.tenant?.tenant_id || '';
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.rescheduleBooking({
+            tenant_id: tenantId,
+            booking_id: id,
+            agent_id: body.agent_id,
+            new_start_time: body.new_start_time,
+            new_end_time: body.new_end_time,
+            resource_id: body.resource_id,
+            resource_ids: body.resource_ids ?? (body.resource_id ? [body.resource_id] : []),
+            notes: body.notes,
+            rescheduled_by: userId,
         }));
         return {
             message: response.message,
@@ -350,6 +408,15 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "deleteResource", null);
 __decorate([
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.SCHEDULING.BOOKINGS),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, booking_dto_js_1.ListBookingsQueryDto]),
+    __metadata("design:returntype", Promise)
+], SchedulingController.prototype, "listBookings", null);
+__decorate([
     (0, common_1.Post)(routes_constant_js_1.API_ROUTES.SCHEDULING.BOOKINGS),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
@@ -359,6 +426,28 @@ __decorate([
     __metadata("design:paramtypes", [Object, booking_dto_js_1.CreateBookingDto]),
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "createBooking", null);
+__decorate([
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.SCHEDULING.BOOKING_CANCEL),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, booking_dto_js_1.CancelBookingDto]),
+    __metadata("design:returntype", Promise)
+], SchedulingController.prototype, "cancelBooking", null);
+__decorate([
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.SCHEDULING.BOOKING_RESCHEDULE),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, booking_dto_js_1.RescheduleBookingDto]),
+    __metadata("design:returntype", Promise)
+], SchedulingController.prototype, "rescheduleBooking", null);
 __decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.SCHEDULING.AVAILABILITY),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),

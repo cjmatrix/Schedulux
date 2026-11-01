@@ -440,6 +440,7 @@ async def create_booking(
     resource_id: str | None = None,
     resource_ids: list[str] | None = None,
     notes: str | None = None,
+    source: str = "customer_agent",
 ) -> dict[str, Any]:
     """Execute booking creation in scheduling-inventory service."""
     target_url = SCHEDULING_SERVICE_URL
@@ -454,7 +455,7 @@ async def create_booking(
         customer_phone=customer_phone.strip(),
         customer_email=customer_email.strip() if customer_email else None,
         notes=notes or None,
-        source="ai_chat",
+        source=source or "customer_agent",
         created_by="customer_agent",
         resource_ids=resource_ids or [],
     )
@@ -493,4 +494,98 @@ async def create_booking(
         return {"success": False, "error": err_msg}
     except Exception as e:
         logger.error("[SchedulingClient Error] Unexpected CreateBooking error: %s", e)
+        return {"success": False, "error": str(e)}
+
+
+async def cancel_booking(
+    tenant_id: str,
+    agent_id: str,
+    booking_id: str,
+    reason: str | None = None,
+    cancelled_by: str = "customer_agent",
+) -> dict[str, Any]:
+    """Execute booking cancellation in scheduling-inventory service."""
+    target_url = SCHEDULING_SERVICE_URL
+    req = scheduling_pb2.CancelBookingRequest(
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        booking_id=booking_id.strip(),
+        reason=reason.strip() if reason else None,
+        cancelled_by=cancelled_by,
+    )
+    try:
+        async with grpc.aio.insecure_channel(target_url) as channel:
+            stub = scheduling_pb2_grpc.SchedulingInventoryServiceStub(channel)
+            resp: scheduling_pb2.BookingResponse = await stub.CancelBooking(
+                req, timeout=GRPC_TIMEOUT_SECONDS
+            )
+
+        bk = resp.booking
+        return {
+            "success": True,
+            "message": resp.message,
+            "booking": {
+                "booking_id": bk.booking_id,
+                "booking_reference": bk.booking_reference,
+                "status": bk.status,
+            },
+        }
+    except grpc.RpcError as rpc_err:
+        err_msg = f"gRPC error ({rpc_err.code()}): {rpc_err.details()}"
+        logger.error("[SchedulingClient Error] Failed CancelBooking: %s", err_msg)
+        return {"success": False, "error": err_msg}
+    except Exception as e:
+        logger.error("[SchedulingClient Error] Unexpected CancelBooking error: %s", e)
+        return {"success": False, "error": str(e)}
+
+
+async def reschedule_booking(
+    tenant_id: str,
+    agent_id: str,
+    booking_id: str,
+    new_start_time: str,
+    new_end_time: str | None = None,
+    resource_id: str | None = None,
+    resource_ids: list[str] | None = None,
+    notes: str | None = None,
+    rescheduled_by: str = "customer_agent",
+) -> dict[str, Any]:
+    """Execute booking rescheduling in scheduling-inventory service."""
+    target_url = SCHEDULING_SERVICE_URL
+    req = scheduling_pb2.RescheduleBookingRequest(
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        booking_id=booking_id.strip(),
+        new_start_time=new_start_time.strip(),
+        new_end_time=new_end_time.strip() if new_end_time else None,
+        resource_id=resource_id or None,
+        resource_ids=resource_ids or [],
+        notes=notes or None,
+        rescheduled_by=rescheduled_by,
+    )
+    try:
+        async with grpc.aio.insecure_channel(target_url) as channel:
+            stub = scheduling_pb2_grpc.SchedulingInventoryServiceStub(channel)
+            resp: scheduling_pb2.BookingResponse = await stub.RescheduleBooking(
+                req, timeout=GRPC_TIMEOUT_SECONDS
+            )
+
+        bk = resp.booking
+        return {
+            "success": True,
+            "message": resp.message,
+            "booking": {
+                "booking_id": bk.booking_id,
+                "booking_reference": bk.booking_reference,
+                "start_time": bk.start_time,
+                "end_time": bk.end_time,
+                "status": bk.status,
+            },
+        }
+    except grpc.RpcError as rpc_err:
+        err_msg = f"gRPC error ({rpc_err.code()}): {rpc_err.details()}"
+        logger.error("[SchedulingClient Error] Failed RescheduleBooking: %s", err_msg)
+        return {"success": False, "error": err_msg}
+    except Exception as e:
+        logger.error("[SchedulingClient Error] Unexpected RescheduleBooking error: %s", e)
         return {"success": False, "error": str(e)}

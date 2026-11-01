@@ -137,11 +137,7 @@ export default function ServicesListPage() {
           </button>
           <button
             onClick={() =>
-              navigate(
-                agentId
-                  ? `/tenant/agents/${agentId}/services/new`
-                  : '/tenant/services/new',
-              )
+              navigate(agentId ? `/tenant/agents/${agentId}/services/new` : '/tenant/services/new')
             }
             className="flex items-center gap-2 bg-slate-950 hover:bg-black text-white px-5 py-2.5 rounded-xl font-semibold text-xs shadow-xs transition active:scale-98 cursor-pointer"
           >
@@ -254,11 +250,7 @@ export default function ServicesListPage() {
           </div>
           <button
             onClick={() =>
-              navigate(
-                agentId
-                  ? `/tenant/agents/${agentId}/services/new`
-                  : '/tenant/services/new',
-              )
+              navigate(agentId ? `/tenant/agents/${agentId}/services/new` : '/tenant/services/new')
             }
             className="px-5 py-2.5 bg-slate-900 hover:bg-black text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-xs transition"
           >

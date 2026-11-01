@@ -2,12 +2,12 @@ import type {
   DepositInfo,
   PriceInfo,
   ResourceInfo,
-  ServiceInfo,
   ResourceRequirementInfo,
+  ServiceInfo,
 } from '@repo/proto/scheduling';
 import { type ApiResponse, axiosClient } from '../../../api/axiosClient';
 
-export type { DepositInfo, PriceInfo, ResourceInfo, ServiceInfo, ResourceRequirementInfo };
+export type { DepositInfo, PriceInfo, ResourceInfo, ResourceRequirementInfo, ServiceInfo };
 
 export interface ListServicesParams {
   page?: number;

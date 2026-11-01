@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import type { DepositInfo, PriceInfo, ServiceVerificationInfo } from '@repo/proto/scheduling';
 import type { ClientSession } from 'mongoose';
+import { firstValueFrom } from 'rxjs';
 import type { ISchedulingEventsProducer } from '../../application/interfaces/scheduling-events-producer.interface.js';
 import { BookingEntity } from '../../domain/entities/booking.entity.js';
 import { ResourceEntity } from '../../domain/entities/resource.entity.js';
@@ -21,8 +22,9 @@ export type SchedulingEventType =
   | 'resource.created'
   | 'resource.updated'
   | 'resource.deleted'
-  | 'booking.created';
-
+  | 'booking.created'
+  | 'booking.cancelled'
+  | 'booking.rescheduled';
 
 export interface BaseSchedulingEventPayload {
   [key: string]: unknown;
@@ -99,6 +101,9 @@ export interface BookingEventPayload extends BaseSchedulingEventPayload {
     deposit_status: string;
     price: { amount: number; currency: string };
     created_at: string;
+    reason?: string;
+    previous_start_time?: string;
+    previous_end_time?: string;
   };
 }
 
@@ -305,7 +310,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
     try {
       const key = outboxDoc.partition_key;
       const value = JSON.stringify(outboxDoc.payload);
-      this._messagingClient.emit(outboxDoc.topic, { key, value });
+      await firstValueFrom(this._messagingClient.emit(outboxDoc.topic, { key, value }));
       await this._outboxRepository.markPublished([outboxDoc._id]);
       this._logger.log(
         `[Messaging] Emitted and marked PUBLISHED: ${outboxDoc._id} (${outboxDoc.event_type})`,
@@ -386,7 +391,9 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
     };
   }
 
-  private _buildResourceSnapshot(entity: ResourceEntity): NonNullable<ResourceEventPayload['data']> {
+  private _buildResourceSnapshot(
+    entity: ResourceEntity,
+  ): NonNullable<ResourceEventPayload['data']> {
     let overrides: Record<string, unknown> = {};
     try {
       overrides = JSON.parse(entity.customShiftOverridesJson || '{}');
@@ -465,5 +472,136 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
     const outboxDoc = await this.createBookingCreatedOutboxEvent(entity);
     await this.publishOutboxEvent(outboxDoc);
   }
-}
 
+  async createBookingCancelledOutboxEvent(
+    entity: BookingEntity,
+    reason?: string,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc> {
+    const version = entity.updatedAt ? entity.updatedAt.getTime() : Date.now();
+    const eventId = `evt_bk_cancel_${entity.id}_${version}`;
+    const payload: BookingEventPayload = {
+      event_id: eventId,
+      event_type: 'booking.cancelled',
+      tenant_id: entity.tenantId,
+      agent_id: entity.agentId,
+      booking_id: entity.id,
+      version,
+      timestamp: new Date().toISOString(),
+      data: {
+        booking_reference: entity.bookingReference,
+        service_id: entity.serviceId,
+        resource_id: entity.resourceId,
+        resource_ids: entity.resourceIds,
+        assigned_asset_ids: entity.assignedAssetIds,
+        customer_id: entity.customerId,
+        customer_name: entity.customerSnapshot.name,
+        customer_phone: entity.customerSnapshot.phone,
+        booking_mode: entity.bookingMode,
+        start_time: entity.startTime.toISOString(),
+        end_time: entity.endTime.toISOString(),
+        effective_end_time: entity.effectiveEndTime.toISOString(),
+        buffer_minutes: entity.bufferMinutes,
+        duration_minutes: entity.durationMinutes,
+        source: entity.source,
+        status: entity.status,
+        deposit_status: entity.depositStatus,
+        price: {
+          amount: entity.price.amount,
+          currency: entity.price.currency,
+        },
+        created_at: entity.createdAt.toISOString(),
+        reason: reason?.trim() || '',
+      },
+    };
+
+    return this._outboxRepository.saveEvent(
+      {
+        eventId,
+        aggregateType: 'booking',
+        aggregateId: entity.id,
+        eventType: 'booking.cancelled',
+        topic: KAFKA_SERVICE_TOPIC_BOOKINGS,
+        partitionKey: entity.tenantId,
+        payload,
+      },
+      session,
+    );
+  }
+
+  async emitBookingCancelled(entity: BookingEntity, reason?: string): Promise<void> {
+    const outboxDoc = await this.createBookingCancelledOutboxEvent(entity, reason);
+    await this.publishOutboxEvent(outboxDoc);
+  }
+
+  async createBookingRescheduledOutboxEvent(
+    entity: BookingEntity,
+    previousStartTime: Date,
+    previousEndTime: Date,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc> {
+    const version = entity.updatedAt ? entity.updatedAt.getTime() : Date.now();
+    const eventId = `evt_bk_resched_${entity.id}_${version}`;
+    const payload: BookingEventPayload = {
+      event_id: eventId,
+      event_type: 'booking.rescheduled',
+      tenant_id: entity.tenantId,
+      agent_id: entity.agentId,
+      booking_id: entity.id,
+      version,
+      timestamp: new Date().toISOString(),
+      data: {
+        booking_reference: entity.bookingReference,
+        service_id: entity.serviceId,
+        resource_id: entity.resourceId,
+        resource_ids: entity.resourceIds,
+        assigned_asset_ids: entity.assignedAssetIds,
+        customer_id: entity.customerId,
+        customer_name: entity.customerSnapshot.name,
+        customer_phone: entity.customerSnapshot.phone,
+        booking_mode: entity.bookingMode,
+        start_time: entity.startTime.toISOString(),
+        end_time: entity.endTime.toISOString(),
+        effective_end_time: entity.effectiveEndTime.toISOString(),
+        buffer_minutes: entity.bufferMinutes,
+        duration_minutes: entity.durationMinutes,
+        source: entity.source,
+        status: entity.status,
+        deposit_status: entity.depositStatus,
+        price: {
+          amount: entity.price.amount,
+          currency: entity.price.currency,
+        },
+        created_at: entity.createdAt.toISOString(),
+        previous_start_time: previousStartTime.toISOString(),
+        previous_end_time: previousEndTime.toISOString(),
+      },
+    };
+
+    return this._outboxRepository.saveEvent(
+      {
+        eventId,
+        aggregateType: 'booking',
+        aggregateId: entity.id,
+        eventType: 'booking.rescheduled',
+        topic: KAFKA_SERVICE_TOPIC_BOOKINGS,
+        partitionKey: entity.tenantId,
+        payload,
+      },
+      session,
+    );
+  }
+
+  async emitBookingRescheduled(
+    entity: BookingEntity,
+    previousStartTime: Date,
+    previousEndTime: Date,
+  ): Promise<void> {
+    const outboxDoc = await this.createBookingRescheduledOutboxEvent(
+      entity,
+      previousStartTime,
+      previousEndTime,
+    );
+    await this.publishOutboxEvent(outboxDoc);
+  }
+}

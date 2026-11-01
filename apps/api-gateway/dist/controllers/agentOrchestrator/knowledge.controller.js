@@ -219,6 +219,69 @@ let KnowledgeController = class KnowledgeController {
             },
         };
     }
+    async getDocumentUploadUrl(req, body) {
+        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+        }
+        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getDocumentUploadUrl({
+            tenant_id: tenantId,
+            agent_id: body.agent_id,
+            file_name: body.file_name,
+            file_size_bytes: body.file_size_bytes || 0,
+        }));
+        return {
+            message: 'Presigned upload URL generated successfully',
+            data: {
+                upload_url: response.upload_url,
+                document_id: response.document_id,
+                s3_key: response.s3_key,
+                expires_in: response.expires_in,
+            },
+        };
+    }
+    async confirmDocumentUpload(req, body) {
+        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+        }
+        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.confirmDocumentUpload({
+            tenant_id: tenantId,
+            document_id: body.document_id,
+        }));
+        return {
+            message: response.message,
+            data: { success: response.success },
+        };
+    }
+    async listDocuments(req, query) {
+        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+        }
+        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.listDocuments({
+            tenant_id: tenantId,
+            agent_id: query.agent_id || '',
+        }));
+        return {
+            message: 'Documents retrieved successfully',
+            data: response.documents || [],
+        };
+    }
+    async deleteDocument(req, documentId) {
+        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+        }
+        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.deleteDocument({
+            tenant_id: tenantId,
+            document_id: documentId,
+        }));
+        return {
+            message: response.message,
+            data: { success: response.success },
+        };
+    }
 };
 exports.KnowledgeController = KnowledgeController;
 __decorate([
@@ -311,6 +374,44 @@ __decorate([
     __metadata("design:paramtypes", [Object, String, String, String]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "getOnboardingMessages", null);
+__decorate([
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.DOCUMENTS_UPLOAD_URL),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.GetDocumentUploadUrlDto]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "getDocumentUploadUrl", null);
+__decorate([
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.DOCUMENTS_CONFIRM),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.ConfirmDocumentUploadDto]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "confirmDocumentUpload", null);
+__decorate([
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.DOCUMENTS),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.ListDocumentsQueryDto]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "listDocuments", null);
+__decorate([
+    (0, common_1.Delete)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.DOCUMENT_BY_ID),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('documentId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "deleteDocument", null);
 exports.KnowledgeController = KnowledgeController = __decorate([
     (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.BASE),
     (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),

@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Any, Protocol
 
-from agent_orchestrator.models import AgentDraft, AgentMessage, AgentRuntimeConfig
+from agent_orchestrator.models import (
+    AgentDraft,
+    AgentMessage,
+    AgentRuntimeConfig,
+    KnowledgeDocument,
+    KnowledgeDocumentStatus,
+)
 
 
 class MessageRepository(Protocol):
@@ -79,6 +86,20 @@ class MemoryQueue(Protocol):
     async def close(self) -> None: ...
 
 
+class DocumentIndexingQueue(Protocol):
+    async def enqueue_indexing(
+        self,
+        tenant_id: str,
+        agent_id: str,
+        document_id: str,
+        s3_bucket: str,
+        s3_key: str,
+        file_name: str,
+    ) -> None: ...
+
+    async def close(self) -> None: ...
+
+
 class AgentOrchestrator(Protocol):
     async def start_session(
         self, tenant_id: str, initial_draft: dict[str, Any], agent_id: str
@@ -89,3 +110,70 @@ class AgentOrchestrator(Protocol):
     ) -> dict[str, Any]: ...
 
     async def get_current_draft(self, tenant_id: str, agent_id: str) -> dict[str, Any] | None: ...
+
+
+class StorageService(Protocol):
+    """Abstract cloud object storage provider (AWS S3, Cloudflare R2, MinIO, GCS)."""
+
+    def generate_presigned_upload_url(
+        self, key: str, content_type: str = "application/pdf", expires_in: int = 900
+    ) -> str: ...
+
+    def delete_object(self, key: str, bucket: str | None = None) -> None: ...
+
+    def get_bucket_name(self) -> str: ...
+
+
+class DocumentRepository(Protocol):
+    """Abstract persistence for KnowledgeDocument entities."""
+
+    async def create_document(
+        self,
+        tenant_id: str,
+        agent_id: str,
+        file_name: str,
+        file_size_bytes: int,
+        s3_bucket: str,
+        s3_key: str,
+        doc_id: str | None = None,
+    ) -> KnowledgeDocument: ...
+
+    async def get_by_doc_id(self, tenant_id: str, document_id: str) -> KnowledgeDocument | None: ...
+
+    async def update_status(
+        self,
+        tenant_id: str,
+        document_id: str,
+        status: KnowledgeDocumentStatus,
+        chunks_count: int | None = None,
+        indexing_error: str | None = None,
+    ) -> bool: ...
+
+    async def list_documents(
+        self, tenant_id: str, agent_id: str | None = None
+    ) -> list[KnowledgeDocument]: ...
+
+    async def delete_document(self, tenant_id: str, document_id: str) -> bool: ...
+
+
+MessageHandler = Callable[[dict[str, Any]], Awaitable[None]]
+
+
+class EventSubscriber(Protocol):
+ 
+
+    async def subscribe(self, topic_or_queue: str, handler: MessageHandler) -> None:
+        """Register an async handler callback for a specific topic or queue."""
+        ...
+
+    async def start(self) -> None:
+        """Initialize the connection and prepare consumption."""
+        ...
+
+    async def run(self) -> None:
+        """Run the consumption loop until cancelled."""
+        ...
+
+    async def stop(self) -> None:
+        """Gracefully disconnect and clean up resources."""
+        ...

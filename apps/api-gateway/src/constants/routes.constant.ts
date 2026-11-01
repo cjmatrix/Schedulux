@@ -46,6 +46,8 @@ export const API_ROUTES = {
     RESOURCES: 'resources',
     RESOURCE_BY_ID: 'resources/:id',
     BOOKINGS: 'bookings',
+    BOOKING_CANCEL: 'bookings/:id/cancel',
+    BOOKING_RESCHEDULE: 'bookings/:id/reschedule',
     AVAILABILITY: 'availability',
   },
   PUBLIC_CHAT: {
@@ -65,5 +67,9 @@ export const API_ROUTES = {
     AGENTS: 'agents',
     AGENT_MESSAGES: 'agents/:agentId/messages',
     ONBOARDING_MESSAGES: 'onboarding/messages',
+    DOCUMENTS_UPLOAD_URL: 'documents/upload-url',
+    DOCUMENTS_CONFIRM: 'documents/confirm',
+    DOCUMENTS: 'documents',
+    DOCUMENT_BY_ID: 'documents/:documentId',
   },
 } as const;

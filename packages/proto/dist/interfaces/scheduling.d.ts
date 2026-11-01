@@ -302,6 +302,42 @@ export interface BookingResponse {
     booking: BookingInfo | undefined;
     message: string;
 }
+export interface CancelBookingRequest {
+    tenant_id: string;
+    booking_id: string;
+    agent_id: string;
+    reason?: string | undefined;
+    cancelled_by?: string | undefined;
+}
+export interface RescheduleBookingRequest {
+    tenant_id: string;
+    booking_id: string;
+    agent_id: string;
+    new_start_time: string;
+    new_end_time?: string | undefined;
+    resource_id?: string | undefined;
+    resource_ids: string[];
+    rescheduled_by?: string | undefined;
+    notes?: string | undefined;
+}
+export interface ListBookingsRequest {
+    tenant_id: string;
+    page: number;
+    limit: number;
+    agent_id?: string | undefined;
+    service_id?: string | undefined;
+    resource_id?: string | undefined;
+    status?: string | undefined;
+    start_date?: string | undefined;
+    end_date?: string | undefined;
+    search?: string | undefined;
+}
+export interface ListBookingsResponse {
+    bookings: BookingInfo[];
+    total: number;
+    page: number;
+    limit: number;
+}
 export interface GetAvailabilityRequest {
     tenant_id: string;
     agent_id: string;
@@ -359,7 +395,10 @@ export interface SchedulingInventoryServiceClient {
     batchSyncInventory(request: BatchSyncInventoryRequest): Observable<BatchSyncInventoryResponse>;
     /** Booking Operations */
     createBooking(request: CreateBookingRequest): Observable<BookingResponse>;
+    cancelBooking(request: CancelBookingRequest): Observable<BookingResponse>;
+    rescheduleBooking(request: RescheduleBookingRequest): Observable<BookingResponse>;
     getAvailability(request: GetAvailabilityRequest): Observable<GetAvailabilityResponse>;
+    listBookings(request: ListBookingsRequest): Observable<ListBookingsResponse>;
 }
 export interface SchedulingInventoryServiceController {
     /** Service CRUD */
@@ -378,7 +417,10 @@ export interface SchedulingInventoryServiceController {
     batchSyncInventory(request: BatchSyncInventoryRequest): Promise<BatchSyncInventoryResponse> | Observable<BatchSyncInventoryResponse> | BatchSyncInventoryResponse;
     /** Booking Operations */
     createBooking(request: CreateBookingRequest): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
+    cancelBooking(request: CancelBookingRequest): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
+    rescheduleBooking(request: RescheduleBookingRequest): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
     getAvailability(request: GetAvailabilityRequest): Promise<GetAvailabilityResponse> | Observable<GetAvailabilityResponse> | GetAvailabilityResponse;
+    listBookings(request: ListBookingsRequest): Promise<ListBookingsResponse> | Observable<ListBookingsResponse> | ListBookingsResponse;
 }
 export declare function SchedulingInventoryServiceControllerMethods(): (constructor: Function) => void;
 export declare const SCHEDULING_INVENTORY_SERVICE_NAME = "SchedulingInventoryService";

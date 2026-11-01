@@ -480,9 +480,7 @@ export function useAgentOnboarding({
           message: userText,
         });
 
-        const reply =
-          res.data?.reply ||
-          `I would be happy to help you with that at ${clinicName}!`;
+        const reply = res.data?.reply || `I would be happy to help you with that at ${clinicName}!`;
 
         setSandboxMessages((prev) => [...prev, { role: 'agent', text: reply }]);
       } catch (err) {

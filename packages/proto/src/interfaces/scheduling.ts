@@ -347,6 +347,46 @@ export interface BookingResponse {
   message: string;
 }
 
+export interface CancelBookingRequest {
+  tenant_id: string;
+  booking_id: string;
+  agent_id: string;
+  reason?: string | undefined;
+  cancelled_by?: string | undefined;
+}
+
+export interface RescheduleBookingRequest {
+  tenant_id: string;
+  booking_id: string;
+  agent_id: string;
+  new_start_time: string;
+  new_end_time?: string | undefined;
+  resource_id?: string | undefined;
+  resource_ids: string[];
+  rescheduled_by?: string | undefined;
+  notes?: string | undefined;
+}
+
+export interface ListBookingsRequest {
+  tenant_id: string;
+  page: number;
+  limit: number;
+  agent_id?: string | undefined;
+  service_id?: string | undefined;
+  resource_id?: string | undefined;
+  status?: string | undefined;
+  start_date?: string | undefined;
+  end_date?: string | undefined;
+  search?: string | undefined;
+}
+
+export interface ListBookingsResponse {
+  bookings: BookingInfo[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export interface GetAvailabilityRequest {
   tenant_id: string;
   agent_id: string;
@@ -426,7 +466,13 @@ export interface SchedulingInventoryServiceClient {
 
   createBooking(request: CreateBookingRequest): Observable<BookingResponse>;
 
+  cancelBooking(request: CancelBookingRequest): Observable<BookingResponse>;
+
+  rescheduleBooking(request: RescheduleBookingRequest): Observable<BookingResponse>;
+
   getAvailability(request: GetAvailabilityRequest): Observable<GetAvailabilityResponse>;
+
+  listBookings(request: ListBookingsRequest): Observable<ListBookingsResponse>;
 }
 
 export interface SchedulingInventoryServiceController {
@@ -482,9 +528,21 @@ export interface SchedulingInventoryServiceController {
     request: CreateBookingRequest,
   ): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
 
+  cancelBooking(
+    request: CancelBookingRequest,
+  ): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
+
+  rescheduleBooking(
+    request: RescheduleBookingRequest,
+  ): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
+
   getAvailability(
     request: GetAvailabilityRequest,
   ): Promise<GetAvailabilityResponse> | Observable<GetAvailabilityResponse> | GetAvailabilityResponse;
+
+  listBookings(
+    request: ListBookingsRequest,
+  ): Promise<ListBookingsResponse> | Observable<ListBookingsResponse> | ListBookingsResponse;
 }
 
 export function SchedulingInventoryServiceControllerMethods() {
@@ -502,7 +560,10 @@ export function SchedulingInventoryServiceControllerMethods() {
       "deleteResource",
       "batchSyncInventory",
       "createBooking",
+      "cancelBooking",
+      "rescheduleBooking",
       "getAvailability",
+      "listBookings",
     ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

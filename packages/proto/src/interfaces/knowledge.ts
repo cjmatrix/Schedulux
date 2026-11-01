@@ -156,6 +156,62 @@ export interface GetCustomerMessagesResponse {
   messages: CustomerChatMessageInfo[];
 }
 
+export interface GetDocumentUploadUrlRequest {
+  tenant_id: string;
+  agent_id: string;
+  file_name: string;
+  file_size_bytes: number;
+}
+
+export interface GetDocumentUploadUrlResponse {
+  upload_url: string;
+  document_id: string;
+  s3_key: string;
+  expires_in: number;
+}
+
+export interface ConfirmDocumentUploadRequest {
+  tenant_id: string;
+  document_id: string;
+}
+
+export interface ConfirmDocumentUploadResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface DocumentInfo {
+  id: string;
+  tenant_id: string;
+  agent_id: string;
+  file_name: string;
+  file_size_bytes: number;
+  s3_key: string;
+  s3_bucket: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListDocumentsRequest {
+  tenant_id: string;
+  agent_id: string;
+}
+
+export interface ListDocumentsResponse {
+  documents: DocumentInfo[];
+}
+
+export interface DeleteDocumentRequest {
+  tenant_id: string;
+  document_id: string;
+}
+
+export interface DeleteDocumentResponse {
+  success: boolean;
+  message: string;
+}
+
 export const KNOWLEDGE_PACKAGE_NAME = "knowledge";
 
 export interface KnowledgeServiceClient {
@@ -176,6 +232,14 @@ export interface KnowledgeServiceClient {
   customerChat(request: CustomerChatRequest): Observable<CustomerChatResponse>;
 
   getCustomerMessages(request: GetCustomerMessagesRequest): Observable<GetCustomerMessagesResponse>;
+
+  getDocumentUploadUrl(request: GetDocumentUploadUrlRequest): Observable<GetDocumentUploadUrlResponse>;
+
+  confirmDocumentUpload(request: ConfirmDocumentUploadRequest): Observable<ConfirmDocumentUploadResponse>;
+
+  listDocuments(request: ListDocumentsRequest): Observable<ListDocumentsResponse>;
+
+  deleteDocument(request: DeleteDocumentRequest): Observable<DeleteDocumentResponse>;
 }
 
 export interface KnowledgeServiceController {
@@ -212,6 +276,22 @@ export interface KnowledgeServiceController {
   getCustomerMessages(
     request: GetCustomerMessagesRequest,
   ): Promise<GetCustomerMessagesResponse> | Observable<GetCustomerMessagesResponse> | GetCustomerMessagesResponse;
+
+  getDocumentUploadUrl(
+    request: GetDocumentUploadUrlRequest,
+  ): Promise<GetDocumentUploadUrlResponse> | Observable<GetDocumentUploadUrlResponse> | GetDocumentUploadUrlResponse;
+
+  confirmDocumentUpload(
+    request: ConfirmDocumentUploadRequest,
+  ): Promise<ConfirmDocumentUploadResponse> | Observable<ConfirmDocumentUploadResponse> | ConfirmDocumentUploadResponse;
+
+  listDocuments(
+    request: ListDocumentsRequest,
+  ): Promise<ListDocumentsResponse> | Observable<ListDocumentsResponse> | ListDocumentsResponse;
+
+  deleteDocument(
+    request: DeleteDocumentRequest,
+  ): Promise<DeleteDocumentResponse> | Observable<DeleteDocumentResponse> | DeleteDocumentResponse;
 }
 
 export function KnowledgeServiceControllerMethods() {
@@ -226,6 +306,10 @@ export function KnowledgeServiceControllerMethods() {
       "getAgentMessages",
       "customerChat",
       "getCustomerMessages",
+      "getDocumentUploadUrl",
+      "confirmDocumentUpload",
+      "listDocuments",
+      "deleteDocument",
     ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

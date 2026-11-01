@@ -13,6 +13,8 @@ export const RESPONSE_MESSAGES = {
   },
   BOOKING: {
     CREATED: 'Booking created successfully',
+    CANCELLED: 'Booking cancelled successfully',
+    RESCHEDULED: 'Booking rescheduled successfully',
   },
   INVENTORY: {
     BATCH_SYNC_SUCCESS: 'Batch sync completed successfully',
@@ -27,7 +29,8 @@ export const RESPONSE_MESSAGES = {
     START_TIME_REQUIRED: 'start_time is required',
     CUSTOMER_PHONE_REQUIRED: 'customer_phone is required',
     INVALID_START_TIME: 'Invalid start_time format',
-    END_TIME_REQUIRED_FOR_DATE_RANGE: 'end_time (check-out date) is required for date_range bookings',
+    END_TIME_REQUIRED_FOR_DATE_RANGE:
+      'end_time (check-out date) is required for date_range bookings',
     INVALID_END_TIME_DATE_RANGE: 'Invalid end_time format for date_range',
     CHECKOUT_AFTER_CHECKIN: 'Check-out end_time must be after check-in start_time',
     INVALID_END_TIME: 'Invalid end_time format',

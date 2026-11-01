@@ -67,7 +67,8 @@ export class GrpcExceptionFilter implements RpcExceptionFilter<RpcException> {
       const err = exception.getError();
       if (typeof err === 'object' && err !== null) {
         code = (err as { code?: number }).code ?? grpc.status.INTERNAL;
-        message = (err as { message?: string }).message ?? RESPONSE_MESSAGES.ERRORS.MICROSERVICE_ERROR;
+        message =
+          (err as { message?: string }).message ?? RESPONSE_MESSAGES.ERRORS.MICROSERVICE_ERROR;
       } else if (typeof err === 'string') {
         message = err;
       }

@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { BatchSyncInventoryRequest, BatchSyncInventoryResponse } from '@repo/proto/scheduling';
+import { RESPONSE_MESSAGES } from '../../../constants/index.js';
 import {
   DispatchStatus,
   ResourceEntity,
@@ -10,6 +11,7 @@ import { IResourceRepository } from '../../../domain/repositories/resource.repos
 import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
 import { ITenantScheduleRepository } from '../../../domain/repositories/tenant-schedule.repository.interface.js';
 import {
+  CACHE_REPOSITORY,
   RESOURCE_REPOSITORY,
   SERVICE_REPOSITORY,
   TENANT_SCHEDULE_REPOSITORY,
@@ -17,10 +19,11 @@ import {
 import { generateSemanticId } from '../../../domain/utils/id-generator.js';
 import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
 import { PriceVO } from '../../../domain/value-objects/price.vo.js';
+import type { ICacheRepository } from '../../../infrastructure/cache/cache-repository.interface.js';
 import { ResourceMapper } from '../../../infrastructure/database/mappers/resource.mapper.js';
 import { ServiceMapper } from '../../../infrastructure/database/mappers/service.mapper.js';
 import { IBatchSyncInventoryUseCase } from '../../interfaces/batch-sync-use-case.interface.js';
-import { RESPONSE_MESSAGES } from '../../../constants/index.js';
+import { invalidateCachedServices } from '../../utils/service-cache.helper.js';
 
 @Injectable()
 export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
@@ -33,6 +36,8 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
     private readonly _serviceRepository: IServiceRepository,
     @Inject(TENANT_SCHEDULE_REPOSITORY)
     private readonly _tenantScheduleRepository: ITenantScheduleRepository,
+    @Inject(CACHE_REPOSITORY)
+    private readonly _cacheRepo: ICacheRepository,
   ) {}
 
   async execute(dto: BatchSyncInventoryRequest): Promise<BatchSyncInventoryResponse> {
@@ -74,8 +79,9 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
       const nameKey = (r.name || '').trim().toLowerCase();
       const existing =
         (r.resource_id && existingResById.get(r.resource_id)) || existingResByName.get(nameKey);
-      const resourceId =
-        existing ? existing.id : r.resource_id?.trim() || generateSemanticId('res', r.name);
+      const resourceId = existing
+        ? existing.id
+        : r.resource_id?.trim() || generateSemanticId('res', r.name);
 
       const isDel = r.is_deleted ?? false;
       const entity = new ResourceEntity({
@@ -87,8 +93,8 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
         title: r.title || '',
         category: r.category || 'General',
         description: r.description || '',
-        isBookable: isDel ? false : (r.is_bookable !== undefined ? r.is_bookable : true),
-        dispatchStatus: isDel ? 'retired' : ((r.dispatch_status as DispatchStatus) || 'active'),
+        isBookable: isDel ? false : r.is_bookable !== undefined ? r.is_bookable : true,
+        dispatchStatus: isDel ? 'retired' : (r.dispatch_status as DispatchStatus) || 'active',
         customShiftOverridesJson: r.custom_shift_overrides_json || '{}',
         isDeleted: isDel,
         deletedAt: isDel ? (r.deleted_at ? new Date(r.deleted_at) : new Date()) : null,
@@ -113,8 +119,9 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
       const nameKey = (s.name || '').trim().toLowerCase();
       const existing =
         (s.service_id && existingSvcById.get(s.service_id)) || existingSvcByName.get(nameKey);
-      const serviceId =
-        existing ? existing.id : s.service_id?.trim() || generateSemanticId('srv', s.name);
+      const serviceId = existing
+        ? existing.id
+        : s.service_id?.trim() || generateSemanticId('srv', s.name);
 
       const mappedRequirements = (s.resource_requirements || []).map((req) => {
         const reqEligible: string[] = [];
@@ -172,6 +179,8 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
 
     if (serviceEntities.length > 0) {
       await this._serviceRepository.bulkUpsert(serviceEntities);
+      const serviceIds = serviceEntities.map((s) => s.id);
+      void invalidateCachedServices(this._cacheRepo, tenantId, serviceIds);
     }
 
     if (dto.operating_hours || dto.timezone || dto.blackout_dates || dto.scheduling_engine) {
@@ -224,7 +233,8 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
           verification_policy: dto.verification_policy
             ? {
                 require_otp_for_new_booking: !!dto.verification_policy.require_otp_for_new_booking,
-                require_otp_for_reschedule: dto.verification_policy.require_otp_for_reschedule ?? true,
+                require_otp_for_reschedule:
+                  dto.verification_policy.require_otp_for_reschedule ?? true,
                 require_otp_for_cancel: dto.verification_policy.require_otp_for_cancel ?? true,
               }
             : {

@@ -39,7 +39,8 @@ let TenantService = class TenantService {
         this._configService = _configService;
         this._emailProducer = _emailProducer;
         this._jwtSecret = this._configService.get('JWT_SECRET') || 'dev-secret-change-in-prod';
-        this._jwtRefreshSecret = this._configService.get('JWT_REFRESH_SECRET') || this._jwtSecret;
+        this._jwtRefreshSecret =
+            this._configService.get('JWT_REFRESH_SECRET') || this._jwtSecret;
         this._googleClient = new OAuth2Client(this._configService.get('GOOGLE_CLIENT_ID'));
         this._accessTokenExpiry = (this._configService.get('ACCESS_TOKEN_EXPIRY') ||
             '15m');

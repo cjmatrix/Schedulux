@@ -68,3 +68,31 @@ export const SendSandboxMessageSchema = z.object({
 
 export class SendSandboxMessageDto extends createZodDto(SendSandboxMessageSchema) {}
 
+export const GetDocumentUploadUrlSchema = z.object({
+  agent_id: z.string().min(1, 'Agent ID is required'),
+  file_name: z
+    .string()
+    .min(1, 'File name is required')
+    .max(255, 'File name exceeds 255 characters')
+    .regex(/\.pdf$/i, 'Only PDF documents (.pdf) are supported'),
+  file_size_bytes: z
+    .number()
+    .nonnegative()
+    .max(25 * 1024 * 1024, 'File size exceeds maximum allowed limit of 25MB')
+    .optional()
+    .default(0),
+});
+
+export class GetDocumentUploadUrlDto extends createZodDto(GetDocumentUploadUrlSchema) {}
+
+export const ConfirmDocumentUploadSchema = z.object({
+  document_id: z.string().min(1, 'Document ID is required'),
+});
+
+export class ConfirmDocumentUploadDto extends createZodDto(ConfirmDocumentUploadSchema) {}
+
+export const ListDocumentsQuerySchema = z.object({
+  agent_id: z.string().optional(),
+});
+
+export class ListDocumentsQueryDto extends createZodDto(ListDocumentsQuerySchema) {}

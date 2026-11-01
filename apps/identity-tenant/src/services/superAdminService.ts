@@ -258,4 +258,3 @@ export class SuperAdminService implements ISuperAdminService {
     };
   }
 }
-

@@ -18,3 +18,36 @@ export const CreateBookingDtoSchema = z.object({
 });
 
 export class CreateBookingDto extends createZodDto(CreateBookingDtoSchema) {}
+
+export const CancelBookingDtoSchema = z.object({
+  agent_id: z.string().min(1, 'agent_id is required'),
+  reason: z.string().optional(),
+});
+
+export class CancelBookingDto extends createZodDto(CancelBookingDtoSchema) {}
+
+export const RescheduleBookingDtoSchema = z.object({
+  agent_id: z.string().min(1, 'agent_id is required'),
+  new_start_time: z.string().min(1, 'new_start_time is required'),
+  new_end_time: z.string().optional(),
+  resource_id: z.string().optional(),
+  resource_ids: z.array(z.string()).optional(),
+  notes: z.string().optional(),
+});
+
+export class RescheduleBookingDto extends createZodDto(RescheduleBookingDtoSchema) {}
+
+export const ListBookingsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  agent_id: z.string().optional(),
+  service_id: z.string().optional(),
+  resource_id: z.string().optional(),
+  status: z.string().optional(),
+  start_date: z.string().optional(),
+  end_date: z.string().optional(),
+  search: z.string().optional(),
+});
+
+export class ListBookingsQueryDto extends createZodDto(ListBookingsQuerySchema) {}
+

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -26,8 +27,11 @@ import { RolesGuard } from '../../guards/roles.guard.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
 import { ISchemaCacheService } from '../../interfaces/ISchemaEventSubscriber.js';
 import {
+  ConfirmDocumentUploadDto,
   CrawlSiteDto,
   GetCrawlStatusDto,
+  GetDocumentUploadUrlDto,
+  ListDocumentsQueryDto,
   ResumeOnboardingDto,
   SaveInitialAgentDraftDto,
   SendSandboxMessageDto,
@@ -161,10 +165,7 @@ export class KnowledgeController implements OnModuleInit {
   @Post(API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX)
   @HttpCode(HttpStatus.OK)
   @UsePipes(ZodValidationPipe)
-  async sandboxChat(
-    @Req() req: AuthenticatedTenantRequest,
-    @Body() body: SendSandboxMessageDto,
-  ) {
+  async sandboxChat(@Req() req: AuthenticatedTenantRequest, @Body() body: SendSandboxMessageDto) {
     const tenantId = body.tenant_id || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
     if (!tenantId) {
       throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
@@ -310,5 +311,101 @@ export class KnowledgeController implements OnModuleInit {
       },
     };
   }
-}
 
+  @Post(API_ROUTES.KNOWLEDGE.DOCUMENTS_UPLOAD_URL)
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(ZodValidationPipe)
+  async getDocumentUploadUrl(
+    @Req() req: AuthenticatedTenantRequest,
+    @Body() body: GetDocumentUploadUrlDto,
+  ) {
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+    }
+    const response = await lastValueFrom(
+      this._knowledgeService.getDocumentUploadUrl({
+        tenant_id: tenantId,
+        agent_id: body.agent_id,
+        file_name: body.file_name,
+        file_size_bytes: body.file_size_bytes || 0,
+      }),
+    );
+    return {
+      message: 'Presigned upload URL generated successfully',
+      data: {
+        upload_url: response.upload_url,
+        document_id: response.document_id,
+        s3_key: response.s3_key,
+        expires_in: response.expires_in,
+      },
+    };
+  }
+
+  @Post(API_ROUTES.KNOWLEDGE.DOCUMENTS_CONFIRM)
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(ZodValidationPipe)
+  async confirmDocumentUpload(
+    @Req() req: AuthenticatedTenantRequest,
+    @Body() body: ConfirmDocumentUploadDto,
+  ) {
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+    }
+    const response = await lastValueFrom(
+      this._knowledgeService.confirmDocumentUpload({
+        tenant_id: tenantId,
+        document_id: body.document_id,
+      }),
+    );
+    return {
+      message: response.message,
+      data: { success: response.success },
+    };
+  }
+
+  @Get(API_ROUTES.KNOWLEDGE.DOCUMENTS)
+  @UsePipes(ZodValidationPipe)
+  async listDocuments(
+    @Req() req: AuthenticatedTenantRequest,
+    @Query() query: ListDocumentsQueryDto,
+  ) {
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+    }
+    const response = await lastValueFrom(
+      this._knowledgeService.listDocuments({
+        tenant_id: tenantId,
+        agent_id: query.agent_id || '',
+      }),
+    );
+    return {
+      message: 'Documents retrieved successfully',
+      data: response.documents || [],
+    };
+  }
+
+  @Delete(API_ROUTES.KNOWLEDGE.DOCUMENT_BY_ID)
+  @HttpCode(HttpStatus.OK)
+  async deleteDocument(
+    @Req() req: AuthenticatedTenantRequest,
+    @Param('documentId') documentId: string,
+  ) {
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+    }
+    const response = await lastValueFrom(
+      this._knowledgeService.deleteDocument({
+        tenant_id: tenantId,
+        document_id: documentId,
+      }),
+    );
+    return {
+      message: response.message,
+      data: { success: response.success },
+    };
+  }
+}

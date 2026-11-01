@@ -7,7 +7,12 @@ from typing import Any
 from langchain_core.tools import BaseTool, StructuredTool
 from mcp.server.fastmcp import FastMCP
 
-from agent_orchestrator.clients.scheduling_client import create_booking, get_availability
+from agent_orchestrator.clients.scheduling_client import (
+    cancel_booking,
+    create_booking,
+    get_availability,
+    reschedule_booking,
+)
 from agent_orchestrator.models import AgentDraft, AgentRuntimeConfig
 
 logger = logging.getLogger(__name__)
@@ -150,6 +155,7 @@ async def book_appointment(
         resource_id=resource_id,
         notes=notes,
         agent_id=agent_id,
+        source="customer_agent",
     )
 
     if not result.get("success"):
@@ -171,6 +177,113 @@ async def book_appointment(
             "end_time": bk.get("end_time"),
             "deposit_status": bk.get("deposit_status"),
             "price": bk.get("price"),
+        },
+        indent=2,
+    )
+
+
+@mcp.tool()
+async def cancel_appointment(
+    tenant_id: str,
+    agent_id: str,
+    booking_id: str,
+    reason: str | None = None,
+) -> str:
+    """Cancel an existing confirmed booking or appointment.
+
+    Args:
+        tenant_id: The tenant identifier.
+        agent_id: The specific agent ID responsible for the scheduling flow.
+        booking_id: The booking ID (bk_...) or booking reference (BK-...).
+        reason: Optional reason for the cancellation.
+    """
+    logger.info(
+        "[MCP Tool cancel_appointment] tenant=%s, agent=%s, booking=%s, reason=%s",
+        tenant_id,
+        agent_id,
+        booking_id,
+        reason,
+    )
+    result = await cancel_booking(
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        booking_id=booking_id,
+        reason=reason,
+    )
+    if not result.get("success"):
+        return json.dumps(
+            {
+                "status": "failed",
+                "error": result.get("error", "Failed to cancel booking"),
+            }
+        )
+
+    bk = result.get("booking", {})
+    return json.dumps(
+        {
+            "status": "cancelled",
+            "message": "Appointment successfully cancelled.",
+            "booking_id": bk.get("booking_id"),
+            "booking_reference": bk.get("booking_reference"),
+        },
+        indent=2,
+    )
+
+
+@mcp.tool()
+async def reschedule_appointment(
+    tenant_id: str,
+    agent_id: str,
+    booking_id: str,
+    new_start_time: str,
+    new_end_time: str | None = None,
+    resource_id: str | None = None,
+    notes: str | None = None,
+) -> str:
+    """Reschedule an existing booking to a new date and time.
+
+    Args:
+        tenant_id: The tenant identifier.
+        agent_id: The specific agent ID responsible for the scheduling flow.
+        booking_id: The booking ID (bk_...) or booking reference (BK-...).
+        new_start_time: New ISO-8601 start time (e.g. 2026-10-30T14:00:00Z).
+        new_end_time: Optional new ISO-8601 end time.
+        resource_id: Optional specific staff/resource ID for the new slot.
+        notes: Optional rescheduling notes.
+    """
+    logger.info(
+        "[MCP Tool reschedule_appointment] tenant=%s, agent=%s, booking=%s, new_time=%s",
+        tenant_id,
+        agent_id,
+        booking_id,
+        new_start_time,
+    )
+    result = await reschedule_booking(
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        booking_id=booking_id,
+        new_start_time=new_start_time,
+        new_end_time=new_end_time,
+        resource_id=resource_id,
+        notes=notes,
+    )
+    if not result.get("success"):
+        return json.dumps(
+            {
+                "status": "failed",
+                "error": result.get("error", "Failed to reschedule booking"),
+            }
+        )
+
+    bk = result.get("booking", {})
+    return json.dumps(
+        {
+            "status": "rescheduled",
+            "message": "Appointment successfully rescheduled!",
+            "booking_id": bk.get("booking_id"),
+            "booking_reference": bk.get("booking_reference"),
+            "new_start_time": bk.get("start_time"),
+            "new_end_time": bk.get("end_time"),
         },
         indent=2,
     )
@@ -309,6 +422,69 @@ async def search_resources(
         },
         indent=2,
     )
+
+
+@mcp.tool()
+async def search_knowledge_base(
+    tenant_id: str,
+    agent_id: str,
+    query: str,
+) -> str:
+    """Search tenant's uploaded knowledge base documents, policies, services, and FAQs using hybrid search (BM25 + Dense vector search + Voyage AI reranking).
+
+    Args:
+        tenant_id: The ID of the business/tenant.
+        agent_id: The ID of the agent managing the business.
+        query: The customer's inquiry or question to search the knowledge base for.
+
+    Returns:
+        JSON string containing the most relevant excerpts and answers from official documents.
+    """
+    try:
+        from agent_orchestrator.services.knowledge_retrieval_service import (
+            KnowledgeRetrievalService,
+        )
+
+        service = KnowledgeRetrievalService()
+        results = await service.retrieve_relevant_context(
+            query=query,
+            tenant_id=tenant_id,
+            agent_id=agent_id,
+            top_k=4,
+        )
+        if not results:
+            return json.dumps(
+                {
+                    "status": "not_found",
+                    "message": "No relevant documents found in knowledge base.",
+                    "results": [],
+                }
+            )
+        return json.dumps(
+            {
+                "status": "success",
+                "matches_count": len(results),
+                "results": [
+                    {
+                        "content": r["content"],
+                        "file_name": r.get("file_name", ""),
+                        "relevance_score": r.get("relevance_score", 1.0),
+                        "headers": r.get("headers", {}),
+                        "is_table": r.get("is_table", False),
+                    }
+                    for r in results
+                ],
+            },
+            indent=2,
+        )
+    except Exception as e:
+        logger.error("[MCP search_knowledge_base Error] %s", e)
+        return json.dumps(
+            {
+                "status": "error",
+                "message": f"Failed to search knowledge base: {str(e)}",
+            }
+        )
 
 
 def get_scheduling_mcp_tools() -> list[BaseTool]:

@@ -14,6 +14,7 @@ from agent_orchestrator.services.protocols import (
     AgentManagementServiceProtocol,
     ChatServiceProtocol,
     CrawlerServiceProtocol,
+    DocumentServiceProtocol,
     OnboardingServiceProtocol,
 )
 
@@ -25,11 +26,13 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
         chat_service: ChatServiceProtocol,
         agent_service: AgentManagementServiceProtocol,
         crawler_service: CrawlerServiceProtocol,
+        document_service: DocumentServiceProtocol,
     ):
         self.onboarding_service = onboarding_service
         self.chat_handler = ChatRPCHandler(chat_service)
         self.agent_service = agent_service
         self.crawler_service = crawler_service
+        self.document_service = document_service
 
     async def CrawlSite(
         self, request: knowledge_pb2.CrawlSiteRequest, context: grpc.aio.ServicerContext
@@ -263,3 +266,97 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"GET_CUSTOMER_MESSAGES_ERROR: {str(e)}")
             return knowledge_pb2.GetCustomerMessagesResponse()
+
+    async def GetDocumentUploadUrl(
+        self, request: knowledge_pb2.GetDocumentUploadUrlRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.GetDocumentUploadUrlResponse:
+        print(
+            f"[gRPC] GetDocumentUploadUrl tenant: {request.tenant_id}, agent: {request.agent_id}, file: {request.file_name}"
+        )
+        try:
+            upload_url, doc_id, s3_key, expires_in = await self.document_service.get_upload_url(
+                tenant_id=request.tenant_id,
+                agent_id=request.agent_id,
+                file_name=request.file_name,
+                file_size_bytes=request.file_size_bytes,
+            )
+            return knowledge_pb2.GetDocumentUploadUrlResponse(
+                upload_url=upload_url,
+                document_id=doc_id,
+                s3_key=s3_key,
+                expires_in=expires_in,
+            )
+        except Exception as e:
+            print(f"[gRPC Error] GetDocumentUploadUrl failed: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"GET_UPLOAD_URL_ERROR: {str(e)}")
+            return knowledge_pb2.GetDocumentUploadUrlResponse()
+
+    async def ConfirmDocumentUpload(
+        self, request: knowledge_pb2.ConfirmDocumentUploadRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.ConfirmDocumentUploadResponse:
+        print(f"[gRPC] ConfirmDocumentUpload doc: {request.document_id}")
+        try:
+            success = await self.document_service.confirm_upload(
+                tenant_id=request.tenant_id,
+                document_id=request.document_id,
+            )
+            return knowledge_pb2.ConfirmDocumentUploadResponse(
+                success=success,
+                message="Document upload confirmed" if success else "Document not found",
+            )
+        except Exception as e:
+            print(f"[gRPC Error] ConfirmDocumentUpload failed: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"CONFIRM_UPLOAD_ERROR: {str(e)}")
+            return knowledge_pb2.ConfirmDocumentUploadResponse(success=False, message=str(e))
+
+    async def ListDocuments(
+        self, request: knowledge_pb2.ListDocumentsRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.ListDocumentsResponse:
+        print(f"[gRPC] ListDocuments tenant: {request.tenant_id}, agent: {request.agent_id}")
+        try:
+            docs = await self.document_service.list_documents(
+                tenant_id=request.tenant_id,
+                agent_id=request.agent_id,
+            )
+            doc_infos = [
+                knowledge_pb2.DocumentInfo(
+                    id=d.doc_id,
+                    tenant_id=d.tenant_id,
+                    agent_id=d.agent_id,
+                    file_name=d.file_name,
+                    file_size_bytes=d.file_size_bytes,
+                    s3_key=d.s3_key,
+                    s3_bucket=d.s3_bucket,
+                    status=d.status,
+                    created_at=d.created_at.isoformat(),
+                    updated_at=d.updated_at.isoformat(),
+                )
+                for d in docs
+            ]
+            return knowledge_pb2.ListDocumentsResponse(documents=doc_infos)
+        except Exception as e:
+            print(f"[gRPC Error] ListDocuments failed: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"LIST_DOCUMENTS_ERROR: {str(e)}")
+            return knowledge_pb2.ListDocumentsResponse()
+
+    async def DeleteDocument(
+        self, request: knowledge_pb2.DeleteDocumentRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.DeleteDocumentResponse:
+        print(f"[gRPC] DeleteDocument doc: {request.document_id}")
+        try:
+            success = await self.document_service.delete_document(
+                tenant_id=request.tenant_id,
+                document_id=request.document_id,
+            )
+            return knowledge_pb2.DeleteDocumentResponse(
+                success=success,
+                message="Document deleted" if success else "Document not found",
+            )
+        except Exception as e:
+            print(f"[gRPC Error] DeleteDocument failed: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"DELETE_DOCUMENT_ERROR: {str(e)}")
+            return knowledge_pb2.DeleteDocumentResponse(success=False, message=str(e))

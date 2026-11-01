@@ -8,7 +8,7 @@ import {
 import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
 import { UNIT_OF_WORK } from '../../../domain/tokens.js';
 import { ServiceMapper } from '../mappers/service.mapper.js';
-import { ServiceModel } from '../schemas/service.schema.js';
+import { type IServiceDoc, ServiceModel } from '../schemas/service.schema.js';
 
 @Injectable()
 export class MongoServiceRepository implements IServiceRepository {
@@ -33,9 +33,12 @@ export class MongoServiceRepository implements IServiceRepository {
       _id: serviceId,
       tenant_id: tenantId,
       is_deleted: { $ne: true },
-    }).exec();
+    })
+      .lean()
+      .exec();
+
     if (!doc) return null;
-    return ServiceMapper.toDomain(doc);
+    return ServiceMapper.toDomain(doc as unknown as IServiceDoc);
   }
 
   async findAll(
@@ -72,7 +75,7 @@ export class MongoServiceRepository implements IServiceRepository {
     const skip = (page - 1) * limit;
 
     const [docs, total, statsResult] = await Promise.all([
-      ServiceModel.find(query).sort({ created_at: -1 }).skip(skip).limit(limit).exec(),
+      ServiceModel.find(query).sort({ created_at: -1 }).skip(skip).limit(limit).lean().exec(),
       ServiceModel.countDocuments(query).exec(),
       ServiceModel.aggregate([
         { $match: baseMatch },
@@ -107,7 +110,7 @@ export class MongoServiceRepository implements IServiceRepository {
     };
 
     return {
-      services: docs.map((doc) => ServiceMapper.toDomain(doc)),
+      services: docs.map((doc) => ServiceMapper.toDomain(doc as unknown as IServiceDoc)),
       total,
       summary,
     };
@@ -120,10 +123,12 @@ export class MongoServiceRepository implements IServiceRepository {
       { _id: service.id, tenant_id: service.tenantId, is_deleted: { $ne: true } },
       { $set: persistenceData },
       { new: true, session },
-    ).exec();
+    )
+      .lean()
+      .exec();
 
     if (!updated) return null;
-    return ServiceMapper.toDomain(updated);
+    return ServiceMapper.toDomain(updated as unknown as IServiceDoc);
   }
 
   async delete(tenantId: string, serviceId: string): Promise<boolean> {
@@ -133,6 +138,7 @@ export class MongoServiceRepository implements IServiceRepository {
       { $set: { is_deleted: true, deleted_at: new Date() } },
       { session },
     ).exec();
+
     return (result.modifiedCount ?? 0) > 0;
   }
 
@@ -160,7 +166,7 @@ export class MongoServiceRepository implements IServiceRepository {
     if (agentId) {
       query.agent_id = agentId;
     }
-    const docs = await ServiceModel.find(query).exec();
-    return docs.map((doc) => ServiceMapper.toDomain(doc));
+    const docs = await ServiceModel.find(query).lean().exec();
+    return docs.map((doc) => ServiceMapper.toDomain(doc as unknown as IServiceDoc));
   }
 }

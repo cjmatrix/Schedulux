@@ -3,228 +3,137 @@ import {
   AlertCircle,
   CalendarDays,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Filter,
-  Globe,
-  Mail,
-  MoreVertical,
-  Phone,
-  PhoneCall,
   Plus,
   Search,
   Sparkles,
-  User,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams } from 'react-router';
+import { BookingDetailsModal } from '../components/BookingDetailsModal';
+import { BookingsCalendarView } from '../components/BookingsCalendarView';
+import { BookingsTableView } from '../components/BookingsTableView';
+import { CancelBookingModal } from '../components/CancelBookingModal';
 import { CreateBookingModal } from '../components/CreateBookingModal';
+import { RescheduleBookingModal } from '../components/RescheduleBookingModal';
+import { useBookingsList } from '../hooks/useBookings';
 import { useResourcesList, useServicesList } from '../hooks/useServices';
-
-interface BookingItem {
-  id: string;
-  customerName: string;
-  customerEmail: string;
-  customerPhone: string;
-  serviceName: string;
-  date: string;
-  timeSlot: string;
-  duration: string;
-  status: 'confirmed' | 'pending' | 'completed' | 'cancelled';
-  source: 'AI Voice Agent' | 'Web Embed' | 'Manual';
-  assignedStaff: string;
-  price: string;
-}
-
-const INITIAL_BOOKINGS: BookingItem[] = [
-  {
-    id: 'BK-8021',
-    customerName: 'Sarah Jenkins',
-    customerEmail: 'sarah.j@example.com',
-    customerPhone: '+1 (555) 234-5678',
-    serviceName: 'Executive Strategy Consultation',
-    date: '2026-10-03',
-    timeSlot: '09:00 AM - 10:00 AM',
-    duration: '60 mins',
-    status: 'confirmed',
-    source: 'AI Voice Agent',
-    assignedStaff: 'Dr. Alex Rivera',
-    price: '$150.00',
-  },
-  {
-    id: 'BK-8022',
-    customerName: 'Michael Chen',
-    customerEmail: 'mchen@techcorp.io',
-    customerPhone: '+1 (555) 876-5432',
-    serviceName: 'Initial Product Onboarding',
-    date: '2026-10-03',
-    timeSlot: '11:30 AM - 12:15 PM',
-    duration: '45 mins',
-    status: 'confirmed',
-    source: 'Web Embed',
-    assignedStaff: 'Elena Rostova',
-    price: '$95.00',
-  },
-  {
-    id: 'BK-8023',
-    customerName: 'Amanda Vance',
-    customerEmail: 'amanda@vancelegal.com',
-    customerPhone: '+1 (555) 345-6789',
-    serviceName: 'Comprehensive Operations Review',
-    date: '2026-10-03',
-    timeSlot: '02:00 PM - 03:00 PM',
-    duration: '60 mins',
-    status: 'pending',
-    source: 'AI Voice Agent',
-    assignedStaff: 'Dr. Alex Rivera',
-    price: '$200.00',
-  },
-  {
-    id: 'BK-8024',
-    customerName: 'David Miller',
-    customerEmail: 'dmiller@apexsystems.com',
-    customerPhone: '+1 (555) 987-6543',
-    serviceName: 'Technical Architecture Audit',
-    date: '2026-10-04',
-    timeSlot: '10:00 AM - 11:30 AM',
-    duration: '90 mins',
-    status: 'confirmed',
-    source: 'Web Embed',
-    assignedStaff: 'Marcus Thorne',
-    price: '$275.00',
-  },
-  {
-    id: 'BK-8025',
-    customerName: 'Jessica Taylor',
-    customerEmail: 'jess.taylor@designco.com',
-    customerPhone: '+1 (555) 456-7890',
-    serviceName: 'Follow-up Consultation',
-    date: '2026-10-04',
-    timeSlot: '01:15 PM - 02:00 PM',
-    duration: '45 mins',
-    status: 'completed',
-    source: 'Manual',
-    assignedStaff: 'Elena Rostova',
-    price: '$80.00',
-  },
-  {
-    id: 'BK-8026',
-    customerName: 'Robert Hayes',
-    customerEmail: 'rhayes@globalnet.org',
-    customerPhone: '+1 (555) 654-3210',
-    serviceName: 'AI Automation Workshop',
-    date: '2026-10-05',
-    timeSlot: '03:30 PM - 05:00 PM',
-    duration: '90 mins',
-    status: 'confirmed',
-    source: 'AI Voice Agent',
-    assignedStaff: 'Dr. Alex Rivera',
-    price: '$310.00',
-  },
-];
 
 export default function BookingsPage() {
   const { agentId } = useParams<{ agentId?: string }>();
 
-  const [bookings, setBookings] = useState<BookingItem[]>(INITIAL_BOOKINGS);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState<number>(1);
+  const [limit, setLimit] = useState<number>(20);
+  const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [calendarDate, setCalendarDate] = useState<Date>(() => new Date());
+
   const [isNewBookingModalOpen, setIsNewBookingModalOpen] = useState(false);
-  const [selectedBooking, setSelectedBooking] = useState<BookingItem | null>(null);
+  const [bookingForDetails, setBookingForDetails] = useState<BookingInfo | null>(null);
+  const [bookingToCancel, setBookingToCancel] = useState<BookingInfo | null>(null);
+  const [bookingToReschedule, setBookingToReschedule] = useState<BookingInfo | null>(null);
+
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 4500);
+  };
+
+  const queryParams = useMemo(() => {
+    return {
+      page,
+      limit,
+      agent_id: agentId,
+      status: statusFilter === 'all' ? undefined : statusFilter,
+      search: searchTerm.trim() || undefined,
+    };
+  }, [page, limit, agentId, statusFilter, searchTerm]);
+
+  const {
+    data: bookingsResponse,
+    isLoading: isBookingsLoading,
+    refetch: refetchBookings,
+  } = useBookingsList(queryParams);
 
   const { data: servicesResponse } = useServicesList({
     agent_id: agentId,
     limit: 100,
   });
+
   const { data: resourcesResponse } = useResourcesList({
     agent_id: agentId,
     limit: 100,
   });
 
-  const filteredBookings = bookings.filter((item) => {
-    const matchesSearch =
-      item.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.serviceName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.id.toLowerCase().includes(searchTerm.toLowerCase());
+  const bookings = useMemo(() => bookingsResponse?.data || [], [bookingsResponse]);
+  const pagination = useMemo(
+    () =>
+      bookingsResponse?.pagination || {
+        total: bookings.length,
+        page,
+        limit,
+      },
+    [bookingsResponse, bookings.length, page, limit],
+  );
 
-    const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
+  const services = useMemo(() => servicesResponse?.data || [], [servicesResponse]);
+  const resources = useMemo(() => resourcesResponse?.data || [], [resourcesResponse]);
 
-    return matchesSearch && matchesStatus;
-  });
+  const metrics = useMemo(() => {
+    const total = pagination.total;
+    const confirmedCount = bookings.filter((b) => b.status === 'confirmed').length;
+    const pendingCount = bookings.filter((b) => b.status === 'pending').length;
+    const aiBookedCount = bookings.filter((b) => b.source === 'customer_agent').length;
+
+    const aiPercent = bookings.length > 0 ? Math.round((aiBookedCount / bookings.length) * 100) : 0;
+
+    return {
+      total,
+      confirmedCount,
+      pendingCount,
+      aiBookedCount,
+      aiPercent,
+    };
+  }, [pagination.total, bookings]);
 
   const handleBookingCreated = (created: BookingInfo) => {
-    const sDate = created.start_time ? new Date(created.start_time) : new Date();
-    const eDate = created.end_time ? new Date(created.end_time) : sDate;
-    const dateFormatted = sDate.toISOString().split('T')[0];
-    const timeSlotFormatted = `${sDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${eDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-
-    let sourceLabel: BookingItem['source'] = 'Manual';
-    if (created.source === 'customer_agent') sourceLabel = 'AI Voice Agent';
-    else if (created.source === 'web_portal') sourceLabel = 'Web Embed';
-
-    const matchedService = servicesResponse?.data?.find(
-      (s) => s.service_id === created.service_id,
-    );
-    const serviceName = matchedService?.name || 'Scheduled Service';
-
-    let assignedStaff = 'Auto-assigned Provider';
-    if (created.resource_ids && created.resource_ids.length > 0) {
-      const matchedRes = resourcesResponse?.data?.find(
-        (r) => r.resource_id === created.resource_ids[0],
-      );
-      if (matchedRes) {
-        assignedStaff = matchedRes.name;
-      }
-    } else if (created.resource_id) {
-      const matchedRes = resourcesResponse?.data?.find(
-        (r) => r.resource_id === created.resource_id,
-      );
-      if (matchedRes) {
-        assignedStaff = matchedRes.name;
-      }
-    }
-
-    const priceFormatted = created.price
-      ? `$${(created.price.amount || 0).toFixed(2)}`
-      : '$150.00';
-
-    const newBookingItem: BookingItem = {
-      id: created.booking_reference || `BK-${created.booking_id.slice(-4).toUpperCase()}`,
-      customerName: created.customer?.name || 'Customer',
-      customerEmail: created.customer?.email || 'N/A',
-      customerPhone: created.customer?.phone || '',
-      serviceName,
-      date: dateFormatted,
-      timeSlot: timeSlotFormatted,
-      duration: created.buffer_minutes
-        ? `${created.duration_minutes || 60}m (+${created.buffer_minutes}m buffer)`
-        : `${created.duration_minutes || 60} mins`,
-      status: (created.status as BookingItem['status']) || 'confirmed',
-      source: sourceLabel,
-      assignedStaff,
-      price: priceFormatted,
-    };
-
-    setBookings((prev) => [newBookingItem, ...prev]);
-    setToastMessage(`Booking ${newBookingItem.id} confirmed for ${newBookingItem.customerName}!`);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 5000);
+    const ref = created.booking_reference || created.booking_id.slice(-6).toUpperCase();
+    const customer = created.customer?.name || 'Customer';
+    showToast(`Booking ${ref} confirmed for ${customer}!`);
+    refetchBookings();
   };
 
-  const updateBookingStatus = (id: string, newStatus: BookingItem['status']) => {
-    setBookings(bookings.map((b) => (b.id === id ? { ...b, status: newStatus } : b)));
-    if (selectedBooking && selectedBooking.id === id) {
-      setSelectedBooking({ ...selectedBooking, status: newStatus });
+  const handleBookingCancelled = () => {
+    if (bookingToCancel) {
+      const ref =
+        bookingToCancel.booking_reference || bookingToCancel.booking_id.slice(-6).toUpperCase();
+      showToast(`Appointment ${ref} cancelled successfully.`);
     }
+    setBookingToCancel(null);
+    setBookingForDetails(null);
+    refetchBookings();
+  };
+
+  const handleBookingRescheduled = () => {
+    if (bookingToReschedule) {
+      const ref =
+        bookingToReschedule.booking_reference ||
+        bookingToReschedule.booking_id.slice(-6).toUpperCase();
+      showToast(`Appointment ${ref} rescheduled successfully!`);
+    }
+    setBookingToReschedule(null);
+    setBookingForDetails(null);
+    refetchBookings();
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6 font-sans">
+    <div className="p-6 sm:p-8 max-w-7xl mx-auto flex flex-col gap-6 font-sans">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 tracking-wide">
         <span>Operations</span>
@@ -240,6 +149,7 @@ export default function BookingsPage() {
             <span>{toastMessage}</span>
           </div>
           <button
+            type="button"
             onClick={() => setToastMessage(null)}
             className="text-emerald-500 hover:text-emerald-800 p-1 rounded-full cursor-pointer"
           >
@@ -248,7 +158,7 @@ export default function BookingsPage() {
         </div>
       )}
 
-      {/* Header & Main Action */}
+      {/* Header & Main Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -256,19 +166,20 @@ export default function BookingsPage() {
               Calendar & Bookings
             </h1>
             <span className="px-2.5 py-0.5 rounded-full bg-slate-200/70 text-slate-700 text-[10px] font-bold tracking-wider uppercase">
-              {filteredBookings.length} ACTIVE SLOTS
+              {pagination.total} TOTAL SLOTS
             </span>
           </div>
           <p className="text-xs text-slate-500 font-medium">
-            Manage real-time appointments, customer schedules, and AI-assisted bookings.
+            Manage real-time appointments, live calendar views, rescheduling, and cancellations.
           </p>
         </div>
 
         <div className="flex items-center gap-2.5">
           <div className="flex items-center bg-white border border-slate-200/90 rounded-full p-1 shadow-2xs">
             <button
+              type="button"
               onClick={() => setViewMode('list')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                 viewMode === 'list'
                   ? 'bg-slate-950 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -277,8 +188,9 @@ export default function BookingsPage() {
               List View
             </button>
             <button
+              type="button"
               onClick={() => setViewMode('calendar')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                 viewMode === 'calendar'
                   ? 'bg-slate-950 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -289,6 +201,7 @@ export default function BookingsPage() {
           </div>
 
           <button
+            type="button"
             onClick={() => setIsNewBookingModalOpen(true)}
             className="px-5 py-2.5 bg-slate-950 hover:bg-black text-white text-xs font-semibold rounded-full flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer"
           >
@@ -303,16 +216,18 @@ export default function BookingsPage() {
         <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">
-              Total Appointments
+              Total Bookings
             </span>
             <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-800">
               <CalendarDays className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">142</span>
+            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">
+              {metrics.total}
+            </span>
             <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-              +14% vs last mo
+              Live DB
             </span>
           </div>
         </div>
@@ -320,16 +235,18 @@ export default function BookingsPage() {
         <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">
-              AI Auto-Booked
+              AI Inbound Booked
             </span>
             <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
               <Sparkles className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">84.2%</span>
+            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">
+              {metrics.aiBookedCount}
+            </span>
             <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-              119 by AI Agent
+              {metrics.aiPercent}% Voice AI
             </span>
           </div>
         </div>
@@ -337,7 +254,7 @@ export default function BookingsPage() {
         <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">
-              Scheduled Today
+              Confirmed
             </span>
             <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
               <Clock className="w-4 h-4" />
@@ -345,9 +262,9 @@ export default function BookingsPage() {
           </div>
           <div className="flex items-baseline justify-between">
             <span className="text-2xl font-extrabold text-slate-900 tracking-tight">
-              3 Sessions
+              {metrics.confirmedCount}
             </span>
-            <span className="text-xs font-semibold text-slate-500">Next: 09:00 AM</span>
+            <span className="text-xs font-semibold text-slate-500">Active</span>
           </div>
         </div>
 
@@ -361,9 +278,11 @@ export default function BookingsPage() {
             </div>
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">1 Pending</span>
+            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">
+              {metrics.pendingCount}
+            </span>
             <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-              Action Required
+              {metrics.pendingCount > 0 ? 'Action Required' : 'All Clear'}
             </span>
           </div>
         </div>
@@ -375,9 +294,12 @@ export default function BookingsPage() {
           <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search by customer, booking ID, service..."
+            placeholder="Search by customer, booking ref, or notes..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(1);
+            }}
             className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200/90 rounded-full text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all shadow-2xs"
           />
         </div>
@@ -386,7 +308,10 @@ export default function BookingsPage() {
           <div className="relative">
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(1);
+              }}
               className="appearance-none bg-white border border-slate-200/90 rounded-full px-4 py-2 pr-8 text-xs font-medium text-slate-700 shadow-2xs focus:outline-none focus:ring-2 focus:ring-slate-900 cursor-pointer"
             >
               <option value="all">All Statuses</option>
@@ -400,293 +325,65 @@ export default function BookingsPage() {
         </div>
       </div>
 
-      {/* Main Content Body */}
+      {/* Main View Display */}
       {viewMode === 'list' ? (
-        /* List View Table */
-        <div className="bg-white border border-slate-200/90 rounded-2xl shadow-2xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  <th className="py-3.5 px-5">Booking ID & Customer</th>
-                  <th className="py-3.5 px-5">Service</th>
-                  <th className="py-3.5 px-5">Date & Time</th>
-                  <th className="py-3.5 px-5">Staff / Provider</th>
-                  <th className="py-3.5 px-5">Source</th>
-                  <th className="py-3.5 px-5">Status</th>
-                  <th className="py-3.5 px-5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                {filteredBookings.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400 text-xs">
-                      No bookings match your current filter.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredBookings.map((item) => (
-                    <tr
-                      key={item.id}
-                      className="hover:bg-slate-50/80 transition-colors cursor-pointer"
-                      onClick={() => setSelectedBooking(item)}
-                    >
-                      <td className="py-4 px-5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-slate-900 text-white font-bold text-xs flex items-center justify-center shrink-0">
-                            {item.customerName.charAt(0)}
-                          </div>
-                          <div>
-                            <div className="font-bold text-slate-900">{item.customerName}</div>
-                            <div className="text-[11px] text-slate-400 font-mono">
-                              {item.id} • {item.customerEmail}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-5">
-                        <div className="font-semibold text-slate-800">{item.serviceName}</div>
-                        <div className="text-[11px] text-slate-400">
-                          {item.duration} • {item.price}
-                        </div>
-                      </td>
-                      <td className="py-4 px-5">
-                        <div className="font-medium text-slate-800">{item.date}</div>
-                        <div className="text-[11px] text-slate-500 font-mono">{item.timeSlot}</div>
-                      </td>
-                      <td className="py-4 px-5 font-medium text-slate-700">{item.assignedStaff}</td>
-                      <td className="py-4 px-5">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">
-                          {item.source === 'AI Voice Agent' && (
-                            <PhoneCall className="w-3 h-3 text-indigo-600" />
-                          )}
-                          {item.source === 'Web Embed' && (
-                            <Globe className="w-3 h-3 text-blue-600" />
-                          )}
-                          {item.source === 'Manual' && <User className="w-3 h-3 text-slate-500" />}
-                          <span>{item.source}</span>
-                        </span>
-                      </td>
-                      <td className="py-4 px-5">
-                        {item.status === 'confirmed' && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            Confirmed
-                          </span>
-                        )}
-                        {item.status === 'pending' && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/60">
-                            <Clock className="w-3 h-3 text-amber-600" />
-                            Pending
-                          </span>
-                        )}
-                        {item.status === 'completed' && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200/60">
-                            Completed
-                          </span>
-                        )}
-                        {item.status === 'cancelled' && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200/60">
-                            Cancelled
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-4 px-5 text-right">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedBooking(item);
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <BookingsTableView
+          bookings={bookings}
+          isLoading={isBookingsLoading}
+          pagination={pagination}
+          onPageChange={(newPage) => setPage(newPage)}
+          onLimitChange={(newLimit) => setLimit(newLimit)}
+          onSelectBooking={(b) => setBookingForDetails(b)}
+          onReschedule={(b) => setBookingToReschedule(b)}
+          onCancel={(b) => setBookingToCancel(b)}
+          services={services}
+          resources={resources}
+        />
       ) : (
-        /* Calendar View Mock Grid */
-        <div className="bg-white border border-slate-200/90 rounded-2xl shadow-2xs p-6 flex flex-col gap-5">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-bold text-slate-900">October 2026</h2>
-              <span className="px-2.5 py-0.5 bg-slate-100 rounded-full text-xs font-semibold text-slate-600">
-                Today
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <button className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-            <div>Mon</div>
-            <div>Tue</div>
-            <div>Wed</div>
-            <div>Thu</div>
-            <div>Fri</div>
-            <div>Sat</div>
-            <div>Sun</div>
-          </div>
-
-          <div className="grid grid-cols-7 gap-2">
-            {Array.from({ length: 31 }).map((_, i) => {
-              const dayNum = i + 1;
-              const dateStr = `2026-10-${dayNum < 10 ? `0${dayNum}` : dayNum}`;
-              const dayBookings = bookings.filter((b) => b.date === dateStr);
-
-              return (
-                <div
-                  key={i}
-                  className={`min-h-[90px] p-2 rounded-xl border transition-all ${
-                    dayNum === 3
-                      ? 'bg-slate-900 text-white border-slate-900'
-                      : 'bg-slate-50/50 border-slate-100 hover:bg-white hover:border-slate-300'
-                  }`}
-                >
-                  <div
-                    className={`text-xs font-bold mb-1 ${
-                      dayNum === 3 ? 'text-white' : 'text-slate-700'
-                    }`}
-                  >
-                    {dayNum}
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    {dayBookings.map((b) => (
-                      <div
-                        key={b.id}
-                        onClick={() => setSelectedBooking(b)}
-                        className={`text-[10px] p-1.5 rounded-md font-semibold truncate cursor-pointer transition-all ${
-                          dayNum === 3
-                            ? 'bg-white/20 text-white hover:bg-white/30'
-                            : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                        }`}
-                      >
-                        {b.timeSlot.split(' - ')[0]} • {b.customerName}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <BookingsCalendarView
+          bookings={bookings}
+          isLoading={isBookingsLoading}
+          services={services}
+          resources={resources}
+          currentDate={calendarDate}
+          onDateChange={(d) => setCalendarDate(d)}
+          onSelectBooking={(b) => setBookingForDetails(b)}
+          onReschedule={(b) => setBookingToReschedule(b)}
+          onCancel={(b) => setBookingToCancel(b)}
+          onNewBookingForDate={() => setIsNewBookingModalOpen(true)}
+        />
       )}
 
       {/* Booking Details Modal */}
-      {selectedBooking && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-7 shadow-2xl border border-slate-100 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-400 font-mono">
-                  {selectedBooking.id}
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 capitalize">
-                  {selectedBooking.status}
-                </span>
-              </div>
-              <button
-                onClick={() => setSelectedBooking(null)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-800 hover:bg-slate-100 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <BookingDetailsModal
+        isOpen={!!bookingForDetails}
+        onClose={() => setBookingForDetails(null)}
+        booking={bookingForDetails}
+        services={services}
+        resources={resources}
+        onReschedule={(b) => setBookingToReschedule(b)}
+        onCancel={(b) => setBookingToCancel(b)}
+      />
 
-            <div className="py-5 space-y-4">
-              <div>
-                <h3 className="text-xl font-bold text-slate-900">{selectedBooking.serviceName}</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Scheduled for {selectedBooking.date} at {selectedBooking.timeSlot}
-                </p>
-              </div>
+      {/* Reschedule Booking Modal */}
+      <RescheduleBookingModal
+        isOpen={!!bookingToReschedule}
+        onClose={() => setBookingToReschedule(null)}
+        booking={bookingToReschedule}
+        agentId={agentId || bookingToReschedule?.agent_id || ''}
+        onSuccess={handleBookingRescheduled}
+      />
 
-              <div className="bg-slate-50 rounded-2xl p-4 space-y-2 text-xs">
-                <div className="flex items-center gap-2 text-slate-700">
-                  <User className="w-4 h-4 text-slate-400" />
-                  <span className="font-semibold">{selectedBooking.customerName}</span>
-                </div>
-                <div className="flex items-center gap-2 text-slate-600">
-                  <Mail className="w-4 h-4 text-slate-400" />
-                  <span>{selectedBooking.customerEmail}</span>
-                </div>
-                <div className="flex items-center gap-2 text-slate-600">
-                  <Phone className="w-4 h-4 text-slate-400" />
-                  <span>{selectedBooking.customerPhone}</span>
-                </div>
-              </div>
+      {/* Cancel Booking Modal */}
+      <CancelBookingModal
+        isOpen={!!bookingToCancel}
+        onClose={() => setBookingToCancel(null)}
+        booking={bookingToCancel}
+        agentId={agentId || bookingToCancel?.agent_id || ''}
+        onSuccess={handleBookingCancelled}
+      />
 
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 border border-slate-100 rounded-xl bg-white">
-                  <span className="block text-[10px] font-bold text-slate-400 uppercase">
-                    Assigned Staff
-                  </span>
-                  <span className="font-semibold text-slate-800">
-                    {selectedBooking.assignedStaff}
-                  </span>
-                </div>
-                <div className="p-3 border border-slate-100 rounded-xl bg-white">
-                  <span className="block text-[10px] font-bold text-slate-400 uppercase">
-                    Channel Source
-                  </span>
-                  <span className="font-semibold text-slate-800">{selectedBooking.source}</span>
-                </div>
-              </div>
-
-              {selectedBooking.source === 'AI Voice Agent' && (
-                <div className="p-3.5 bg-indigo-50/60 border border-indigo-100 rounded-2xl text-xs text-indigo-900 space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold">
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>AI Voice Transcript Summary</span>
-                  </div>
-                  <p className="text-[11px] text-indigo-700 leading-relaxed">
-                    Customer called to schedule consultation for business scaling. The AI agent
-                    confirmed available slot with Dr. Alex Rivera.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
-              <button
-                onClick={() => updateBookingStatus(selectedBooking.id, 'cancelled')}
-                className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-              >
-                Cancel Booking
-              </button>
-              <div className="flex gap-2">
-                {selectedBooking.status === 'pending' && (
-                  <button
-                    onClick={() => updateBookingStatus(selectedBooking.id, 'confirmed')}
-                    className="px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-                  >
-                    Confirm Booking
-                  </button>
-                )}
-                <button
-                  onClick={() => setSelectedBooking(null)}
-                  className="px-4 py-2 rounded-full bg-slate-900 hover:bg-black text-white text-xs font-semibold transition-colors cursor-pointer"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Real Feature-Based Create Booking Modal */}
+      {/* Create Booking Modal */}
       <CreateBookingModal
         isOpen={isNewBookingModalOpen}
         onClose={() => setIsNewBookingModalOpen(false)}

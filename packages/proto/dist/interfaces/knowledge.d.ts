@@ -125,6 +125,53 @@ export interface GetCustomerMessagesRequest {
 export interface GetCustomerMessagesResponse {
     messages: CustomerChatMessageInfo[];
 }
+export interface GetDocumentUploadUrlRequest {
+    tenant_id: string;
+    agent_id: string;
+    file_name: string;
+    file_size_bytes: number;
+}
+export interface GetDocumentUploadUrlResponse {
+    upload_url: string;
+    document_id: string;
+    s3_key: string;
+    expires_in: number;
+}
+export interface ConfirmDocumentUploadRequest {
+    tenant_id: string;
+    document_id: string;
+}
+export interface ConfirmDocumentUploadResponse {
+    success: boolean;
+    message: string;
+}
+export interface DocumentInfo {
+    id: string;
+    tenant_id: string;
+    agent_id: string;
+    file_name: string;
+    file_size_bytes: number;
+    s3_key: string;
+    s3_bucket: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+}
+export interface ListDocumentsRequest {
+    tenant_id: string;
+    agent_id: string;
+}
+export interface ListDocumentsResponse {
+    documents: DocumentInfo[];
+}
+export interface DeleteDocumentRequest {
+    tenant_id: string;
+    document_id: string;
+}
+export interface DeleteDocumentResponse {
+    success: boolean;
+    message: string;
+}
 export declare const KNOWLEDGE_PACKAGE_NAME = "knowledge";
 export interface KnowledgeServiceClient {
     crawlSite(request: CrawlSiteRequest): Observable<CrawlSiteResponse>;
@@ -136,6 +183,10 @@ export interface KnowledgeServiceClient {
     getAgentMessages(request: GetAgentMessagesRequest): Observable<GetAgentMessagesResponse>;
     customerChat(request: CustomerChatRequest): Observable<CustomerChatResponse>;
     getCustomerMessages(request: GetCustomerMessagesRequest): Observable<GetCustomerMessagesResponse>;
+    getDocumentUploadUrl(request: GetDocumentUploadUrlRequest): Observable<GetDocumentUploadUrlResponse>;
+    confirmDocumentUpload(request: ConfirmDocumentUploadRequest): Observable<ConfirmDocumentUploadResponse>;
+    listDocuments(request: ListDocumentsRequest): Observable<ListDocumentsResponse>;
+    deleteDocument(request: DeleteDocumentRequest): Observable<DeleteDocumentResponse>;
 }
 export interface KnowledgeServiceController {
     crawlSite(request: CrawlSiteRequest): Promise<CrawlSiteResponse> | Observable<CrawlSiteResponse> | CrawlSiteResponse;
@@ -147,6 +198,10 @@ export interface KnowledgeServiceController {
     getAgentMessages(request: GetAgentMessagesRequest): Promise<GetAgentMessagesResponse> | Observable<GetAgentMessagesResponse> | GetAgentMessagesResponse;
     customerChat(request: CustomerChatRequest): Promise<CustomerChatResponse> | Observable<CustomerChatResponse> | CustomerChatResponse;
     getCustomerMessages(request: GetCustomerMessagesRequest): Promise<GetCustomerMessagesResponse> | Observable<GetCustomerMessagesResponse> | GetCustomerMessagesResponse;
+    getDocumentUploadUrl(request: GetDocumentUploadUrlRequest): Promise<GetDocumentUploadUrlResponse> | Observable<GetDocumentUploadUrlResponse> | GetDocumentUploadUrlResponse;
+    confirmDocumentUpload(request: ConfirmDocumentUploadRequest): Promise<ConfirmDocumentUploadResponse> | Observable<ConfirmDocumentUploadResponse> | ConfirmDocumentUploadResponse;
+    listDocuments(request: ListDocumentsRequest): Promise<ListDocumentsResponse> | Observable<ListDocumentsResponse> | ListDocumentsResponse;
+    deleteDocument(request: DeleteDocumentRequest): Promise<DeleteDocumentResponse> | Observable<DeleteDocumentResponse> | DeleteDocumentResponse;
 }
 export declare function KnowledgeServiceControllerMethods(): (constructor: Function) => void;
 export declare const KNOWLEDGE_SERVICE_NAME = "KnowledgeService";

@@ -1,35 +1,14 @@
-"""
-scheduling_consumer.py  —  CQRS Kafka Consumer for AI-Orchestration Service
-
-Listens to:
-  - scheduling.service.events   → service.created / service.updated / service.deleted
-  - scheduling.resource.events  → resource.created / resource.updated / resource.deleted
-
-On each event, upserts or removes the corresponding item from the
-AgentRuntimeConfig.services[] / AgentRuntimeConfig.resources[] array,
-keeping the AI runtime view in sync with the scheduling-inventory source of truth.
-
-Industry-standard patterns used:
-  - aiokafka for async Kafka consumer
-  - Idempotent upsert with Beanie $set / $pull operators
-  - Dead-letter queue via stderr logging (extend to a DLQ topic if needed)
-  - Consumer group: ai-orchestration-consumer-group
-  - Auto-commit disabled; manual commit after successful processing (at-least-once)
-"""
-
-from __future__ import annotations
-
 import asyncio
-import json
 import logging
 import os
-import ssl
 from typing import Any
 
-from aiokafka import AIOKafkaConsumer
 from dotenv import load_dotenv
 
+from agent_orchestrator.adapters.kafka_subscriber import KafkaEventSubscriber
+from agent_orchestrator.adapters.rabbitmq_subscriber import RabbitMQEventSubscriber
 from agent_orchestrator.clients.redis_client import set_cached_draft
+from agent_orchestrator.domain.protocols import EventSubscriber
 from agent_orchestrator.models import (
     AgentDraft,
     AgentRuntimeConfig,
@@ -50,13 +29,25 @@ local_env = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", 
 load_dotenv(local_env)
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
-KAFKA_BROKERS = os.environ.get("KAFKA_BROKERS", "localhost:9092")
-KAFKA_USERNAME = os.environ.get("KAFKA_USERNAME", "")
-KAFKA_PASSWORD = os.environ.get("KAFKA_PASSWORD", "")
-CONSUMER_GROUP = os.environ.get("KAFKA_CONSUMER_GROUP", "ai-orchestration-consumer-group")
 TOPICS = ["scheduling.service.events", "scheduling.resource.events"]
+
+
+def create_default_scheduling_subscriber() -> EventSubscriber:
+ 
+    broker_type = os.environ.get("SCHEDULING_EVENT_BROKER", "kafka").lower()
+    if broker_type == "rabbitmq":
+        return RabbitMQEventSubscriber(
+            uri=os.environ.get("RABBITMQ_URI", "amqp://guest:guest@localhost:5672"),
+            prefetch_count=10,
+        )
+
+    return KafkaEventSubscriber(
+        brokers=os.environ.get("KAFKA_BROKERS", "localhost:9092"),
+        group_id=os.environ.get("KAFKA_CONSUMER_GROUP", "ai-orchestration-consumer-group"),
+        username=os.environ.get("KAFKA_USERNAME", ""),
+        password=os.environ.get("KAFKA_PASSWORD", ""),
+    )
 
 
 async def handle_service_event(payload: dict[str, Any]) -> None:
@@ -269,81 +260,20 @@ async def handle_resource_event(payload: dict[str, Any]) -> None:
         )
 
 
-async def dispatch(topic: str, raw_value: bytes) -> None:
-    try:
-        payload = json.loads(raw_value.decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        logger.error("[Consumer] Failed to decode message on topic %s: %s", topic, exc)
-        return
-
-    event_type = payload.get("event_type", "")
-    service_id = payload.get("service_id", "")
-    resource_id = payload.get("resource_id", "")
-    aggregate_id = service_id or resource_id or ""
-    timestamp = payload.get("timestamp", "")
-    event_id = payload.get("event_id") or f"kafka_{aggregate_id}_{timestamp}"
-
-    logger.info("[Consumer] Processing event=%s id=%s on topic=%s", event_type, event_id, topic)
-
-    try:
-        if topic == "scheduling.service.events":
-            await handle_service_event(payload)
-        elif topic == "scheduling.resource.events":
-            await handle_resource_event(payload)
-        else:
-            logger.warning("[Consumer] Unknown topic: %s", topic)
-    except Exception as exc:
-        logger.error(
-            "[Consumer] Error processing event %s (id=%s): %s",
-            event_type,
-            event_id,
-            exc,
-            exc_info=True,
-        )
-        raise
-
-
-async def run_consumer() -> None:
+async def run_consumer(subscriber: EventSubscriber | None = None) -> None:
+  
     await init_db()
+    sub = subscriber or create_default_scheduling_subscriber()
 
-    logger.info("[Consumer] Connecting to Kafka brokers: %s", KAFKA_BROKERS)
-    logger.info("[Consumer] Subscribing to topics: %s", TOPICS)
+    await sub.subscribe("scheduling.service.events", handle_service_event)
+    await sub.subscribe("scheduling.resource.events", handle_resource_event)
 
-    ssl_context = ssl.create_default_context()
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl.CERT_NONE
-
-    consumer = AIOKafkaConsumer(
-        *TOPICS,
-        bootstrap_servers=KAFKA_BROKERS,
-        group_id=CONSUMER_GROUP,
-        security_protocol="SASL_SSL",
-        sasl_mechanism="SCRAM-SHA-256",
-        sasl_plain_username=KAFKA_USERNAME,
-        sasl_plain_password=KAFKA_PASSWORD,
-        ssl_context=ssl_context,
-        auto_offset_reset="earliest",
-        enable_auto_commit=False,
-        value_deserializer=None,
-        max_poll_interval_ms=300_000,
+    await sub.start()
+    logger.info(
+        "[SchedulingConsumer] Listening for scheduling events via %s...",
+        type(sub).__name__,
     )
-
-    await consumer.start()
-    logger.info("[Consumer] Kafka consumer started — listening for scheduling events...")
-
-    try:
-        async for msg in consumer:
-            await dispatch(msg.topic, msg.value)
-
-            await consumer.commit()
-    except asyncio.CancelledError:
-        logger.info("[Consumer] Consumer task cancelled — shutting down.")
-    except Exception as exc:
-        logger.error("[Consumer] Fatal consumer error: %s", exc, exc_info=True)
-        raise
-    finally:
-        await consumer.stop()
-        logger.info("[Consumer] Kafka consumer stopped.")
+    await sub.run()
 
 
 def main() -> None:

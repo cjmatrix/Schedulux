@@ -19,9 +19,7 @@ import { AllExceptionsFilter } from './rpcExpetionFilter.js';
 @Controller()
 @UseFilters(new AllExceptionsFilter())
 export class TenantAuthController {
-  constructor(
-    @Inject('ITenantService') private readonly _tenantService: ITenantService,
-  ) {}
+  constructor(@Inject('ITenantService') private readonly _tenantService: ITenantService) {}
 
   @GrpcMethod(GRPC_SERVICES.TENANT_AUTH, GRPC_METHODS.TENANT_AUTH.REGISTER)
   async register(data: RegisterRequest) {
@@ -121,8 +119,8 @@ export class TenantAuthController {
   @GrpcMethod(GRPC_SERVICES.TENANT_AUTH, GRPC_METHODS.TENANT_AUTH.RESET_PASSWORD)
   async resetPassword(data: ResetPasswordRequest) {
     const { token, new_password } = data;
-    if (!token || !new_password) throw new Error(RESPONSE_MESSAGES.ERRORS.TOKEN_AND_NEW_PASSWORD_REQUIRED);
+    if (!token || !new_password)
+      throw new Error(RESPONSE_MESSAGES.ERRORS.TOKEN_AND_NEW_PASSWORD_REQUIRED);
     return await this._tenantService.resetPassword(token, new_password);
   }
 }
-

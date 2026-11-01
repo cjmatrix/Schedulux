@@ -1,11 +1,13 @@
 import * as grpc from '@grpc/grpc-js';
-import { ArgumentsHost, Catch, RpcExceptionFilter } from '@nestjs/common';
+import { ArgumentsHost, Catch, Logger, RpcExceptionFilter } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { Observable, throwError } from 'rxjs';
 import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
 
 @Catch()
 export class AllExceptionsFilter implements RpcExceptionFilter<RpcException> {
+  private readonly _logger = new Logger(AllExceptionsFilter.name);
+
   catch(exception: unknown, _host: ArgumentsHost): Observable<never> {
     let code = grpc.status.INTERNAL;
     let message: string = RESPONSE_MESSAGES.ERRORS.INTERNAL_SERVER_ERROR;
@@ -76,10 +78,9 @@ export class AllExceptionsFilter implements RpcExceptionFilter<RpcException> {
         message = RESPONSE_MESSAGES.ERRORS.CRAWL_JOB_NOT_FOUND_MSG;
         break;
       default:
-        console.error('Unhandled Microservice Error:', exception);
+        this._logger.error('Unhandled Microservice Error:', exception);
     }
 
     return throwError(() => ({ code, message }));
   }
 }
-

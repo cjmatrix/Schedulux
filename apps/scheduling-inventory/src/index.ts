@@ -12,13 +12,15 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import mongoose from 'mongoose';
-import { GrpcExceptionFilter } from './presentation/grpc/grpc-exception.filter.js';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module.js';
+import { GrpcExceptionFilter } from './presentation/grpc/grpc-exception.filter.js';
 
 const require = createRequire(import.meta.url);
 
 async function bootstrap() {
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule, {
+    bufferLogs: true,
     transport: Transport.GRPC,
     options: {
       url: '0.0.0.0:50053',
@@ -34,23 +36,27 @@ async function bootstrap() {
     },
   });
 
+  const logger = app.get(Logger);
+  app.useLogger(logger);
+
   app.useGlobalFilters(new GrpcExceptionFilter());
 
   const configService = app.get(ConfigService);
 
-  console.log('Connecting MongoDB for Scheduling & Inventory...');
+  logger.log('Connecting MongoDB for Scheduling & Inventory...', 'Bootstrap');
   const mongoUri = configService.get<string>('MONGO_URI');
   if (!mongoUri) {
     throw new Error('MONGO_URI is missing in scheduling-inventory configuration');
   }
   await mongoose.connect(mongoUri);
-  console.log('MongoDB connected for Scheduling & Inventory.');
+  logger.log('MongoDB connected for Scheduling & Inventory.', 'Bootstrap');
 
   await app.listen();
-  console.log('🚀 Scheduling & Inventory gRPC Microservice listening on port 50053');
+  logger.log('🚀 Scheduling & Inventory gRPC Microservice listening on port 50053', 'Bootstrap');
 }
 
-bootstrap().catch((err) => {
-  console.error('Scheduling & Inventory service startup failed:', err);
+bootstrap().catch((err: unknown) => {
+  const message = err instanceof Error ? err.stack || err.message : String(err);
+  process.stderr.write(`Scheduling & Inventory service startup failed: ${message}\n`);
   process.exit(1);
 });

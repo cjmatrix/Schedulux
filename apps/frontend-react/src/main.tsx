@@ -18,6 +18,7 @@ import { TenantProtectedRoute } from './features/tenant/components/TenantProtect
 import AgentDashboardPage from './features/tenant/pages/AgentDashboardPage.tsx';
 import BookingsPage from './features/tenant/pages/BookingsPage.tsx';
 import ForgotPasswordPage from './features/tenant/pages/ForgotPasswordPage.tsx';
+import KnowledgeBasePage from './features/tenant/pages/KnowledgeBasePage.tsx';
 import LoginPage from './features/tenant/pages/LoginPage.tsx';
 
 // Tenant Dashboard Feature Imports
@@ -159,6 +160,14 @@ const router = createBrowserRouter([
           {
             path: 'agents/:agentId/dashboard',
             element: <AgentDashboardPage />,
+          },
+          {
+            path: 'agents/:agentId/knowledge',
+            element: <KnowledgeBasePage />,
+          },
+          {
+            path: 'knowledge',
+            element: <KnowledgeBasePage />,
           },
           {
             path: 'agents/:agentId/bookings',

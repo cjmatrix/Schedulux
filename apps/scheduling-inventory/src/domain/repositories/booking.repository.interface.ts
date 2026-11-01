@@ -16,6 +16,7 @@ export interface IBookingRepository {
   create(booking: BookingEntity): Promise<BookingEntity>;
   findById(tenantId: string, bookingId: string): Promise<BookingEntity | null>;
   findByReference(tenantId: string, bookingReference: string): Promise<BookingEntity | null>;
+  findByIdOrReference(tenantId: string, identifier: string): Promise<BookingEntity | null>;
   findOverlappingBookings(
     tenantId: string,
     resourceId: string,

@@ -5,10 +5,12 @@ import { IResourceRepository } from '../domain/repositories/resource.repository.
 import { IServiceRepository } from '../domain/repositories/service.repository.interface.js';
 import { ITenantScheduleRepository } from '../domain/repositories/tenant-schedule.repository.interface.js';
 import {
+  CACHE_REPOSITORY,
   RESOURCE_REPOSITORY,
   SERVICE_REPOSITORY,
   TENANT_SCHEDULE_REPOSITORY,
 } from '../domain/tokens.js';
+import type { ICacheRepository } from '../infrastructure/cache/cache-repository.interface.js';
 import { ResourceModule } from './resource.module.js';
 import { ScheduleModule } from './schedule.module.js';
 import { ServiceModule } from './service.module.js';
@@ -22,11 +24,16 @@ import { ServiceModule } from './service.module.js';
         resourceRepo: IResourceRepository,
         serviceRepo: IServiceRepository,
         tenantScheduleRepo: ITenantScheduleRepository,
-      ) => new BatchSyncInventoryUseCase(resourceRepo, serviceRepo, tenantScheduleRepo),
-      inject: [RESOURCE_REPOSITORY, SERVICE_REPOSITORY, TENANT_SCHEDULE_REPOSITORY],
+        cacheRepo: ICacheRepository,
+      ) => new BatchSyncInventoryUseCase(resourceRepo, serviceRepo, tenantScheduleRepo, cacheRepo),
+      inject: [
+        RESOURCE_REPOSITORY,
+        SERVICE_REPOSITORY,
+        TENANT_SCHEDULE_REPOSITORY,
+        CACHE_REPOSITORY,
+      ],
     },
   ],
   exports: [BATCH_SYNC_INVENTORY_USE_CASE],
 })
 export class InventoryModule {}
-

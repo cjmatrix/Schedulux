@@ -1,3 +1,4 @@
+from pathlib import Path
 import os
 import json
 from typing import Optional, Any
@@ -5,16 +6,20 @@ import aio_pika
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
 
-dotenv_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..', '.env')
-if not os.path.exists(dotenv_path):
-    dotenv_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', '.env')
+dotenv_path = Path(__file__).resolve().parents[5] / ".env"
 load_dotenv(dotenv_path)
 
 redis_uri = os.environ.get("REDIS_URI", "redis://localhost:6379")
 rabbitmq_uri = os.environ.get("RABBITMQ_URI", "amqp://guest:guest@localhost:5672")
 
-CRAWL_QUEUE_NAME = "knowledge-crawl-queue"
-SCHEMA_QUEUE_NAME = "schema-generation-queue"
+CRAWL_QUEUE_NAME = os.environ.get("CRAWL_QUEUE_NAME", "knowledge-crawl-queue")
+SCHEMA_QUEUE_NAME = os.environ.get("SCHEMA_QUEUE_NAME", "schema-generation-queue")
+DOCUMENT_INDEXING_QUEUE_NAME = os.environ.get(
+    "DOCUMENT_INDEXING_QUEUE_NAME", "knowledge-document-indexing-queue"
+)
+DOCUMENT_STATUS_QUEUE_NAME = os.environ.get(
+    "DOCUMENT_STATUS_QUEUE_NAME", "knowledge-document-status-queue"
+)
 
 _rabbit_connection: Optional[aio_pika.abc.AbstractRobustConnection] = None
 _rabbit_channel: Optional[aio_pika.abc.AbstractChannel] = None
@@ -29,11 +34,85 @@ async def get_rabbitmq_channel() -> aio_pika.abc.AbstractChannel:
         _rabbit_channel = await _rabbit_connection.channel()
         await _rabbit_channel.declare_queue(CRAWL_QUEUE_NAME, durable=True)
         await _rabbit_channel.declare_queue(SCHEMA_QUEUE_NAME, durable=True)
+        await _rabbit_channel.declare_queue(DOCUMENT_INDEXING_QUEUE_NAME, durable=True)
+        await _rabbit_channel.declare_queue(DOCUMENT_STATUS_QUEUE_NAME, durable=True)
     elif _rabbit_channel is None or _rabbit_channel.is_closed:
         _rabbit_channel = await _rabbit_connection.channel()
         await _rabbit_channel.declare_queue(CRAWL_QUEUE_NAME, durable=True)
         await _rabbit_channel.declare_queue(SCHEMA_QUEUE_NAME, durable=True)
+        await _rabbit_channel.declare_queue(DOCUMENT_INDEXING_QUEUE_NAME, durable=True)
+        await _rabbit_channel.declare_queue(DOCUMENT_STATUS_QUEUE_NAME, durable=True)
     return _rabbit_channel
+
+
+async def publish_document_indexing_job(
+    tenant_id: str,
+    agent_id: str,
+    document_id: str,
+    s3_bucket: str,
+    s3_key: str,
+    file_name: str,
+) -> None:
+    """Publishes a document indexing task to RabbitMQ knowledge-document-indexing-queue."""
+    channel = await get_rabbitmq_channel()
+    payload = {
+        "name": "index-knowledge-document",
+        "tenant_id": tenant_id,
+        "agent_id": agent_id,
+        "document_id": document_id,
+        "s3_bucket": s3_bucket,
+        "s3_key": s3_key,
+        "file_name": file_name,
+    }
+
+    await channel.default_exchange.publish(
+        aio_pika.Message(
+            body=json.dumps(payload).encode(),
+            delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+            content_type="application/json",
+            message_id=f"doc_idx_{document_id}",
+        ),
+        routing_key=DOCUMENT_INDEXING_QUEUE_NAME,
+    )
+    print(
+        f"[RabbitMQ] Published indexing job for doc '{document_id}' to '{DOCUMENT_INDEXING_QUEUE_NAME}'",
+        flush=True,
+    )
+
+
+async def publish_document_status_update(
+    tenant_id: str,
+    agent_id: str,
+    document_id: str,
+    status: str,
+    chunks_count: Optional[int] = None,
+    error_message: Optional[str] = None,
+) -> None:
+    """Publishes a document indexing status update to RabbitMQ knowledge-document-status-queue."""
+    channel = await get_rabbitmq_channel()
+    payload = {
+        "event": "document.status_updated",
+        "tenant_id": tenant_id,
+        "agent_id": agent_id,
+        "document_id": document_id,
+        "status": status,
+        "chunks_count": chunks_count,
+        "error_message": error_message,
+    }
+
+    await channel.default_exchange.publish(
+        aio_pika.Message(
+            body=json.dumps(payload).encode(),
+            delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+            content_type="application/json",
+            message_id=f"doc_status_{document_id}_{status}",
+        ),
+        routing_key=DOCUMENT_STATUS_QUEUE_NAME,
+    )
+    print(
+        f"[RabbitMQ] Published status '{status}' for doc '{document_id}' to '{DOCUMENT_STATUS_QUEUE_NAME}'",
+        flush=True,
+    )
 
 
 async def publish_schema_generation_job(tenant_id: str, url: str, job_id: str, crawled_data: dict) -> None:

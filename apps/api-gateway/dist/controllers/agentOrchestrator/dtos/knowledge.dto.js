@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SendSandboxMessageDto = exports.SendSandboxMessageSchema = exports.CustomerChatDto = exports.CustomerChatSchema = exports.SaveInitialAgentDraftDto = exports.SaveInitialAgentDraftSchema = exports.ResumeOnboardingDto = exports.ResumeOnboardingSchema = exports.StartOnboardingDto = exports.StartOnboardingSchema = exports.GetCrawlStatusDto = exports.GetCrawlStatusSchema = exports.CrawlSiteDto = exports.CrawlSiteSchema = void 0;
+exports.ListDocumentsQueryDto = exports.ListDocumentsQuerySchema = exports.ConfirmDocumentUploadDto = exports.ConfirmDocumentUploadSchema = exports.GetDocumentUploadUrlDto = exports.GetDocumentUploadUrlSchema = exports.SendSandboxMessageDto = exports.SendSandboxMessageSchema = exports.CustomerChatDto = exports.CustomerChatSchema = exports.SaveInitialAgentDraftDto = exports.SaveInitialAgentDraftSchema = exports.ResumeOnboardingDto = exports.ResumeOnboardingSchema = exports.StartOnboardingDto = exports.StartOnboardingSchema = exports.GetCrawlStatusDto = exports.GetCrawlStatusSchema = exports.CrawlSiteDto = exports.CrawlSiteSchema = void 0;
 const nestjs_zod_1 = require("nestjs-zod");
 const zod_1 = require("zod");
 exports.CrawlSiteSchema = zod_1.z.object({
@@ -69,3 +69,32 @@ exports.SendSandboxMessageSchema = zod_1.z.object({
 class SendSandboxMessageDto extends (0, nestjs_zod_1.createZodDto)(exports.SendSandboxMessageSchema) {
 }
 exports.SendSandboxMessageDto = SendSandboxMessageDto;
+exports.GetDocumentUploadUrlSchema = zod_1.z.object({
+    agent_id: zod_1.z.string().min(1, 'Agent ID is required'),
+    file_name: zod_1.z
+        .string()
+        .min(1, 'File name is required')
+        .max(255, 'File name exceeds 255 characters')
+        .regex(/\.pdf$/i, 'Only PDF documents (.pdf) are supported'),
+    file_size_bytes: zod_1.z
+        .number()
+        .nonnegative()
+        .max(25 * 1024 * 1024, 'File size exceeds maximum allowed limit of 25MB')
+        .optional()
+        .default(0),
+});
+class GetDocumentUploadUrlDto extends (0, nestjs_zod_1.createZodDto)(exports.GetDocumentUploadUrlSchema) {
+}
+exports.GetDocumentUploadUrlDto = GetDocumentUploadUrlDto;
+exports.ConfirmDocumentUploadSchema = zod_1.z.object({
+    document_id: zod_1.z.string().min(1, 'Document ID is required'),
+});
+class ConfirmDocumentUploadDto extends (0, nestjs_zod_1.createZodDto)(exports.ConfirmDocumentUploadSchema) {
+}
+exports.ConfirmDocumentUploadDto = ConfirmDocumentUploadDto;
+exports.ListDocumentsQuerySchema = zod_1.z.object({
+    agent_id: zod_1.z.string().optional(),
+});
+class ListDocumentsQueryDto extends (0, nestjs_zod_1.createZodDto)(exports.ListDocumentsQuerySchema) {
+}
+exports.ListDocumentsQueryDto = ListDocumentsQueryDto;

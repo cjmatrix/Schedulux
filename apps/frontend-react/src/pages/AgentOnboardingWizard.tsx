@@ -61,7 +61,6 @@ export default function AgentOnboardingWizard() {
   const timezone = businessProfile.timezone || '';
   const operatingHours = draftSchema?.operating_hours || {};
 
-
   useEffect(() => {
     if (sandboxMessages.length === 0) {
       setSandboxMessages([
@@ -87,7 +86,6 @@ export default function AgentOnboardingWizard() {
     sendSandboxMessage(e, clinicName);
   };
 
-  
   const scheduleGroups = getOperatingScheduleGroups(operatingHours);
   const openGroups = scheduleGroups.filter((g) => g.isOpen);
 
@@ -103,12 +101,12 @@ export default function AgentOnboardingWizard() {
     dailyHoursText = `${totalDays} days/week`;
   }
 
-  const rawResources = (
-    Array.isArray(draftSchema?.resources) ? draftSchema.resources : []
-  ).filter((r: any) => !r.is_deleted);
-  const rawServices = (
-    Array.isArray(draftSchema?.services) ? draftSchema.services : []
-  ).filter((s: any) => !s.is_deleted);
+  const rawResources = (Array.isArray(draftSchema?.resources) ? draftSchema.resources : []).filter(
+    (r: any) => !r.is_deleted,
+  );
+  const rawServices = (Array.isArray(draftSchema?.services) ? draftSchema.services : []).filter(
+    (s: any) => !s.is_deleted,
+  );
 
   const servicesList: OnboardingServiceItem[] = useMemo(() => {
     return rawServices.map((svc: Partial<ServiceInfo>, idx: number): OnboardingServiceItem => {

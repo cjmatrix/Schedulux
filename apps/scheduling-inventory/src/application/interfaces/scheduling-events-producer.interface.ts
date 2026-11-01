@@ -39,6 +39,17 @@ export interface ISchedulingEventsProducer {
     entity: BookingEntity,
     session?: ClientSession,
   ): Promise<IOutboxDoc>;
+  createBookingCancelledOutboxEvent(
+    entity: BookingEntity,
+    reason?: string,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc>;
+  createBookingRescheduledOutboxEvent(
+    entity: BookingEntity,
+    previousStartTime: Date,
+    previousEndTime: Date,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc>;
 
   publishOutboxEvent(outboxDoc: IOutboxDoc): Promise<void>;
 
@@ -51,5 +62,10 @@ export interface ISchedulingEventsProducer {
   emitResourceDeleted(tenantId: string, agentId: string, resourceId: string): Promise<void>;
 
   emitBookingCreated(entity: BookingEntity): Promise<void>;
+  emitBookingCancelled(entity: BookingEntity, reason?: string): Promise<void>;
+  emitBookingRescheduled(
+    entity: BookingEntity,
+    previousStartTime: Date,
+    previousEndTime: Date,
+  ): Promise<void>;
 }
-

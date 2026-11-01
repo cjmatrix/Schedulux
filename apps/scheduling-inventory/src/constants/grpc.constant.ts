@@ -18,6 +18,9 @@ export const GRPC_METHODS = {
     DELETE_RESOURCE: 'DeleteResource',
     BATCH_SYNC_INVENTORY: 'BatchSyncInventory',
     CREATE_BOOKING: 'CreateBooking',
+    CANCEL_BOOKING: 'CancelBooking',
+    RESCHEDULE_BOOKING: 'RescheduleBooking',
     GET_AVAILABILITY: 'GetAvailability',
+    LIST_BOOKINGS: 'ListBookings',
   },
 } as const;

@@ -35,12 +35,12 @@ class KafkaEventSubscriber(EventSubscriber):
         self._running = False
 
     async def subscribe(self, topic_or_queue: str, handler: MessageHandler) -> None:
-        """Register a handler callback for a specific Kafka topic."""
+
         self._handlers[topic_or_queue] = handler
         logger.info("[KafkaSubscriber] Registered handler for topic '%s'", topic_or_queue)
 
     async def start(self) -> None:
-        """Initialize connection and start AIOKafkaConsumer."""
+
         if not self._handlers:
             logger.warning("[KafkaSubscriber] No topic handlers registered before start.")
             return

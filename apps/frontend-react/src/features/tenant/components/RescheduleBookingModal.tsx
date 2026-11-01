@@ -270,7 +270,7 @@ export function RescheduleBookingModal({
         hour: '2-digit',
         minute: '2-digit',
         hour12: true,
-        timeZone: 'UTC',
+        timeZone: availability?.timezone || undefined,
       });
     } catch {
       return iso;

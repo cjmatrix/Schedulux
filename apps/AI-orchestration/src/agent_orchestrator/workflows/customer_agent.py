@@ -318,11 +318,11 @@ Agent ID: {agent_id}
    - When a user wants to book or asks for open times, match their request to the appropriate service_id from the catalog.
    - Use the `check_availability` tool passing tenant_id="{tenant_id}", agent_id="{agent_id}", and service_id to query real-time slots. If a specific provider was requested, include their `resource_id`. NEVER invent, estimate, or hallucinate available times.
    - If no specific date is mentioned, check today and upcoming days.
-   - Present available slots clearly to the customer.
+   - Present available slots clearly to the customer in the business timezone ({biz_context.get("timezone")}). The slot timestamps from `check_availability` already represent the business's local time (e.g. 09:00:00+05:30 means 09:00 AM). Present them directly in local business time without adding or subtracting any timezone offset.
 6. Booking Confirmation Requirements:
    - Before confirming a booking, ensure you have:
      a) Desired Service (`service_id`)
-     b) Specific Start Time (`start_time` in ISO format, e.g. 2026-10-30T10:00:00Z)
+     b) Specific Start Time (`start_time` in ISO format exactly as returned by `check_availability`, e.g. 2026-11-02T09:00:00+05:30)
      c) Customer's Full Name
      d) Customer's Mobile Phone Number
      e) Desired Staff Member (`resource_id`), only if the customer requested someone specific

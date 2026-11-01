@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import tempfile
 import uuid
@@ -10,6 +11,7 @@ from typing import Any
 import boto3
 from botocore.config import Config
 from dotenv import load_dotenv
+from fastembed.sparse import SparseTextEmbedding
 from qdrant_client import AsyncQdrantClient, models
 import voyageai
 
@@ -21,9 +23,11 @@ load_dotenv(dotenv_path)
 
 KNOWLEDGE_COLLECTION_NAME = os.getenv("KNOWLEDGE_COLLECTION_NAME", "knowledge_documents")
 VOYAGE_EMBEDDING_MODEL = os.getenv("VOYAGE_EMBEDDING_MODEL", "voyage-3-lite")
-VECTOR_SIZE = 512
+SPARSE_MODEL_NAME = os.getenv("SPARSE_EMBEDDING_MODEL", "Qdrant/bm25")
+DENSE_VECTOR_SIZE = 512  
 
 _qdrant_client: AsyncQdrantClient | None = None
+_sparse_model: SparseTextEmbedding | None = None
 
 
 def get_qdrant_client() -> AsyncQdrantClient:
@@ -40,29 +44,44 @@ def get_qdrant_client() -> AsyncQdrantClient:
     return _qdrant_client
 
 
-async def ensure_qdrant_knowledge_collection(client: AsyncQdrantClient) -> None:
+def get_sparse_model() -> SparseTextEmbedding:
+    """Lazy-initialise the sparse embedding model (downloads weights on first call)."""
+    global _sparse_model
+    if _sparse_model is None:
+        _sparse_model = SparseTextEmbedding(model_name=SPARSE_MODEL_NAME)
+    return _sparse_model
 
+
+
+
+async def ensure_qdrant_knowledge_collection(client: AsyncQdrantClient) -> None:
     try:
         collections = await client.get_collections()
         existing = [c.name for c in collections.collections]
 
         if KNOWLEDGE_COLLECTION_NAME not in existing:
+            
             await client.create_collection(
                 collection_name=KNOWLEDGE_COLLECTION_NAME,
-                vectors_config=models.VectorParams(
-                    size=VECTOR_SIZE,
-                    distance=models.Distance.COSINE,
-                ),
+                vectors_config={
+                    "dense-text": models.VectorParams(
+                        size=DENSE_VECTOR_SIZE,
+                        distance=models.Distance.COSINE,
+                    ),
+                },
+                sparse_vectors_config={
+                    "sparse-text": models.SparseVectorParams(),
+                },
             )
             print(
-                f"[DocumentIndexer] Created Qdrant collection: {KNOWLEDGE_COLLECTION_NAME}",
+                f"[DocumentIndexer] Created Qdrant collection: {KNOWLEDGE_COLLECTION_NAME} "
+                "(dense-text + sparse-text)",
                 flush=True,
             )
 
         col_info = await client.get_collection(KNOWLEDGE_COLLECTION_NAME)
         payload_schema = col_info.payload_schema or {}
 
-     
         for field in ("tenant_id", "agent_id", "document_id"):
             if field not in payload_schema:
                 try:
@@ -74,7 +93,6 @@ async def ensure_qdrant_knowledge_collection(client: AsyncQdrantClient) -> None:
                 except Exception as e:
                     print(f"[DocumentIndexer] Warning creating index for {field}: {e}", flush=True)
 
-        
         if "content" not in payload_schema:
             try:
                 await client.create_payload_index(
@@ -115,8 +133,22 @@ def download_pdf_from_s3(bucket: str, key: str, dest_path: str) -> None:
     s3.download_file(Bucket=bucket, Key=key, Filename=dest_path)
 
 
-async def process_document_indexing(data: dict[str, Any]) -> None:
 
+#bm25 embdedding
+def _generate_sparse_vectors(texts: list[str]) -> list[models.SparseVector]:
+  
+    model = get_sparse_model()
+    sparse_results = list(model.embed(texts))
+    return [
+        models.SparseVector(
+            indices=sv.indices.tolist(),
+            values=sv.values.tolist(),
+        )
+        for sv in sparse_results
+    ]
+
+
+async def process_document_indexing(data: dict[str, Any]) -> None:
     tenant_id = data.get("tenant_id")
     agent_id = data.get("agent_id") or ""
     document_id = data.get("document_id")
@@ -170,23 +202,30 @@ async def process_document_indexing(data: dict[str, Any]) -> None:
             )
             return
 
-        voyage_api_key = os.getenv("VOYAGE_API_KEY", "")
-        voyage_client = voyageai.AsyncClient(api_key=voyage_api_key)
-
         chunk_texts = [c.page_content for c in chunks]
-        batch_size = 64
-        all_embeddings: list[list[float]] = []
 
-        for i in range(0, len(chunk_texts), batch_size):
-            batch = chunk_texts[i : i + batch_size]
-            resp = await voyage_client.embed(
-                texts=batch,
-                model=VOYAGE_EMBEDDING_MODEL,
-                input_type="document",
-                truncation=True,
-            )
-            all_embeddings.extend(resp.embeddings)
+        
+        voyage_client = voyageai.AsyncClient(api_key=os.getenv("VOYAGE_API_KEY", ""))
 
+        async def _embed_dense(texts: list[str]) -> list[list[float]]:
+            batch_size = 64
+            result: list[list[float]] = []
+            for i in range(0, len(texts), batch_size):
+                resp = await voyage_client.embed(
+                    texts=texts[i : i + batch_size],
+                    model=VOYAGE_EMBEDDING_MODEL,
+                    input_type="document",
+                    truncation=True,
+                )
+                result.extend(resp.embeddings)
+            return result
+
+        dense_embeddings, sparse_embeddings = await asyncio.gather(
+            _embed_dense(chunk_texts),
+            asyncio.to_thread(_generate_sparse_vectors, chunk_texts),
+        )
+
+     
         qdrant = get_qdrant_client()
         await ensure_qdrant_knowledge_collection(qdrant)
 
@@ -194,7 +233,10 @@ async def process_document_indexing(data: dict[str, Any]) -> None:
         points: list[models.PointStruct] = [
             models.PointStruct(
                 id=str(uuid.uuid5(uuid.NAMESPACE_URL, f"{document_id}_{idx}")),
-                vector=vector,
+                vector={
+                    "dense-text": dense_vec,
+                    "sparse-text": sparse_vec,
+                },
                 payload={
                     "tenant_id": tenant_id,
                     "agent_id": agent_id,
@@ -207,19 +249,21 @@ async def process_document_indexing(data: dict[str, Any]) -> None:
                     "created_at": now_iso,
                 },
             )
-            for idx, (chunk, vector) in enumerate(zip(chunks, all_embeddings, strict=True))
+            for idx, (chunk, dense_vec, sparse_vec) in enumerate(
+                zip(chunks, dense_embeddings, sparse_embeddings, strict=True)
+            )
         ]
 
         qdrant_batch_size = 100
         for i in range(0, len(points), qdrant_batch_size):
-            p_batch = points[i : i + qdrant_batch_size]
             await qdrant.upsert(
                 collection_name=KNOWLEDGE_COLLECTION_NAME,
-                points=p_batch,
+                points=points[i : i + qdrant_batch_size],
             )
 
         print(
-            f"[DocumentIndexer] Successfully indexed {len(points)} chunks into Qdrant for doc={document_id}",
+            f"[DocumentIndexer] Successfully indexed {len(points)} chunks "
+            f"(dense + sparse) for doc={document_id}",
             flush=True,
         )
 

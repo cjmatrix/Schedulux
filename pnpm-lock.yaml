@@ -372,6 +372,9 @@ importers:
       '@repo/proto':
         specifier: workspace:*
         version: link:../../packages/proto
+      dayjs:
+        specifier: ^1.11.23
+        version: 1.11.23
       dotenv:
         specifier: ^18.0.3
         version: 18.0.3
@@ -1719,6 +1722,9 @@ packages:
 
   dateformat@4.6.3:
     resolution: {integrity: sha512-2P0p0pFGzHS5EMnhdxQi7aJN+iMheud0UhG4dlE1DLAlvL8JHjJJTX/CSm4JXwV0Ka5nGk3zC5mcb5bUQUxxMA==}
+
+  dayjs@1.11.23:
+    resolution: {integrity: sha512-QDTCU0M0MxR3hQfnlDJfwekQiaanm1ubOD231u73WBckQ/fsamwRLiE2GBz6D3a/xF1NgfiDLJjXBa1hYOYTtQ==}
 
   debug@2.6.9:
     resolution: {integrity: sha512-bC7ElrdJaJnPbAP+1EotYvqZsb3ecl5wi6Bfi6BJTUcNowp6cvspg0jXznRTKDjm/E7AdgFBVeAPVMNcKGsHMA==}
@@ -4388,6 +4394,8 @@ snapshots:
   data-uri-to-buffer@4.0.1: {}
 
   dateformat@4.6.3: {}
+
+  dayjs@1.11.23: {}
 
   debug@2.6.9(supports-color@10.2.2):
     dependencies:

@@ -13,12 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 class RabbitMQEventSubscriber(EventSubscriber):
-    """
-    RabbitMQ adapter implementing the EventSubscriber protocol.
-    Encapsulates aio_pika connections, channels, prefetch QoS,
-    and automatic message processing/acknowledgment.
-    """
-
     def __init__(
         self,
         uri: str | None = None,
@@ -32,12 +26,12 @@ class RabbitMQEventSubscriber(EventSubscriber):
         self._stop_event = asyncio.Event()
 
     async def subscribe(self, topic_or_queue: str, handler: MessageHandler) -> None:
-        """Register a handler callback for a specific RabbitMQ queue."""
+
         self._handlers[topic_or_queue] = handler
         logger.info("[RabbitMQSubscriber] Registered handler for queue '%s'", topic_or_queue)
 
     async def start(self) -> None:
-        """Initialize robust connection and channel."""
+
         logger.info("[RabbitMQSubscriber] Connecting to RabbitMQ at %s...", self.uri)
         self._connection = await aio_pika.connect_robust(self.uri)
         self._channel = await self._connection.channel()
@@ -48,7 +42,7 @@ class RabbitMQEventSubscriber(EventSubscriber):
         )
 
     async def run(self) -> None:
-        """Declare queues and attach consumption callbacks."""
+
         if self._channel is None:
             await self.start()
 
@@ -92,7 +86,7 @@ class RabbitMQEventSubscriber(EventSubscriber):
             await self.stop()
 
     async def stop(self) -> None:
-        """Gracefully close channel and connection."""
+
         self._stop_event.set()
         if self._channel is not None and not self._channel.is_closed:
             try:

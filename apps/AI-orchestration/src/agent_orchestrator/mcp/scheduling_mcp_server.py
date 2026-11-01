@@ -441,11 +441,18 @@ async def search_knowledge_base(
         JSON string containing the most relevant excerpts and answers from official documents.
     """
     try:
+        from agent_orchestrator.adapters.bm25_embedder import BM25SparseEmbedder
+        from agent_orchestrator.adapters.qdrant_stores import QdrantKnowledgeStore
+        from agent_orchestrator.adapters.voyage_embedder import VoyageDenseEmbedder
         from agent_orchestrator.services.knowledge_retrieval_service import (
             KnowledgeRetrievalService,
         )
 
-        service = KnowledgeRetrievalService()
+        service = KnowledgeRetrievalService(
+            dense_embedder=VoyageDenseEmbedder(),
+            sparse_embedder=BM25SparseEmbedder(),
+            knowledge_store=QdrantKnowledgeStore(),
+        )
         results = await service.retrieve_relevant_context(
             query=query,
             tenant_id=tenant_id,

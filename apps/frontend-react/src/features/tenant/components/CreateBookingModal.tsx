@@ -70,7 +70,7 @@ export function CreateBookingModal({
 
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlotInfo | null>(null);
 
-  // Customer information
+
   const [customerName, setCustomerName] = useState<string>('');
   const [customerPhone, setCustomerPhone] = useState<string>('');
   const [customerEmail, setCustomerEmail] = useState<string>('');
@@ -341,7 +341,7 @@ export function CreateBookingModal({
         hour: '2-digit',
         minute: '2-digit',
         hour12: true,
-        timeZone: 'UTC',
+        timeZone: availability?.timezone || undefined,
       });
     } catch {
       return iso;

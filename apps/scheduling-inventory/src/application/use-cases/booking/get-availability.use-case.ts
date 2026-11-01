@@ -1,4 +1,11 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import dayjs from 'dayjs';
+import timezonePlugin from 'dayjs/plugin/timezone.js';
+import utc from 'dayjs/plugin/utc.js';
+
+dayjs.extend(utc);
+dayjs.extend(timezonePlugin);
+
 import {
   AvailableSlotInfo,
   DayAvailabilityInfo,
@@ -79,35 +86,31 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
       requestedResourceIds.push(dto.resource_id.trim());
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = dayjs().tz(timezone).format('YYYY-MM-DD');
     const startDateStr = dto.start_date || todayStr;
     let endDateStr = dto.end_date || startDateStr;
 
     if (!dto.end_date && bookingMode === 'date_range') {
-      const endD = new Date(`${startDateStr}T00:00:00Z`);
-      endD.setUTCDate(endD.getUTCDate() + 1);
-      endDateStr = endD.toISOString().split('T')[0];
+      endDateStr = dayjs.tz(startDateStr, timezone).add(1, 'day').format('YYYY-MM-DD');
     }
 
-    const startObj = new Date(`${startDateStr}T00:00:00Z`);
-    let endObj = new Date(`${endDateStr}T00:00:00Z`);
+    const startObj = dayjs.tz(startDateStr, timezone).startOf('day');
+    let endObj = dayjs.tz(endDateStr, timezone).startOf('day');
 
-    if (endObj < startObj) {
-      endObj = new Date(startObj);
+    if (endObj.isBefore(startObj)) {
+      endObj = startObj;
+      endDateStr = startDateStr;
     }
 
     const MAX_DAYS_LIMIT = 31;
-    const diffDays = Math.ceil((endObj.getTime() - startObj.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const diffDays = endObj.diff(startObj, 'day') + 1;
     if (diffDays > MAX_DAYS_LIMIT) {
-      endObj = new Date(startObj);
-      endObj.setUTCDate(endObj.getUTCDate() + (MAX_DAYS_LIMIT - 1));
-      endDateStr = endObj.toISOString().split('T')[0];
+      endObj = startObj.add(MAX_DAYS_LIMIT - 1, 'day');
+      endDateStr = endObj.format('YYYY-MM-DD');
     }
 
-    const totalStartIso = `${startDateStr}T00:00:00.000Z`;
-    const totalEndIso = `${endDateStr}T23:59:59.999Z`;
-    const totalStartDate = new Date(totalStartIso);
-    const totalEndDate = new Date(totalEndIso);
+    const totalStartDate = startObj.startOf('day').toDate();
+    const totalEndDate = endObj.endOf('day').toDate();
 
     const requirements = service.getEffectiveResourceRequirements();
     const allEligibleIdsSet = new Set<string>();
@@ -168,11 +171,14 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
     };
 
     let loopCount = 0;
-    const curr = new Date(startObj);
-    while (curr <= endObj && loopCount < MAX_DAYS_LIMIT) {
+    let currDay = startObj;
+    while (
+      (currDay.isBefore(endObj) || currDay.isSame(endObj, 'day')) &&
+      loopCount < MAX_DAYS_LIMIT
+    ) {
       loopCount++;
-      const dateStr = curr.toISOString().split('T')[0];
-      const dayOfWeekIdx = curr.getUTCDay();
+      const dateStr = currDay.format('YYYY-MM-DD');
+      const dayOfWeekIdx = currDay.day();
       const dayName = DAY_NAMES[dayOfWeekIdx];
 
       const blackout = blackoutMap.get(dateStr);
@@ -185,7 +191,7 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
           slots: [],
         });
         blockedDatesSet.add(dateStr);
-        curr.setUTCDate(curr.getUTCDate() + 1);
+        currDay = currDay.add(1, 'day');
         continue;
       }
 
@@ -205,7 +211,7 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
             has_availability: false,
             slots: [],
           });
-          curr.setUTCDate(curr.getUTCDate() + 1);
+          currDay = currDay.add(1, 'day');
           continue;
         }
       }
@@ -232,24 +238,22 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
           ) {
             const slotHour = Math.floor(m / 60);
             const slotMinute = m % 60;
-            const slotStartIso = `${dateStr}T${pad(slotHour)}:${pad(slotMinute)}:00.000Z`;
 
-            const endSlotMin = m + durationMins;
-            const endHourCalculated = Math.floor(endSlotMin / 60);
-            const endMinCalculated = endSlotMin % 60;
-            const slotEndIso = `${dateStr}T${pad(endHourCalculated)}:${pad(endMinCalculated)}:00.000Z`;
+            const slotStart = currDay.hour(slotHour).minute(slotMinute).second(0).millisecond(0);
+            const slotEnd = slotStart.add(durationMins, 'minute');
+            const effectiveEnd = slotStart.add(totalSlotDuration, 'minute');
 
-            const effectiveEndSlotMin = m + totalSlotDuration;
-            const effEndHour = Math.floor(effectiveEndSlotMin / 60);
-            const effEndMin = effectiveEndSlotMin % 60;
-            const effectiveEndIso = `${dateStr}T${pad(effEndHour)}:${pad(effEndMin)}:00.000Z`;
+            const slotStartIso = slotStart.format();
+            const slotEndIso = slotEnd.format();
 
-            const slotStartDate = new Date(slotStartIso);
+            const slotStartDate = slotStart.toDate();
+            const effectiveEndDate = effectiveEnd.toDate();
+
             const isSlotPast = slotStartDate.getTime() < Date.now();
 
             const busyResourceIds = getBusyResourceIdsInMemory(
               slotStartDate,
-              new Date(effectiveEndIso),
+              effectiveEndDate,
             );
 
             let isSlotAvailable = !isSlotPast;
@@ -352,16 +356,18 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
           blockedDatesSet.add(dateStr);
         }
       } else {
-        const dayStartIso = `${dateStr}T00:00:00.000Z`;
-        const dayEndIso = `${dateStr}T23:59:59.999Z`;
+        const dayStart = currDay.startOf('day');
+        const dayEnd = currDay.endOf('day');
+        const dayStartIso = dayStart.format();
+        const dayEndIso = dayEnd.format();
 
         const busyResourceIds = getBusyResourceIdsInMemory(
-          new Date(dayStartIso),
-          new Date(dayEndIso),
+          dayStart.toDate(),
+          dayEnd.toDate(),
         );
 
-        const todayUtc = new Date().toISOString().split('T')[0];
-        const isPastDay = dateStr < todayUtc;
+        const todayZoned = dayjs().tz(timezone).format('YYYY-MM-DD');
+        const isPastDay = dateStr < todayZoned;
 
         let hasAvailability = !isPastDay;
         const freeResources = activeEligibleResources.filter((r) => !busyResourceIds.has(r.id));
@@ -403,7 +409,7 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
         }
       }
 
-      curr.setUTCDate(curr.getUTCDate() + 1);
+      currDay = currDay.add(1, 'day');
     }
 
     const periodBusyIds = getBusyResourceIdsInMemory(totalStartDate, totalEndDate);

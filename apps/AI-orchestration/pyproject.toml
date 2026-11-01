@@ -31,6 +31,7 @@ dependencies = [
     "jsonmerge>=1.9.2",
     "boto3>=1.43.123",
     "rank-bm25>=0.2.2",
+    "fastembed>=0.4.1",
     "pymupdf4llm>=2.0",
 ]
 

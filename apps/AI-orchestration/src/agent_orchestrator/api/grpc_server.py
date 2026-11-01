@@ -11,7 +11,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import agent_orchestrator.proto.knowledge_pb2_grpc as knowledge_pb2_grpc
 from agent_orchestrator.adapters.orchestrator_adapter import LangGraphAgentOrchestrator
+from agent_orchestrator.adapters.qdrant_stores import QdrantMemoryStore
 from agent_orchestrator.adapters.s3_storage_provider import S3StorageProvider
+from agent_orchestrator.adapters.voyage_embedder import VoyageDenseEmbedder
 from agent_orchestrator.api.servicers.knowledge_servicer import KnowledgeServiceServicer
 from agent_orchestrator.domain.protocols import MemoryQueue
 from agent_orchestrator.models import init_db
@@ -54,6 +56,8 @@ def build_knowledge_servicer() -> tuple[
         message_repo=msg_repo,
         draft_repo=draft_repo,
         memory_queue=memory_queue,
+        dense_embedder=VoyageDenseEmbedder(),
+        memory_store=QdrantMemoryStore(),
     )
 
     onboarding_service = OnboardingService(

@@ -1,12 +1,9 @@
-import asyncio
 import logging
 import os
 from typing import Any
 
 from dotenv import load_dotenv
 
-from agent_orchestrator.adapters.kafka_subscriber import KafkaEventSubscriber
-from agent_orchestrator.adapters.rabbitmq_subscriber import RabbitMQEventSubscriber
 from agent_orchestrator.clients.redis_client import set_cached_draft
 from agent_orchestrator.domain.protocols import EventSubscriber
 from agent_orchestrator.models import (
@@ -22,7 +19,6 @@ from agent_orchestrator.models import (
     ResourceType,
     ServiceEmbed,
     ServiceVerificationEmbed,
-    init_db,
 )
 
 local_env = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env"))
@@ -31,23 +27,6 @@ load_dotenv(local_env)
 logger = logging.getLogger(__name__)
 
 TOPICS = ["scheduling.service.events", "scheduling.resource.events"]
-
-
-def create_default_scheduling_subscriber() -> EventSubscriber:
- 
-    broker_type = os.environ.get("SCHEDULING_EVENT_BROKER", "kafka").lower()
-    if broker_type == "rabbitmq":
-        return RabbitMQEventSubscriber(
-            uri=os.environ.get("RABBITMQ_URI", "amqp://guest:guest@localhost:5672"),
-            prefetch_count=10,
-        )
-
-    return KafkaEventSubscriber(
-        brokers=os.environ.get("KAFKA_BROKERS", "localhost:9092"),
-        group_id=os.environ.get("KAFKA_CONSUMER_GROUP", "ai-orchestration-consumer-group"),
-        username=os.environ.get("KAFKA_USERNAME", ""),
-        password=os.environ.get("KAFKA_PASSWORD", ""),
-    )
 
 
 async def handle_service_event(payload: dict[str, Any]) -> None:
@@ -260,26 +239,36 @@ async def handle_resource_event(payload: dict[str, Any]) -> None:
         )
 
 
-async def run_consumer(subscriber: EventSubscriber | None = None) -> None:
-  
-    await init_db()
-    sub = subscriber or create_default_scheduling_subscriber()
+class SchedulingConsumer:
+    def __init__(
+        self,
+        subscriber: EventSubscriber,
+        service_topic: str = "scheduling.service.events",
+        resource_topic: str = "scheduling.resource.events",
+    ) -> None:
+        self.subscriber = subscriber
+        self.service_topic = service_topic
+        self.resource_topic = resource_topic
 
-    await sub.subscribe("scheduling.service.events", handle_service_event)
-    await sub.subscribe("scheduling.resource.events", handle_resource_event)
+    async def handle_service_event(self, payload: dict[str, Any]) -> None:
+        await handle_service_event(payload)
 
-    await sub.start()
-    logger.info(
-        "[SchedulingConsumer] Listening for scheduling events via %s...",
-        type(sub).__name__,
-    )
-    await sub.run()
+    async def handle_resource_event(self, payload: dict[str, Any]) -> None:
+        await handle_resource_event(payload)
 
+    async def start(self) -> None:
+        """Register topic handlers, start the subscriber connection, and listen."""
+        await self.subscriber.subscribe(self.service_topic, self.handle_service_event)
+        await self.subscriber.subscribe(self.resource_topic, self.handle_resource_event)
+        await self.subscriber.start()
+        logger.info(
+            "[SchedulingConsumer] Listening for scheduling events via %s on topics: [%s, %s]...",
+            type(self.subscriber).__name__,
+            self.service_topic,
+            self.resource_topic,
+        )
+        await self.subscriber.run()
 
-def main() -> None:
-    """Entry point for running the consumer standalone."""
-    asyncio.run(run_consumer())
-
-
-if __name__ == "__main__":
-    main()
+    async def stop(self) -> None:
+        """Stop the underlying subscriber."""
+        await self.subscriber.stop()

@@ -160,20 +160,54 @@ MessageHandler = Callable[[dict[str, Any]], Awaitable[None]]
 
 
 class EventSubscriber(Protocol):
- 
+    async def subscribe(self, topic_or_queue: str, handler: MessageHandler) -> None: ...
 
-    async def subscribe(self, topic_or_queue: str, handler: MessageHandler) -> None:
-        """Register an async handler callback for a specific topic or queue."""
-        ...
+    async def start(self) -> None: ...
 
-    async def start(self) -> None:
-        """Initialize the connection and prepare consumption."""
-        ...
+    async def run(self) -> None: ...
 
-    async def run(self) -> None:
-        """Run the consumption loop until cancelled."""
-        ...
+    async def stop(self) -> None: ...
 
-    async def stop(self) -> None:
-        """Gracefully disconnect and clean up resources."""
-        ...
+
+class DenseEmbedder(Protocol):
+    async def embed_texts(
+        self, texts: list[str], input_type: str = "document"
+    ) -> list[list[float]]: ...
+
+    async def embed_query(self, query: str) -> list[float]: ...
+
+
+class SparseEmbedder(Protocol):
+    def embed_texts(self, texts: list[str]) -> list[tuple[list[int], list[float]]]: ...
+
+    def embed_query(self, query: str) -> tuple[list[int], list[float]]: ...
+
+
+class MemoryVectorStore(Protocol):
+    async def upsert_facts(
+        self,
+        tenant_id: str,
+        agent_id: str,
+        facts: list[dict[str, Any]],
+        vectors: list[list[float]],
+    ) -> None: ...
+
+    async def search_relevant_facts(
+        self,
+        query_vector: list[float],
+        tenant_id: str,
+        agent_id: str | None,
+        limit: int,
+    ) -> list[str]: ...
+
+
+class KnowledgeVectorStore(Protocol):
+    async def hybrid_search(
+        self,
+        dense_vector: list[float],
+        sparse_indices: list[int],
+        sparse_values: list[float],
+        tenant_id: str,
+        agent_id: str | None,
+        limit: int,
+    ) -> list[dict[str, Any]]: ...

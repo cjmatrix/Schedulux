@@ -10,10 +10,12 @@ import { ServiceEntity } from '../../domain/entities/service.entity.js';
 import type { IOutboxRepository } from '../../domain/repositories/outbox.repository.interface.js';
 import { MESSAGING_SERVICE, OUTBOX_REPOSITORY } from '../../domain/tokens.js';
 import { IOutboxDoc } from '../database/schemas/outbox.schema.js';
+import type { ITenantScheduleDoc } from '../database/schemas/tenant-schedule.schema.js';
 
 export const KAFKA_SERVICE_TOPIC_SERVICES = 'scheduling.service.events';
 export const KAFKA_SERVICE_TOPIC_RESOURCES = 'scheduling.resource.events';
 export const KAFKA_SERVICE_TOPIC_BOOKINGS = 'scheduling.booking.events';
+export const KAFKA_SERVICE_TOPIC_SCHEDULES = 'scheduling.schedule.events';
 
 export type SchedulingEventType =
   | 'service.created'
@@ -24,7 +26,8 @@ export type SchedulingEventType =
   | 'resource.deleted'
   | 'booking.created'
   | 'booking.cancelled'
-  | 'booking.rescheduled';
+  | 'booking.rescheduled'
+  | 'schedule.updated';
 
 export interface BaseSchedulingEventPayload {
   [key: string]: unknown;
@@ -103,6 +106,36 @@ export interface BookingEventPayload extends BaseSchedulingEventPayload {
     reason?: string;
     previous_start_time?: string;
     previous_end_time?: string;
+  };
+}
+
+export interface ScheduleEventPayload extends BaseSchedulingEventPayload {
+  data?: {
+    timezone: string;
+    currency: string;
+    operating_hours: {
+      monday: Array<{ start: string; end: string }>;
+      tuesday: Array<{ start: string; end: string }>;
+      wednesday: Array<{ start: string; end: string }>;
+      thursday: Array<{ start: string; end: string }>;
+      friday: Array<{ start: string; end: string }>;
+      saturday: Array<{ start: string; end: string }>;
+      sunday: Array<{ start: string; end: string }>;
+      blackout_dates?: Array<{ date: string; reason?: string; is_closed: boolean }>;
+    };
+    blackout_dates: Array<{ date: string; reason?: string; is_closed: boolean }>;
+    scheduling_engine: {
+      booking_mode: string;
+      default_lead_time_hours: number;
+      max_advance_booking_days: number;
+      cancellation_window_hours: number;
+      hold_duration_minutes: number;
+    };
+    verification_policy: {
+      require_otp_for_new_booking: boolean;
+    };
+    created_at: string;
+    updated_at: string;
   };
 }
 
@@ -601,5 +634,66 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
       previousEndTime,
     );
     await this.publishOutboxEvent(outboxDoc);
+  }
+
+  async createScheduleUpdatedOutboxEvent(
+    doc: ITenantScheduleDoc,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc> {
+    const version = doc.updated_at ? new Date(doc.updated_at).getTime() : Date.now();
+    const eventId = `evt_sched_${doc.tenant_id}_${doc.agent_id}_${version}`;
+    const blackoutDates = (doc.blackout_dates || []).map((b) => ({
+      date: b.date,
+      reason: b.reason || '',
+      is_closed: b.is_closed ?? true,
+    }));
+    const payload: ScheduleEventPayload = {
+      event_id: eventId,
+      event_type: 'schedule.updated',
+      tenant_id: doc.tenant_id,
+      agent_id: doc.agent_id,
+      version,
+      timestamp: new Date().toISOString(),
+      data: {
+        timezone: doc.timezone || 'UTC',
+        currency: doc.currency || 'USD',
+        operating_hours: {
+          monday: (doc.operating_hours?.monday || []).map((t) => ({ start: t.start, end: t.end })),
+          tuesday: (doc.operating_hours?.tuesday || []).map((t) => ({ start: t.start, end: t.end })),
+          wednesday: (doc.operating_hours?.wednesday || []).map((t) => ({ start: t.start, end: t.end })),
+          thursday: (doc.operating_hours?.thursday || []).map((t) => ({ start: t.start, end: t.end })),
+          friday: (doc.operating_hours?.friday || []).map((t) => ({ start: t.start, end: t.end })),
+          saturday: (doc.operating_hours?.saturday || []).map((t) => ({ start: t.start, end: t.end })),
+          sunday: (doc.operating_hours?.sunday || []).map((t) => ({ start: t.start, end: t.end })),
+          blackout_dates: blackoutDates,
+        },
+        blackout_dates: blackoutDates,
+        scheduling_engine: {
+          booking_mode: doc.scheduling_engine?.booking_mode || 'time_slot',
+          default_lead_time_hours: doc.scheduling_engine?.default_lead_time_hours ?? 2,
+          max_advance_booking_days: doc.scheduling_engine?.max_advance_booking_days ?? 60,
+          cancellation_window_hours: doc.scheduling_engine?.cancellation_window_hours ?? 24,
+          hold_duration_minutes: doc.scheduling_engine?.hold_duration_minutes ?? 10,
+        },
+        verification_policy: {
+          require_otp_for_new_booking: doc.verification_policy?.require_otp_for_new_booking ?? false,
+        },
+        created_at: doc.created_at ? new Date(doc.created_at).toISOString() : new Date().toISOString(),
+        updated_at: doc.updated_at ? new Date(doc.updated_at).toISOString() : new Date().toISOString(),
+      },
+    };
+
+    return this._outboxRepository.saveEvent(
+      {
+        eventId,
+        aggregateType: 'tenant_schedule',
+        aggregateId: doc._id || `${doc.tenant_id}:${doc.agent_id}`,
+        eventType: 'schedule.updated',
+        topic: KAFKA_SERVICE_TOPIC_SCHEDULES,
+        partitionKey: doc.agent_id || doc.tenant_id,
+        payload,
+      },
+      session,
+    );
   }
 }

@@ -454,7 +454,7 @@ export interface TenantScheduleInfo {
 
 export interface GetTenantScheduleRequest {
   tenant_id: string;
-  agent_id?: string | undefined;
+  agent_id: string;
 }
 
 export interface UpdateTenantScheduleRequest {
@@ -521,7 +521,7 @@ export interface SchedulingInventoryServiceClient {
 
   verifyCustomer(request: VerifyCustomerRequest): Observable<VerifyCustomerResponse>;
 
-  /** Tenant Schedule Operations */
+  /** Tenant Schedule Settings */
 
   getTenantSchedule(request: GetTenantScheduleRequest): Observable<TenantScheduleResponse>;
 
@@ -603,7 +603,7 @@ export interface SchedulingInventoryServiceController {
     request: VerifyCustomerRequest,
   ): Promise<VerifyCustomerResponse> | Observable<VerifyCustomerResponse> | VerifyCustomerResponse;
 
-  /** Tenant Schedule Operations */
+  /** Tenant Schedule Settings */
 
   getTenantSchedule(
     request: GetTenantScheduleRequest,

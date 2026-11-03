@@ -128,6 +128,10 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
         navigate(`/tenant/agents/${currentAgentId}/knowledge`);
         return;
       }
+      if (itemPath === '/tenant/settings') {
+        navigate(currentAgentId ? `/tenant/agents/${currentAgentId}/settings` : `/tenant/settings`);
+        return;
+      }
     }
     navigate(itemPath);
   };
@@ -144,6 +148,8 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
       navigate(`/tenant/agents/${newAgentId}/resources`);
     } else if (location.pathname.includes('/knowledge')) {
       navigate(`/tenant/agents/${newAgentId}/knowledge`);
+    } else if (location.pathname.includes('/settings')) {
+      navigate(`/tenant/agents/${newAgentId}/settings`);
     } else {
       navigate(`/tenant/agents/${newAgentId}/dashboard`);
     }
@@ -223,6 +229,7 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
               const isServicesTab = item.path === '/tenant/services';
               const isInventoryTab = item.path === '/tenant/inventory';
               const isKnowledgeTab = item.path === '/tenant/knowledge';
+              const isSettingsTab = item.path === '/tenant/settings';
 
               const isActive =
                 (!isAgentsTab &&
@@ -230,6 +237,7 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
                   !isServicesTab &&
                   !isInventoryTab &&
                   !isKnowledgeTab &&
+                  !isSettingsTab &&
                   location.pathname === item.path) ||
                 (isAgentsTab && location.pathname === '/tenant/agents') ||
                 (isBookingsTab && location.pathname.includes('/bookings')) ||
@@ -238,6 +246,7 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
                   (location.pathname.includes('/inventory') ||
                     location.pathname.includes('/resources'))) ||
                 (isKnowledgeTab && location.pathname.includes('/knowledge')) ||
+                (isSettingsTab && location.pathname.includes('/settings')) ||
                 (item.path === '/tenant/users' &&
                   (location.pathname === '/tenant' || location.pathname === '/tenant/'));
               const Icon = item.icon;

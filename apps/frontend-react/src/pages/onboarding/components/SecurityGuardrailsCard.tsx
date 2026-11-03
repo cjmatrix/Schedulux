@@ -60,7 +60,7 @@ export const SecurityGuardrailsCard: React.FC<SecurityGuardrailsCardProps> = ({
   const triage = guardrails?.triage_emergency;
   const handoff = guardrails?.human_handoff;
 
-  const isNewBookingOtp = Boolean(vp?.require_otp_for_new_booking ?? false);
+  const isNewBookingOtp = Boolean(vp?.require_otp_for_new_booking ?? legacyRequireOtp ?? false);
   const isRescheduleOtp = true;
   const isCancelOtp = true;
 

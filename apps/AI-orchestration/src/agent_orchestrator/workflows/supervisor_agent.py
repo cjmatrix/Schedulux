@@ -23,7 +23,7 @@ def _get_chat_model(temperature: float = 0.0) -> Any:
             model=os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
             api_key=SecretStr(groq_key),
             temperature=temperature,
-            max_tokens=256,  # intent classification → short output
+            max_tokens=256,  
         )
     elif gemini_key:
         return ChatGoogleGenerativeAI(
@@ -58,13 +58,20 @@ def _check_handoff_topics(message: str, guardrails: dict[str, Any]) -> bool:
 
 _ROUTER_SYSTEM = """\
 You are a routing classifier for an AI booking concierge system.
-Classify the user message into exactly ONE of these intents:
+Analyze the user message and conversation context to identify which specialist agents need to respond.
 
-  "booking"  — user wants to check availability, book an appointment, cancel a booking, or reschedule
-  "faq"      — user is asking about business policies, staff information, service details, pricing, procedures, or FAQs
-  "handoff"  — user is expressing a complaint, legal threat, refund demand, or needs to speak with a human
+Possible intents:
+  "booking"  — user wants to check availability, book an appointment, cancel a booking, reschedule, or view bookings
+  "faq"      — user is asking about business policies, repayment/refund policies, staff info, service details, pricing, or procedures
+  "handoff"  — user is expressing a complaint, legal threat, refund dispute, or demanding to speak with a human
 
-Respond ONLY with a JSON object: {"intent": "<booking|faq|handoff>"}
+Rules:
+1. If the message contains BOTH a booking/availability request AND a policy/FAQ question, include BOTH in the list: ["faq", "booking"].
+2. If only booking/scheduling actions are mentioned, return ["booking"].
+3. If only general/FAQ/policy questions are asked, return ["faq"].
+4. If the user escalates or demands human contact, return ["handoff"].
+
+Respond ONLY with a JSON object: {"intents": ["<booking|faq|handoff>", ...]}
 No other text.
 """
 
@@ -73,27 +80,23 @@ async def classify_intent(
     message: str,
     conversation_history: list[BaseMessage],
     biz_context: dict[str, Any],
-) -> str:
+) -> list[str]:
     """
-    Returns "booking", "faq", or "handoff".
+    Returns a list of intents: e.g. ["booking"], ["faq"], ["faq", "booking"], ["handoff"], or ["emergency"].
     Fast-path guardrail checks run before LLM to minimise latency.
     """
     guardrails = biz_context.get("guardrails") or {}
 
-    # ── Fast-path: emergency keywords → instant handoff (no LLM call) ─────────
     if _check_emergency_keywords(message, guardrails):
         logger.info("[Supervisor] Emergency keyword detected → emergency")
-        return "emergency"
-
+        return ["emergency"]
 
     if _check_handoff_topics(message, guardrails):
         logger.info("[Supervisor] Handoff topic detected → handoff")
-        return "handoff"
+        return ["handoff"]
 
-    # ── LLM-based intent classification ───────────────────────────────────────
     model = _get_chat_model(temperature=0.0)
 
-    # Include last 3 turns for context so "book it" after availability check routes correctly
     recent: list[BaseMessage] = conversation_history[-6:] if conversation_history else []
     classify_messages: list[BaseMessage] = [
         SystemMessage(content=_ROUTER_SYSTEM),
@@ -105,11 +108,22 @@ async def classify_intent(
         result = await model.ainvoke(classify_messages)
         content = result.content if isinstance(result.content, str) else str(result.content)
         parsed = json.loads(content.strip())
-        intent = parsed.get("intent", "faq")
-        if intent not in ("booking", "faq", "handoff"):
-            intent = "faq"
-        logger.info("[Supervisor] Classified intent: %s", intent)
-        return intent
+
+        raw_intents = parsed.get("intents")
+        if not raw_intents:
+            single = parsed.get("intent")
+            raw_intents = [single] if single else ["booking"]
+        elif isinstance(raw_intents, str):
+            raw_intents = [raw_intents]
+
+        valid_intents = [i for i in raw_intents if i in ("booking", "faq", "handoff")]
+        if not valid_intents:
+            valid_intents = ["booking"]
+
+        logger.info("[Supervisor] Classified intents: %s", valid_intents)
+        return valid_intents
     except Exception as e:
-        logger.warning("[Supervisor] Intent classification failed (%s) → defaulting to booking", e)
-        return "booking"
+        logger.warning(
+            "[Supervisor] Intent classification failed (%s) → defaulting to ['booking']", e
+        )
+        return ["booking"]

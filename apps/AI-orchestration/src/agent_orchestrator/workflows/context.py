@@ -1,11 +1,4 @@
-"""
-Business context loader with Redis caching.
-TTL: 5 minutes — short enough to reflect admin changes quickly,
-long enough to absorb burst chat traffic without hammering MongoDB.
-Cache is invalidated on scheduling.service.events / scheduling.resource.events
-via the existing SchedulingConsumer (scheduling_consumer.py already calls
-set_cached_draft on every service/resource upsert).
-"""
+
 from __future__ import annotations
 
 import json
@@ -25,17 +18,11 @@ invalidate_biz_context = delete_cached_biz_context
 
 
 
-# ── Loader ─────────────────────────────────────────────────────────────────────
+
 
 
 async def resolve_business_context(tenant_id: str, agent_id: str) -> dict[str, Any]:
-    """
-    Load business context for all sub-agents.
-    Cache-first: Redis → MongoDB AgentRuntimeConfig → AgentDraft fallback.
-    Returns a stable dict with keys:
-        business_name, timezone, currency, services, resources,
-        supervisor_prompt, guardrails, scheduling_engine, sub_agents
-    """
+   
     cached = await get_cached_biz_context(tenant_id, agent_id)
     if cached:
         return cached
@@ -95,7 +82,7 @@ async def _load_from_db(tenant_id: str, agent_id: str) -> dict[str, Any]:
                 "name": s.name,
             })
 
-    # ── AgentDraft fallback (when runtime not yet compiled) ────────────────────
+   
     if not runtime or not services or not biz_name:
         draft = await AgentDraft.find_one(query)
         if draft and draft.current_draft:

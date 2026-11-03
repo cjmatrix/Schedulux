@@ -1,3 +1,4 @@
+import type { ClientSession } from 'mongoose';
 import type { ITenantScheduleDoc } from '../../infrastructure/database/schemas/tenant-schedule.schema.js';
 
 export interface ITenantScheduleRepository {
@@ -5,5 +6,6 @@ export interface ITenantScheduleRepository {
 
   upsertSchedule(
     scheduleData: Partial<ITenantScheduleDoc> & { tenant_id: string; agent_id: string },
+    session?: ClientSession,
   ): Promise<ITenantScheduleDoc>;
 }

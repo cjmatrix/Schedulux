@@ -3,6 +3,7 @@ import type { BookingEntity } from '../../domain/entities/booking.entity.js';
 import type { ResourceEntity } from '../../domain/entities/resource.entity.js';
 import type { ServiceEntity } from '../../domain/entities/service.entity.js';
 import type { IOutboxDoc } from '../../infrastructure/database/schemas/outbox.schema.js';
+import type { ITenantScheduleDoc } from '../../infrastructure/database/schemas/tenant-schedule.schema.js';
 
 export interface ISchedulingEventsProducer {
   createServiceCreatedOutboxEvent(
@@ -48,6 +49,11 @@ export interface ISchedulingEventsProducer {
     entity: BookingEntity,
     previousStartTime: Date,
     previousEndTime: Date,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc>;
+
+  createScheduleUpdatedOutboxEvent(
+    doc: ITenantScheduleDoc,
     session?: ClientSession,
   ): Promise<IOutboxDoc>;
 

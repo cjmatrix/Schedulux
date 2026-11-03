@@ -20,6 +20,10 @@ export const RESPONSE_MESSAGES = {
     BATCH_SYNC_SUCCESS: 'Batch sync completed successfully',
     BATCH_SYNC_FAILED: 'Batch sync failed',
   },
+  SCHEDULE: {
+    RETRIEVED: 'Tenant schedule retrieved successfully',
+    UPDATED: 'Tenant schedule updated successfully',
+  },
   ERRORS: {
     INTERNAL_SERVER_ERROR: 'Internal server error',
     MICROSERVICE_ERROR: 'Microservice error',

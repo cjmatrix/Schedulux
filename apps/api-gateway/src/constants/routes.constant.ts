@@ -49,6 +49,7 @@ export const API_ROUTES = {
     BOOKING_CANCEL: 'bookings/:id/cancel',
     BOOKING_RESCHEDULE: 'bookings/:id/reschedule',
     AVAILABILITY: 'availability',
+    SCHEDULE: 'schedule',
   },
   PUBLIC_CHAT: {
     BASE: 'api/v1/public/chat',

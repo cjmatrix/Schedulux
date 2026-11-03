@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 
 from dotenv import load_dotenv
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
@@ -96,34 +96,34 @@ class CustomerGraphState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
     biz_context: dict[str, Any]
     all_tools: list[BaseTool]
-    intent: str  # "booking" | "faq" | "handoff" | "emergency"
+    intents: list[str]  # e.g. ["booking"], ["faq"], ["faq", "booking"], ["handoff"], ["emergency"]
+    booking_response: str | None
+    faq_response: str | None
+    handoff_response: str | None
     response: str
     error: str | None
 
 
-
-
-
 async def node_supervisor(state: CustomerGraphState) -> dict[str, Any]:
     """
-    Supervisor Node — Evaluates fast-path guardrails and classifies user intent.
-    Sets 'intent' in the graph state to trigger conditional edge routing.
+    Supervisor Node — Evaluates fast-path guardrails and classifies user intent(s).
+    Sets 'intents' in the graph state to trigger conditional edge fan-out routing.
     """
     message = state.get("message", "")
     history = state.get("messages", [])
     biz_context = state.get("biz_context", {})
 
-    intent = await classify_intent(
+    intents = await classify_intent(
         message=message,
         conversation_history=history,
         biz_context=biz_context,
     )
-    logger.info("[CustomerGraph:SupervisorNode] Classified intent -> '%s'", intent)
-    return {"intent": intent}
+    logger.info("[CustomerGraph:SupervisorNode] Classified intents -> %s", intents)
+    return {"intents": intents}
 
 
 async def node_booking_agent(state: CustomerGraphState) -> dict[str, Any]:
-   
+    
     logger.info("[CustomerGraph:BookingAgentNode] Executing booking specialist")
     response_text = await run_booking_agent(
         tenant_id=state["tenant_id"],
@@ -135,8 +135,7 @@ async def node_booking_agent(state: CustomerGraphState) -> dict[str, Any]:
         session_id=state.get("session_id", ""),
     )
     return {
-        "response": response_text,
-        "messages": [AIMessage(content=response_text)],
+        "booking_response": response_text,
     }
 
 
@@ -152,8 +151,7 @@ async def node_faq_agent(state: CustomerGraphState) -> dict[str, Any]:
         all_tools=state["all_tools"],
     )
     return {
-        "response": response_text,
-        "messages": [AIMessage(content=response_text)],
+        "faq_response": response_text,
     }
 
 
@@ -162,8 +160,8 @@ async def node_handoff_agent(state: CustomerGraphState) -> dict[str, Any]:
     Handoff / Escalation Guardrail Node — Delivers immediate deterministic human contact
     or emergency triage instructions. Zero LLM latency.
     """
-    intent = state.get("intent", "handoff")
-    is_emergency = intent == "emergency"
+    intents = state.get("intents") or ["handoff"]
+    is_emergency = "emergency" in intents
     logger.info(
         "[CustomerGraph:HandoffNode] Executing handoff guardrail (is_emergency=%s)",
         is_emergency,
@@ -174,54 +172,106 @@ async def node_handoff_agent(state: CustomerGraphState) -> dict[str, Any]:
         is_emergency=is_emergency,
     )
     return {
+        "handoff_response": response_text,
         "response": response_text,
         "messages": [AIMessage(content=response_text)],
     }
 
 
+async def node_synthesizer(state: CustomerGraphState) -> dict[str, Any]:
+    
+    booking_resp = state.get("booking_response")
+    faq_resp = state.get("faq_response")
+
+    if booking_resp and faq_resp:
+        logger.info("[CustomerGraph:SynthesizerNode] Merging compound FAQ + Booking responses")
+        model = _get_chat_model(temperature=0.2)
+        biz_name = state.get("biz_context", {}).get("business_name", "our business")
+        user_msg = state.get("message", "")
+
+        synth_system = f"""You are the AI Concierge for {biz_name}.
+A customer asked: "{user_msg}"
+
+Two specialist agents provided the following verified facts:
+[Policy / Knowledge Specialist Answer]:
+{faq_resp}
+
+[Booking & Availability Specialist Answer]:
+{booking_resp}
+
+Merge these two answers into a single, cohesive, seamless, warm, and natural response for the customer.
+- Answer their question thoroughly using the Knowledge answer.
+- Present their scheduling/availability options clearly using the Booking answer.
+- Do NOT hallucinate any new dates, times, prices, or policies not present in the specialist answers.
+- Speak in a single natural voice as the assistant for {biz_name}."""
+
+        try:
+            synth_result = await model.ainvoke([SystemMessage(content=synth_system)])
+            final_text = (
+                synth_result.content
+                if isinstance(synth_result.content, str)
+                else str(synth_result.content)
+            )
+        except Exception as e:
+            logger.error("[CustomerGraph:SynthesizerNode] Synthesis LLM error (%s) → fallback join", e)
+            final_text = f"{faq_resp}\n\n{booking_resp}"
+    elif booking_resp:
+        final_text = booking_resp
+    elif faq_resp:
+        final_text = faq_resp
+    else:
+        final_text = (
+            "I'm sorry, I could not complete your request. Please try again or ask our team."
+        )
+
+    return {
+        "response": final_text,
+        "messages": [AIMessage(content=final_text)],
+    }
 
 
 def route_supervisor_decision(
     state: CustomerGraphState,
-) -> Literal["booking_agent", "faq_agent", "handoff_agent"]:
-    intent = state.get("intent", "booking")
-    if intent in ("emergency", "handoff"):
-        return "handoff_agent"
-    elif intent == "faq":
-        return "faq_agent"
-    else:
-        return "booking_agent"
+) -> list[str]:
+    """
+    Dynamic Fan-Out Router:
+    Returns a list of target node names to execute based on classified intents.
+    Enables concurrent parallel execution of FAQ and Booking specialists.
+    """
+    intents = state.get("intents") or ["booking"]
+    if "emergency" in intents or "handoff" in intents:
+        return ["handoff_agent"]
 
+    targets: list[str] = []
+    if "faq" in intents:
+        targets.append("faq_agent")
+    if "booking" in intents:
+        targets.append("booking_agent")
 
-
+    return targets if targets else ["booking_agent"]
 
 
 def build_customer_orchestration_graph():
-  
+   
     builder = StateGraph(CustomerGraphState)
 
-    
     builder.add_node("supervisor", node_supervisor)
     builder.add_node("booking_agent", node_booking_agent)
     builder.add_node("faq_agent", node_faq_agent)
     builder.add_node("handoff_agent", node_handoff_agent)
+    builder.add_node("synthesizer", node_synthesizer)
 
-  
     builder.set_entry_point("supervisor")
 
-  
     builder.add_conditional_edges(
         "supervisor",
         route_supervisor_decision,
-        {
-            "booking_agent": "booking_agent",
-            "faq_agent": "faq_agent",
-            "handoff_agent": "handoff_agent",
-        },
+        ["booking_agent", "faq_agent", "handoff_agent"],
     )
 
-    builder.add_edge("booking_agent", END)
-    builder.add_edge("faq_agent", END)
+    builder.add_edge("booking_agent", "synthesizer")
+    builder.add_edge("faq_agent", "synthesizer")
+    builder.add_edge("synthesizer", END)
     builder.add_edge("handoff_agent", END)
 
     return builder.compile()
@@ -300,7 +350,10 @@ async def process_customer_chat(
         "messages": langchain_messages,
         "biz_context": biz_context,
         "all_tools": all_tools,
-        "intent": "",
+        "intents": [],
+        "booking_response": None,
+        "faq_response": None,
+        "handoff_response": None,
         "response": "",
         "error": None,
     }

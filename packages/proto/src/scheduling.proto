@@ -29,6 +29,10 @@ service SchedulingInventoryService {
 
   // Customer Operations
   rpc VerifyCustomer (VerifyCustomerRequest) returns (VerifyCustomerResponse);
+
+  // Tenant Schedule Settings
+  rpc GetTenantSchedule (GetTenantScheduleRequest) returns (TenantScheduleResponse);
+  rpc UpdateTenantSchedule (UpdateTenantScheduleRequest) returns (TenantScheduleResponse);
 }
 
 message PriceInfo {
@@ -458,6 +462,43 @@ message VerifyCustomerResponse {
   string message = 2;
   int32 updated_count = 3;
 }
+
+message TenantScheduleInfo {
+  string id = 1;
+  string tenant_id = 2;
+  string agent_id = 3;
+  string timezone = 4;
+  string currency = 5;
+  OperatingHoursInfo operating_hours = 6;
+  repeated BlackoutDateInfo blackout_dates = 7;
+  SchedulingEngineConfigInfo scheduling_engine = 8;
+  VerificationPolicyConfigInfo verification_policy = 9;
+  string created_at = 10;
+  string updated_at = 11;
+}
+
+message GetTenantScheduleRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+}
+
+message UpdateTenantScheduleRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+  optional string timezone = 3;
+  optional string currency = 4;
+  optional OperatingHoursInfo operating_hours = 5;
+  repeated BlackoutDateInfo blackout_dates = 6;
+  optional SchedulingEngineConfigInfo scheduling_engine = 7;
+  optional VerificationPolicyConfigInfo verification_policy = 8;
+}
+
+message TenantScheduleResponse {
+  bool success = 1;
+  string message = 2;
+  optional TenantScheduleInfo schedule = 3;
+}
+
 
 
 

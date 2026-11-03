@@ -25,6 +25,7 @@ const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
 const availability_dto_js_1 = require("./dtos/availability.dto.js");
 const booking_dto_js_1 = require("./dtos/booking.dto.js");
 const resource_dto_js_1 = require("./dtos/resource.dto.js");
+const schedule_dto_js_1 = require("./dtos/schedule.dto.js");
 const service_dto_js_1 = require("./dtos/service.dto.js");
 let SchedulingController = class SchedulingController {
     _client;
@@ -313,6 +314,34 @@ let SchedulingController = class SchedulingController {
             data: response,
         };
     }
+    async getTenantSchedule(req, query) {
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.getTenantSchedule({
+            tenant_id: tenantId,
+            agent_id: query.agent_id || '',
+        }));
+        return {
+            message: response.message,
+            data: response.schedule,
+        };
+    }
+    async updateTenantSchedule(req, body) {
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.updateTenantSchedule({
+            tenant_id: tenantId,
+            agent_id: body.agent_id,
+            timezone: body.timezone,
+            currency: body.currency,
+            operating_hours: body.operating_hours,
+            blackout_dates: body.blackout_dates || [],
+            scheduling_engine: body.scheduling_engine,
+            verification_policy: body.verification_policy,
+        }));
+        return {
+            message: response.message,
+            data: response.schedule,
+        };
+    }
 };
 exports.SchedulingController = SchedulingController;
 __decorate([
@@ -455,6 +484,24 @@ __decorate([
     __metadata("design:paramtypes", [Object, availability_dto_js_1.GetAvailabilityQueryDto]),
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "getAvailability", null);
+__decorate([
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.SCHEDULING.SCHEDULE),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, schedule_dto_js_1.GetTenantScheduleQueryDto]),
+    __metadata("design:returntype", Promise)
+], SchedulingController.prototype, "getTenantSchedule", null);
+__decorate([
+    (0, common_1.Put)(routes_constant_js_1.API_ROUTES.SCHEDULING.SCHEDULE),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, schedule_dto_js_1.UpdateTenantScheduleDto]),
+    __metadata("design:returntype", Promise)
+], SchedulingController.prototype, "updateTenantSchedule", null);
 exports.SchedulingController = SchedulingController = __decorate([
     (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.SCHEDULING.BASE),
     (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),

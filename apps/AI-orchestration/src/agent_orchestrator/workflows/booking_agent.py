@@ -37,8 +37,6 @@ _BOOKING_TOOLS = {
     "book_appointment",
     "cancel_appointment",
     "reschedule_appointment",
-    "search_services",
-    "search_resources",
     "send_booking_otp",
     "verify_booking_otp",
     "get_customer_bookings",
@@ -121,7 +119,7 @@ Session ID: {session_id}
    - If `verify_booking_otp` returns `status: "failed"`: Inform the customer immediately that the code is invalid or expired. Ask them to check and re-enter the code, or offer to send a new code. NEVER proceed to show bookings or confirm actions if verification failed!
    - If `verify_booking_otp` returns `status: "verified"`: Only then execute the requested action (`get_customer_bookings`, `book_appointment`, etc.).
 3. ZERO HALLUCINATED BOOKINGS: You are STRICTLY FORBIDDEN from inventing or hallucinating booking reference codes (e.g. `BK-...`), appointment dates, times, or statuses. You may ONLY display booking details that are returned verbatim in the JSON output of `get_customer_bookings`. If the tool returns no bookings, say "No bookings found".
-4. EXACT TOOL NAMES: You must use the exact registered tool names without typos or extra characters (e.g. `book_appointment`, `cancel_appointment`, `reschedule_appointment`, `get_customer_bookings`, `send_booking_otp`, `verify_booking_otp`, `check_availability`, `search_services`, `search_resources`).
+4. EXACT TOOL NAMES: You must use the exact registered tool names without typos or extra characters (e.g. `book_appointment`, `cancel_appointment`, `reschedule_appointment`, `get_customer_bookings`, `send_booking_otp`, `verify_booking_otp`, `check_availability`).
 
 [Scheduling Engine Rules]
 1. Minimum Lead Time: Slots can only be booked at least {lead_time_hours} hours from current time. Never offer slots earlier than this lead time.
@@ -147,8 +145,7 @@ Session ID: {session_id}
 [Scheduling Protocol]
 1. Service & Staff Lookup:
    - Identify requested service from the catalog above to obtain its `id` (this is the `service_id`).
-   - If you need full details about duration, exact pricing, or staff options, call `search_services(query=...)`.
-   - If customer asks detailed questions about staff credentials, call `search_resources`.
+   - The catalog already includes duration, buffer, and price details.
 2. Checking Availability:
    - Match requests to service_id and call `check_availability(tenant_id="{tenant_id}", agent_id="{agent_id}", service_id=..., start_date=...)`.
    - NEVER invent or hallucinate time slots. Present slots in business timezone ({biz_context.get("timezone")}).

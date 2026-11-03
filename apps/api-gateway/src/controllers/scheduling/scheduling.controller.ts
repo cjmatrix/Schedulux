@@ -40,6 +40,10 @@ import {
   ListResourcesQueryDto,
   UpdateResourceDto,
 } from './dtos/resource.dto.js';
+import {
+  GetTenantScheduleQueryDto,
+  UpdateTenantScheduleDto,
+} from './dtos/schedule.dto.js';
 import { CreateServiceDto, ListServicesQueryDto, UpdateServiceDto } from './dtos/service.dto.js';
 
 @Controller(API_ROUTES.SCHEDULING.BASE)
@@ -448,6 +452,52 @@ export class SchedulingController implements OnModuleInit {
     return {
       message: RESPONSE_MESSAGES.SCHEDULING.AVAILABILITY_FETCHED,
       data: response,
+    };
+  }
+
+  @Get(API_ROUTES.SCHEDULING.SCHEDULE)
+  @UsePipes(ZodValidationPipe)
+  async getTenantSchedule(
+    @Req() req: AuthenticatedTenantRequest,
+    @Query() query: GetTenantScheduleQueryDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const response = await lastValueFrom(
+      this._schedulingService.getTenantSchedule({
+        tenant_id: tenantId,
+        agent_id: query.agent_id || '',
+      }),
+    );
+
+    return {
+      message: response.message,
+      data: response.schedule,
+    };
+  }
+
+  @Put(API_ROUTES.SCHEDULING.SCHEDULE)
+  @UsePipes(ZodValidationPipe)
+  async updateTenantSchedule(
+    @Req() req: AuthenticatedTenantRequest,
+    @Body() body: UpdateTenantScheduleDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const response = await lastValueFrom(
+      this._schedulingService.updateTenantSchedule({
+        tenant_id: tenantId,
+        agent_id: body.agent_id,
+        timezone: body.timezone,
+        currency: body.currency,
+        operating_hours: body.operating_hours,
+        blackout_dates: body.blackout_dates || [],
+        scheduling_engine: body.scheduling_engine,
+        verification_policy: body.verification_policy,
+      }),
+    );
+
+    return {
+      message: response.message,
+      data: response.schedule,
     };
   }
 }

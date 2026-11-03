@@ -23,5 +23,7 @@ export const GRPC_METHODS = {
     GET_AVAILABILITY: 'GetAvailability',
     LIST_BOOKINGS: 'ListBookings',
     VERIFY_CUSTOMER: 'VerifyCustomer',
+    GET_TENANT_SCHEDULE: 'GetTenantSchedule',
+    UPDATE_TENANT_SCHEDULE: 'UpdateTenantSchedule',
   },
 } as const;

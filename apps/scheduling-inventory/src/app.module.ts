@@ -7,6 +7,7 @@ import { KafkaModule } from './infrastructure/messaging/kafka.module.js';
 import { BookingModule } from './modules/booking.module.js';
 import { InventoryModule } from './modules/inventory.module.js';
 import { ResourceModule } from './modules/resource.module.js';
+import { ScheduleModule } from './modules/schedule.module.js';
 import { ServiceModule } from './modules/service.module.js';
 import { SchedulingInventoryGrpcController } from './presentation/grpc/scheduling-inventory.grpc.controller.js';
 
@@ -37,6 +38,7 @@ const isProduction = process.env.NODE_ENV === 'production';
     }),
     RedisModule,
     KafkaModule,
+    ScheduleModule,
     ServiceModule,
     ResourceModule,
     InventoryModule,

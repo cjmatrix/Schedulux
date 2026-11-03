@@ -16,6 +16,7 @@ import {
   GetAvailabilityResponse,
   GetResourceRequest,
   GetServiceRequest,
+  GetTenantScheduleRequest,
   ListBookingsRequest,
   ListBookingsResponse,
   ListResourcesRequest,
@@ -25,8 +26,10 @@ import {
   RescheduleBookingRequest,
   ResourceResponse,
   ServiceResponse,
+  TenantScheduleResponse,
   UpdateResourceRequest,
   UpdateServiceRequest,
+  UpdateTenantScheduleRequest,
   VerifyCustomerRequest,
   VerifyCustomerResponse,
 } from '@repo/proto/scheduling';
@@ -61,6 +64,12 @@ import {
   UPDATE_RESOURCE_USE_CASE,
 } from '../../application/interfaces/resource-use-cases.interface.js';
 import {
+  GET_TENANT_SCHEDULE_USE_CASE,
+  IGetTenantScheduleUseCase,
+  IUpdateTenantScheduleUseCase,
+  UPDATE_TENANT_SCHEDULE_USE_CASE,
+} from '../../application/interfaces/schedule-use-cases.interface.js';
+import {
   CREATE_SERVICE_USE_CASE,
   DELETE_SERVICE_USE_CASE,
   GET_SERVICE_USE_CASE,
@@ -76,6 +85,7 @@ import { GRPC_METHODS, GRPC_SERVICES, RESPONSE_MESSAGES } from '../../constants/
 import { BookingMapper } from '../../infrastructure/database/mappers/booking.mapper.js';
 import { ResourceMapper } from '../../infrastructure/database/mappers/resource.mapper.js';
 import { ServiceMapper } from '../../infrastructure/database/mappers/service.mapper.js';
+import { TenantScheduleMapper } from '../../infrastructure/database/mappers/tenant-schedule.mapper.js';
 import { GrpcExceptionFilter } from './grpc-exception.filter.js';
 
 @Controller()
@@ -116,6 +126,10 @@ export class SchedulingInventoryGrpcController {
     private readonly _listBookingsUseCase: IListBookingsUseCase,
     @Inject(VERIFY_CUSTOMER_USE_CASE)
     private readonly _verifyCustomerUseCase: IVerifyCustomerUseCase,
+    @Inject(GET_TENANT_SCHEDULE_USE_CASE)
+    private readonly _getTenantScheduleUseCase: IGetTenantScheduleUseCase,
+    @Inject(UPDATE_TENANT_SCHEDULE_USE_CASE)
+    private readonly _updateTenantScheduleUseCase: IUpdateTenantScheduleUseCase,
   ) {}
 
   @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.CREATE_SERVICE)
@@ -293,5 +307,33 @@ export class SchedulingInventoryGrpcController {
   )
   async verifyCustomer(request: VerifyCustomerRequest): Promise<VerifyCustomerResponse> {
     return this._verifyCustomerUseCase.execute(request);
+  }
+
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.GET_TENANT_SCHEDULE,
+  )
+  async getTenantSchedule(request: GetTenantScheduleRequest): Promise<TenantScheduleResponse> {
+    const schedule = await this._getTenantScheduleUseCase.execute(request);
+    return {
+      success: true,
+      message: RESPONSE_MESSAGES.SCHEDULE.RETRIEVED,
+      schedule: TenantScheduleMapper.toProto(schedule),
+    };
+  }
+
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.UPDATE_TENANT_SCHEDULE,
+  )
+  async updateTenantSchedule(
+    request: UpdateTenantScheduleRequest,
+  ): Promise<TenantScheduleResponse> {
+    const schedule = await this._updateTenantScheduleUseCase.execute(request);
+    return {
+      success: true,
+      message: RESPONSE_MESSAGES.SCHEDULE.UPDATED,
+      schedule: TenantScheduleMapper.toProto(schedule),
+    };
   }
 }

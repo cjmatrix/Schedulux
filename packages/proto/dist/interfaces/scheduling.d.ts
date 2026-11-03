@@ -397,7 +397,7 @@ export interface TenantScheduleInfo {
 }
 export interface GetTenantScheduleRequest {
     tenant_id: string;
-    agent_id?: string | undefined;
+    agent_id: string;
 }
 export interface UpdateTenantScheduleRequest {
     tenant_id: string;
@@ -438,7 +438,7 @@ export interface SchedulingInventoryServiceClient {
     listBookings(request: ListBookingsRequest): Observable<ListBookingsResponse>;
     /** Customer Operations */
     verifyCustomer(request: VerifyCustomerRequest): Observable<VerifyCustomerResponse>;
-    /** Tenant Schedule Operations */
+    /** Tenant Schedule Settings */
     getTenantSchedule(request: GetTenantScheduleRequest): Observable<TenantScheduleResponse>;
     updateTenantSchedule(request: UpdateTenantScheduleRequest): Observable<TenantScheduleResponse>;
 }
@@ -465,7 +465,7 @@ export interface SchedulingInventoryServiceController {
     listBookings(request: ListBookingsRequest): Promise<ListBookingsResponse> | Observable<ListBookingsResponse> | ListBookingsResponse;
     /** Customer Operations */
     verifyCustomer(request: VerifyCustomerRequest): Promise<VerifyCustomerResponse> | Observable<VerifyCustomerResponse> | VerifyCustomerResponse;
-    /** Tenant Schedule Operations */
+    /** Tenant Schedule Settings */
     getTenantSchedule(request: GetTenantScheduleRequest): Promise<TenantScheduleResponse> | Observable<TenantScheduleResponse> | TenantScheduleResponse;
     updateTenantSchedule(request: UpdateTenantScheduleRequest): Promise<TenantScheduleResponse> | Observable<TenantScheduleResponse> | TenantScheduleResponse;
 }

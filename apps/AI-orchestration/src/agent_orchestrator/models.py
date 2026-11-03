@@ -287,7 +287,6 @@ class ServiceEmbed(TolerantBaseModel):
     deposit: DepositEmbed = Field(default_factory=DepositEmbed)
     verification: ServiceVerificationEmbed | None = None
     resource_requirements: list[ResourceRequirementEmbed] = Field(default_factory=list)
-    recall_interval_days: int | None = 0
     is_deleted: bool = False
     deleted_at: str | None = None
 
@@ -298,7 +297,7 @@ class ServiceEmbed(TolerantBaseModel):
             return "General"
         return str(v).strip()
 
-    @field_validator("recall_interval_days", "buffer_minutes", mode="before")
+    @field_validator("buffer_minutes", mode="before")
     @classmethod
     def parse_zero_ints(cls, v: object) -> int:
         if v is None:
@@ -321,8 +320,6 @@ class ServiceEmbed(TolerantBaseModel):
 
 class VerificationPolicyEmbed(TolerantBaseModel):
     require_otp_for_new_booking: bool = False
-    require_otp_for_reschedule: bool = True
-    require_otp_for_cancel: bool = True
 
 
 class PatientFieldEmbed(TolerantBaseModel):
@@ -545,7 +542,6 @@ class StrictServiceSchema(BaseModel):
     deposit: StrictDepositSchema | None = None
     verification: StrictServiceVerificationSchema | None = None
     resource_requirements: list[StrictResourceRequirementSchema] | None = None
-    recall_interval_days: int | None = None
     is_deleted: bool | None = None
     deleted_at: str | None = None
 
@@ -663,8 +659,6 @@ class StrictHumanHandoffSchema(BaseModel):
 class StrictVerificationPolicySchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     require_otp_for_new_booking: bool | None = None
-    require_otp_for_reschedule: bool | None = None
-    require_otp_for_cancel: bool | None = None
 
 
 class StrictGuardrailsSchema(BaseModel):
@@ -1017,7 +1011,9 @@ class CustomerConversation(Document):
     customer_id: str | None = None
     customer_name: str | None = None
     customer_phone: str | None = None
-    status: str = "active"  # "active", "completed", "abandoned"
+    status: str = "active"
+    is_verified: bool = False
+    verified_at: datetime | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -1118,3 +1114,5 @@ async def init_db(mongo_uri: str | None = None):
         ],
     )
     _db_initialized = True
+
+

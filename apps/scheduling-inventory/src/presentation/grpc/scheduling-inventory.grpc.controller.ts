@@ -27,6 +27,8 @@ import {
   ServiceResponse,
   UpdateResourceRequest,
   UpdateServiceRequest,
+  VerifyCustomerRequest,
+  VerifyCustomerResponse,
 } from '@repo/proto/scheduling';
 import {
   BATCH_SYNC_INVENTORY_USE_CASE,
@@ -41,8 +43,10 @@ import {
   IGetAvailabilityUseCase,
   IListBookingsUseCase,
   IRescheduleBookingUseCase,
+  IVerifyCustomerUseCase,
   LIST_BOOKINGS_USE_CASE,
   RESCHEDULE_BOOKING_USE_CASE,
+  VERIFY_CUSTOMER_USE_CASE,
 } from '../../application/interfaces/booking-use-cases.interface.js';
 import {
   CREATE_RESOURCE_USE_CASE,
@@ -110,6 +114,8 @@ export class SchedulingInventoryGrpcController {
     private readonly _getAvailabilityUseCase: IGetAvailabilityUseCase,
     @Inject(LIST_BOOKINGS_USE_CASE)
     private readonly _listBookingsUseCase: IListBookingsUseCase,
+    @Inject(VERIFY_CUSTOMER_USE_CASE)
+    private readonly _verifyCustomerUseCase: IVerifyCustomerUseCase,
   ) {}
 
   @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.CREATE_SERVICE)
@@ -279,5 +285,13 @@ export class SchedulingInventoryGrpcController {
       page: result.page,
       limit: result.limit,
     };
+  }
+
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.VERIFY_CUSTOMER,
+  )
+  async verifyCustomer(request: VerifyCustomerRequest): Promise<VerifyCustomerResponse> {
+    return this._verifyCustomerUseCase.execute(request);
   }
 }

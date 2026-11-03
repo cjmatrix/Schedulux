@@ -63,11 +63,6 @@ export const ServicesCatalogCard: React.FC<ServicesCatalogCardProps> = ({
                         <span className="bg-slate-100 text-slate-600 text-[10px] font-semibold px-2 py-0.5 rounded-md">
                           {srv.category || 'General'}
                         </span>
-                        {(srv.recall_interval_days ?? 0) > 0 && (
-                          <span className="text-[10px] text-slate-400 font-mono">
-                            {srv.recall_interval_days}d recall
-                          </span>
-                        )}
                       </div>
                     </div>
                   </td>

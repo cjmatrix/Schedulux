@@ -62,7 +62,6 @@ export class CreateServiceUseCase implements ICreateServiceUseCase {
           (r.selection_mode as 'user_selectable' | 'auto_assign') ||
           (r.resource_type === 'staff' ? 'user_selectable' : 'auto_assign'),
       })),
-      recallIntervalDays: dto.recall_interval_days || 0,
     });
 
     const { created, outbox } = await this._unitOfWork.withTransaction(async () => {

@@ -105,7 +105,6 @@ class StrictServiceSchema(BaseModel):
     deposit: Optional[StrictDepositSchema] = None
     verification: Optional[StrictServiceVerificationSchema] = None
     resource_requirements: Optional[list[StrictResourceRequirementSchema]] = None
-    recall_interval_days: Optional[int] = None
 
 class StrictResourceSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -194,8 +193,6 @@ class StrictHumanHandoffSchema(BaseModel):
 class StrictVerificationPolicySchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
     require_otp_for_new_booking: Optional[bool] = None
-    require_otp_for_reschedule: Optional[bool] = None
-    require_otp_for_cancel: Optional[bool] = None
 
 class StrictGuardrailsSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")

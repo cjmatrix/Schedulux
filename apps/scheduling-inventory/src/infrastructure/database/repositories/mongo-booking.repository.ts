@@ -208,6 +208,13 @@ export class MongoBookingRepository implements IBookingRepository {
     if (filter.status) {
       query.status = filter.status;
     }
+    if (filter.customerPhone?.trim()) {
+      const phone = filter.customerPhone.trim();
+      const last10 = phone.length >= 10 ? phone.slice(-10) : phone;
+      query['customer_snapshot.phone'] = {
+        $in: [phone, `+91${last10}`, last10],
+      };
+    }
     if (filter.startDate || filter.endDate) {
       const timeFilter: Record<string, unknown> = {};
       if (filter.startDate) timeFilter.$gte = filter.startDate;

@@ -30,6 +30,9 @@ function SchedulingInventoryServiceControllerMethods() {
             "rescheduleBooking",
             "getAvailability",
             "listBookings",
+            "verifyCustomer",
+            "getTenantSchedule",
+            "updateTenantSchedule",
         ];
         for (const method of grpcMethods) {
             const descriptor = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

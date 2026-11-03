@@ -148,9 +148,7 @@ export default function AgentOnboardingWizard() {
 
   const guardrails = draftSchema?.guardrails || {};
   const requireOtp = Boolean(
-    guardrails?.verification_policy?.require_otp_for_reschedule ??
-      guardrails?.verification_policy?.require_otp_for_new_booking ??
-      false,
+    guardrails?.verification_policy?.require_otp_for_new_booking ?? false,
   );
   const phiScrubbing = Boolean(guardrails?.phi_scrubbing?.enabled);
   const emergencyTriage = Boolean(guardrails?.triage_emergency?.enabled);

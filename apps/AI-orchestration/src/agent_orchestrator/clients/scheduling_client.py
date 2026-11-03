@@ -85,7 +85,6 @@ def build_embedded_services(raw_services: list[dict[str, Any]]) -> list[ServiceE
                     )
                     for req in (svc.get("resource_requirements") or [])
                 ],
-                recall_interval_days=int(svc.get("recall_interval_days") or 0),
             )
         )
     return services_list
@@ -200,7 +199,6 @@ async def sync_agent_inventory(
                         )
                         for req in (svc.get("resource_requirements") or [])
                     ],
-                    recall_interval_days=int(svc.get("recall_interval_days") or 0),
                     is_deleted=bool(svc.get("is_deleted", False)),
                     deleted_at=str(svc.get("deleted_at")) if svc.get("deleted_at") else None,
                 )
@@ -259,8 +257,6 @@ async def sync_agent_inventory(
             require_otp_for_new_booking=bool(
                 verif_pol_raw.get("require_otp_for_new_booking", False)
             ),
-            require_otp_for_reschedule=bool(verif_pol_raw.get("require_otp_for_reschedule", True)),
-            require_otp_for_cancel=bool(verif_pol_raw.get("require_otp_for_cancel", True)),
         )
 
         batch_request = scheduling_pb2.BatchSyncInventoryRequest(
@@ -589,3 +585,108 @@ async def reschedule_booking(
     except Exception as e:
         logger.error("[SchedulingClient Error] Unexpected RescheduleBooking error: %s", e)
         return {"success": False, "error": str(e)}
+
+
+async def list_bookings(
+    tenant_id: str,
+    agent_id: str | None = None,
+    service_id: str | None = None,
+    resource_id: str | None = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    search: str | None = None,
+    customer_phone: str | None = None,
+    page: int = 1,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Query bookings from scheduling-inventory service via gRPC."""
+    target_url = SCHEDULING_SERVICE_URL
+    req = scheduling_pb2.ListBookingsRequest(
+        tenant_id=tenant_id.strip(),
+        agent_id=agent_id.strip() if agent_id else None,
+        service_id=service_id.strip() if service_id else None,
+        resource_id=resource_id.strip() if resource_id else None,
+        status=status.strip() if status else None,
+        start_date=start_date.strip() if start_date else None,
+        end_date=end_date.strip() if end_date else None,
+        search=search.strip() if search else None,
+        customer_phone=customer_phone.strip() if customer_phone else None,
+        page=page,
+        limit=limit,
+    )
+    try:
+        async with grpc.aio.insecure_channel(target_url) as channel:
+            stub = scheduling_pb2_grpc.SchedulingInventoryServiceStub(channel)
+            resp: scheduling_pb2.ListBookingsResponse = await stub.ListBookings(
+                req, timeout=GRPC_TIMEOUT_SECONDS
+            )
+
+        items = []
+        for bk in resp.bookings:
+            c_name = bk.customer.name if bk.HasField("customer") else ""
+            c_phone = bk.customer.phone if bk.HasField("customer") else ""
+            c_email = bk.customer.email if (bk.HasField("customer") and bk.customer.email) else None
+            items.append(
+                {
+                    "booking_id": bk.booking_id,
+                    "booking_reference": bk.booking_reference,
+                    "tenant_id": bk.tenant_id,
+                    "agent_id": bk.agent_id,
+                    "service_id": bk.service_id,
+                    "resource_id": bk.resource_id if bk.resource_id else None,
+                    "start_time": bk.start_time,
+                    "end_time": bk.end_time,
+                    "customer_name": c_name,
+                    "customer_phone": c_phone,
+                    "customer_email": c_email,
+                    "status": bk.status,
+                }
+            )
+
+        return {
+            "success": True,
+            "bookings": items,
+            "total": resp.total,
+            "page": resp.page,
+            "limit": resp.limit,
+        }
+    except grpc.RpcError as rpc_err:
+        err_msg = f"gRPC error ({rpc_err.code()}): {rpc_err.details()}"
+        logger.error("[SchedulingClient Error] Failed ListBookings: %s", err_msg)
+        return {"success": False, "error": err_msg, "bookings": [], "total": 0}
+    except Exception as e:
+        logger.error("[SchedulingClient Error] Unexpected ListBookings error: %s", e)
+        return {"success": False, "error": str(e), "bookings": [], "total": 0}
+
+
+async def verify_customer(
+    tenant_id: str,
+    customer_phone: str,
+) -> dict[str, Any]:
+    """Mark a customer as verified (is_guest: false) in scheduling-inventory service via gRPC."""
+    target_url = SCHEDULING_SERVICE_URL
+    req = scheduling_pb2.VerifyCustomerRequest(
+        tenant_id=tenant_id.strip(),
+        customer_phone=customer_phone.strip(),
+    )
+    try:
+        async with grpc.aio.insecure_channel(target_url) as channel:
+            stub = scheduling_pb2_grpc.SchedulingInventoryServiceStub(channel)
+            resp: scheduling_pb2.VerifyCustomerResponse = await stub.VerifyCustomer(
+                req, timeout=GRPC_TIMEOUT_SECONDS
+            )
+        return {
+            "success": resp.success,
+            "message": resp.message,
+            "updated_count": resp.updated_count,
+        }
+    except grpc.RpcError as rpc_err:
+        err_msg = f"gRPC error ({rpc_err.code()}): {rpc_err.details()}"
+        logger.error("[SchedulingClient Error] Failed VerifyCustomer: %s", err_msg)
+        return {"success": False, "error": err_msg, "updated_count": 0}
+    except Exception as e:
+        logger.error("[SchedulingClient Error] Unexpected VerifyCustomer error: %s", e)
+        return {"success": False, "error": str(e), "updated_count": 0}
+
+

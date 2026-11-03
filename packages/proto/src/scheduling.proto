@@ -26,6 +26,9 @@ service SchedulingInventoryService {
   rpc RescheduleBooking (RescheduleBookingRequest) returns (BookingResponse);
   rpc GetAvailability (GetAvailabilityRequest) returns (GetAvailabilityResponse);
   rpc ListBookings (ListBookingsRequest) returns (ListBookingsResponse);
+
+  // Customer Operations
+  rpc VerifyCustomer (VerifyCustomerRequest) returns (VerifyCustomerResponse);
 }
 
 message PriceInfo {
@@ -66,7 +69,6 @@ message ServiceInfo {
   int32 buffer_minutes = 7;
   PriceInfo price = 9;
   DepositInfo deposit = 10;
-  int32 recall_interval_days = 13;
   string created_at = 14;
   string updated_at = 15;
   string booking_mode = 16;
@@ -86,7 +88,6 @@ message CreateServiceRequest {
   int32 buffer_minutes = 6;
   PriceInfo price = 8;
   DepositInfo deposit = 9;
-  int32 recall_interval_days = 12;
   optional string booking_mode = 13;
   string agent_id = 14;
   optional string service_id = 15;
@@ -135,7 +136,6 @@ message UpdateServiceRequest {
   optional int32 buffer_minutes = 7;
   PriceInfo price = 9;
   DepositInfo deposit = 10;
-  optional int32 recall_interval_days = 13;
   optional string booking_mode = 14;
   optional string agent_id = 15;
   optional ServiceVerificationInfo verification = 16;
@@ -286,8 +286,6 @@ message SchedulingEngineConfigInfo {
 
 message VerificationPolicyConfigInfo {
   bool require_otp_for_new_booking = 1;
-  bool require_otp_for_reschedule = 2;
-  bool require_otp_for_cancel = 3;
 }
 
 message BatchSyncInventoryRequest {
@@ -396,6 +394,7 @@ message ListBookingsRequest {
   optional string start_date = 8;
   optional string end_date = 9;
   optional string search = 10;
+  optional string customer_phone = 11;
 }
 
 message ListBookingsResponse {
@@ -447,6 +446,17 @@ message GetAvailabilityResponse {
   repeated DayAvailabilityInfo days = 4;
   repeated ResourceAvailabilityInfo resources = 5;
   repeated string blocked_dates = 6;
+}
+
+message VerifyCustomerRequest {
+  string tenant_id = 1;
+  string customer_phone = 2;
+}
+
+message VerifyCustomerResponse {
+  bool success = 1;
+  string message = 2;
+  int32 updated_count = 3;
 }
 
 

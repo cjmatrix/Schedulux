@@ -59,7 +59,6 @@ let SchedulingController = class SchedulingController {
                 ? { require_otp: body.verification.require_otp ?? undefined }
                 : undefined,
             resource_requirements: body.resource_requirements ?? [],
-            recall_interval_days: body.recall_interval_days,
         }));
         return {
             message: response.message,
@@ -115,7 +114,6 @@ let SchedulingController = class SchedulingController {
                 ? { require_otp: body.verification.require_otp ?? undefined }
                 : undefined,
             resource_requirements: body.resource_requirements ?? [],
-            recall_interval_days: body.recall_interval_days,
         }));
         return {
             message: response.message,

@@ -1,6 +1,4 @@
-from agent_orchestrator.adapters.orchestrator_adapter import LangGraphAgentOrchestrator
 
-# Backwards compatibility imports (deprecated: import from agent_orchestrator.queues / .adapters instead)
 from agent_orchestrator.queues.crawler_queue import BullMQCrawlerQueue, RabbitMQCrawlerQueue
 from agent_orchestrator.queues.memory_queue import BullMQMemoryQueue, RabbitMQMemoryQueue
 from agent_orchestrator.repositories.customer_message_repository import CustomerMessageRepository
@@ -16,11 +14,9 @@ __all__ = [
     "MongoMessageRepository",
     "MongoDraftRepository",
     "MongoRuntimeConfigRepository",
-    "RedisCacheRepository",
     # Deprecated aliases
     "RabbitMQCrawlerQueue",
     "BullMQCrawlerQueue",
     "RabbitMQMemoryQueue",
     "BullMQMemoryQueue",
-    "LangGraphAgentOrchestrator",
 ]

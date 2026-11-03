@@ -10,6 +10,7 @@ export interface FindBookingsFilter {
   startDate?: Date;
   endDate?: Date;
   search?: string;
+  customerPhone?: string;
 }
 
 export interface IBookingRepository {

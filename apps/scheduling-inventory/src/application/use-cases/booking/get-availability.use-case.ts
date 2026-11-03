@@ -109,6 +109,13 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
       endDateStr = endObj.format('YYYY-MM-DD');
     }
 
+    const maxAdvanceDays = tenantSchedule?.scheduling_engine?.max_advance_booking_days ?? 60;
+    const maxBookingDate = dayjs().tz(timezone).add(maxAdvanceDays, 'day').endOf('day');
+    if (endObj.isAfter(maxBookingDate)) {
+      endObj = maxBookingDate;
+      endDateStr = endObj.format('YYYY-MM-DD');
+    }
+
     const totalStartDate = startObj.startOf('day').toDate();
     const totalEndDate = endObj.endOf('day').toDate();
 
@@ -249,7 +256,9 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
             const slotStartDate = slotStart.toDate();
             const effectiveEndDate = effectiveEnd.toDate();
 
-            const isSlotPast = slotStartDate.getTime() < Date.now();
+            const leadTimeHours = tenantSchedule?.scheduling_engine?.default_lead_time_hours ?? 2;
+            const minSlotTime = Date.now() + leadTimeHours * 3600 * 1000;
+            const isSlotPast = slotStartDate.getTime() < minSlotTime;
 
             const busyResourceIds = getBusyResourceIdsInMemory(
               slotStartDate,

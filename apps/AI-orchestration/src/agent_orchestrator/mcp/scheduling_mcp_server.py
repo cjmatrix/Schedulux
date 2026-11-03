@@ -1,21 +1,85 @@
-from __future__ import annotations
-
+import asyncio
+from datetime import datetime, timezone
 import json
 import logging
+import os
+import secrets
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from langchain_core.tools import BaseTool, StructuredTool
 from mcp.server.fastmcp import FastMCP
 
+from agent_orchestrator.clients.redis_client import (
+    get_session_auth,
+    is_session_verified,
+    set_session_auth,
+    store_otp,
+    verify_otp_code,
+)
 from agent_orchestrator.clients.scheduling_client import (
     cancel_booking,
     create_booking,
     get_availability,
+    list_bookings,
     reschedule_booking,
+    verify_customer,
 )
 from agent_orchestrator.models import AgentDraft, AgentRuntimeConfig
+from agent_orchestrator.queues.sms_queue import get_sms_queue
+from agent_orchestrator.repositories.customer_message_repository import CustomerMessageRepository
 
 logger = logging.getLogger(__name__)
+
+
+_TZ_ALIASES: dict[str, str] = {
+    "kolkata": "Asia/Kolkata",
+    "calcutta": "Asia/Kolkata",
+    "ist": "Asia/Kolkata",
+    "utc": "UTC",
+    "gmt": "GMT",
+    "est": "America/New_York",
+    "edt": "America/New_York",
+    "cst": "America/Chicago",
+    "cdt": "America/Chicago",
+    "mst": "America/Denver",
+    "mdt": "America/Denver",
+    "pst": "America/Los_Angeles",
+    "pdt": "America/Los_Angeles",
+    "london": "Europe/London",
+    "dubai": "Asia/Dubai",
+    "singapore": "Asia/Singapore",
+}
+
+
+def _resolve_zoneinfo(tz_name: str | None) -> ZoneInfo:
+    if not tz_name:
+        return ZoneInfo("UTC")
+    cleaned = tz_name.strip()
+    try:
+        return ZoneInfo(cleaned)
+    except Exception:
+        canonical = _TZ_ALIASES.get(cleaned.lower())
+        if canonical:
+            try:
+                return ZoneInfo(canonical)
+            except Exception:
+                pass
+    return ZoneInfo("UTC")
+
+
+def _format_local_datetime(iso_str: str | None, tz_name: str | None) -> str:
+    """Convert UTC ISO timestamp (e.g. 2026-11-03T09:30:00.000Z) to formatted local time string."""
+    if not iso_str:
+        return ""
+    try:
+        clean_iso = iso_str.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(clean_iso)
+        target_tz = _resolve_zoneinfo(tz_name)
+        local_dt = dt.astimezone(target_tz)
+        return local_dt.strftime("%d %b %Y, %I:%M %p %Z").strip()
+    except Exception:
+        return iso_str
 
 
 mcp = FastMCP("schedulux-scheduling-service")
@@ -101,6 +165,81 @@ async def check_availability(
 
 
 @mcp.tool()
+async def send_booking_otp(
+    tenant_id: str,
+    agent_id: str,
+    phone: str,
+) -> str:
+ 
+    cleaned_phone = phone.strip()
+    if not cleaned_phone:
+        return json.dumps({"status": "failed", "message": "Valid phone number is required."})
+
+   
+    code = f"{secrets.randbelow(900000) + 100000}"
+    await store_otp(cleaned_phone, code, ttl=300)
+
+    await get_sms_queue().enqueue_otp_sms(
+        phone=cleaned_phone,
+        code=code,
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+    )
+
+    logger.info("[MCP Tool send_booking_otp] Enqueued OTP for %s for agent %s", cleaned_phone, agent_id)
+    return json.dumps({
+        "status": "sent",
+        "phone": cleaned_phone,
+        "message": f"Verification code sent to {cleaned_phone}. Please ask customer to provide the 6-digit code.",
+    })
+
+
+@mcp.tool()
+async def verify_booking_otp(
+    session_id: str,
+    phone: str,
+    code: str,
+    tenant_id: str | None = None,
+) -> str:
+    """Verify customer's 6-digit OTP code and authenticate their chat session.
+
+    Args:
+        session_id: Active customer chat session ID.
+        phone: Customer mobile phone number.
+        code: 6-digit code provided by customer.
+        tenant_id: Optional business / tenant ID.
+    """
+    cleaned_phone = phone.strip()
+    cleaned_code = code.strip()
+
+    valid = await verify_otp_code(cleaned_phone, cleaned_code)
+    if not valid:
+        return json.dumps({
+            "status": "failed",
+            "message": "Invalid or expired verification code. Please check and try again.",
+        })
+
+    await set_session_auth(session_id=session_id, phone=cleaned_phone, ttl=86400)
+
+    repo = CustomerMessageRepository()
+    await repo.mark_conversation_verified(session_id=session_id, customer_phone=cleaned_phone)
+
+    
+    try:
+        await verify_customer(tenant_id=tenant_id or "", customer_phone=cleaned_phone)
+        logger.info("[MCP Tool verify_booking_otp] Synced is_guest: false via gRPC for %s", cleaned_phone)
+    except Exception as e:
+        logger.warning("[MCP Tool verify_booking_otp] Could not sync customer verification via gRPC: %s", e)
+
+    logger.info("[MCP Tool verify_booking_otp] Session %s verified for phone %s", session_id, cleaned_phone)
+    return json.dumps({
+        "status": "verified",
+        "phone": cleaned_phone,
+        "message": f"Phone number {cleaned_phone} successfully verified! Session is now authenticated.",
+    })
+
+
+@mcp.tool()
 async def book_appointment(
     tenant_id: str,
     agent_id: str,
@@ -112,6 +251,7 @@ async def book_appointment(
     end_time: str | None = None,
     resource_id: str | None = None,
     notes: str | None = None,
+    session_id: str | None = None,
 ) -> str:
     """Create and confirm an appointment booking for a customer.
 
@@ -132,6 +272,7 @@ async def book_appointment(
         end_time: Optional appointment end time (required for date_range bookings).
         resource_id: Optional specific staff or resource ID requested.
         notes: Optional customer requests or notes.
+        session_id: Optional active chat session ID for session verification check.
 
     Returns:
         JSON string containing the booking confirmation, booking reference code, and status.
@@ -144,6 +285,38 @@ async def book_appointment(
         customer_phone,
         start_time,
     )
+
+    runtime = await AgentRuntimeConfig.find_one({"tenant_id": tenant_id})
+    service_doc = next((s for s in (runtime.services if runtime else []) if s.service_id == service_id), None)
+
+    service_otp_override = (
+        service_doc.verification.require_otp
+        if (service_doc and service_doc.verification and service_doc.verification.require_otp is not None)
+        else None
+    )
+    deposit_required = bool(service_doc and service_doc.deposit and service_doc.deposit.required)
+    global_otp = bool(
+        runtime
+        and runtime.guardrails
+        and runtime.guardrails.verification_policy
+        and runtime.guardrails.verification_policy.require_otp_for_new_booking
+    )
+
+    requires_otp = service_otp_override if service_otp_override is not None else (deposit_required or global_otp)
+
+    if requires_otp:
+        is_verified = await is_session_verified(session_id, customer_phone) if session_id else False
+        if not is_verified:
+            return json.dumps({
+                "status": "requires_verification",
+                "phone": customer_phone,
+                "message": (
+                    f"Phone verification is required to confirm this booking for {customer_phone}. "
+                    "Inform the customer that a 6-digit verification code is being sent to their phone, "
+                    "and call send_booking_otp followed by verify_booking_otp."
+                ),
+            })
+
     result = await create_booking(
         tenant_id=tenant_id,
         service_id=service_id,
@@ -167,14 +340,41 @@ async def book_appointment(
         )
 
     bk = result.get("booking", {})
+    customer_id = bk.get("customer_id")
+
+    if session_id:
+        await set_session_auth(
+            session_id=session_id,
+            phone=customer_phone,
+            customer_id=customer_id,
+            customer_name=customer_name,
+        )
+        await CustomerMessageRepository().update_conversation_customer(
+            session_id=session_id,
+            customer_id=customer_id,
+            customer_name=customer_name,
+            customer_phone=customer_phone,
+        )
+
+    tz_str = (
+        runtime.business_profile.timezone
+        if (runtime and runtime.business_profile and runtime.business_profile.timezone)
+        else "UTC"
+    )
+    start_utc = bk.get("start_time")
+    end_utc = bk.get("end_time")
+
     return json.dumps(
         {
             "status": "confirmed",
             "message": "Appointment successfully confirmed!",
             "booking_id": bk.get("booking_id"),
             "booking_reference": bk.get("booking_reference"),
-            "start_time": bk.get("start_time"),
-            "end_time": bk.get("end_time"),
+            "start_time_utc": start_utc,
+            "end_time_utc": end_utc,
+            "start_time_local": _format_local_datetime(start_utc, tz_str),
+            "end_time_local": _format_local_datetime(end_utc, tz_str),
+            "timezone": tz_str,
             "deposit_status": bk.get("deposit_status"),
             "price": bk.get("price"),
         },
@@ -187,14 +387,20 @@ async def cancel_appointment(
     tenant_id: str,
     agent_id: str,
     booking_id: str,
+    session_id: str | None = None,
+    customer_phone: str | None = None,
     reason: str | None = None,
 ) -> str:
     """Cancel an existing confirmed booking or appointment.
+
+    Requires mandatory phone verification via OTP to prevent unauthorized cancellations.
 
     Args:
         tenant_id: The tenant identifier.
         agent_id: The specific agent ID responsible for the scheduling flow.
         booking_id: The booking ID (bk_...) or booking reference (BK-...).
+        session_id: Optional active chat session ID for verification status.
+        customer_phone: Customer phone number for OTP verification.
         reason: Optional reason for the cancellation.
     """
     logger.info(
@@ -204,6 +410,25 @@ async def cancel_appointment(
         booking_id,
         reason,
     )
+
+    is_verified = await is_session_verified(session_id, customer_phone) if session_id else False
+
+    if not is_verified:
+        if customer_phone:
+            return json.dumps({
+                "status": "requires_verification",
+                "phone": customer_phone,
+                "message": (
+                    f"For security, cancellation strictly requires phone verification for {customer_phone}. "
+                    "Inform the customer that a 6-digit verification code is being sent to their phone, "
+                    "and call send_booking_otp followed by verify_booking_otp."
+                ),
+            })
+        return json.dumps({
+            "status": "requires_verification",
+            "message": "Cancellation strictly requires phone verification. Please provide your phone number so we can text you a 6-digit verification code.",
+        })
+
     result = await cancel_booking(
         tenant_id=tenant_id,
         agent_id=agent_id,
@@ -238,9 +463,13 @@ async def reschedule_appointment(
     new_start_time: str,
     new_end_time: str | None = None,
     resource_id: str | None = None,
+    session_id: str | None = None,
+    customer_phone: str | None = None,
     notes: str | None = None,
 ) -> str:
     """Reschedule an existing booking to a new date and time.
+
+    Requires mandatory phone verification via OTP to prevent unauthorized modifications.
 
     Args:
         tenant_id: The tenant identifier.
@@ -249,6 +478,8 @@ async def reschedule_appointment(
         new_start_time: New ISO-8601 start time (e.g. 2026-10-30T14:00:00Z).
         new_end_time: Optional new ISO-8601 end time.
         resource_id: Optional specific staff/resource ID for the new slot.
+        session_id: Optional active chat session ID for verification status.
+        customer_phone: Customer phone number for OTP verification.
         notes: Optional rescheduling notes.
     """
     logger.info(
@@ -258,6 +489,24 @@ async def reschedule_appointment(
         booking_id,
         new_start_time,
     )
+
+    is_verified = await is_session_verified(session_id, customer_phone) if session_id else False
+
+    if not is_verified:
+        if customer_phone:
+            return json.dumps({
+                "status": "requires_verification",
+                "phone": customer_phone,
+                "message": (
+                    f"For security, rescheduling strictly requires phone verification for {customer_phone}. "
+                    "Inform the customer that a 6-digit verification code is being sent to their phone, "
+                    "and call send_booking_otp followed by verify_booking_otp."
+                ),
+            })
+        return json.dumps({
+            "status": "requires_verification",
+            "message": "Rescheduling strictly requires phone verification. Please provide your phone number so we can text you a 6-digit verification code.",
+        })
     result = await reschedule_booking(
         tenant_id=tenant_id,
         agent_id=agent_id,
@@ -276,14 +525,139 @@ async def reschedule_appointment(
         )
 
     bk = result.get("booking", {})
+    runtime = await AgentRuntimeConfig.find_one({"tenant_id": tenant_id})
+    tz_str = (
+        runtime.business_profile.timezone
+        if (runtime and runtime.business_profile and runtime.business_profile.timezone)
+        else "UTC"
+    )
+    start_utc = bk.get("start_time")
+    end_utc = bk.get("end_time")
+
     return json.dumps(
         {
             "status": "rescheduled",
             "message": "Appointment successfully rescheduled!",
             "booking_id": bk.get("booking_id"),
             "booking_reference": bk.get("booking_reference"),
-            "new_start_time": bk.get("start_time"),
-            "new_end_time": bk.get("end_time"),
+            "new_start_time_utc": start_utc,
+            "new_end_time_utc": end_utc,
+            "new_start_time_local": _format_local_datetime(start_utc, tz_str),
+            "new_end_time_local": _format_local_datetime(end_utc, tz_str),
+            "timezone": tz_str,
+        },
+        indent=2,
+    )
+
+
+@mcp.tool()
+async def get_customer_bookings(
+    session_id: str,
+    phone: str,
+    tenant_id: str,
+    agent_id: str | None = None,
+    status: str | None = None,
+    limit: int = 20,
+) -> str:
+    """Retrieve the recent booking records and history (up to 20) for a customer.
+
+    CRITICAL SECURITY PROTOCOL:
+    Before returning private customer appointment records, the customer's phone number MUST
+    be verified via OTP in the active chat session (Layer 2 Deterministic Check).
+    If the session is not verified, this tool returns 'requires_verification'. You MUST
+    then call send_booking_otp and verify_booking_otp with the customer before retrying.
+
+    Args:
+        session_id: Active customer chat session ID.
+        phone: Customer mobile phone number (E.164 or 10-digit).
+        tenant_id: The business / tenant ID.
+        agent_id: Optional agent ID.
+        status: Optional filter by booking status (e.g. 'confirmed', 'pending', 'cancelled').
+        limit: Max number of bookings to return (default 20, max 20).
+
+    Returns:
+        JSON string containing the list of recent bookings.
+    """
+    cleaned_phone = phone.strip()
+    if not cleaned_phone:
+        return json.dumps({
+            "status": "failed",
+            "message": "Valid customer phone number is required to look up bookings.",
+        })
+
+    
+    verified = await is_session_verified(session_id, cleaned_phone)
+    if not verified:
+        logger.warning(
+            "[MCP Security Gatekeeper] Blocked unauthorized booking lookup for session=%s, phone=%s",
+            session_id,
+            cleaned_phone,
+        )
+        return json.dumps({
+            "status": "requires_verification",
+            "phone": cleaned_phone,
+            "message": (
+                f"Customer phone number {cleaned_phone} has not been verified for this session. "
+                "For privacy and security, inform the customer that an OTP verification is required "
+                "before showing their booking details. Call send_booking_otp to send a verification code."
+            ),
+        })
+
+    clamped_limit = min(20, max(1, limit))
+
+    result = await list_bookings(
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        customer_phone=cleaned_phone,
+        status=status,
+        page=1,
+        limit=clamped_limit,
+    )
+
+    if not result.get("success"):
+        return json.dumps({
+            "status": "failed",
+            "error": result.get("error", "Failed to retrieve customer bookings"),
+        })
+
+    raw_bookings = result.get("bookings", [])
+    last10 = cleaned_phone[-10:] if len(cleaned_phone) >= 10 else cleaned_phone
+    matched = [
+        bk for bk in raw_bookings
+        if not bk.get("customer_phone") or last10 in bk.get("customer_phone", "")
+    ]
+
+    runtime = await AgentRuntimeConfig.find_one({"tenant_id": tenant_id})
+    tz_str = (
+        runtime.business_profile.timezone
+        if (runtime and runtime.business_profile and runtime.business_profile.timezone)
+        else "UTC"
+    )
+
+    enriched_bookings = []
+    for bk in matched:
+        b_dict = dict(bk)
+        s_utc = bk.get("start_time")
+        e_utc = bk.get("end_time")
+        b_dict["start_time_utc"] = s_utc
+        b_dict["end_time_utc"] = e_utc
+        b_dict["start_time_local"] = _format_local_datetime(s_utc, tz_str)
+        b_dict["end_time_local"] = _format_local_datetime(e_utc, tz_str)
+        b_dict["timezone"] = tz_str
+        enriched_bookings.append(b_dict)
+
+    return json.dumps(
+        {
+            "status": "success",
+            "phone": cleaned_phone,
+            "timezone": tz_str,
+            "total": len(enriched_bookings),
+            "bookings": enriched_bookings,
+            "message": (
+                f"Found {len(enriched_bookings)} booking(s) for {cleaned_phone}."
+                if enriched_bookings
+                else f"No bookings found for phone number {cleaned_phone}."
+            ),
         },
         indent=2,
     )
@@ -424,8 +798,233 @@ async def search_resources(
     )
 
 
+async def _load_tenant_services(tenant_id: str, agent_id: str) -> list[dict[str, Any]]:
+    """Load full service catalog directly from local CQRS Read Model (AgentRuntimeConfig / AgentDraft)."""
+    query: dict[str, Any] = {"tenant_id": tenant_id}
+    if agent_id:
+        query["agent_id"] = agent_id
+
+    services: list[dict[str, Any]] = []
+    resource_map: dict[str, dict[str, Any]] = {}
+
+    try:
+        runtime = await AgentRuntimeConfig.find_one(query)
+    except Exception as e:
+        logger.warning("[MCP _load_tenant_services] AgentRuntimeConfig lookup failed: %s", e)
+        runtime = None
+
+
+    if runtime and runtime.resources:
+        for r in runtime.resources:
+            resource_map[r.resource_id] = {
+                "resource_id": r.resource_id,
+                "name": r.name,
+                "title": r.title or "",
+                "category": r.category or "General",
+                "description": r.description or "",
+            }
+
+    if runtime and runtime.services:
+        for s in runtime.services:
+            selectable_staff: list[dict[str, Any]] = []
+            auto_assigned: list[dict[str, Any]] = []
+
+            for req in s.resource_requirements:
+                req_mode = str(getattr(req.selection_mode, "value", req.selection_mode) or "")
+                r_type = str(getattr(req.resource_type, "value", req.resource_type) or "staff")
+
+                resolved = [resource_map[rid] for rid in req.eligible_resource_ids if rid in resource_map]
+                if req_mode == "user_selectable" or (not req_mode and r_type.lower() == "staff"):
+                    for res in resolved:
+                        selectable_staff.append({
+                            "resource_id": res["resource_id"],
+                            "name": res["name"],
+                            "title": res["title"],
+                            "category": res["category"],
+                            "role": req.role or "Provider",
+                        })
+                else:
+                    auto_assigned.append({
+                        "role": req.role or "Resource",
+                        "resource_type": r_type,
+                        "count": req.count,
+                    })
+
+            price_str = (
+                f"{s.price.amount} {s.price.currency}"
+                if s.price and getattr(s.price, "amount", None) is not None
+                else "Free"
+            )
+
+            services.append({
+                "service_id": s.service_id,
+                "name": s.name,
+                "category": s.category or "General",
+                "description": s.description or "",
+                "duration_minutes": s.duration_minutes,
+                "price": price_str,
+                "booking_mode": s.booking_mode,
+                "selectable_staff": selectable_staff,
+                "auto_assigned_resources": auto_assigned,
+            })
+
+    if not services:
+        try:
+            draft = await AgentDraft.find_one(query)
+        except Exception as e:
+            logger.warning("[MCP _load_tenant_services] AgentDraft lookup failed: %s", e)
+            draft = None
+
+        if draft and draft.current_draft:
+
+            raw_resources = draft.current_draft.get("resources") or []
+            if isinstance(raw_resources, list):
+                for r in raw_resources:
+                    if isinstance(r, dict):
+                        resource_map[r.get("resource_id", "")] = {
+                            "resource_id": r.get("resource_id", ""),
+                            "name": r.get("name", "Unnamed"),
+                            "title": r.get("title", ""),
+                            "category": r.get("category", "General"),
+                            "description": r.get("description", ""),
+                        }
+
+            raw_services = draft.current_draft.get("services") or []
+            if isinstance(raw_services, list):
+                for s in raw_services:
+                    if not isinstance(s, dict):
+                        continue
+                    price_val = s.get("price")
+                    if isinstance(price_val, dict):
+                        price_str = f"{price_val.get('amount', 0)} {price_val.get('currency', 'USD')}"
+                    elif price_val is not None:
+                        price_str = str(price_val)
+                    else:
+                        price_str = "Free"
+
+                    raw_reqs = s.get("resource_requirements") or []
+                    selectable_staff = []
+                    auto_assigned = []
+                    if isinstance(raw_reqs, list):
+                        for req in raw_reqs:
+                            if not isinstance(req, dict):
+                                continue
+                            draft_req_mode = str(req.get("selection_mode") or "")
+                            req_r_type = str(req.get("resource_type") or "staff").lower()
+                            eligible_ids = req.get("eligible_resource_ids") or []
+                            resolved = [resource_map[rid] for rid in eligible_ids if rid in resource_map]
+                            if draft_req_mode == "user_selectable" or (not draft_req_mode and req_r_type == "staff"):
+                                for res in resolved:
+                                    selectable_staff.append({
+                                        "resource_id": res["resource_id"],
+                                        "name": res["name"],
+                                        "title": res["title"],
+                                        "category": res["category"],
+                                        "role": req.get("role", "Provider"),
+                                    })
+                            else:
+                                auto_assigned.append({
+                                    "role": req.get("role", "Resource"),
+                                    "resource_type": req.get("resource_type", ""),
+                                    "count": req.get("count", 1),
+                                })
+
+                    services.append({
+                        "service_id": s.get("service_id", ""),
+                        "name": s.get("name", "Unnamed"),
+                        "category": s.get("category", "General"),
+                        "description": s.get("description", ""),
+                        "duration_minutes": s.get("duration_minutes", 30),
+                        "price": price_str,
+                        "booking_mode": s.get("booking_mode", "time_slot"),
+                        "selectable_staff": selectable_staff,
+                        "auto_assigned_resources": auto_assigned,
+                    })
+
+    return services
+
+
+@mcp.tool()
+async def search_services(
+    tenant_id: str,
+    agent_id: str,
+    query: str | None = None,
+    category: str | None = None,
+    service_id: str | None = None,
+) -> str:
+    """Search and get detailed information about services, treatments, prices, and requirements.
+
+    Use this tool when:
+    - Customer asks about a service, treatment, procedure, or package not listed in the initial view.
+    - Customer asks for services under a specific category (e.g. 'Dental Cleaning', 'Facials', 'Repairs').
+    - Customer needs full details, duration, pricing, or provider options for a specific service ID.
+
+    Args:
+        tenant_id: The ID of the business/tenant.
+        agent_id: The ID of the agent managing the services.
+        query: Optional search keyword to filter by service name or description.
+        category: Optional category filter (e.g. 'Dental', 'Cosmetic', 'General').
+        service_id: Optional exact service ID to retrieve full details.
+
+    Returns:
+        JSON string containing matching services with their service_id, name, category, price, duration, and staff requirements.
+    """
+    logger.info(
+        "[MCP Tool search_services (CQRS Local Read)] tenant=%s, query=%s, category=%s, service_id=%s",
+        tenant_id,
+        query,
+        category,
+        service_id,
+    )
+
+    all_services = await _load_tenant_services(tenant_id=tenant_id, agent_id=agent_id)
+
+    if service_id:
+        match = next((s for s in all_services if s["service_id"] == service_id.strip()), None)
+        if not match:
+            return json.dumps(
+                {
+                    "status": "not_found",
+                    "message": f"Service '{service_id}' not found in catalog",
+                }
+            )
+        return json.dumps(
+            {
+                "status": "success",
+                "service": match,
+            },
+            indent=2,
+        )
+
+    filtered = all_services
+
+    if category:
+        cat_lower = category.lower().strip()
+        filtered = [s for s in filtered if cat_lower in s.get("category", "").lower()]
+
+    if query:
+        q = query.lower().strip()
+        filtered = [
+            s
+            for s in filtered
+            if q in s.get("name", "").lower()
+            or q in s.get("description", "").lower()
+            or q in s.get("category", "").lower()
+        ]
+
+    return json.dumps(
+        {
+            "status": "success",
+            "total_matches": len(filtered),
+            "services": filtered[:15],
+        },
+        indent=2,
+    )
+
+
 @mcp.tool()
 async def search_knowledge_base(
+
     tenant_id: str,
     agent_id: str,
     query: str,

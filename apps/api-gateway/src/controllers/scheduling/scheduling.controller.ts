@@ -85,7 +85,6 @@ export class SchedulingController implements OnModuleInit {
           ? { require_otp: body.verification.require_otp ?? undefined }
           : undefined,
         resource_requirements: body.resource_requirements ?? [],
-        recall_interval_days: body.recall_interval_days,
       }),
     );
 
@@ -162,7 +161,6 @@ export class SchedulingController implements OnModuleInit {
           ? { require_otp: body.verification.require_otp ?? undefined }
           : undefined,
         resource_requirements: body.resource_requirements ?? [],
-        recall_interval_days: body.recall_interval_days,
       }),
     );
 

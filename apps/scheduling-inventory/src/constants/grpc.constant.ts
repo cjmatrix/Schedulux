@@ -22,5 +22,6 @@ export const GRPC_METHODS = {
     RESCHEDULE_BOOKING: 'RescheduleBooking',
     GET_AVAILABILITY: 'GetAvailability',
     LIST_BOOKINGS: 'ListBookings',
+    VERIFY_CUSTOMER: 'VerifyCustomer',
   },
 } as const;

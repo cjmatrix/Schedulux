@@ -3,21 +3,27 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any, Literal
 
 from dotenv import load_dotenv
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
-from langgraph.prebuilt import create_react_agent
+from langgraph.graph import END, StateGraph
+from langgraph.graph.message import add_messages
 from pydantic import SecretStr
+from typing_extensions import TypedDict
 
 from agent_orchestrator.mcp.scheduling_mcp_server import get_scheduling_mcp_tools
-from agent_orchestrator.models import AgentDraft, AgentRuntimeConfig
 from agent_orchestrator.repositories.customer_message_repository import CustomerMessageRepository
+from agent_orchestrator.workflows.booking_agent import run_booking_agent
+from agent_orchestrator.workflows.context import resolve_business_context
+from agent_orchestrator.workflows.faq_agent import run_faq_agent
+from agent_orchestrator.workflows.handoff_agent import run_handoff_agent
+from agent_orchestrator.workflows.supervisor_agent import classify_intent
 
 try:
     import toon
@@ -74,273 +80,164 @@ def _get_chat_model(temperature: float = 0.2) -> BaseChatModel:
         )
 
 
-async def _resolve_business_context(tenant_id: str, agent_id: str) -> dict[str, Any]:
-    """Retrieve tenant business configuration, services, and resources for the prompt."""
-    biz_name: str | None = None
-    timezone: str | None = None
-    currency: str | None = None
-    services: list[dict[str, Any]] = []
-    resources: list[dict[str, Any]] = []
-    resource_map: dict[str, dict[str, Any]] = {}
 
-    query: dict[str, Any] = {"tenant_id": tenant_id}
-    if agent_id:
-        query["agent_id"] = agent_id
 
-    runtime = await AgentRuntimeConfig.find_one(query)
 
-    if runtime:
-        if runtime.business_profile:
-            biz_name = runtime.business_profile.name or biz_name
-            timezone = runtime.business_profile.timezone or timezone
-            currency = runtime.business_profile.currency or currency
-        if not timezone and hasattr(runtime.scheduling_engine, "timezone"):
-            timezone = getattr(runtime.scheduling_engine, "timezone", None) or timezone
 
-        if runtime.resources:
-            for r in runtime.resources:
-                if not r.is_bookable:
-                    continue
-                r_type = (
-                    str(r.resource_type.value)
-                    if hasattr(r.resource_type, "value")
-                    else str(r.resource_type or "staff")
-                )
-                d_status = (
-                    str(r.dispatch_status.value)
-                    if hasattr(r.dispatch_status, "value")
-                    else str(r.dispatch_status or "active")
-                )
-                r_entry = {
-                    "resource_id": r.resource_id,
-                    "name": r.name,
-                    "title": r.title or "",
-                    "category": r.category or "General",
-                    "description": r.description or "",
-                    "resource_type": r_type,
-                    "dispatch_status": d_status,
-                }
-                resource_map[r.resource_id] = r_entry
-                resources.append(r_entry)
 
-        if runtime.services:
-            for s in runtime.services:
-                selectable_staff: list[dict[str, Any]] = []
-                auto_assigned: list[dict[str, Any]] = []
 
-                for req in s.resource_requirements:
-                    req_mode = (
-                        str(req.selection_mode.value)
-                        if hasattr(req.selection_mode, "value")
-                        else str(req.selection_mode or "")
-                    )
-                    r_type = str(getattr(req.resource_type, "value", req.resource_type) or "staff")
 
-                    resolved_for_req = [
-                        resource_map[rid]
-                        for rid in req.eligible_resource_ids
-                        if rid in resource_map
-                    ]
 
-                    if req_mode == "user_selectable" or (
-                        not req_mode and r_type.lower() == "staff"
-                    ):
-                        for res in resolved_for_req:
-                            selectable_staff.append(
-                                {
-                                    "resource_id": res["resource_id"],
-                                    "name": res["name"],
-                                    "title": res["title"],
-                                    "category": res["category"],
-                                    "role": req.role or "Provider",
-                                }
-                            )
-                    else:
-                        auto_assigned.append(
-                            {
-                                "role": req.role or "Resource",
-                                "resource_type": r_type,
-                                "count": req.count,
-                            }
-                        )
+class CustomerGraphState(TypedDict):
+    session_id: str
+    tenant_id: str
+    agent_id: str
+    message: str
+    messages: Annotated[list[BaseMessage], add_messages]
+    biz_context: dict[str, Any]
+    all_tools: list[BaseTool]
+    intent: str  # "booking" | "faq" | "handoff" | "emergency"
+    response: str
+    error: str | None
 
-                services.append(
-                    {
-                        "service_id": s.service_id,
-                        "name": s.name,
-                        "description": s.description or "",
-                        "duration_minutes": s.duration_minutes,
-                        "price": (
-                            f"{s.price.amount} {s.price.currency}"
-                            if s.price and getattr(s.price, "amount", None) is not None
-                            else "Free"
-                        ),
-                        "booking_mode": s.booking_mode,
-                        "selectable_staff": selectable_staff,
-                        "auto_assigned_resources": auto_assigned,
-                    }
-                )
 
-    if not runtime or not services or not biz_name:
-        draft = await AgentDraft.find_one(query)
-        if draft and draft.current_draft:
-            biz = draft.current_draft.get("business_profile") or {}
-            if isinstance(biz, dict):
-                if not biz_name:
-                    biz_name = biz.get("name")
-                if not timezone:
-                    timezone = biz.get("timezone")
-                if not currency:
-                    currency = biz.get("currency")
-            if not timezone:
-                engine = draft.current_draft.get("scheduling_engine") or {}
-                if isinstance(engine, dict):
-                    timezone = engine.get("timezone")
 
-            if not resources:
-                raw_resources = draft.current_draft.get("resources") or []
-                if isinstance(raw_resources, list):
-                    for r in raw_resources:
-                        if not isinstance(r, dict) or not r.get("is_bookable", True):
-                            continue
-                        r_entry = {
-                            "resource_id": r.get("resource_id", ""),
-                            "name": r.get("name", "Unnamed"),
-                            "title": r.get("title", ""),
-                            "category": r.get("category", "General"),
-                            "description": r.get("description", ""),
-                            "resource_type": r.get("resource_type", "staff"),
-                            "dispatch_status": r.get("dispatch_status", "active"),
-                        }
-                        resource_map[r_entry["resource_id"]] = r_entry
-                        resources.append(r_entry)
 
-            if not services:
-                raw_services = draft.current_draft.get("services") or []
-                if isinstance(raw_services, list):
-                    for s in raw_services:
-                        if not isinstance(s, dict):
-                            continue
-                        price_val = s.get("price")
-                        if isinstance(price_val, dict):
-                            price_str = f"{price_val.get('amount', 0)} {price_val.get('currency', currency or 'USD')}"
-                        elif price_val is not None:
-                            price_str = str(price_val)
-                        else:
-                            price_str = "Free"
 
-                        raw_reqs = s.get("resource_requirements") or []
-                        selectable_staff = []
-                        auto_assigned = []
-                        if isinstance(raw_reqs, list):
-                            for req in raw_reqs:
-                                if not isinstance(req, dict):
-                                    continue
-                                draft_req_mode = str(req.get("selection_mode") or "")
-                                req_r_type = str(req.get("resource_type") or "staff").lower()
-                                eligible_ids = req.get("eligible_resource_ids") or []
-                                resolved_for_req = [
-                                    resource_map[rid] for rid in eligible_ids if rid in resource_map
-                                ]
-                                if draft_req_mode == "user_selectable" or (
-                                    not draft_req_mode and req_r_type == "staff"
-                                ):
-                                    for res in resolved_for_req:
-                                        selectable_staff.append(
-                                            {
-                                                "resource_id": res["resource_id"],
-                                                "name": res["name"],
-                                                "title": res["title"],
-                                                "category": res["category"],
-                                                "role": req.get("role", "Provider"),
-                                            }
-                                        )
-                                else:
-                                    auto_assigned.append(
-                                        {
-                                            "role": req.get("role", "Resource"),
-                                            "resource_type": req.get("resource_type", ""),
-                                            "count": req.get("count", 1),
-                                        }
-                                    )
+async def node_supervisor(state: CustomerGraphState) -> dict[str, Any]:
+    """
+    Supervisor Node — Evaluates fast-path guardrails and classifies user intent.
+    Sets 'intent' in the graph state to trigger conditional edge routing.
+    """
+    message = state.get("message", "")
+    history = state.get("messages", [])
+    biz_context = state.get("biz_context", {})
 
-                        services.append(
-                            {
-                                "service_id": s.get("service_id", ""),
-                                "name": s.get("name", "Unnamed"),
-                                "description": s.get("description", ""),
-                                "duration_minutes": s.get("duration_minutes", 30),
-                                "price": price_str,
-                                "booking_mode": s.get("booking_mode", "time_slot"),
-                                "selectable_staff": selectable_staff,
-                                "auto_assigned_resources": auto_assigned,
-                            }
-                        )
+    intent = await classify_intent(
+        message=message,
+        conversation_history=history,
+        biz_context=biz_context,
+    )
+    logger.info("[CustomerGraph:SupervisorNode] Classified intent -> '%s'", intent)
+    return {"intent": intent}
 
+
+async def node_booking_agent(state: CustomerGraphState) -> dict[str, Any]:
+   
+    logger.info("[CustomerGraph:BookingAgentNode] Executing booking specialist")
+    response_text = await run_booking_agent(
+        tenant_id=state["tenant_id"],
+        agent_id=state["agent_id"],
+        message=state["message"],
+        conversation_history=state["messages"],
+        biz_context=state["biz_context"],
+        all_tools=state["all_tools"],
+        session_id=state.get("session_id", ""),
+    )
     return {
-        "business_name": biz_name or "Schedulux Business",
-        "timezone": timezone or "UTC",
-        "currency": currency or "USD",
-        "services": services,
-        "resources": resources,
+        "response": response_text,
+        "messages": [AIMessage(content=response_text)],
     }
 
 
-def _build_system_prompt(tenant_id: str, agent_id: str, biz_context: dict[str, Any]) -> str:
-    now_iso = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
-    services_catalog = _format_services_catalog(biz_context.get("services", []))
+async def node_faq_agent(state: CustomerGraphState) -> dict[str, Any]:
+    
+    logger.info("[CustomerGraph:FaqAgentNode] Executing FAQ / RAG specialist")
+    response_text = await run_faq_agent(
+        tenant_id=state["tenant_id"],
+        agent_id=state["agent_id"],
+        message=state["message"],
+        conversation_history=state["messages"],
+        biz_context=state["biz_context"],
+        all_tools=state["all_tools"],
+    )
+    return {
+        "response": response_text,
+        "messages": [AIMessage(content=response_text)],
+    }
 
-    return f"""You are the friendly, professional AI Booking Concierge for {biz_context.get("business_name")}.
-Your sole mission is to assist customers with discovering available services, checking real-time availability, and completing appointment bookings.
 
-[Context]
-Current UTC Time: {now_iso}
-Business Timezone: {biz_context.get("timezone")}
-Tenant ID: {tenant_id}
-Agent ID: {agent_id}
+async def node_handoff_agent(state: CustomerGraphState) -> dict[str, Any]:
+    """
+    Handoff / Escalation Guardrail Node — Delivers immediate deterministic human contact
+    or emergency triage instructions. Zero LLM latency.
+    """
+    intent = state.get("intent", "handoff")
+    is_emergency = intent == "emergency"
+    logger.info(
+        "[CustomerGraph:HandoffNode] Executing handoff guardrail (is_emergency=%s)",
+        is_emergency,
+    )
+    response_text = run_handoff_agent(
+        message=state["message"],
+        biz_context=state["biz_context"],
+        is_emergency=is_emergency,
+    )
+    return {
+        "response": response_text,
+        "messages": [AIMessage(content=response_text)],
+    }
 
-[Services Catalog]
-{services_catalog}
 
-[Guidelines & Protocol]
-1. Warm Greeting & Guidance:
-   - Be polite, welcoming, and concise. Explain services, pricing, and duration if asked.
-2. Resource / Staff Selection:
-   - When a service has `selectable_staff` listed, the customer may request a specific staff member or provider (e.g. "I want Dr. Sarah").
-   - If the customer specifies a provider, match their choice to that staff member's `resource_id`. Pass this `resource_id` into `check_availability` and `book_appointment`.
-   - If the customer does NOT express a provider preference, or if requirements are marked under `auto_assigned_resources`, do NOT force them to choose. Leave `resource_id=None` so the scheduling engine automatically assigns the best available provider.
-3. In-Depth Staff & Resource Inquiries:
-   - If a customer asks detailed questions about our staff, specific providers' backgrounds, qualifications, specialties, rooms, or equipment, invoke the `search_resources` tool passing tenant_id="{tenant_id}" and agent_id="{agent_id}".
-4. Knowledge Base, Clinic Policies, & FAQ Inquiries:
-   - If a customer asks questions about business policies, clinic regulations, FAQs, procedures, pricing details, insurance, preparation instructions, or clinic information, invoke the `search_knowledge_base` tool passing tenant_id="{tenant_id}", agent_id="{agent_id}", and query.
-   - Ground your answers strictly on the retrieved knowledge base facts without fabricating policies.
-5. Checking Availability:
-   - When a user wants to book or asks for open times, match their request to the appropriate service_id from the catalog.
-   - Use the `check_availability` tool passing tenant_id="{tenant_id}", agent_id="{agent_id}", and service_id to query real-time slots. If a specific provider was requested, include their `resource_id`. NEVER invent, estimate, or hallucinate available times.
-   - If no specific date is mentioned, check today and upcoming days.
-   - Present available slots clearly to the customer in the business timezone ({biz_context.get("timezone")}). The slot timestamps from `check_availability` already represent the business's local time (e.g. 09:00:00+05:30 means 09:00 AM). Present them directly in local business time without adding or subtracting any timezone offset.
-6. Booking Confirmation Requirements:
-   - Before confirming a booking, ensure you have:
-     a) Desired Service (`service_id`)
-     b) Specific Start Time (`start_time` in ISO format exactly as returned by `check_availability`, e.g. 2026-11-02T09:00:00+05:30)
-     c) Customer's Full Name
-     d) Customer's Mobile Phone Number
-     e) Desired Staff Member (`resource_id`), only if the customer requested someone specific
-   - If any of these are missing, ask the customer for them politely before calling the booking tool.
-7. Calling `book_appointment`:
-   - Pass tenant_id="{tenant_id}", agent_id="{agent_id}", the selected service_id, start_time, customer_name, customer_phone, and optional resource_id if chosen.
-   - Once confirmed, share the booking reference code and reassure the customer their appointment is booked!
-8. Cancelling an Appointment:
-   - If a customer wants to cancel an appointment, ask for their booking ID or reference code (e.g. BK-XXXXXX) if not already provided.
-   - Use the `cancel_appointment` tool passing tenant_id="{tenant_id}", agent_id="{agent_id}", booking_id, and optional reason.
-   - Once cancelled, confirm the cancellation to the customer politely.
-9. Rescheduling an Appointment:
-   - If a customer wants to reschedule an existing appointment to a new date/time, ask for their booking reference and their new desired time.
-   - Check availability for the new time first using `check_availability`.
-   - Use the `reschedule_appointment` tool passing tenant_id="{tenant_id}", agent_id="{agent_id}", booking_id, and new_start_time.
-   - Once rescheduled, confirm the updated time and booking reference to the customer.
-10. Tone: Helpful, courteous, and efficient.
-"""
+
+
+def route_supervisor_decision(
+    state: CustomerGraphState,
+) -> Literal["booking_agent", "faq_agent", "handoff_agent"]:
+    intent = state.get("intent", "booking")
+    if intent in ("emergency", "handoff"):
+        return "handoff_agent"
+    elif intent == "faq":
+        return "faq_agent"
+    else:
+        return "booking_agent"
+
+
+
+
+
+def build_customer_orchestration_graph():
+  
+    builder = StateGraph(CustomerGraphState)
+
+    
+    builder.add_node("supervisor", node_supervisor)
+    builder.add_node("booking_agent", node_booking_agent)
+    builder.add_node("faq_agent", node_faq_agent)
+    builder.add_node("handoff_agent", node_handoff_agent)
+
+  
+    builder.set_entry_point("supervisor")
+
+  
+    builder.add_conditional_edges(
+        "supervisor",
+        route_supervisor_decision,
+        {
+            "booking_agent": "booking_agent",
+            "faq_agent": "faq_agent",
+            "handoff_agent": "handoff_agent",
+        },
+    )
+
+    builder.add_edge("booking_agent", END)
+    builder.add_edge("faq_agent", END)
+    builder.add_edge("handoff_agent", END)
+
+    return builder.compile()
+
+
+customer_orchestration_graph = build_customer_orchestration_graph()
+
+
+def get_orchestration_graph_mermaid() -> str:
+    """Returns Mermaid markdown of the compiled customer state graph for documentation & UI rendering."""
+    try:
+        return customer_orchestration_graph.get_graph().draw_mermaid()
+    except Exception:
+        return ""
+
+
 
 
 async def process_customer_chat(
@@ -352,8 +249,18 @@ async def process_customer_chat(
     customer_phone: str | None = None,
     customer_name: str | None = None,
 ) -> dict[str, Any]:
-    """Execute LangGraph Customer Agent with FastMCP tools and sliding window memory."""
+    """
+    State-Based Multi-Agent Orchestration Entrypoint for Customer Chat.
 
+    Architecture:
+      1. Session & History: Fetches conversation sliding-window from MongoDB.
+      2. Hot-Path Cache: Retrieves business context & custom instructions from Redis.
+      3. StateGraph Execution:
+         - Supervisor Node: Evaluates guardrails and classifies intent (booking, faq, handoff, emergency).
+         - Conditional Edge: Dispatches state to specialized worker node (Booking, FAQ, or Handoff).
+         - Specialist Node: Runs domain logic with isolated tools and appends response to state.
+      4. State Persistence: Stores assistant response and customer metadata in MongoDB.
+    """
     await _customer_msg_repo.get_or_create_conversation(session_id, tenant_id, agent_id)
 
     if customer_id or customer_phone or customer_name:
@@ -381,39 +288,37 @@ async def process_customer_chat(
         elif m.role == "assistant":
             langchain_messages.append(AIMessage(content=m.content))
 
-    biz_context = await _resolve_business_context(tenant_id, agent_id)
-    system_prompt = _build_system_prompt(tenant_id, agent_id, biz_context)
+    biz_context = await resolve_business_context(tenant_id, agent_id)
+    all_tools = get_scheduling_mcp_tools()
 
-    model = _get_chat_model(temperature=0.2)
-    tools = get_scheduling_mcp_tools()
+   
+    initial_state: CustomerGraphState = {
+        "session_id": session_id,
+        "tenant_id": tenant_id,
+        "agent_id": agent_id,
+        "message": message,
+        "messages": langchain_messages,
+        "biz_context": biz_context,
+        "all_tools": all_tools,
+        "intent": "",
+        "response": "",
+        "error": None,
+    }
 
-    agent = create_react_agent(
-        model=model,
-        tools=tools,
-        prompt=SystemMessage(content=system_prompt),
-    )
-
+ 
     try:
-        result = await agent.ainvoke({"messages": langchain_messages})
-        final_message = result["messages"][-1]
-        if isinstance(final_message.content, str):
-            response_text = final_message.content
-        elif isinstance(final_message.content, list):
-            texts = []
-            for item in final_message.content:
-                if isinstance(item, dict) and item.get("text"):
-                    texts.append(item["text"])
-                elif isinstance(item, str):
-                    texts.append(item)
-            response_text = "\n".join(texts) if texts else str(final_message.content)
-        else:
-            response_text = str(final_message.content)
-    except Exception as e:
-        logger.error("[CustomerAgent] Error invoking LangGraph agent: %s", e, exc_info=True)
-        response_text = (
-            "I'm sorry, I encountered a temporary issue checking the schedule. "
+        final_state = await customer_orchestration_graph.ainvoke(initial_state)
+        response_text = final_state.get("response") or (
+            "I'm sorry, I encountered a temporary issue while processing your request. "
             "Please try again in a moment."
         )
+    except Exception as e:
+        logger.error("[CustomerAgent] StateGraph orchestration error: %s", e, exc_info=True)
+        response_text = (
+            "I'm sorry, I encountered a temporary issue while processing your request. "
+            "Please try again in a moment."
+        )
+
 
     await _customer_msg_repo.save_message(
         session_id=session_id,

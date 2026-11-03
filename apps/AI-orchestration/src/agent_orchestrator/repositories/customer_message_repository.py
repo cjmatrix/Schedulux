@@ -77,7 +77,23 @@ class CustomerMessageRepository:
             updates["customer_id"] = customer_id
         if customer_name:
             updates["customer_name"] = customer_name
+        await CustomerConversation.find({"session_id": session_id}).update({"$set": updates})
+
+    async def mark_conversation_verified(
+        self,
+        session_id: str,
+        customer_phone: str | None = None,
+        customer_id: str | None = None,
+    ) -> None:
+        updates: dict[str, Any] = {
+            "is_verified": True,
+            "verified_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
         if customer_phone:
             updates["customer_phone"] = customer_phone
+        if customer_id:
+            updates["customer_id"] = customer_id
 
         await CustomerConversation.find({"session_id": session_id}).update({"$set": updates})
+

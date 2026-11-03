@@ -74,7 +74,6 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
               (r.resource_type === 'staff' ? 'user_selectable' : 'auto_assign'),
           }))
         : undefined,
-      recallIntervalDays: dto.recall_interval_days,
     });
 
     const { updated, outbox } = await this._unitOfWork.withTransaction(async () => {

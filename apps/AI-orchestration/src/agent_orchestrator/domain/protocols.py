@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from agent_orchestrator.models import (
     AgentDraft,
@@ -60,12 +60,23 @@ class RuntimeConfigRepository(Protocol):
     async def list_runtime_configs(self, tenant_id: str) -> list[AgentRuntimeConfig]: ...
 
 
+@runtime_checkable
 class CacheRepository(Protocol):
     async def get_cached_draft(self, tenant_id: str, agent_id: str) -> dict[str, Any] | None: ...
 
     async def set_cached_draft(
         self, tenant_id: str, agent_id: str, draft: dict[str, Any], ttl: int = 86400 * 3
     ) -> None: ...
+
+    async def delete_cached_draft(self, tenant_id: str, agent_id: str) -> None: ...
+
+    async def get_cached_biz_context(self, tenant_id: str, agent_id: str) -> dict[str, Any] | None: ...
+
+    async def set_cached_biz_context(
+        self, tenant_id: str, agent_id: str, context: dict[str, Any], ttl: int = 3600
+    ) -> None: ...
+
+    async def delete_cached_biz_context(self, tenant_id: str, agent_id: str) -> None: ...
 
     async def get_raw_crawl_draft(self, tenant_id: str) -> str | None: ...
 

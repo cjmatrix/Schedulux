@@ -56,7 +56,6 @@ export interface ServiceEventPayload extends BaseSchedulingEventPayload {
       eligible_resource_ids: string[];
       selection_mode?: string;
     }>;
-    recall_interval_days: number;
     created_at: string;
     updated_at: string;
   };
@@ -385,7 +384,6 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eligible_resource_ids: r.eligibleResourceIds,
         selection_mode: r.selectionMode,
       })),
-      recall_interval_days: entity.recallIntervalDays,
       created_at: entity.createdAt.toISOString(),
       updated_at: entity.updatedAt.toISOString(),
     };

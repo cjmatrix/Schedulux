@@ -50,6 +50,7 @@ export class ListBookingsUseCase implements IListBookingsUseCase {
       startDate,
       endDate,
       search: dto.search?.trim() || undefined,
+      customerPhone: dto.customer_phone?.trim() || undefined,
     });
 
     return {

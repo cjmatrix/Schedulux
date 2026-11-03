@@ -169,7 +169,6 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
         deposit,
         verification: s.verification ? { require_otp: s.verification.require_otp } : undefined,
         resourceRequirements: mappedRequirements,
-        recallIntervalDays: s.recall_interval_days || 0,
         isDeleted: isDelSvc,
         deletedAt: isDelSvc ? (s.deleted_at ? new Date(s.deleted_at) : new Date()) : null,
       });
@@ -233,14 +232,9 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
           verification_policy: dto.verification_policy
             ? {
                 require_otp_for_new_booking: !!dto.verification_policy.require_otp_for_new_booking,
-                require_otp_for_reschedule:
-                  dto.verification_policy.require_otp_for_reschedule ?? true,
-                require_otp_for_cancel: dto.verification_policy.require_otp_for_cancel ?? true,
               }
             : {
                 require_otp_for_new_booking: false,
-                require_otp_for_reschedule: true,
-                require_otp_for_cancel: true,
               },
         });
         this._logger.log(`Synced tenant schedule settings for agent ${agentId}`);

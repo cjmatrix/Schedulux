@@ -4,7 +4,10 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from agent_orchestrator.clients.redis_client import set_cached_draft
+from agent_orchestrator.clients.redis_client import (
+    delete_cached_biz_context,
+    set_cached_draft,
+)
 from agent_orchestrator.domain.protocols import EventSubscriber
 from agent_orchestrator.models import (
     AgentDraft,
@@ -98,16 +101,20 @@ async def handle_service_event(payload: dict[str, Any]) -> None:
                     )
                     for req in (data.get("resource_requirements") or [])
                 ],
-                recall_interval_days=int(data.get("recall_interval_days") or 0),
             )
             config.services = [s for s in config.services if s.service_id != service_id]
             config.services.append(new_embed)
             await config.save()
+            try:
+                await delete_cached_biz_context(config.tenant_id, agent_id)
+            except Exception:
+                pass
             logger.info(
                 "[Consumer] Upserted service %s into live AgentRuntimeConfig of agent %s",
                 service_id,
                 agent_id,
             )
+
 
     agent_draft = await AgentDraft.find_one({"agent_id": agent_id})
     if agent_draft:
@@ -138,7 +145,6 @@ async def handle_service_event(payload: dict[str, Any]) -> None:
                 "deposit": deposit_raw,
                 "verification": verif_dict,
                 "resource_requirements": data.get("resource_requirements", []),
-                "recall_interval_days": int(data.get("recall_interval_days") or 0),
             }
             updated_svcs = [s for s in svcs if s.get("service_id") != service_id]
             updated_svcs.append(svc_dict)
@@ -193,11 +199,16 @@ async def handle_resource_event(payload: dict[str, Any]) -> None:
             config.resources = [r for r in config.resources if r.resource_id != resource_id]
             config.resources.append(new_embed)
             await config.save()
+            try:
+                await delete_cached_biz_context(config.tenant_id, agent_id)
+            except Exception:
+                pass
             logger.info(
                 "[Consumer] Upserted resource %s into live AgentRuntimeConfig of agent %s",
                 resource_id,
                 agent_id,
             )
+
 
     agent_draft = await AgentDraft.find_one({"agent_id": agent_id})
     if agent_draft:

@@ -61,7 +61,6 @@ export interface CreateServicePayload {
     require_otp?: boolean | null;
   };
   resource_requirements?: ResourceRequirementInfo[];
-  recall_interval_days?: number;
 }
 
 export interface UpdateServicePayload extends Partial<CreateServicePayload> {}

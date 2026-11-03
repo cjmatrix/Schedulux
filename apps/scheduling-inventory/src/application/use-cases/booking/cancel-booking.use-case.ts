@@ -7,8 +7,10 @@ import {
   BOOKING_ALLOCATION_SERVICE,
   BOOKING_REPOSITORY,
   SCHEDULING_EVENTS_PRODUCER,
+  TENANT_SCHEDULE_REPOSITORY,
   UNIT_OF_WORK,
 } from '../../../domain/tokens.js';
+import type { ITenantScheduleRepository } from '../../../domain/repositories/tenant-schedule.repository.interface.js';
 import type { IBookingAllocationService } from '../../interfaces/booking-allocation-service.interface.js';
 import { ICancelBookingUseCase } from '../../interfaces/booking-use-cases.interface.js';
 import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-events-producer.interface.js';
@@ -26,6 +28,8 @@ export class CancelBookingUseCase implements ICancelBookingUseCase {
     private readonly _eventsProducer: ISchedulingEventsProducer,
     @Inject(BOOKING_ALLOCATION_SERVICE)
     private readonly _bookingAllocationService: IBookingAllocationService,
+    @Inject(TENANT_SCHEDULE_REPOSITORY)
+    private readonly _tenantScheduleRepository: ITenantScheduleRepository,
   ) {}
 
   async execute(dto: CancelBookingRequest): Promise<BookingEntity> {
@@ -40,12 +44,29 @@ export class CancelBookingUseCase implements ICancelBookingUseCase {
     const reason = dto.reason?.trim() || '';
     const cancelledBy = dto.cancelled_by?.trim() || 'system';
 
-    const booking = await this._bookingAllocationService.resolveBookingByIdentifier(
-      this._bookingRepository,
-      tenantId,
-      bookingIdentifier,
-      agentId,
-    );
+    const [booking, tenantSchedule] = await Promise.all([
+      this._bookingAllocationService.resolveBookingByIdentifier(
+        this._bookingRepository,
+        tenantId,
+        bookingIdentifier,
+        agentId,
+      ),
+      this._tenantScheduleRepository.findByTenantAndAgent(tenantId, agentId),
+    ]);
+
+    const cancellationWindowHours =
+      tenantSchedule?.scheduling_engine?.cancellation_window_hours ?? 24;
+    const isPrivileged =
+      cancelledBy === 'admin' || cancelledBy === 'system' || cancelledBy === 'owner';
+
+    if (!isPrivileged && booking.startTime) {
+      const hoursUntilBooking = (booking.startTime.getTime() - Date.now()) / (1000 * 60 * 60);
+      if (hoursUntilBooking < cancellationWindowHours) {
+        throw new BadRequestException(
+          `Appointments must be cancelled at least ${cancellationWindowHours} hours in advance.`,
+        );
+      }
+    }
 
     try {
       booking.cancel(reason, cancelledBy);

@@ -27,7 +27,7 @@
       "customer_singular": "Patient",
       "customer_plural": "Patients",
       "primary_metric": "Active Care Plans",
-      "action_metric": "Next Recall Due"
+      "action_metric": "Upcoming Bookings"
     },
     "brand": {
       "primary_color": "#0F0F11",
@@ -215,8 +215,7 @@
           "eligible_resource_ids": ["res_dr_aris_smith", "res_dr_elena_vance"],
           "selection_mode": "user_selectable"
         }
-      ],
-      "recall_interval_days": 180
+      ]
     },
     {
       "service_id": "srv_root_canal",
@@ -258,8 +257,7 @@
           "eligible_resource_ids": ["res_xray_room"],
           "selection_mode": "auto_assign"
         }
-      ],
-      "recall_interval_days": 0
+      ]
     },
     {
       "service_id": "srv_wisdom_extraction",
@@ -301,8 +299,7 @@
           "eligible_resource_ids": ["res_xray_room"],
           "selection_mode": "auto_assign"
         }
-      ],
-      "recall_interval_days": 0
+      ]
     },
     {
       "service_id": "srv_deep_cleaning",
@@ -334,8 +331,7 @@
           "eligible_resource_ids": ["res_dr_aris_smith", "res_dr_elena_vance"],
           "selection_mode": "user_selectable"
         }
-      ],
-      "recall_interval_days": 180
+      ]
     },
     {
       "service_id": "srv_emergency_triage",
@@ -374,8 +370,7 @@
           "eligible_resource_ids": ["res_operatory_bay_3"],
           "selection_mode": "auto_assign"
         }
-      ],
-      "recall_interval_days": 0
+      ]
     }
   ],
 
@@ -383,9 +378,6 @@
     "new_patient_notice": "Please arrive 10 minutes early to complete new patient paperwork. Bring your insurance card and a valid photo ID.",
     "verification_policy": {
       "require_otp_for_new_booking": false,
-      "require_otp_for_reschedule": true,
-      "require_otp_for_cancel": true,
-      "require_otp_for_history_access": true,
       "otp_delivery_channel": "sms",
       "otp_expiry_seconds": 300
     },
@@ -423,7 +415,7 @@
       "keywords": [
         "chest pain",
         "uncontrollable bleeding",
-        "severe trauma",_me
+        "severe trauma",
         "difficulty breathing",
         "throat swelling",
         "unconscious",
@@ -553,33 +545,6 @@
           "prompt_if_missing": "Please share your UPI transaction reference number (UTR) to confirm your deposit and lock your slot."
         }
       ]
-    },
-    {
-      "agent_id": "sub_recall_outbound",
-      "agent_type": "recall_outbound",
-      "routing_trigger_description": "Proactive outbound recall — patient is due for a follow-up based on service recall_interval_days. Triggered by cron job, not by inbound chat.",
-      "system_prompt": "You are an outbound recall coordinator for Apex Dental. Your goal is to proactively reach out to patients whose last visit exceeded their recall interval and schedule their next appointment. Be warm, professional, and non-pushy. If the patient declines, log the refusal and do not contact again for 30 days.",
-      "allowed_tools": [
-        "check_availability",
-        "create_booking",
-        "send_sms_notification"
-      ],
-      "required_state_variables": [
-        {
-          "variable_key": "patient_name",
-          "data_type": "string",
-          "description": "Full name of patient being recalled",
-          "is_required": true,
-          "prompt_if_missing": null
-        },
-        {
-          "variable_key": "last_service",
-          "data_type": "string",
-          "description": "Service the patient last received",
-          "is_required": true,
-          "prompt_if_missing": null
-        }
-      ]
     }
   ],
 
@@ -606,7 +571,7 @@
     },
     "twilio": {
       "enabled": true,
-      "use_cases": ["otp_sms", "booking_confirmation_sms", "recall_outbound_sms"]
+      "use_cases": ["otp_sms", "booking_confirmation_sms"]
     }
   },
 

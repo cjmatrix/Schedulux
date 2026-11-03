@@ -12,8 +12,10 @@ import {
   RESOURCE_REPOSITORY,
   SCHEDULING_EVENTS_PRODUCER,
   SERVICE_REPOSITORY,
+  TENANT_SCHEDULE_REPOSITORY,
   UNIT_OF_WORK,
 } from '../../../domain/tokens.js';
+import type { ITenantScheduleRepository } from '../../../domain/repositories/tenant-schedule.repository.interface.js';
 import type { ICacheRepository } from '../../../infrastructure/cache/cache-repository.interface.js';
 import type { IBookingAllocationService } from '../../interfaces/booking-allocation-service.interface.js';
 import { IRescheduleBookingUseCase } from '../../interfaces/booking-use-cases.interface.js';
@@ -39,6 +41,8 @@ export class RescheduleBookingUseCase implements IRescheduleBookingUseCase {
     private readonly _bookingAllocationService: IBookingAllocationService,
     @Inject(CACHE_REPOSITORY)
     private readonly _cacheRepo: ICacheRepository,
+    @Inject(TENANT_SCHEDULE_REPOSITORY)
+    private readonly _tenantScheduleRepository: ITenantScheduleRepository,
   ) {}
 
   async execute(dto: RescheduleBookingRequest): Promise<BookingEntity> {
@@ -52,18 +56,36 @@ export class RescheduleBookingUseCase implements IRescheduleBookingUseCase {
     const agentId = dto.agent_id.trim();
     const bookingIdentifier = dto.booking_id.trim();
 
-    const booking = await this._bookingAllocationService.resolveBookingByIdentifier(
-      this._bookingRepository,
-      tenantId,
-      bookingIdentifier,
-      agentId,
-    );
+    const [booking, tenantSchedule] = await Promise.all([
+      this._bookingAllocationService.resolveBookingByIdentifier(
+        this._bookingRepository,
+        tenantId,
+        bookingIdentifier,
+        agentId,
+      ),
+      this._tenantScheduleRepository.findByTenantAndAgent(tenantId, agentId),
+    ]);
 
     if (booking.status === 'cancelled') {
       throw new BadRequestException('Cannot reschedule a cancelled booking');
     }
     if (booking.status === 'completed') {
       throw new BadRequestException('Cannot reschedule a completed booking');
+    }
+
+    const cancellationWindowHours =
+      tenantSchedule?.scheduling_engine?.cancellation_window_hours ?? 24;
+    const rescheduledBy = dto.rescheduled_by?.trim() || 'system';
+    const isPrivileged =
+      rescheduledBy === 'admin' || rescheduledBy === 'system' || rescheduledBy === 'owner';
+
+    if (!isPrivileged && booking.startTime) {
+      const hoursUntilBooking = (booking.startTime.getTime() - Date.now()) / (1000 * 60 * 60);
+      if (hoursUntilBooking < cancellationWindowHours) {
+        throw new BadRequestException(
+          `Appointments must be rescheduled at least ${cancellationWindowHours} hours in advance.`,
+        );
+      }
     }
 
     const service = await getCachedService(
@@ -83,6 +105,24 @@ export class RescheduleBookingUseCase implements IRescheduleBookingUseCase {
       dto.new_start_time,
       dto.new_end_time,
     );
+
+    const leadTimeHours = tenantSchedule?.scheduling_engine?.default_lead_time_hours ?? 2;
+    const maxAdvanceDays = tenantSchedule?.scheduling_engine?.max_advance_booking_days ?? 60;
+
+    const minBookingTime = Date.now() + leadTimeHours * 3600 * 1000;
+    const maxBookingTime = Date.now() + maxAdvanceDays * 24 * 3600 * 1000;
+
+    if (interval.startTime.getTime() < minBookingTime) {
+      throw new BadRequestException(
+        `Rescheduled appointments must be scheduled at least ${leadTimeHours} hour(s) in advance.`,
+      );
+    }
+
+    if (interval.startTime.getTime() > maxBookingTime) {
+      throw new BadRequestException(
+        `Rescheduled appointments cannot be scheduled more than ${maxAdvanceDays} days in advance.`,
+      );
+    }
 
     const explicitResourceIds: string[] = dto.resource_ids?.length
       ? dto.resource_ids

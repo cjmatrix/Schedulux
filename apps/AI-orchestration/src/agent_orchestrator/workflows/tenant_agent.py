@@ -448,8 +448,9 @@ These features are fully configurable and can dramatically improve the user's bo
    - Requires: deposit.required=true, deposit.amount, deposit.processor="upi_direct", deposit.upi_id, deposit.confirmation_method="utr_reference".
 
 2. OTP VERIFICATION POLICY (guardrails.verification_policy):
-   - Ask: "Should customers verify via OTP before booking, rescheduling, or cancelling? (Recommended for high-value or deposit-backed services)"
-   - Fields: require_otp_for_new_booking, require_otp_for_reschedule, require_otp_for_cancel (all boolean).
+   - Note: Rescheduling and cancellations are always strictly protected by OTP verification.
+   - Ask: "Should customers verify via OTP before creating new bookings? (Recommended for high-value or deposit-backed services)"
+   - Fields: require_otp_for_new_booking (boolean).
 
 3. BLACKOUT / HOLIDAY DATES (operating_hours.blackout_dates):
    - Ask: "Do you have any holidays or days when you'll be closed? I can block those dates out."
@@ -464,15 +465,11 @@ These features are fully configurable and can dramatically improve the user's bo
    - Ask: "If the AI can't handle a query, should it transfer the customer to a human? (e.g. for complex cases or emergencies)"
    - Fields: enabled, trigger_topics, reception_contact, handoff_message.
 
-6. RETURN VISIT REMINDERS (services[].recall_interval_days):
-   - Ask: "Should the system remind customers to book again after a set number of days? (e.g. remind dental patients every 180 days)"
-   - Relevant when: service is configured but recall_interval_days is null or 0.
-
-7. WIDGET CUSTOMISATION (widget_config):
+6. WIDGET CUSTOMISATION (widget_config):
    - Ask: "Would you like to customise the booking widget? (e.g. chatbot name, greeting message, brand color, or which platforms to enable it on)"
    - Fields: agent_name, initial_greeting, fallback_message, primary_color, platform_sources.
 
-8. SUPERVISOR / CUSTOM AI INSTRUCTIONS (supervisor_prompt):
+7. SUPERVISOR / CUSTOM AI INSTRUCTIONS (supervisor_prompt):
    - Ask: "Do you want to give the AI any special instructions? (e.g. 'Always upsell the premium package' or 'Never book Sundays')"
    - Field: supervisor_prompt (free-text string).
 
@@ -610,7 +607,7 @@ DOMAIN INTEGRITY & DEPENDENCY RULES:
 CRITICAL: When generating `draft_update`, adhere strictly to the MINIMAL DELTA rule (STRICT NO-ECHO).
 Provide a structured partial configuration using ONLY the specific section(s) being modified right now:
 - business_profile: (ONLY if modifying profile) name, vertical, timezone, locale, currency, address, contact, terminology, brand
-- services[]: (ONLY changed or newly added services) service_id, name, category, description, duration_minutes, buffer_minutes, booking_mode ("time_slot"|"date_range"), price, deposit, verification, resource_requirements, recall_interval_days, is_deleted
+- services[]: (ONLY changed or newly added services) service_id, name, category, description, duration_minutes, buffer_minutes, booking_mode ("time_slot"|"date_range"), price, deposit, verification, resource_requirements, is_deleted
 - resources[]: (ONLY changed or newly added resources) resource_id, resource_type (staff|room|chair|bay|equipment|asset|vehicle), name, title, category, description, is_bookable, dispatch_status (active|on_leave|maintenance|retired|inactive), custom_shift_overrides, is_deleted
 - operating_hours: (ONLY if changing schedule) monday, tuesday, wednesday, thursday, friday, saturday, sunday (each is list of {{start: "HH:MM", end: "HH:MM"}}), blackout_dates (list of {{date: "YYYY-MM-DD", reason, is_closed}})
 - scheduling_engine: (ONLY if changing engine settings) booking_mode ("time_slot"|"date_range"), default_lead_time_hours, max_advance_booking_days, cancellation_window_hours, hold_duration_minutes
@@ -1088,11 +1085,16 @@ async def node_finalize_and_save(state: GraphState) -> dict:
         print(f"[TenantAgent Warning] Failed to update AgentDraft on finalize: {ade}", flush=True)
 
     try:
-        from agent_orchestrator.clients.redis_client import set_cached_draft
+        from agent_orchestrator.clients.redis_client import (
+            delete_cached_biz_context,
+            set_cached_draft,
+        )
 
         await set_cached_draft(tenant_id, agent_id, canonical_draft)
+        await delete_cached_biz_context(tenant_id, agent_id)
     except Exception as re:
         print(f"[TenantAgent Warning] Failed to update Redis cache on finalize: {re}", flush=True)
+
 
     return {
         "status": "complete",

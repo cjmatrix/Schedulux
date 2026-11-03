@@ -50,7 +50,6 @@ exports.CreateServiceDtoSchema = zod_1.z.object({
     }),
     verification: exports.ServiceVerificationDtoSchema.optional(),
     resource_requirements: zod_1.z.array(exports.ResourceRequirementDtoSchema).optional().default([]),
-    recall_interval_days: zod_1.z.number().int().min(0).optional().default(0),
 });
 class CreateServiceDto extends (0, nestjs_zod_1.createZodDto)(exports.CreateServiceDtoSchema) {
 }
@@ -67,7 +66,6 @@ exports.UpdateServiceDtoSchema = zod_1.z.object({
     deposit: exports.DepositDtoSchema.optional(),
     verification: exports.ServiceVerificationDtoSchema.optional(),
     resource_requirements: zod_1.z.array(exports.ResourceRequirementDtoSchema).optional(),
-    recall_interval_days: zod_1.z.number().int().min(0).optional(),
 });
 class UpdateServiceDto extends (0, nestjs_zod_1.createZodDto)(exports.UpdateServiceDtoSchema) {
 }

@@ -34,7 +34,6 @@ export interface ServiceInfo {
     buffer_minutes: number;
     price: PriceInfo | undefined;
     deposit: DepositInfo | undefined;
-    recall_interval_days: number;
     created_at: string;
     updated_at: string;
     booking_mode: string;
@@ -53,7 +52,6 @@ export interface CreateServiceRequest {
     buffer_minutes: number;
     price: PriceInfo | undefined;
     deposit: DepositInfo | undefined;
-    recall_interval_days: number;
     booking_mode?: string | undefined;
     agent_id: string;
     service_id?: string | undefined;
@@ -97,7 +95,6 @@ export interface UpdateServiceRequest {
     buffer_minutes?: number | undefined;
     price: PriceInfo | undefined;
     deposit: DepositInfo | undefined;
-    recall_interval_days?: number | undefined;
     booking_mode?: string | undefined;
     agent_id?: string | undefined;
     verification?: ServiceVerificationInfo | undefined;
@@ -230,8 +227,6 @@ export interface SchedulingEngineConfigInfo {
 }
 export interface VerificationPolicyConfigInfo {
     require_otp_for_new_booking: boolean;
-    require_otp_for_reschedule: boolean;
-    require_otp_for_cancel: boolean;
 }
 export interface BatchSyncInventoryRequest {
     tenant_id: string;
@@ -331,6 +326,7 @@ export interface ListBookingsRequest {
     start_date?: string | undefined;
     end_date?: string | undefined;
     search?: string | undefined;
+    customer_phone?: string | undefined;
 }
 export interface ListBookingsResponse {
     bookings: BookingInfo[];
@@ -377,6 +373,47 @@ export interface GetAvailabilityResponse {
     resources: ResourceAvailabilityInfo[];
     blocked_dates: string[];
 }
+export interface VerifyCustomerRequest {
+    tenant_id: string;
+    customer_phone: string;
+}
+export interface VerifyCustomerResponse {
+    success: boolean;
+    message: string;
+    updated_count: number;
+}
+export interface TenantScheduleInfo {
+    id: string;
+    tenant_id: string;
+    agent_id: string;
+    timezone: string;
+    currency: string;
+    operating_hours: OperatingHoursInfo | undefined;
+    blackout_dates: BlackoutDateInfo[];
+    scheduling_engine: SchedulingEngineConfigInfo | undefined;
+    verification_policy: VerificationPolicyConfigInfo | undefined;
+    created_at: string;
+    updated_at: string;
+}
+export interface GetTenantScheduleRequest {
+    tenant_id: string;
+    agent_id?: string | undefined;
+}
+export interface UpdateTenantScheduleRequest {
+    tenant_id: string;
+    agent_id: string;
+    timezone?: string | undefined;
+    currency?: string | undefined;
+    operating_hours?: OperatingHoursInfo | undefined;
+    blackout_dates: BlackoutDateInfo[];
+    scheduling_engine?: SchedulingEngineConfigInfo | undefined;
+    verification_policy?: VerificationPolicyConfigInfo | undefined;
+}
+export interface TenantScheduleResponse {
+    success: boolean;
+    message: string;
+    schedule?: TenantScheduleInfo | undefined;
+}
 export declare const SCHEDULING_PACKAGE_NAME = "scheduling";
 export interface SchedulingInventoryServiceClient {
     /** Service CRUD */
@@ -399,6 +436,11 @@ export interface SchedulingInventoryServiceClient {
     rescheduleBooking(request: RescheduleBookingRequest): Observable<BookingResponse>;
     getAvailability(request: GetAvailabilityRequest): Observable<GetAvailabilityResponse>;
     listBookings(request: ListBookingsRequest): Observable<ListBookingsResponse>;
+    /** Customer Operations */
+    verifyCustomer(request: VerifyCustomerRequest): Observable<VerifyCustomerResponse>;
+    /** Tenant Schedule Operations */
+    getTenantSchedule(request: GetTenantScheduleRequest): Observable<TenantScheduleResponse>;
+    updateTenantSchedule(request: UpdateTenantScheduleRequest): Observable<TenantScheduleResponse>;
 }
 export interface SchedulingInventoryServiceController {
     /** Service CRUD */
@@ -421,6 +463,11 @@ export interface SchedulingInventoryServiceController {
     rescheduleBooking(request: RescheduleBookingRequest): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
     getAvailability(request: GetAvailabilityRequest): Promise<GetAvailabilityResponse> | Observable<GetAvailabilityResponse> | GetAvailabilityResponse;
     listBookings(request: ListBookingsRequest): Promise<ListBookingsResponse> | Observable<ListBookingsResponse> | ListBookingsResponse;
+    /** Customer Operations */
+    verifyCustomer(request: VerifyCustomerRequest): Promise<VerifyCustomerResponse> | Observable<VerifyCustomerResponse> | VerifyCustomerResponse;
+    /** Tenant Schedule Operations */
+    getTenantSchedule(request: GetTenantScheduleRequest): Promise<TenantScheduleResponse> | Observable<TenantScheduleResponse> | TenantScheduleResponse;
+    updateTenantSchedule(request: UpdateTenantScheduleRequest): Promise<TenantScheduleResponse> | Observable<TenantScheduleResponse> | TenantScheduleResponse;
 }
 export declare function SchedulingInventoryServiceControllerMethods(): (constructor: Function) => void;
 export declare const SCHEDULING_INVENTORY_SERVICE_NAME = "SchedulingInventoryService";

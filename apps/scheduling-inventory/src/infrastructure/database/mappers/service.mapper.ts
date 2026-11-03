@@ -34,7 +34,6 @@ export class ServiceMapper {
         eligibleResourceIds: r.eligible_resource_ids ?? [],
         selectionMode: r.selection_mode,
       })),
-      recallIntervalDays: doc.recall_interval_days ?? 0,
       isDeleted: doc.is_deleted ?? false,
       deletedAt: doc.deleted_at ?? null,
       createdAt: doc.created_at,
@@ -77,7 +76,6 @@ export class ServiceMapper {
         eligible_resource_ids: r.eligibleResourceIds,
         selection_mode: r.selectionMode,
       })),
-      recall_interval_days: entity.recallIntervalDays,
       is_deleted: entity.isDeleted,
       deleted_at: entity.deletedAt,
     };
@@ -118,7 +116,6 @@ export class ServiceMapper {
         eligible_resource_ids: r.eligibleResourceIds,
         selection_mode: r.selectionMode,
       })),
-      recall_interval_days: entity.recallIntervalDays,
       created_at: entity.createdAt.toISOString(),
       updated_at: entity.updatedAt.toISOString(),
       is_deleted: entity.isDeleted,

@@ -29,8 +29,10 @@ import {
   RESOURCE_REPOSITORY,
   SCHEDULING_EVENTS_PRODUCER,
   SERVICE_REPOSITORY,
+  TENANT_SCHEDULE_REPOSITORY,
   UNIT_OF_WORK,
 } from '../../../domain/tokens.js';
+import type { ITenantScheduleRepository } from '../../../domain/repositories/tenant-schedule.repository.interface.js';
 import {
   generateBookingReference,
   generateSemanticId,
@@ -62,6 +64,8 @@ export class CreateBookingUseCase implements ICreateBookingUseCase {
     private readonly _bookingAllocationService: IBookingAllocationService,
     @Inject(CACHE_REPOSITORY)
     private readonly _cacheRepo: ICacheRepository,
+    @Inject(TENANT_SCHEDULE_REPOSITORY)
+    private readonly _tenantScheduleRepository: ITenantScheduleRepository,
   ) {}
 
   async execute(dto: CreateBookingRequest): Promise<BookingEntity> {
@@ -81,9 +85,10 @@ export class CreateBookingUseCase implements ICreateBookingUseCase {
     const customerEmail = dto.customer_email?.trim() || '';
     const customerName = dto.customer_name?.trim() || 'Guest';
 
-    const [service, existingCustomerByPhone] = await Promise.all([
+    const [service, existingCustomerByPhone, tenantSchedule] = await Promise.all([
       getCachedService(this._serviceRepository, this._cacheRepo, tenantId, dto.service_id),
       this._customerRepository.findByPhone(tenantId, customerPhone, agentId),
+      this._tenantScheduleRepository.findByTenantAndAgent(tenantId, agentId),
     ]);
 
     if (!service) {
@@ -100,6 +105,24 @@ export class CreateBookingUseCase implements ICreateBookingUseCase {
       dto.start_time,
       dto.end_time,
     );
+
+    const leadTimeHours = tenantSchedule?.scheduling_engine?.default_lead_time_hours ?? 2;
+    const maxAdvanceDays = tenantSchedule?.scheduling_engine?.max_advance_booking_days ?? 60;
+
+    const minBookingTime = Date.now() + leadTimeHours * 3600 * 1000;
+    const maxBookingTime = Date.now() + maxAdvanceDays * 24 * 3600 * 1000;
+
+    if (interval.startTime.getTime() < minBookingTime) {
+      throw new BadRequestException(
+        `Bookings must be scheduled at least ${leadTimeHours} hour(s) in advance.`,
+      );
+    }
+
+    if (interval.startTime.getTime() > maxBookingTime) {
+      throw new BadRequestException(
+        `Bookings cannot be scheduled more than ${maxAdvanceDays} days in advance.`,
+      );
+    }
 
     const [allocation, existingCustomerByEmail] = await Promise.all([
       this._bookingAllocationService.allocateResourcesForSlot({

@@ -28,7 +28,6 @@ export interface IServiceDoc extends Document<string> {
     require_otp?: boolean | null;
   };
   resource_requirements?: IResourceRequirementDoc[];
-  recall_interval_days: number;
   is_deleted: boolean;
   deleted_at: Date | null;
   created_at: Date;
@@ -95,7 +94,6 @@ export const ServiceMongooseSchema = new Schema<IServiceDoc>(
       ],
       default: [],
     },
-    recall_interval_days: { type: Number, default: 0 },
     is_deleted: { type: Boolean, default: false, index: true },
     deleted_at: { type: Date, default: null },
   },

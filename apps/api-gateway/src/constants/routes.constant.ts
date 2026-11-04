@@ -50,10 +50,12 @@ export const API_ROUTES = {
     BOOKING_RESCHEDULE: 'bookings/:id/reschedule',
     AVAILABILITY: 'availability',
     SCHEDULE: 'schedule',
+    CUSTOMERS: 'customers',
   },
   PUBLIC_CHAT: {
     BASE: 'api/v1/public/chat',
     ROOT: '',
+    INIT: 'init',
     MESSAGES: 'messages',
   },
   KNOWLEDGE: {
@@ -64,6 +66,8 @@ export const API_ROUTES = {
     ONBOARDING_START: 'onboarding/start',
     ONBOARDING_MESSAGE: 'onboarding/message',
     ONBOARDING_SANDBOX: 'onboarding/sandbox',
+    ONBOARDING_SANDBOX_INIT: 'onboarding/sandbox/init',
+    ONBOARDING_SANDBOX_MESSAGES: 'onboarding/sandbox/messages',
     AGENTS_DRAFT: 'agents/draft',
     AGENTS: 'agents',
     AGENT_MESSAGES: 'agents/:agentId/messages',

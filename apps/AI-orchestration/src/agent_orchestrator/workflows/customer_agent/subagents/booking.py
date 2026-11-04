@@ -1,13 +1,3 @@
-"""
-Booking Agent — handles availability, booking, cancellation, rescheduling.
-
-Tools available:
-  check_availability, book_appointment, cancel_appointment, reschedule_appointment
-
-The supervisor_prompt from AgentRuntimeConfig is injected here as a
-business-owner custom instruction block (e.g. "always upsell premium
-packages", "offer free consultation for first-time customers").
-"""
 from __future__ import annotations
 
 import json
@@ -22,7 +12,7 @@ try:
 except ImportError:
     _has_toon = False
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
@@ -30,9 +20,13 @@ from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from pydantic import SecretStr
 
+from agent_orchestrator.clients.redis_client import get_session_auth
+
 logger = logging.getLogger(__name__)
 
 _BOOKING_TOOLS = {
+    "search_resources",
+    "search_services",
     "check_availability",
     "book_appointment",
     "cancel_appointment",
@@ -78,6 +72,7 @@ def _build_booking_system_prompt(
     agent_id: str,
     biz_context: dict[str, Any],
     session_id: str = "",
+    session_auth: dict[str, Any] | None = None,
 ) -> str:
     now_iso = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
     services = biz_context.get("services", [])
@@ -100,6 +95,21 @@ def _build_booking_system_prompt(
 {supervisor_prompt.strip()}
 """
 
+    session_auth_block = ""
+    if session_auth and session_auth.get("is_verified"):
+        auth_phone = session_auth.get("phone", "")
+        auth_name = session_auth.get("customer_name") or ""
+        name_line = f"Customer Name: {auth_name}\n" if auth_name else ""
+        session_auth_block = f"""
+[Authenticated Customer Profile (Active 24h Session)]
+{name_line}Verified Phone: {auth_phone}
+Verification Status: VERIFIED
+Instructions for Authenticated Customer:
+- This customer has already verified their phone via OTP. Do NOT ask them for an OTP code again.
+- When they want to book, view appointments, cancel, or reschedule, use their verified phone ({auth_phone}).
+- ALWAYS confirm with the customer before finalizing: "Shall I proceed under {auth_name or 'your phone'} ({auth_phone})?"
+"""
+
     return f"""You are the AI Booking Concierge for {biz_context.get("business_name")}.
 Your sole purpose in this conversation turn: assist customers with scheduling actions.{custom_instructions_block}
 
@@ -109,7 +119,7 @@ Business Timezone: {biz_context.get("timezone")}
 Tenant ID: {tenant_id}
 Agent ID: {agent_id}
 Session ID: {session_id}
-
+{session_auth_block}
 [Services Catalog (Compact TOON: id, name)]
 {services_catalog}
 
@@ -119,7 +129,7 @@ Session ID: {session_id}
    - If `verify_booking_otp` returns `status: "failed"`: Inform the customer immediately that the code is invalid or expired. Ask them to check and re-enter the code, or offer to send a new code. NEVER proceed to show bookings or confirm actions if verification failed!
    - If `verify_booking_otp` returns `status: "verified"`: Only then execute the requested action (`get_customer_bookings`, `book_appointment`, etc.).
 3. ZERO HALLUCINATED BOOKINGS: You are STRICTLY FORBIDDEN from inventing or hallucinating booking reference codes (e.g. `BK-...`), appointment dates, times, or statuses. You may ONLY display booking details that are returned verbatim in the JSON output of `get_customer_bookings`. If the tool returns no bookings, say "No bookings found".
-4. EXACT TOOL NAMES: You must use the exact registered tool names without typos or extra characters (e.g. `book_appointment`, `cancel_appointment`, `reschedule_appointment`, `get_customer_bookings`, `send_booking_otp`, `verify_booking_otp`, `check_availability`).
+4. EXACT TOOL NAMES: You must use the exact registered tool names without typos or extra characters (e.g. `search_resources`, `search_services`, `check_availability`, `book_appointment`, `cancel_appointment`, `reschedule_appointment`, `get_customer_bookings`, `send_booking_otp`, `verify_booking_otp`).
 
 [Scheduling Engine Rules]
 1. Minimum Lead Time: Slots can only be booked at least {lead_time_hours} hours from current time. Never offer slots earlier than this lead time.
@@ -144,8 +154,11 @@ Session ID: {session_id}
 
 [Scheduling Protocol]
 1. Service & Staff Lookup:
-   - Identify requested service from the catalog above to obtain its `id` (this is the `service_id`).
-   - The catalog already includes duration, buffer, and price details.
+   - When a customer asks who provides or delivers a service (e.g. "who does shirt stitching?", "who does haircuts?", "who is the doctor for consultation?"):
+     Call `search_resources(tenant_id="{tenant_id}", agent_id="{agent_id}", query=...)` to find matching staff/practitioners/rooms.
+     Name the specialist and proactively offer to check their availability or book with them!
+   - To look up specific service details, pricing, duration, or categories:
+     Reference the catalog above or call `search_services(tenant_id="{tenant_id}", agent_id="{agent_id}", query=...)`.
 2. Checking Availability:
    - Match requests to service_id and call `check_availability(tenant_id="{tenant_id}", agent_id="{agent_id}", service_id=..., start_date=...)`.
    - NEVER invent or hallucinate time slots. Present slots in business timezone ({biz_context.get("timezone")}).
@@ -188,8 +201,15 @@ async def run_booking_agent(
         langchain_msgs.append(m)
     langchain_msgs.append(HumanMessage(content=message))
 
+    session_auth: dict[str, Any] | None = None
+    if session_id:
+        try:
+            session_auth = await get_session_auth(session_id)
+        except Exception as e:
+            logger.warning("[BookingAgent] Error retrieving session auth: %s", e)
+
     system_prompt = _build_booking_system_prompt(
-        tenant_id, agent_id, biz_context, session_id=session_id
+        tenant_id, agent_id, biz_context, session_id=session_id, session_auth=session_auth
     )
     model = _get_chat_model(temperature=0.0)
 
@@ -198,7 +218,7 @@ async def run_booking_agent(
         tools=booking_tools,
         prompt=SystemMessage(content=system_prompt),
     )
-    
+
     try:
         result = await agent.ainvoke({"messages": langchain_msgs})
         final = result["messages"][-1]
@@ -217,3 +237,4 @@ async def run_booking_agent(
             "I'm sorry, I encountered a temporary issue with the scheduling system. "
             "Please try again in a moment."
         )
+

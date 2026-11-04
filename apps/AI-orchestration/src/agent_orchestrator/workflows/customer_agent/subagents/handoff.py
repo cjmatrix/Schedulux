@@ -1,15 +1,3 @@
-"""
-Human Handoff Agent — guardrail escalation node.
-
-This is NOT a full LLM agent. It is a deterministic guardrail that reads
-the handoff config from AgentRuntimeConfig.guardrails.human_handoff and
-returns a pre-configured escalation message. No LLM call is made.
-
-Triggered by:
-  - Emergency keywords  (guardrails.triage_emergency.keywords)
-  - Human handoff topics (guardrails.human_handoff.trigger_topics)
-  — Both evaluated by the Supervisor before reaching here.
-"""
 from __future__ import annotations
 
 import logging
@@ -34,10 +22,6 @@ def run_handoff_agent(
     biz_context: dict[str, Any],
     is_emergency: bool = False,
 ) -> str:
-    """
-    Returns a pre-configured escalation response.
-    No network I/O — pure in-memory resolution.
-    """
     guardrails = biz_context.get("guardrails") or {}
 
     if is_emergency:
@@ -49,7 +33,7 @@ def run_handoff_agent(
 
     handoff_cfg = guardrails.get("human_handoff") or {}
     handoff_message = handoff_cfg.get("handoff_message") or _DEFAULT_HANDOFF_MSG
-    contact = handoff_cfg.get("reception_contact")
+    contact = handoff_cfg.get("reception_contact") or biz_context.get("public_phone")
 
     if contact:
         handoff_message = f"{handoff_message}\n\nYou can reach us directly at: {contact}"
@@ -59,3 +43,4 @@ def run_handoff_agent(
         biz_context.get("business_name"),
     )
     return handoff_message
+

@@ -41,11 +41,127 @@ export function useAgentOnboarding({
   const pagesCountRef = useRef(1);
 
   const [sandboxMessages, setSandboxMessages] = useState<
-    Array<{ role: 'user' | 'agent'; text: string }>
+    Array<{ id?: string; role: 'user' | 'agent'; text: string; created_at?: string }>
   >([]);
   const [sandboxInput, setSandboxInput] = useState('');
   const [isSandboxTyping, setIsSandboxTyping] = useState(false);
-  const [sandboxSessionId, setSandboxSessionId] = useState<string>(() => `sandbox_${Date.now()}`);
+  const [sandboxSessionId, setSandboxSessionId] = useState<string>('');
+  const [sandboxToken, setSandboxToken] = useState<string>('');
+  const [sandboxNextCursor, setSandboxNextCursor] = useState<string | null>(null);
+  const [sandboxHasMore, setSandboxHasMore] = useState<boolean>(false);
+  const [isFetchingOlderSandboxMessages, setIsFetchingOlderSandboxMessages] =
+    useState<boolean>(false);
+
+  const sandboxStorageKey = useMemo(
+    () => `sandbox_token_${tenantId || 'tenant'}_${agentId || 'default'}`,
+    [tenantId, agentId],
+  );
+
+  useEffect(() => {
+    if (!tenantId || !agentId) return;
+
+    let isMounted = true;
+    const existingToken = localStorage.getItem(sandboxStorageKey);
+
+    const init = async () => {
+      try {
+        const res = await onboardingApi.initSandboxSession({
+          tenant_id: tenantId,
+          agent_id: agentId,
+          token: existingToken || undefined,
+        });
+
+        if (!isMounted) return;
+
+        const data = res.data;
+        if (data) {
+          setSandboxSessionId(data.session_id);
+          setSandboxToken(data.token);
+          setSandboxNextCursor(data.next_cursor || null);
+          setSandboxHasMore(Boolean(data.has_more));
+          localStorage.setItem(sandboxStorageKey, data.token);
+
+          if (!data.is_first_time && data.messages && data.messages.length > 0) {
+            setSandboxMessages(
+              data.messages.map((m) => ({
+                id: m.id,
+                role: (m.role === 'user' ? 'user' : 'agent') as 'user' | 'agent',
+                text: m.content,
+                created_at: m.created_at,
+              })),
+            );
+          } else {
+            setSandboxMessages([
+              {
+                role: 'agent',
+                text: `Hello! I'm your AI booking coordinator. How can I assist you with scheduling or consultations today?`,
+              },
+            ]);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to initialize sandbox session:', err);
+      }
+    };
+
+    init();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [tenantId, agentId, sandboxStorageKey]);
+
+  const fetchOlderSandboxMessages = useCallback(async () => {
+    if (
+      !sandboxSessionId ||
+      !sandboxNextCursor ||
+      isFetchingOlderSandboxMessages ||
+      !sandboxHasMore
+    ) {
+      return;
+    }
+
+    setIsFetchingOlderSandboxMessages(true);
+    try {
+      const res = await onboardingApi.getSandboxMessages({
+        agent_id: agentId,
+        session_id: sandboxSessionId,
+        token: sandboxToken || undefined,
+        before: sandboxNextCursor,
+        limit: 20,
+      });
+
+      const olderMsgs = res.data?.messages || [];
+      const newCursor = res.data?.next_cursor || null;
+      const newHasMore = Boolean(res.data?.has_more);
+
+      setSandboxNextCursor(newCursor);
+      setSandboxHasMore(newHasMore);
+
+      if (olderMsgs.length > 0) {
+        setSandboxMessages((prev) => [
+          ...olderMsgs.map((m) => ({
+            id: m.id,
+            role: (m.role === 'user' ? 'user' : 'agent') as 'user' | 'agent',
+            text: m.content,
+            created_at: m.created_at,
+          })),
+          ...prev,
+        ]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch older sandbox messages:', err);
+    } finally {
+      setIsFetchingOlderSandboxMessages(false);
+    }
+  }, [
+    agentId,
+    sandboxSessionId,
+    sandboxToken,
+    sandboxNextCursor,
+    isFetchingOlderSandboxMessages,
+    sandboxHasMore,
+  ]);
 
   const hasStartedRef = useRef(false);
   const currentAgentIdRef = useRef<string | null>(null);
@@ -476,9 +592,18 @@ export function useAgentOnboarding({
         const res = await onboardingApi.sendSandboxMessage({
           tenant_id: tenantId,
           agent_id: agentId,
-          session_id: sandboxSessionId,
+          session_id: sandboxSessionId || undefined,
+          token: sandboxToken || undefined,
           message: userText,
         });
+
+        if (res.data?.token) {
+          setSandboxToken(res.data.token);
+          localStorage.setItem(sandboxStorageKey, res.data.token);
+        }
+        if (res.data?.session_id) {
+          setSandboxSessionId(res.data.session_id);
+        }
 
         const reply = res.data?.reply || `I would be happy to help you with that at ${clinicName}!`;
 
@@ -496,21 +621,44 @@ export function useAgentOnboarding({
         setIsSandboxTyping(false);
       }
     },
-    [sandboxInput, isSandboxTyping, tenantId, agentId, sandboxSessionId],
+    [sandboxInput, isSandboxTyping, tenantId, agentId, sandboxSessionId, sandboxToken, sandboxStorageKey],
   );
 
-  const resetSandbox = useCallback((greeting?: string) => {
-    setSandboxSessionId(`sandbox_${Date.now()}`);
-    setSandboxMessages([
-      {
-        role: 'agent',
-        text:
-          greeting ||
-          `Hello! I'm your AI booking coordinator. How can I assist you with scheduling or consultations today?`,
-      },
-    ]);
-    setSandboxInput('');
-  }, []);
+  const resetSandbox = useCallback(
+    async (greeting?: string) => {
+      setSandboxInput('');
+      setSandboxNextCursor(null);
+      setSandboxHasMore(false);
+      setSandboxMessages([
+        {
+          role: 'agent',
+          text:
+            greeting ||
+            `Hello! I'm your AI booking coordinator. How can I assist you with scheduling or consultations today?`,
+        },
+      ]);
+
+      if (!tenantId || !agentId) return;
+
+      try {
+        const res = await onboardingApi.initSandboxSession({
+          tenant_id: tenantId,
+          agent_id: agentId,
+        });
+
+        if (res.data) {
+          setSandboxSessionId(res.data.session_id);
+          setSandboxToken(res.data.token);
+          setSandboxNextCursor(res.data.next_cursor || null);
+          setSandboxHasMore(Boolean(res.data.has_more));
+          localStorage.setItem(sandboxStorageKey, res.data.token);
+        }
+      } catch (err) {
+        console.error('Failed to reset sandbox session:', err);
+      }
+    },
+    [tenantId, agentId, sandboxStorageKey],
+  );
 
   return {
     messages,
@@ -543,6 +691,11 @@ export function useAgentOnboarding({
     sendSandboxMessage,
     resetSandbox,
     sandboxSessionId,
+    sandboxToken,
+    sandboxNextCursor,
+    sandboxHasMore,
+    isFetchingOlderSandboxMessages,
+    fetchOlderSandboxMessages,
 
     refetchMessages: () => queryClient.invalidateQueries({ queryKey }),
   };

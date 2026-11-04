@@ -50,12 +50,36 @@ class CustomerMessageRepository:
         )
         return msg
 
+    async def get_messages(
+        self,
+        session_id: str,
+        before: datetime | None = None,
+        limit: int = 20,
+    ) -> tuple[list[CustomerMessage], bool, str | None]:
+        query: dict[str, Any] = {"session_id": session_id}
+        if before:
+            query["created_at"] = {"$lt": before}
+
+        messages = (
+            await CustomerMessage.find(query)
+            .sort("-created_at")
+            .limit(limit + 1)
+            .to_list()
+        )
+        has_more = len(messages) > limit
+        slice_msgs = messages[:limit]
+
+        next_cursor = (
+            slice_msgs[-1].created_at.isoformat() if slice_msgs and has_more else None
+        )
+
+        return list(reversed(slice_msgs)), has_more, next_cursor
+
     async def get_recent_messages(
         self,
         session_id: str,
         limit: int = 10,
     ) -> list[CustomerMessage]:
-        """Fetch last `limit` messages in chronological order (sliding window)."""
         messages = (
             await CustomerMessage.find({"session_id": session_id})
             .sort("-created_at")

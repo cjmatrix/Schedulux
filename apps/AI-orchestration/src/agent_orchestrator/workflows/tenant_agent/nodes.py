@@ -1,297 +1,25 @@
 from __future__ import annotations
 
 import copy
-import json
 import os
-import re
 import secrets
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal, cast
+from typing import cast
 
-from dotenv import load_dotenv
-from jsonmerge import Merger
-from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_groq import ChatGroq
-from langchain_openai import ChatOpenAI
-from langgraph.graph import END, StateGraph
-from langgraph.graph.message import add_messages
-from pydantic import BaseModel, Field, SecretStr
-from typing_extensions import TypedDict
 
 from agent_orchestrator.models import StrictDraftPatchValidator
-
-_env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env"))
-load_dotenv(_env_path)
-
-_GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-_GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
-_GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY", "")
-_GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
-
-
-class GraphState(TypedDict):
-    tenant_id: str
-    agent_id: str | None
-    draft: dict[str, Any]
-    messages: Annotated[list, add_messages]
-    structural_gaps: list[dict]
-    pending_field: str | None
-    semantic_note: str | None
-    decision: str | None
-    pending_draft_update: dict[str, Any] | None
-    status: str
-    patch_retries: int
-
-
-STRUCTURAL_REQUIREMENTS: list[dict] = [
-    {
-        "field": "business_profile.name",
-        "question": "What is the name of your business?",
-        "type": "scalar",
-    },
-    {
-        "field": "business_profile.vertical",
-        "question": (
-            "What industry are you in? "
-            "(e.g. medical_dental, auto_repair, lodging, salon, legal, custom)"
-        ),
-        "type": "scalar",
-    },
-    {
-        "field": "business_profile.timezone",
-        "question": "What timezone are your operating hours in? (e.g. Asia/Kolkata, America/New_York)",
-        "type": "scalar",
-    },
-    {
-        "field": "business_profile.contact.public_phone",
-        "question": "What is your public contact phone number?",
-        "type": "scalar",
-    },
-    {
-        "field": "operating_hours",
-        "question": (
-            "What are your operating hours? "
-            "Describe your weekly schedule (e.g. Mon-Fri 9am-6pm, Sat 10am-2pm, closed Sun)."
-        ),
-        "type": "operating_hours",
-    },
-    {
-        "field": "services",
-        "question": (
-            "Please tell me about your first service — its name, duration in minutes, "
-            "cleanup/buffer time in minutes, and price."
-        ),
-        "type": "services_present",
-    },
-    {
-        "field": "services[*].name",
-        "question": "What is the name of this service?",
-        "type": "per_service",
-        "attr": "name",
-    },
-    {
-        "field": "services[*].duration_minutes",
-        "question": "How many minutes does '{service_name}' take?",
-        "type": "per_service",
-        "attr": "duration_minutes",
-    },
-    {
-        "field": "services[*].buffer_minutes",
-        "question": "How many minutes of cleanup/buffer time after '{service_name}'? (enter 0 if none)",
-        "type": "per_service",
-        "attr": "buffer_minutes",
-    },
-    {
-        "field": "services[*].price.amount",
-        "question": "What is the price of '{service_name}'? (enter 0 if free)",
-        "type": "per_service_nested",
-        "attr": "price.amount",
-    },
-    {
-        "field": "services[*].resource_requirements",
-        "question": "Who or what delivers '{service_name}'? (Please assign at least one staff member, doctor, room, or equipment so customers can book it)",
-        "type": "per_service_requirements",
-    },
-    {
-        "field": "resources",
-        "question": (
-            "Who or what delivers your services? "
-            "Please tell me about at least one staff member or bookable resource "
-            "(e.g. staff member name and role, or room/bay/chair name)."
-        ),
-        "type": "resources_present",
-    },
-]
-
-
-def _get_nested(d: dict, path: str) -> Any:
-    parts = path.split(".")
-    cur: Any = d
-    for part in parts:
-        if not isinstance(cur, dict):
-            return None
-        cur = cur.get(part)
-    return cur
-
-
-def _set_nested(d: dict, path: str, value: Any) -> None:
-    parts = path.split(".")
-    cur = d
-    for part in parts[:-1]:
-        if part not in cur or not isinstance(cur[part], dict):
-            cur[part] = {}
-        cur = cur[part]
-    cur[parts[-1]] = value
-
-
-def _get_llm(temperature: float = 0.2) -> BaseChatModel:
-
-    groq_api_key = os.environ.get("GROQ_API_KEY") or _GROQ_API_KEY
-    gemini_api_key = (
-        os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or _GEMINI_API_KEY
-    )
-
-    if groq_api_key:
-        groq_model = os.environ.get("GROQ_MODEL") or _GROQ_MODEL or "openai/gpt-oss-120b"
-        if ChatGroq is not None:
-            print(f"[Tenant Agent] Initializing ChatGroq with model '{groq_model}'.", flush=True)
-            return ChatGroq(  # type: ignore[call-arg]
-                model_name=groq_model,
-                groq_api_key=groq_api_key,
-                temperature=temperature,
-                max_tokens=8192,
-            )
-        else:
-            print(
-                f"[Tenant Agent] Initializing ChatOpenAI (Groq endpoint) with model '{groq_model}'.",
-                flush=True,
-            )
-            return ChatOpenAI(  # type: ignore[call-arg]
-                model=groq_model,
-                api_key=SecretStr(groq_api_key),
-                base_url="https://api.groq.com/openai/v1",
-                temperature=temperature,
-                max_tokens=8192,
-            )
-    else:
-        model_name = os.environ.get("GEMINI_MODEL") or _GEMINI_MODEL or "gemini-3.5-flash"
-        if "gemma" in model_name.lower():
-            model_name = "gemini-3.5-flash"
-        print(
-            f"[Tenant Agent] Initializing ChatGoogleGenerativeAI with model '{model_name}'.",
-            flush=True,
-        )
-        return ChatGoogleGenerativeAI(
-            model=model_name,
-            google_api_key=gemini_api_key,
-            temperature=temperature,
-            max_output_tokens=8192,
-        )
-
-
-def _compute_structural_gaps(draft: dict) -> list[dict]:
-    gaps: list[dict] = []
-
-    for req in STRUCTURAL_REQUIREMENTS:
-        rtype = req["type"]
-
-        if rtype == "scalar":
-            if not _get_nested(draft, req["field"]):
-                gaps.append(req)
-
-        elif rtype == "operating_hours":
-            oh = draft.get("operating_hours", {})
-            weekdays = ("monday", "tuesday", "wednesday", "thursday", "friday")
-            has_slot = any(isinstance(oh.get(d), list) and len(oh[d]) > 0 for d in weekdays)
-            if not has_slot:
-                gaps.append(req)
-
-        elif rtype == "services_present":
-            active_svcs = [s for s in draft.get("services", []) if not s.get("is_deleted")]
-            if not active_svcs:
-                gaps.append(req)
-
-        elif rtype == "resources_present":
-            active_res = [
-                r
-                for r in draft.get("resources", [])
-                if not r.get("is_deleted")
-                and r.get("dispatch_status") not in ("retired", "inactive")
-            ]
-            if not active_res:
-                gaps.append(req)
-
-        elif rtype == "per_service":
-            attr = req["attr"]
-            for idx, svc in enumerate(draft.get("services", [])):
-                if svc.get("is_deleted"):
-                    continue
-                val = svc.get(attr)
-                if val is None or val == "":
-                    svc_name = svc.get("name", f"Service #{idx + 1}")
-                    gaps.append(
-                        {
-                            **req,
-                            "service_idx": idx,
-                            "question": req["question"].format(service_name=svc_name),
-                        }
-                    )
-
-        elif rtype == "per_service_nested":
-            for idx, svc in enumerate(draft.get("services", [])):
-                if svc.get("is_deleted"):
-                    continue
-                val = _get_nested(svc, req["attr"])
-                if val is None:
-                    svc_name = svc.get("name", f"Service #{idx + 1}")
-                    gaps.append(
-                        {
-                            **req,
-                            "service_idx": idx,
-                            "question": req["question"].format(service_name=svc_name),
-                        }
-                    )
-
-        elif rtype == "per_service_requirements":
-            for idx, svc in enumerate(draft.get("services", [])):
-                if svc.get("is_deleted"):
-                    continue
-                reqs = svc.get("resource_requirements") or []
-                has_assigned = any(
-                    isinstance(r, dict) and len(r.get("eligible_resource_ids", [])) > 0
-                    for r in reqs
-                )
-                if not has_assigned:
-                    svc_name = svc.get("name", f"Service #{idx + 1}")
-                    gaps.append(
-                        {
-                            **req,
-                            "service_idx": idx,
-                            "question": req["question"].format(service_name=svc_name),
-                        }
-                    )
-
-    return gaps
-
-
-def _format_draft_toon(draft: dict) -> str:
-    """
-    Serializes the draft schema using TOON (Token-Oriented Object Notation).
-    Provides optimal token compression for LLM attention while preserving complete schema structure.
-    """
-    try:
-        import toon
-
-        return toon.encode(draft)
-    except Exception as e:
-        print(f"[TOON Warning] Fallback to json: {e}", flush=True)
-        return json.dumps(draft, indent=2)
+from agent_orchestrator.workflows.tenant_agent.state import GraphState, SemanticAction
+from agent_orchestrator.workflows.tenant_agent.tools import apply_draft_merge
+from agent_orchestrator.workflows.tenant_agent.utils import (
+    _compute_structural_gaps,
+    _format_draft_toon,
+    _get_llm,
+)
 
 
 async def node_load_draft(state: GraphState) -> dict:
-    """Entry point. Ensures baseline dict structure."""
     draft = copy.deepcopy(state.get("draft", {}))
     tenant_id = state.get("tenant_id") or draft.get("tenant_id", "")
     agent_id = state.get("agent_id") or draft.get("agent_id") or f"agent_{tenant_id}_v1"
@@ -318,35 +46,7 @@ async def node_load_draft(state: GraphState) -> dict:
     }
 
 
-class SemanticAction(BaseModel):
-    action: Literal["update_schema", "ask_user", "finalize"] = Field(
-        description="Action to take based on current state"
-    )
-    question: str = Field(
-        description=(
-            "MANDATORY. The conversational response and follow-up question sent to the user. "
-            "Must ALWAYS be a non-empty string. "
-            "When updating the schema ('update_schema'): briefly acknowledge the applied changes (1 sentence) "
-            "AND proactively ask the next specific question from the deployment checklist or suggest an optional feature. "
-            "For 'ask_user': ask a specific, contextual follow-up question based on what is missing in the draft. "
-            "For 'finalize': confirm the save and summarise next steps. "
-            "NEVER leave this field empty or null."
-        ),
-    )
-    draft_update: StrictDraftPatchValidator | None = Field(
-        default=None,
-        description=(
-            "Structured partial draft containing any configuration updates to merge into the draft. "
-            "Use this whenever the user provides services, staff/resources, hours, prices, or business details."
-        ),
-    )
-
-
 async def node_llm_semantic_review(state: GraphState) -> dict:
-    """
-    Acts as the 'Main Brain' for the semantic phase.
-    Decides whether to apply structured draft updates, ask the user a question, or finalize setup.
-    """
     llm = _get_llm().with_structured_output(SemanticAction)
 
     all_msgs = state.get("messages", [])
@@ -649,19 +349,17 @@ CRITICAL OUTPUT RULE — QUESTION FIELD IS MANDATORY:
 """
 
     try:
-        print("Start streaming", flush=True)
         resp = cast(
             SemanticAction,
             await llm.ainvoke(
                 [SystemMessage(content="You are a Schedulux agent."), HumanMessage(content=prompt)]
             ),
         )
-        print("End streaming", flush=True)
     except Exception as e:
         print(f"[Semantic Agent Error] {e}", flush=True)
 
         gemini_api_key = (
-            os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or _GEMINI_API_KEY
+            os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or ""
         )
         if gemini_api_key:
             try:
@@ -741,135 +439,7 @@ CRITICAL OUTPUT RULE — QUESTION FIELD IS MANDATORY:
         }
 
 
-_MERGE_SCHEMA = {
-    "properties": {
-        "services": {
-            "mergeStrategy": "arrayMergeById",
-            "mergeOptions": {"idRef": "service_id"},
-        },
-        "resources": {
-            "mergeStrategy": "arrayMergeById",
-            "mergeOptions": {"idRef": "resource_id"},
-        },
-        "operating_hours": {
-            "properties": {
-                "blackout_dates": {
-                    "mergeStrategy": "arrayMergeById",
-                    "mergeOptions": {"idRef": "date"},
-                }
-            }
-        },
-    }
-}
-_DRAFT_MERGER = Merger(_MERGE_SCHEMA)
-
-
-def _slugify(val: str) -> str:
-    cleaned = re.sub(r"[^a-zA-Z0-9]+", "_", val.strip().lower()).strip("_")
-    return cleaned or "item"
-
-
-def apply_draft_merge(base_draft: dict[str, Any], update_data: dict[str, Any]) -> dict[str, Any]:
-    """
-    Merges a structured partial draft update (RFC 7396 style) into base_draft.
-    - Resolves or generates service_id and resource_id matching existing names
-    - Merges services and resources by ID using arrayMergeById
-    - Replaces weekday operating hours if specified
-    - Merges nested dicts (business_profile, scheduling_engine, etc.) recursively
-    """
-
-    print(update_data, flush=True)
-    if not update_data:
-        return base_draft
-
-    up = copy.deepcopy(update_data)
-
-    if "services" in up and isinstance(up["services"], list):
-        base_services = {
-            s.get("name", "").strip().lower(): s.get("service_id")
-            for s in base_draft.get("services", [])
-            if s.get("name") and s.get("service_id")
-        }
-        base_services_by_id = {
-            s.get("service_id"): s for s in base_draft.get("services", []) if s.get("service_id")
-        }
-        for s in up["services"]:
-            if isinstance(s, dict):
-                name_key = s.get("name", "").strip().lower()
-
-                if name_key and name_key in base_services and base_services[name_key]:
-                    s["service_id"] = base_services[name_key]
-
-                elif s.get("service_id") and s.get("service_id") in base_services_by_id:
-                    pass
-
-                elif not s.get("service_id"):
-                    if name_key:
-                        s["service_id"] = f"srv_{_slugify(name_key)}"
-                    else:
-                        s["service_id"] = f"srv_{secrets.token_hex(4)}"
-                if s.get("is_deleted"):
-                    s.setdefault("deleted_at", datetime.now(UTC).isoformat())
-
-    if "resources" in up and isinstance(up["resources"], list):
-        base_resources = {
-            r.get("name", "").strip().lower(): r.get("resource_id")
-            for r in base_draft.get("resources", [])
-            if r.get("name") and r.get("resource_id")
-        }
-        base_resources_by_id = {
-            r.get("resource_id"): r for r in base_draft.get("resources", []) if r.get("resource_id")
-        }
-        for r in up["resources"]:
-            if isinstance(r, dict):
-                name_key = r.get("name", "").strip().lower()
-
-                if name_key and name_key in base_resources and base_resources[name_key]:
-                    r["resource_id"] = base_resources[name_key]
-
-                elif r.get("resource_id") and r.get("resource_id") in base_resources_by_id:
-                    pass
-
-                elif not r.get("resource_id"):
-                    if name_key:
-                        r["resource_id"] = f"res_{_slugify(name_key)}"
-                    else:
-                        r["resource_id"] = f"res_{secrets.token_hex(4)}"
-                if "custom_shift_overrides" in r and isinstance(r["custom_shift_overrides"], str):
-                    try:
-                        r["custom_shift_overrides"] = json.loads(r["custom_shift_overrides"])
-                    except Exception:
-                        r["custom_shift_overrides"] = {}
-                if r.get("is_deleted"):
-                    r.setdefault("deleted_at", datetime.now(UTC).isoformat())
-                    r["dispatch_status"] = "retired"
-                    r["is_bookable"] = False
-
-    merged = _DRAFT_MERGER.merge(base_draft, up)
-
-    deleted_res_ids = {
-        r.get("resource_id")
-        for r in merged.get("resources", [])
-        if isinstance(r, dict) and r.get("is_deleted") and r.get("resource_id")
-    }
-    if deleted_res_ids:
-        for svc in merged.get("services", []):
-            if isinstance(svc, dict) and "resource_requirements" in svc:
-                for rr in svc.get("resource_requirements") or []:
-                    if isinstance(rr, dict) and "eligible_resource_ids" in rr:
-                        rr["eligible_resource_ids"] = [
-                            rid for rid in rr["eligible_resource_ids"] if rid not in deleted_res_ids
-                        ]
-
-    return cast(dict[str, Any], merged)
-
-
 async def node_apply_draft_update(state: GraphState) -> dict:
-    """
-    Execution / Tool Node: Applies structured draft updates to the draft via JSON merge.
-    Keeps mutation and side-effects strictly separate from LLM decision making.
-    Writes the updated draft directly to Redis cache and keeps state in LangGraph memory (0 MongoDB hits).
-    """
     draft_update = state.get("pending_draft_update")
     if not draft_update:
         return {"decision": None, "pending_draft_update": None}
@@ -936,11 +506,6 @@ async def node_apply_draft_update(state: GraphState) -> dict:
 
 
 async def node_ask_human_semantic(state: GraphState) -> dict:
-    """
-    Interrupts the graph to ask the human the semantic agent's question.
-    Records the Q&A in the conversation history and loops back to the agent.
-    Defers writing the consolidated MongoDB AgentDraft checkpoint to here (once per conversational turn).
-    """
     tenant_id = state.get("tenant_id", "")
     agent_id = state.get("agent_id") or state.get("draft", {}).get("agent_id", "")
     current_draft = state.get("draft", {})
@@ -948,8 +513,6 @@ async def node_ask_human_semantic(state: GraphState) -> dict:
 
     if tenant_id and agent_id and current_draft:
         try:
-            import secrets
-
             from agent_orchestrator.models import AgentDraft, init_db
 
             await init_db()
@@ -988,11 +551,26 @@ async def node_ask_human_semantic(state: GraphState) -> dict:
     }
 
 
+async def node_block_incomplete_finalize(state: GraphState) -> dict:
+    draft = state.get("draft", {})
+    gaps = _compute_structural_gaps(draft)
+    missing_desc = "\n".join(
+        [f"• {g['field'].replace('_', ' ').title()}: {g['question']}" for g in gaps]
+    )
+    note = (
+        f"We cannot finalize and deploy your agent just yet because a few required configuration items are still missing:\n\n"
+        f"{missing_desc}\n\n"
+        f"Could you please provide these details so we can complete your setup?"
+    )
+    return {
+        "decision": "ask_user",
+        "semantic_note": note,
+        "structural_gaps": gaps,
+        "status": "awaiting_input",
+    }
+
+
 async def node_finalize_and_save(state: GraphState) -> dict:
-    """
-    Stamps the config as live and upserts to MongoDB via Beanie.
-    One live config per tenant (upsert by tenant_id).
-    """
     from agent_orchestrator.models import (
         AgentRuntimeConfig,
         init_db,
@@ -1024,8 +602,6 @@ async def node_finalize_and_save(state: GraphState) -> dict:
         print(f"[TenantAgent Warning] Unexpected exception during inventory sync: {se}", flush=True)
 
     agent_id = draft.get("agent_id") or state.get("agent_id") or f"agent_{tenant_id}_v1"
-
-    import secrets
 
     from agent_orchestrator.models import AgentDraft, canonicalize_agent_schema
 
@@ -1095,43 +671,13 @@ async def node_finalize_and_save(state: GraphState) -> dict:
     except Exception as re:
         print(f"[TenantAgent Warning] Failed to update Redis cache on finalize: {re}", flush=True)
 
-
     return {
         "status": "complete",
         "draft": canonical_draft,
     }
 
 
-async def node_block_incomplete_finalize(state: GraphState) -> dict:
-    """
-    Safety Gatekeeper: Intercepts premature finalize attempts when minimum deployment checklist items are still missing.
-    Sets a polite, clear explanation in semantic_note and directs to ask_human_semantic.
-    """
-    draft = state.get("draft", {})
-    gaps = _compute_structural_gaps(draft)
-    missing_desc = "\n".join(
-        [f"• {g['field'].replace('_', ' ').title()}: {g['question']}" for g in gaps]
-    )
-    note = (
-        f"We cannot finalize and deploy your agent just yet because a few required configuration items are still missing:\n\n"
-        f"{missing_desc}\n\n"
-        f"Could you please provide these details so we can complete your setup?"
-    )
-    return {
-        "decision": "ask_user",
-        "semantic_note": note,
-        "structural_gaps": gaps,
-        "status": "awaiting_input",
-    }
-
-
 def route_semantic(state: GraphState) -> str:
-    """
-    Routes from semantic review based on the explicit decision state:
-      - 'update_schema' -> apply_draft_update
-      - 'ask_user'      -> ask_human_semantic
-      - 'finalize'      -> block_incomplete_finalize (if checklist gaps remain) else finalize_and_save
-    """
     decision = state.get("decision")
     if decision == "update_schema":
         return "apply_draft_update"
@@ -1147,245 +693,7 @@ def route_semantic(state: GraphState) -> str:
 
 
 def route_after_patch(state: GraphState) -> str:
-    """
-    Routes from draft update node:
-      - If update was applied or max retries were exceeded (decision == 'ask_user'), routes directly to ask_human_semantic.
-      - Otherwise (update failed and retries < 3), returns to LLM semantic review for self-correction.
-    """
     if state.get("decision") == "ask_user":
         return "ask_human_semantic"
     return "llm_semantic_review"
 
-
-def build_tenant_onboarding_graph():
-    """Compiles and returns the LangGraph StateGraph without in-memory checkpointing dependency."""
-    builder = StateGraph(GraphState)
-
-    builder.add_node("load_draft", node_load_draft)
-    builder.add_node("llm_semantic_review", node_llm_semantic_review)
-    builder.add_node("apply_draft_update", node_apply_draft_update)
-    builder.add_node("ask_human_semantic", node_ask_human_semantic)
-    builder.add_node("block_incomplete_finalize", node_block_incomplete_finalize)
-    builder.add_node("finalize_and_save", node_finalize_and_save)
-
-    builder.set_entry_point("load_draft")
-    builder.add_edge("load_draft", "llm_semantic_review")
-
-    builder.add_conditional_edges(
-        "llm_semantic_review",
-        route_semantic,
-        {
-            "apply_draft_update": "apply_draft_update",
-            "ask_human_semantic": "ask_human_semantic",
-            "block_incomplete_finalize": "block_incomplete_finalize",
-            "finalize_and_save": "finalize_and_save",
-        },
-    )
-
-    builder.add_conditional_edges(
-        "apply_draft_update",
-        route_after_patch,
-        {
-            "ask_human_semantic": "ask_human_semantic",
-            "llm_semantic_review": "llm_semantic_review",
-        },
-    )
-    builder.add_edge("block_incomplete_finalize", "ask_human_semantic")
-    builder.add_edge("ask_human_semantic", END)
-    builder.add_edge("finalize_and_save", END)
-
-    return builder.compile()
-
-
-_graph = build_tenant_onboarding_graph()
-
-
-async def start_onboarding_session(tenant_id: str, draft: dict, agent_id: str = "") -> dict:
-    """
-    Starts (or restarts) an onboarding session for a tenant agent.
-
-    Args:
-        tenant_id: Schedulux tenant ID
-        draft:     Pre-populated dict from web crawl OR empty {} for template path
-        agent_id:  Optional agent ID — used together with tenant_id for thread_id
-
-    Returns:
-        {
-          "status":   "awaiting_input" | "complete",
-          "question": str | None,
-          "field":    str | None,
-          "type":     "structural_gap" | "semantic_review" | None,
-        }
-    """
-    target_agent_id = agent_id or draft.get("agent_id") or f"agent_{tenant_id}_v1"
-    draft["agent_id"] = target_agent_id
-
-    initial: GraphState = {
-        "tenant_id": tenant_id,
-        "agent_id": target_agent_id,
-        "draft": draft,
-        "messages": [],
-        "structural_gaps": [],
-        "pending_field": None,
-        "semantic_note": None,
-        "decision": None,
-        "pending_draft_update": None,
-        "status": "onboarding",
-        "patch_retries": 0,
-    }
-
-    try:
-        from agent_orchestrator.clients.redis_client import set_cached_draft
-
-        await set_cached_draft(tenant_id, target_agent_id, draft)
-    except Exception as e:
-        print(f"[Start Session Warning] Failed to prime Redis cache: {e}", flush=True)
-
-    result_state = await _graph.ainvoke(initial)
-    return _extract_payload(result_state)
-
-
-async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: str = "") -> dict:
-    from agent_orchestrator.clients.redis_client import get_cached_draft
-
-    draft = await get_cached_draft(tenant_id, agent_id)
-    if not draft and agent_id:
-        try:
-            from agent_orchestrator.models import AgentDraft, AgentRuntimeConfig
-
-            ad = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
-            if ad and ad.current_draft:
-                draft = ad.current_draft
-            else:
-                cfg = await AgentRuntimeConfig.find_one(
-                    {"tenant_id": tenant_id, "agent_id": agent_id}
-                )
-                if cfg:
-                    from agent_orchestrator.models import canonicalize_agent_schema
-
-                    draft = canonicalize_agent_schema(cfg.model_dump(), status="live")
-        except Exception:
-            pass
-
-    if not draft:
-        draft = {"tenant_id": tenant_id, "agent_id": agent_id}
-
-    target_agent_id = agent_id or draft.get("agent_id") or f"agent_{tenant_id}_v1"
-
-    recent_history: list[HumanMessage | AIMessage] = []
-    if target_agent_id:
-        try:
-            from agent_orchestrator.models import AgentDraft, AgentMessage
-
-            agent_draft_doc = await AgentDraft.find_one(
-                {"tenant_id": tenant_id, "agent_id": target_agent_id}
-            )
-            last_summarized = agent_draft_doc.last_summarized_seq if agent_draft_doc else 0
-
-            active_db_msgs = (
-                await AgentMessage.find(
-                    {
-                        "tenant_id": tenant_id,
-                        "agent_id": target_agent_id,
-                        "seq": {"$gt": last_summarized},
-                    }
-                )
-                .sort("seq")
-                .to_list()
-            )
-
-            from agent_orchestrator.config import MEMORY_TRIGGER_TOKEN_THRESHOLD
-
-            total_active_tokens = sum(
-                (m.token_count or max(1, len(m.content) // 4)) for m in active_db_msgs
-            )
-            if total_active_tokens > MEMORY_TRIGGER_TOKEN_THRESHOLD:
-                budget = MEMORY_TRIGGER_TOKEN_THRESHOLD
-                kept: list[AgentMessage] = []
-                for m in reversed(active_db_msgs):
-                    t = m.token_count or max(1, len(m.content) // 4)
-                    if budget - t < 0 and kept:
-                        break
-                    kept.append(m)
-                    budget -= t
-                active_db_msgs = list(reversed(kept))
-
-            for m in active_db_msgs:
-                if m.role in ("tenant", "user"):
-                    recent_history.append(HumanMessage(content=m.content))
-                else:
-                    recent_history.append(AIMessage(content=m.content))
-        except Exception as rhe:
-            print(f"[TenantAgent Warning] Could not rehydrate recent history: {rhe}", flush=True)
-
-    initial: GraphState = {
-        "tenant_id": tenant_id,
-        "agent_id": target_agent_id,
-        "draft": draft,
-        "messages": recent_history,
-        "structural_gaps": [],
-        "pending_field": None,
-        "semantic_note": f"User requested change: {user_answer}",
-        "decision": None,
-        "pending_draft_update": None,
-        "status": "onboarding",
-        "patch_retries": 0,
-    }
-
-    result_state = await _graph.ainvoke(initial)
-    return _extract_payload(result_state)
-
-
-async def get_current_draft(tenant_id: str, agent_id: str = "") -> dict:
-    if agent_id:
-        try:
-            from agent_orchestrator.clients.redis_client import (
-                get_cached_draft,
-                set_cached_draft,
-            )
-            from agent_orchestrator.models import (
-                AgentDraft,
-                canonicalize_agent_schema,
-                init_db,
-            )
-
-            cached = await get_cached_draft(tenant_id, agent_id)
-            if cached:
-                return canonicalize_agent_schema(cached, status="draft")
-
-            await init_db()
-            doc = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
-            if doc and doc.current_draft:
-                canonical = canonicalize_agent_schema(doc.current_draft, status="draft")
-
-                try:
-                    await set_cached_draft(tenant_id, agent_id, canonical)
-                except Exception:
-                    pass
-                return canonical
-
-        except Exception as e:
-            print(f"[get_current_draft Warning] {e}", flush=True)
-
-    return {}
-
-
-def _extract_payload(snapshot: Any) -> dict:
-    """Converts a LangGraph snapshot or state dict into a clean frontend-ready payload."""
-    if isinstance(snapshot, dict):
-        values = snapshot
-    elif hasattr(snapshot, "values") and isinstance(snapshot.values, dict):
-        values = snapshot.values
-    else:
-        values = {}
-
-    if values.get("status") == "complete":
-        return {"status": "complete", "question": None, "field": None, "type": None}
-
-    question = values.get("semantic_note") or ""
-    return {
-        "status": values.get("status", "awaiting_input"),
-        "question": question,
-        "field": values.get("pending_field") or "",
-        "type": "semantic_review",
-    }

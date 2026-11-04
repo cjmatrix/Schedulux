@@ -128,6 +128,13 @@ class QdrantMemoryStore(MemoryVectorStore):
             )
             return [p.payload["fact"] for p in results.points if p.payload and "fact" in p.payload]
         except Exception as e:
+            err_msg = str(e)
+            if "doesn't exist" in err_msg or "Not found" in err_msg:
+                try:
+                    await self._ensure_collection()
+                except Exception:
+                    pass
+                return []
             print(f"[QdrantMemoryStore] Search warning: {e}", flush=True)
             return []
 

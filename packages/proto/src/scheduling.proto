@@ -29,6 +29,7 @@ service SchedulingInventoryService {
 
   // Customer Operations
   rpc VerifyCustomer (VerifyCustomerRequest) returns (VerifyCustomerResponse);
+  rpc ListCustomers (ListCustomersRequest) returns (ListCustomersResponse);
 
   // Tenant Schedule Settings
   rpc GetTenantSchedule (GetTenantScheduleRequest) returns (TenantScheduleResponse);
@@ -461,6 +462,36 @@ message VerifyCustomerResponse {
   bool success = 1;
   string message = 2;
   int32 updated_count = 3;
+}
+
+message ListCustomersRequest {
+  string tenant_id = 1;
+  optional string agent_id = 2;
+  int32 page = 3;
+  int32 limit = 4;
+  optional string search = 5;
+}
+
+message CustomerDetails {
+  string id = 1;
+  string tenant_id = 2;
+  string agent_id = 3;
+  string name = 4;
+  string phone = 5;
+  string email = 6;
+  string notes = 7;
+  bool is_guest = 8;
+  int32 total_bookings = 9;
+  string created_at = 10;
+  string updated_at = 11;
+}
+
+message ListCustomersResponse {
+  repeated CustomerDetails customers = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
+  int32 total_pages = 5;
 }
 
 message TenantScheduleInfo {

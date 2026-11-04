@@ -1,7 +1,5 @@
-
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -17,12 +15,7 @@ logger = logging.getLogger(__name__)
 invalidate_biz_context = delete_cached_biz_context
 
 
-
-
-
-
 async def resolve_business_context(tenant_id: str, agent_id: str) -> dict[str, Any]:
-   
     cached = await get_cached_biz_context(tenant_id, agent_id)
     if cached:
         return cached
@@ -36,6 +29,7 @@ async def _load_from_db(tenant_id: str, agent_id: str) -> dict[str, Any]:
     biz_name: str | None = None
     timezone: str | None = None
     currency: str | None = None
+    public_phone: str | None = None
     supervisor_prompt: str | None = None
     services: list[dict[str, Any]] = []
     resources: list[dict[str, Any]] = []
@@ -54,6 +48,8 @@ async def _load_from_db(tenant_id: str, agent_id: str) -> dict[str, Any]:
             biz_name = runtime.business_profile.name or biz_name
             timezone = runtime.business_profile.timezone or timezone
             currency = runtime.business_profile.currency or currency
+            if runtime.business_profile.contact:
+                public_phone = runtime.business_profile.contact.public_phone or public_phone
 
         supervisor_prompt = runtime.supervisor_prompt
 
@@ -82,7 +78,6 @@ async def _load_from_db(tenant_id: str, agent_id: str) -> dict[str, Any]:
                 "name": s.name,
             })
 
-   
     if not runtime or not services or not biz_name:
         draft = await AgentDraft.find_one(query)
         if draft and draft.current_draft:
@@ -91,6 +86,9 @@ async def _load_from_db(tenant_id: str, agent_id: str) -> dict[str, Any]:
                 biz_name = biz_name or biz.get("name")
                 timezone = timezone or biz.get("timezone")
                 currency = currency or biz.get("currency")
+                contact_dict = biz.get("contact") or {}
+                if isinstance(contact_dict, dict):
+                    public_phone = public_phone or contact_dict.get("public_phone")
             if not timezone:
                 engine: dict[str, Any] = draft.current_draft.get("scheduling_engine") or {}  # type: ignore[assignment]
                 if isinstance(engine, dict):
@@ -119,6 +117,7 @@ async def _load_from_db(tenant_id: str, agent_id: str) -> dict[str, Any]:
         "business_name": biz_name or "Schedulux Business",
         "timezone": timezone or "UTC",
         "currency": currency or "USD",
+        "public_phone": public_phone,
         "services": services,
         "total_services_count": len(services),
         "resources": resources,

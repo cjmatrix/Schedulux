@@ -1,13 +1,3 @@
-"""
-FAQ / RAG Agent — answers knowledge base and policy questions.
-
-Tools available:
-  search_knowledge_base, search_resources
-
-Does NOT have access to any scheduling mutation tools.
-Supervisor_prompt is injected here too so business-owner tone instructions
-(e.g. "always emphasise our premium Bridal Suite package") apply consistently.
-"""
 from __future__ import annotations
 
 import logging
@@ -25,8 +15,7 @@ from pydantic import SecretStr
 
 logger = logging.getLogger(__name__)
 
-_FAQ_TOOLS = {"search_knowledge_base", "search_resources", "search_services"}
-
+_FAQ_TOOLS = {"search_knowledge_base"}
 
 
 def _get_chat_model(temperature: float = 0.1) -> Any:
@@ -65,8 +54,8 @@ def _build_faq_system_prompt(
 {supervisor_prompt.strip()}
 """
 
-    return f"""You are the Knowledge & FAQ specialist for {biz_context.get("business_name")}.
-Your sole purpose: answer questions about the business, services, staff, and policies accurately.{custom_instructions_block}
+    return f"""You are the Knowledge & Policy specialist for {biz_context.get("business_name")}.
+Your sole purpose: answer customer questions about business policies, procedures, rules, preparation guidelines, and general knowledge accurately.{custom_instructions_block}
 
 [Context]
 Current UTC Time: {now_iso}
@@ -75,18 +64,13 @@ Tenant ID: {tenant_id}
 Agent ID: {agent_id}
 
 [Protocol]
-1. For any question about policies, procedures, clinic rules, preparation instructions, FAQs,
-   or business information — invoke search_knowledge_base with tenant_id="{tenant_id}", agent_id="{agent_id}".
-2. For questions about specific services, packages, treatment options, or pricing details —
-   invoke search_services with tenant_id="{tenant_id}", agent_id="{agent_id}".
-3. For detailed questions about staff members, their qualifications, specialties, or equipment —
-   invoke search_resources with tenant_id="{tenant_id}", agent_id="{agent_id}".
-4. Ground every answer STRICTLY on retrieved content. Do NOT fabricate policies, prices, or credentials.
-5. If nothing is retrieved, say: "I don't have that information on file — our team can help you directly."
-6. If the customer then wants to book, tell them: "I can connect you with our booking assistant right away."
-7. Tone: knowledgeable, warm, concise.
+1. For any question about policies, refund/cancellation rules, procedures, preparation guidelines, or general business information:
+   Invoke `search_knowledge_base(query=..., tenant_id="{tenant_id}", agent_id="{agent_id}")`.
+2. Ground every answer STRICTLY on retrieved content from the knowledge base. Do NOT fabricate policies, terms, or guidelines.
+3. If no matching information is found in the knowledge base, say: "I don't have that information on file — our team will be happy to assist you directly."
+4. If the customer indicates they want to schedule an appointment or book, let them know our booking concierge can assist them right away.
+5. Tone: knowledgeable, warm, concise, and helpful.
 """
-
 
 
 async def run_faq_agent(
@@ -97,7 +81,6 @@ async def run_faq_agent(
     biz_context: dict[str, Any],
     all_tools: list[BaseTool],
 ) -> str:
-    """Execute the FAQ/RAG agent with only knowledge tools."""
     faq_tools = [t for t in all_tools if t.name in _FAQ_TOOLS]
 
     langchain_msgs: list[BaseMessage] = []
@@ -132,3 +115,4 @@ async def run_faq_agent(
             "I'm having trouble retrieving that information right now. "
             "Please feel free to call us directly or try again in a moment."
         )
+

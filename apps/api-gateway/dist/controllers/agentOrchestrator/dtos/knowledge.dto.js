@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ListDocumentsQueryDto = exports.ListDocumentsQuerySchema = exports.ConfirmDocumentUploadDto = exports.ConfirmDocumentUploadSchema = exports.GetDocumentUploadUrlDto = exports.GetDocumentUploadUrlSchema = exports.SendSandboxMessageDto = exports.SendSandboxMessageSchema = exports.CustomerChatDto = exports.CustomerChatSchema = exports.SaveInitialAgentDraftDto = exports.SaveInitialAgentDraftSchema = exports.ResumeOnboardingDto = exports.ResumeOnboardingSchema = exports.StartOnboardingDto = exports.StartOnboardingSchema = exports.GetCrawlStatusDto = exports.GetCrawlStatusSchema = exports.CrawlSiteDto = exports.CrawlSiteSchema = void 0;
+exports.ListDocumentsQueryDto = exports.ListDocumentsQuerySchema = exports.ConfirmDocumentUploadDto = exports.ConfirmDocumentUploadSchema = exports.GetDocumentUploadUrlDto = exports.GetDocumentUploadUrlSchema = exports.SendSandboxMessageDto = exports.SendSandboxMessageSchema = exports.CustomerChatDto = exports.CustomerChatSchema = exports.InitCustomerChatDto = exports.InitCustomerChatSchema = exports.SaveInitialAgentDraftDto = exports.SaveInitialAgentDraftSchema = exports.ResumeOnboardingDto = exports.ResumeOnboardingSchema = exports.StartOnboardingDto = exports.StartOnboardingSchema = exports.GetCrawlStatusDto = exports.GetCrawlStatusSchema = exports.CrawlSiteDto = exports.CrawlSiteSchema = void 0;
 const nestjs_zod_1 = require("nestjs-zod");
 const zod_1 = require("zod");
 exports.CrawlSiteSchema = zod_1.z.object({
@@ -45,10 +45,20 @@ exports.SaveInitialAgentDraftSchema = zod_1.z.object({
 class SaveInitialAgentDraftDto extends (0, nestjs_zod_1.createZodDto)(exports.SaveInitialAgentDraftSchema) {
 }
 exports.SaveInitialAgentDraftDto = SaveInitialAgentDraftDto;
+exports.InitCustomerChatSchema = zod_1.z.object({
+    tenant_id: zod_1.z.string().min(1, 'Tenant ID is required'),
+    agent_id: zod_1.z.string().min(1, 'Agent ID is required'),
+    token: zod_1.z.string().optional(),
+    session_id: zod_1.z.string().optional(),
+});
+class InitCustomerChatDto extends (0, nestjs_zod_1.createZodDto)(exports.InitCustomerChatSchema) {
+}
+exports.InitCustomerChatDto = InitCustomerChatDto;
 exports.CustomerChatSchema = zod_1.z.object({
     tenant_id: zod_1.z.string().min(1, 'Tenant ID is required'),
     agent_id: zod_1.z.string().min(1, 'Agent ID is required'),
-    session_id: zod_1.z.string().min(1, 'Session ID is required'),
+    session_id: zod_1.z.string().optional(),
+    token: zod_1.z.string().optional(),
     message: zod_1.z.string().min(1, 'Message cannot be empty'),
     customer_id: zod_1.z.string().optional(),
     customer_phone: zod_1.z.string().optional(),
@@ -61,6 +71,7 @@ exports.SendSandboxMessageSchema = zod_1.z.object({
     tenant_id: zod_1.z.string().optional(),
     agent_id: zod_1.z.string().optional(),
     session_id: zod_1.z.string().optional(),
+    token: zod_1.z.string().optional(),
     message: zod_1.z.string().min(1, 'Message cannot be empty'),
     customer_id: zod_1.z.string().optional(),
     customer_phone: zod_1.z.string().optional(),

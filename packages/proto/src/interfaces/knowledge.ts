@@ -150,10 +150,13 @@ export interface GetCustomerMessagesRequest {
   agent_id: string;
   session_id: string;
   limit?: number | undefined;
+  before?: string | undefined;
 }
 
 export interface GetCustomerMessagesResponse {
   messages: CustomerChatMessageInfo[];
+  next_cursor?: string | undefined;
+  has_more: boolean;
 }
 
 export interface GetDocumentUploadUrlRequest {

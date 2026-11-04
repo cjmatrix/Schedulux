@@ -1,18 +1,25 @@
-
 from __future__ import annotations
 
 import json
 import logging
 import os
-from typing import Any
+import re
+from typing import Any, Literal
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
-from pydantic import SecretStr
+from pydantic import BaseModel, Field, SecretStr
 
 logger = logging.getLogger(__name__)
+
+
+class SupervisorRouting(BaseModel):
+    intents: list[Literal["booking", "faq", "handoff"]] = Field(
+        default_factory=lambda: ["booking"],
+        description="List of specialist agent intents to handle the customer query. Use ['faq', 'booking'] for compound queries.",
+    )
 
 
 def _get_chat_model(temperature: float = 0.0) -> Any:
@@ -23,7 +30,7 @@ def _get_chat_model(temperature: float = 0.0) -> Any:
             model=os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
             api_key=SecretStr(groq_key),
             temperature=temperature,
-            max_tokens=256,  
+            max_tokens=256,
         )
     elif gemini_key:
         return ChatGoogleGenerativeAI(
@@ -37,7 +44,6 @@ def _get_chat_model(temperature: float = 0.0) -> Any:
 
 
 def _check_emergency_keywords(message: str, guardrails: dict[str, Any]) -> bool:
-    """Fast in-memory keyword scan before calling LLM — avoids latency for emergency detection."""
     triage = guardrails.get("triage_emergency") or {}
     if not triage.get("enabled", False):
         return False
@@ -47,7 +53,6 @@ def _check_emergency_keywords(message: str, guardrails: dict[str, Any]) -> bool:
 
 
 def _check_handoff_topics(message: str, guardrails: dict[str, Any]) -> bool:
-    """Fast in-memory check for human handoff topics before calling LLM."""
     handoff = guardrails.get("human_handoff") or {}
     if not handoff.get("enabled", False):
         return False
@@ -61,14 +66,14 @@ You are a routing classifier for an AI booking concierge system.
 Analyze the user message and conversation context to identify which specialist agents need to respond.
 
 Possible intents:
-  "booking"  — user wants to check availability, book an appointment, cancel a booking, reschedule, or view bookings
-  "faq"      — user is asking about business policies, repayment/refund policies, staff info, service details, pricing, or procedures
+  "booking"  — user is asking about services, pricing, available staff/practitioners/specialists (e.g. "who does shirt stitching?", "who does haircuts?"), checking availability, booking an appointment, cancelling, rescheduling, or viewing bookings
+  "faq"      — user is asking about business policies, repayment/refund rules, clinic/shop guidelines, preparation instructions, parking, or general knowledge base topics
   "handoff"  — user is expressing a complaint, legal threat, refund dispute, or demanding to speak with a human
 
 Rules:
-1. If the message contains BOTH a booking/availability request AND a policy/FAQ question, include BOTH in the list: ["faq", "booking"].
-2. If only booking/scheduling actions are mentioned, return ["booking"].
-3. If only general/FAQ/policy questions are asked, return ["faq"].
+1. If the message contains BOTH a booking/service/availability request AND a policy/FAQ question, include BOTH in the list: ["faq", "booking"].
+2. If only service inquiry, staff inquiry, or booking/scheduling actions are mentioned, return ["booking"].
+3. If only business policy, FAQ, or general knowledge questions are asked, return ["faq"].
 4. If the user escalates or demands human contact, return ["handoff"].
 
 Respond ONLY with a JSON object: {"intents": ["<booking|faq|handoff>", ...]}
@@ -81,10 +86,6 @@ async def classify_intent(
     conversation_history: list[BaseMessage],
     biz_context: dict[str, Any],
 ) -> list[str]:
-    """
-    Returns a list of intents: e.g. ["booking"], ["faq"], ["faq", "booking"], ["handoff"], or ["emergency"].
-    Fast-path guardrail checks run before LLM to minimise latency.
-    """
     guardrails = biz_context.get("guardrails") or {}
 
     if _check_emergency_keywords(message, guardrails):
@@ -105,9 +106,31 @@ async def classify_intent(
     ]
 
     try:
+        structured_model = model.with_structured_output(SupervisorRouting)
+        routing = await structured_model.ainvoke(classify_messages)
+        if isinstance(routing, SupervisorRouting) and routing.intents:
+            logger.info("[Supervisor] Classified intents: %s", routing.intents)
+            return list(routing.intents)
+        if isinstance(routing, dict) and routing.get("intents"):
+            return list(routing["intents"])
+    except Exception as e:
+        logger.warning(
+            "[Supervisor] Structured output classification warning (%s) → trying safe text fallback", e
+        )
+
+    try:
         result = await model.ainvoke(classify_messages)
-        content = result.content if isinstance(result.content, str) else str(result.content)
-        parsed = json.loads(content.strip())
+        if isinstance(result.content, str):
+            text_content = result.content
+        elif isinstance(result.content, list):
+            text_content = "".join(
+                b.get("text", "") if isinstance(b, dict) else str(b) for b in result.content
+            )
+        else:
+            text_content = str(result.content)
+
+        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text_content.strip(), flags=re.MULTILINE).strip()
+        parsed = json.loads(cleaned)
 
         raw_intents = parsed.get("intents")
         if not raw_intents:
@@ -120,10 +143,11 @@ async def classify_intent(
         if not valid_intents:
             valid_intents = ["booking"]
 
-        logger.info("[Supervisor] Classified intents: %s", valid_intents)
+        logger.info("[Supervisor] Classified intents via fallback: %s", valid_intents)
         return valid_intents
-    except Exception as e:
+    except Exception as fe:
         logger.warning(
-            "[Supervisor] Intent classification failed (%s) → defaulting to ['booking']", e
+            "[Supervisor] All intent classification attempts failed (%s) → defaulting to ['booking']", fe
         )
         return ["booking"]
+

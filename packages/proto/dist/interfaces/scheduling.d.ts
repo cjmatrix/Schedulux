@@ -382,6 +382,33 @@ export interface VerifyCustomerResponse {
     message: string;
     updated_count: number;
 }
+export interface ListCustomersRequest {
+    tenant_id: string;
+    agent_id?: string | undefined;
+    page: number;
+    limit: number;
+    search?: string | undefined;
+}
+export interface CustomerDetails {
+    id: string;
+    tenant_id: string;
+    agent_id: string;
+    name: string;
+    phone: string;
+    email: string;
+    notes: string;
+    is_guest: boolean;
+    total_bookings: number;
+    created_at: string;
+    updated_at: string;
+}
+export interface ListCustomersResponse {
+    customers: CustomerDetails[];
+    total: number;
+    page: number;
+    limit: number;
+    total_pages: number;
+}
 export interface TenantScheduleInfo {
     id: string;
     tenant_id: string;
@@ -438,6 +465,7 @@ export interface SchedulingInventoryServiceClient {
     listBookings(request: ListBookingsRequest): Observable<ListBookingsResponse>;
     /** Customer Operations */
     verifyCustomer(request: VerifyCustomerRequest): Observable<VerifyCustomerResponse>;
+    listCustomers(request: ListCustomersRequest): Observable<ListCustomersResponse>;
     /** Tenant Schedule Settings */
     getTenantSchedule(request: GetTenantScheduleRequest): Observable<TenantScheduleResponse>;
     updateTenantSchedule(request: UpdateTenantScheduleRequest): Observable<TenantScheduleResponse>;
@@ -465,6 +493,7 @@ export interface SchedulingInventoryServiceController {
     listBookings(request: ListBookingsRequest): Promise<ListBookingsResponse> | Observable<ListBookingsResponse> | ListBookingsResponse;
     /** Customer Operations */
     verifyCustomer(request: VerifyCustomerRequest): Promise<VerifyCustomerResponse> | Observable<VerifyCustomerResponse> | VerifyCustomerResponse;
+    listCustomers(request: ListCustomersRequest): Promise<ListCustomersResponse> | Observable<ListCustomersResponse> | ListCustomersResponse;
     /** Tenant Schedule Settings */
     getTenantSchedule(request: GetTenantScheduleRequest): Promise<TenantScheduleResponse> | Observable<TenantScheduleResponse> | TenantScheduleResponse;
     updateTenantSchedule(request: UpdateTenantScheduleRequest): Promise<TenantScheduleResponse> | Observable<TenantScheduleResponse> | TenantScheduleResponse;

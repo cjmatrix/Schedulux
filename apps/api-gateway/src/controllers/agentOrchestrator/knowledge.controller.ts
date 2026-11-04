@@ -31,12 +31,18 @@ import {
   CrawlSiteDto,
   GetCrawlStatusDto,
   GetDocumentUploadUrlDto,
+  InitCustomerChatDto,
   ListDocumentsQueryDto,
   ResumeOnboardingDto,
   SaveInitialAgentDraftDto,
   SendSandboxMessageDto,
   StartOnboardingDto,
 } from './dtos/knowledge.dto.js';
+import {
+  createSignedSession,
+  signSessionId,
+  verifySessionToken,
+} from '../../utils/session-token.util.js';
 
 @Controller(API_ROUTES.KNOWLEDGE.BASE)
 @UseGuards(TenantAuthGuard, RolesGuard)
@@ -162,6 +168,130 @@ export class KnowledgeController implements OnModuleInit {
     };
   }
 
+  @Post(API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_INIT)
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(ZodValidationPipe)
+  async sandboxInit(@Req() req: AuthenticatedTenantRequest, @Body() body: InitCustomerChatDto) {
+    const tenantId = body.tenant_id || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+    }
+    const agentId = body.agent_id || 'default';
+
+    let resolvedSessionId: string | undefined;
+    let resolvedToken: string | undefined;
+    let isFirstTime = true;
+    let messages: any[] = [];
+
+    if (body.token) {
+      const verified = verifySessionToken(body.token);
+      if (verified.valid && verified.sessionId) {
+        resolvedSessionId = verified.sessionId;
+        resolvedToken = body.token;
+      }
+    } else if (body.session_id) {
+      resolvedSessionId = body.session_id;
+      resolvedToken = signSessionId(body.session_id);
+    }
+
+    if (resolvedSessionId && resolvedToken) {
+      try {
+        const response = await lastValueFrom(
+          this._knowledgeService.getCustomerMessages({
+            tenant_id: tenantId,
+            agent_id: agentId,
+            session_id: resolvedSessionId,
+            limit: 20,
+          }),
+        );
+        messages = response.messages || [];
+        isFirstTime = messages.length === 0;
+
+        return {
+          message: RESPONSE_MESSAGES.CHAT.SESSION_INITIALIZED,
+          data: {
+            is_first_time: isFirstTime,
+            session_id: resolvedSessionId,
+            token: resolvedToken,
+            messages,
+            next_cursor: response.next_cursor || null,
+            has_more: Boolean(response.has_more),
+          },
+        };
+      } catch {
+        isFirstTime = true;
+        messages = [];
+      }
+    } else {
+      const session = createSignedSession(`sandbox_${tenantId}_${agentId}`);
+      resolvedSessionId = session.sessionId;
+      resolvedToken = session.token;
+      isFirstTime = true;
+      messages = [];
+    }
+
+    return {
+      message: RESPONSE_MESSAGES.CHAT.SESSION_INITIALIZED,
+      data: {
+        is_first_time: isFirstTime,
+        session_id: resolvedSessionId,
+        token: resolvedToken,
+        messages,
+        next_cursor: null,
+        has_more: false,
+      },
+    };
+  }
+
+  @Get(API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_MESSAGES)
+  async getSandboxMessages(
+    @Req() req: AuthenticatedTenantRequest,
+    @Query('agent_id') agentIdParam?: string,
+    @Query('session_id') sessionIdParam?: string,
+    @Query('token') token?: string,
+    @Query('before') before?: string,
+    @Query('limit') limitStr?: string,
+  ) {
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+    }
+    const agentId = agentIdParam || 'default';
+    let resolvedSessionId = sessionIdParam;
+
+    if (token) {
+      const verified = verifySessionToken(token);
+      if (!verified.valid || !verified.sessionId) {
+        throw new UnauthorizedException(RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
+      }
+      resolvedSessionId = verified.sessionId;
+    }
+
+    if (!resolvedSessionId) {
+      throw new BadRequestException(RESPONSE_MESSAGES.CHAT.REQUIRED_FIELDS);
+    }
+
+    const limit = limitStr ? parseInt(limitStr, 10) : 20;
+    const response = await lastValueFrom(
+      this._knowledgeService.getCustomerMessages({
+        tenant_id: tenantId,
+        agent_id: agentId,
+        session_id: resolvedSessionId,
+        limit,
+        before,
+      }),
+    );
+
+    return {
+      message: RESPONSE_MESSAGES.CHAT.MESSAGES_RETRIEVED,
+      data: {
+        messages: response.messages || [],
+        next_cursor: response.next_cursor || null,
+        has_more: Boolean(response.has_more),
+      },
+    };
+  }
+
   @Post(API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX)
   @HttpCode(HttpStatus.OK)
   @UsePipes(ZodValidationPipe)
@@ -171,7 +301,23 @@ export class KnowledgeController implements OnModuleInit {
       throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
     }
     const agentId = body.agent_id || 'default';
-    const sessionId = body.session_id || `sandbox_${tenantId}_${agentId}`;
+
+    let sessionId = body.session_id;
+    let token = body.token;
+
+    if (token) {
+      const verified = verifySessionToken(token);
+      if (!verified.valid || !verified.sessionId) {
+        throw new UnauthorizedException(RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
+      }
+      sessionId = verified.sessionId;
+    } else if (sessionId) {
+      token = signSessionId(sessionId);
+    } else {
+      const session = createSignedSession(`sandbox_${tenantId}_${agentId}`);
+      sessionId = session.sessionId;
+      token = session.token;
+    }
 
     const response = await lastValueFrom(
       this._knowledgeService.customerChat({
@@ -190,6 +336,7 @@ export class KnowledgeController implements OnModuleInit {
       data: {
         reply: response.response,
         session_id: response.session_id,
+        token,
         history: response.history || [],
       },
     };

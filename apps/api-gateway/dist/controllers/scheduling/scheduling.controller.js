@@ -27,6 +27,7 @@ const booking_dto_js_1 = require("./dtos/booking.dto.js");
 const resource_dto_js_1 = require("./dtos/resource.dto.js");
 const schedule_dto_js_1 = require("./dtos/schedule.dto.js");
 const service_dto_js_1 = require("./dtos/service.dto.js");
+const customer_dto_js_1 = require("./dtos/customer.dto.js");
 let SchedulingController = class SchedulingController {
     _client;
     _schedulingService;
@@ -342,6 +343,26 @@ let SchedulingController = class SchedulingController {
             data: response.schedule,
         };
     }
+    async listCustomers(req, query) {
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.listCustomers({
+            tenant_id: tenantId,
+            agent_id: query.agent_id || '',
+            page: query.page,
+            limit: query.limit,
+            search: query.search || '',
+        }));
+        return {
+            message: messages_constant_js_1.RESPONSE_MESSAGES.SCHEDULING.CUSTOMERS_RETRIEVED,
+            data: response.customers || [],
+            pagination: {
+                total: response.total,
+                page: response.page,
+                limit: response.limit,
+                total_pages: response.total_pages,
+            },
+        };
+    }
 };
 exports.SchedulingController = SchedulingController;
 __decorate([
@@ -502,6 +523,15 @@ __decorate([
     __metadata("design:paramtypes", [Object, schedule_dto_js_1.UpdateTenantScheduleDto]),
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "updateTenantSchedule", null);
+__decorate([
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.SCHEDULING.CUSTOMERS),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, customer_dto_js_1.ListCustomersQueryDto]),
+    __metadata("design:returntype", Promise)
+], SchedulingController.prototype, "listCustomers", null);
 exports.SchedulingController = SchedulingController = __decorate([
     (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.SCHEDULING.BASE),
     (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),

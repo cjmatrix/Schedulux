@@ -31,6 +31,7 @@ function SchedulingInventoryServiceControllerMethods() {
             "getAvailability",
             "listBookings",
             "verifyCustomer",
+            "listCustomers",
             "getTenantSchedule",
             "updateTenantSchedule",
         ];

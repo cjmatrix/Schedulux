@@ -4,6 +4,7 @@ import {
   CREATE_BOOKING_USE_CASE,
   GET_AVAILABILITY_USE_CASE,
   LIST_BOOKINGS_USE_CASE,
+  LIST_CUSTOMERS_USE_CASE,
   RESCHEDULE_BOOKING_USE_CASE,
   VERIFY_CUSTOMER_USE_CASE,
 } from '../application/interfaces/booking-use-cases.interface.js';
@@ -13,6 +14,7 @@ import { CreateBookingUseCase } from '../application/use-cases/booking/create-bo
 import { GetAvailabilityUseCase } from '../application/use-cases/booking/get-availability.use-case.js';
 import { ListBookingsUseCase } from '../application/use-cases/booking/list-bookings.use-case.js';
 import { RescheduleBookingUseCase } from '../application/use-cases/booking/reschedule-booking.use-case.js';
+import { ListCustomersUseCase } from '../application/use-cases/customer/list-customers.use-case.js';
 import { VerifyCustomerUseCase } from '../application/use-cases/customer/verify-customer.use-case.js';
 import {
   BOOKING_ALLOCATION_SERVICE,
@@ -65,6 +67,10 @@ import { ServiceModule } from './service.module.js';
       provide: VERIFY_CUSTOMER_USE_CASE,
       useClass: VerifyCustomerUseCase,
     },
+    {
+      provide: LIST_CUSTOMERS_USE_CASE,
+      useClass: ListCustomersUseCase,
+    },
   ],
   exports: [
     BookingAllocationService,
@@ -77,6 +83,7 @@ import { ServiceModule } from './service.module.js';
     GET_AVAILABILITY_USE_CASE,
     LIST_BOOKINGS_USE_CASE,
     VERIFY_CUSTOMER_USE_CASE,
+    LIST_CUSTOMERS_USE_CASE,
   ],
 })
 export class BookingModule {}

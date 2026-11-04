@@ -17,6 +17,7 @@ import TenantListPage from './features/superadmin/pages/TenantListPage.tsx';
 import { TenantProtectedRoute } from './features/tenant/components/TenantProtectedRoute.tsx';
 import AgentDashboardPage from './features/tenant/pages/AgentDashboardPage.tsx';
 import BookingsPage from './features/tenant/pages/BookingsPage.tsx';
+import CustomersPage from './features/tenant/pages/CustomersPage.tsx';
 import ForgotPasswordPage from './features/tenant/pages/ForgotPasswordPage.tsx';
 import KnowledgeBasePage from './features/tenant/pages/KnowledgeBasePage.tsx';
 import LoginPage from './features/tenant/pages/LoginPage.tsx';
@@ -157,6 +158,10 @@ const router = createBrowserRouter([
             path: 'bookings',
             element: <BookingsPage />,
           },
+          {
+            path: 'customers',
+            element: <CustomersPage />,
+          },
 
           {
             path: 'agents/:agentId/dashboard',
@@ -173,6 +178,10 @@ const router = createBrowserRouter([
           {
             path: 'agents/:agentId/bookings',
             element: <BookingsPage />,
+          },
+          {
+            path: 'agents/:agentId/customers',
+            element: <CustomersPage />,
           },
           {
             path: 'agents/:agentId/services',
@@ -266,6 +275,10 @@ const router = createBrowserRouter([
           {
             path: 'bookings',
             element: <BookingsPage />,
+          },
+          {
+            path: 'customers',
+            element: <CustomersPage />,
           },
         ],
       },

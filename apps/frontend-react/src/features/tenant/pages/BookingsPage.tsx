@@ -10,8 +10,9 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
+import useDebounceHook from '../../../shared/hooks/useDebounceHook';
 import { BookingDetailsModal } from '../components/BookingDetailsModal';
 import { BookingsCalendarView } from '../components/BookingsCalendarView';
 import { BookingsTableView } from '../components/BookingsTableView';
@@ -27,6 +28,7 @@ export default function BookingsPage() {
   const [page, setPage] = useState<number>(1);
   const [limit, setLimit] = useState<number>(20);
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [debouncedSearch] = useDebounceHook(searchTerm);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [calendarDate, setCalendarDate] = useState<Date>(() => new Date());
@@ -37,6 +39,10 @@ export default function BookingsPage() {
   const [bookingToReschedule, setBookingToReschedule] = useState<BookingInfo | null>(null);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter]);
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -51,9 +57,9 @@ export default function BookingsPage() {
       limit,
       agent_id: agentId,
       status: statusFilter === 'all' ? undefined : statusFilter,
-      search: searchTerm.trim() || undefined,
+      search: debouncedSearch.trim() || undefined,
     };
-  }, [page, limit, agentId, statusFilter, searchTerm]);
+  }, [page, limit, agentId, statusFilter, debouncedSearch]);
 
   const {
     data: bookingsResponse,
@@ -176,7 +182,7 @@ export default function BookingsPage() {
 
         <div className="flex items-center gap-2.5">
           <div className="flex items-center bg-white border border-slate-200/90 rounded-full p-1 shadow-2xs">
-            <button
+            {false&&<button
               type="button"
               onClick={() => setViewMode('list')}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
@@ -186,8 +192,8 @@ export default function BookingsPage() {
               }`}
             >
               List View
-            </button>
-            <button
+            </button>}
+            {false&&<button
               type="button"
               onClick={() => setViewMode('calendar')}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
@@ -197,7 +203,7 @@ export default function BookingsPage() {
               }`}
             >
               Calendar View
-            </button>
+            </button>}
           </div>
 
           <button
@@ -296,12 +302,18 @@ export default function BookingsPage() {
             type="text"
             placeholder="Search by customer, booking ref, or notes..."
             value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setPage(1);
-            }}
-            className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200/90 rounded-full text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all shadow-2xs"
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-8 py-2 bg-white border border-slate-200/90 rounded-full text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all shadow-2xs"
           />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">

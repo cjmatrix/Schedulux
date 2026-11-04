@@ -25,6 +25,14 @@ async def _run_all():
 
     await init_db()
 
+    try:
+        from agent_orchestrator.utils.qdrant_util import get_qdrant_store
+
+        await get_qdrant_store().ensure_collection()
+        print("[AI Orchestrator Service] Qdrant collections initialized.", flush=True)
+    except Exception as qe:
+        print(f"[AI Orchestrator Service Warning] Qdrant initialization warning: {qe}", flush=True)
+
     kafka_subscriber = KafkaEventSubscriber(
         brokers=os.environ.get("KAFKA_BROKERS", "localhost:9092"),
         group_id=os.environ.get("KAFKA_CONSUMER_GROUP", "ai-orchestration-consumer-group"),

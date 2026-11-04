@@ -3,27 +3,27 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Annotated, Any, Literal
+from typing import Any
 
 from dotenv import load_dotenv
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
-from langgraph.graph.message import add_messages
 from pydantic import SecretStr
-from typing_extensions import TypedDict
 
 from agent_orchestrator.mcp.scheduling_mcp_server import get_scheduling_mcp_tools
 from agent_orchestrator.repositories.customer_message_repository import CustomerMessageRepository
-from agent_orchestrator.workflows.booking_agent import run_booking_agent
-from agent_orchestrator.workflows.context import resolve_business_context
-from agent_orchestrator.workflows.faq_agent import run_faq_agent
-from agent_orchestrator.workflows.handoff_agent import run_handoff_agent
-from agent_orchestrator.workflows.supervisor_agent import classify_intent
+from agent_orchestrator.workflows.customer_agent.context import resolve_business_context
+from agent_orchestrator.workflows.customer_agent.state import CustomerGraphState
+from agent_orchestrator.workflows.customer_agent.subagents import (
+    classify_intent,
+    run_booking_agent,
+    run_faq_agent,
+    run_handoff_agent,
+)
 
 try:
     import toon
@@ -41,19 +41,15 @@ _customer_msg_repo = CustomerMessageRepository()
 
 
 def _format_services_catalog(services: list[dict[str, Any]]) -> str:
-    """Format services catalog using TOON for token efficiency, with JSON fallback."""
     if _has_toon:
         try:
             return toon.encode(services)
         except Exception as e:
-            logger.warning(
-                "[CustomerAgent] Failed to toonify services, falling back to JSON: %s", e
-            )
+            logger.warning("[CustomerAgent] Failed to toonify services, falling back to JSON: %s", e)
     return json.dumps(services, indent=2)
 
 
 def _get_chat_model(temperature: float = 0.2) -> BaseChatModel:
-    """Initialize LLM model (Groq preferred, Gemini fallback)."""
     groq_api_key = os.environ.get("GROQ_API_KEY")
     gemini_api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 
@@ -80,35 +76,7 @@ def _get_chat_model(temperature: float = 0.2) -> BaseChatModel:
         )
 
 
-
-
-
-
-
-
-
-
-class CustomerGraphState(TypedDict):
-    session_id: str
-    tenant_id: str
-    agent_id: str
-    message: str
-    messages: Annotated[list[BaseMessage], add_messages]
-    biz_context: dict[str, Any]
-    all_tools: list[BaseTool]
-    intents: list[str]  # e.g. ["booking"], ["faq"], ["faq", "booking"], ["handoff"], ["emergency"]
-    booking_response: str | None
-    faq_response: str | None
-    handoff_response: str | None
-    response: str
-    error: str | None
-
-
 async def node_supervisor(state: CustomerGraphState) -> dict[str, Any]:
-    """
-    Supervisor Node — Evaluates fast-path guardrails and classifies user intent(s).
-    Sets 'intents' in the graph state to trigger conditional edge fan-out routing.
-    """
     message = state.get("message", "")
     history = state.get("messages", [])
     biz_context = state.get("biz_context", {})
@@ -123,7 +91,6 @@ async def node_supervisor(state: CustomerGraphState) -> dict[str, Any]:
 
 
 async def node_booking_agent(state: CustomerGraphState) -> dict[str, Any]:
-    
     logger.info("[CustomerGraph:BookingAgentNode] Executing booking specialist")
     response_text = await run_booking_agent(
         tenant_id=state["tenant_id"],
@@ -140,7 +107,6 @@ async def node_booking_agent(state: CustomerGraphState) -> dict[str, Any]:
 
 
 async def node_faq_agent(state: CustomerGraphState) -> dict[str, Any]:
-    
     logger.info("[CustomerGraph:FaqAgentNode] Executing FAQ / RAG specialist")
     response_text = await run_faq_agent(
         tenant_id=state["tenant_id"],
@@ -156,10 +122,6 @@ async def node_faq_agent(state: CustomerGraphState) -> dict[str, Any]:
 
 
 async def node_handoff_agent(state: CustomerGraphState) -> dict[str, Any]:
-    """
-    Handoff / Escalation Guardrail Node — Delivers immediate deterministic human contact
-    or emergency triage instructions. Zero LLM latency.
-    """
     intents = state.get("intents") or ["handoff"]
     is_emergency = "emergency" in intents
     logger.info(
@@ -179,7 +141,6 @@ async def node_handoff_agent(state: CustomerGraphState) -> dict[str, Any]:
 
 
 async def node_synthesizer(state: CustomerGraphState) -> dict[str, Any]:
-    
     booking_resp = state.get("booking_response")
     faq_resp = state.get("faq_response")
 
@@ -230,14 +191,7 @@ Merge these two answers into a single, cohesive, seamless, warm, and natural res
     }
 
 
-def route_supervisor_decision(
-    state: CustomerGraphState,
-) -> list[str]:
-    """
-    Dynamic Fan-Out Router:
-    Returns a list of target node names to execute based on classified intents.
-    Enables concurrent parallel execution of FAQ and Booking specialists.
-    """
+def route_supervisor_decision(state: CustomerGraphState) -> list[str]:
     intents = state.get("intents") or ["booking"]
     if "emergency" in intents or "handoff" in intents:
         return ["handoff_agent"]
@@ -247,12 +201,10 @@ def route_supervisor_decision(
         targets.append("faq_agent")
     if "booking" in intents:
         targets.append("booking_agent")
-
     return targets if targets else ["booking_agent"]
 
 
 def build_customer_orchestration_graph():
-   
     builder = StateGraph(CustomerGraphState)
 
     builder.add_node("supervisor", node_supervisor)
@@ -281,13 +233,10 @@ customer_orchestration_graph = build_customer_orchestration_graph()
 
 
 def get_orchestration_graph_mermaid() -> str:
-    """Returns Mermaid markdown of the compiled customer state graph for documentation & UI rendering."""
     try:
         return customer_orchestration_graph.get_graph().draw_mermaid()
     except Exception:
         return ""
-
-
 
 
 async def process_customer_chat(
@@ -299,18 +248,6 @@ async def process_customer_chat(
     customer_phone: str | None = None,
     customer_name: str | None = None,
 ) -> dict[str, Any]:
-    """
-    State-Based Multi-Agent Orchestration Entrypoint for Customer Chat.
-
-    Architecture:
-      1. Session & History: Fetches conversation sliding-window from MongoDB.
-      2. Hot-Path Cache: Retrieves business context & custom instructions from Redis.
-      3. StateGraph Execution:
-         - Supervisor Node: Evaluates guardrails and classifies intent (booking, faq, handoff, emergency).
-         - Conditional Edge: Dispatches state to specialized worker node (Booking, FAQ, or Handoff).
-         - Specialist Node: Runs domain logic with isolated tools and appends response to state.
-      4. State Persistence: Stores assistant response and customer metadata in MongoDB.
-    """
     await _customer_msg_repo.get_or_create_conversation(session_id, tenant_id, agent_id)
 
     if customer_id or customer_phone or customer_name:
@@ -341,7 +278,6 @@ async def process_customer_chat(
     biz_context = await resolve_business_context(tenant_id, agent_id)
     all_tools = get_scheduling_mcp_tools()
 
-   
     initial_state: CustomerGraphState = {
         "session_id": session_id,
         "tenant_id": tenant_id,
@@ -358,7 +294,6 @@ async def process_customer_chat(
         "error": None,
     }
 
- 
     try:
         final_state = await customer_orchestration_graph.ainvoke(initial_state)
         response_text = final_state.get("response") or (
@@ -371,7 +306,6 @@ async def process_customer_chat(
             "I'm sorry, I encountered a temporary issue while processing your request. "
             "Please try again in a moment."
         )
-
 
     await _customer_msg_repo.save_message(
         session_id=session_id,
@@ -399,3 +333,4 @@ async def process_customer_chat(
             for m in updated_history
         ],
     }
+

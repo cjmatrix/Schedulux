@@ -19,6 +19,8 @@ import {
   GetTenantScheduleRequest,
   ListBookingsRequest,
   ListBookingsResponse,
+  ListCustomersRequest,
+  ListCustomersResponse,
   ListResourcesRequest,
   ListResourcesResponse,
   ListServicesRequest,
@@ -45,9 +47,11 @@ import {
   ICreateBookingUseCase,
   IGetAvailabilityUseCase,
   IListBookingsUseCase,
+  IListCustomersUseCase,
   IRescheduleBookingUseCase,
   IVerifyCustomerUseCase,
   LIST_BOOKINGS_USE_CASE,
+  LIST_CUSTOMERS_USE_CASE,
   RESCHEDULE_BOOKING_USE_CASE,
   VERIFY_CUSTOMER_USE_CASE,
 } from '../../application/interfaces/booking-use-cases.interface.js';
@@ -126,6 +130,8 @@ export class SchedulingInventoryGrpcController {
     private readonly _listBookingsUseCase: IListBookingsUseCase,
     @Inject(VERIFY_CUSTOMER_USE_CASE)
     private readonly _verifyCustomerUseCase: IVerifyCustomerUseCase,
+    @Inject(LIST_CUSTOMERS_USE_CASE)
+    private readonly _listCustomersUseCase: IListCustomersUseCase,
     @Inject(GET_TENANT_SCHEDULE_USE_CASE)
     private readonly _getTenantScheduleUseCase: IGetTenantScheduleUseCase,
     @Inject(UPDATE_TENANT_SCHEDULE_USE_CASE)
@@ -307,6 +313,14 @@ export class SchedulingInventoryGrpcController {
   )
   async verifyCustomer(request: VerifyCustomerRequest): Promise<VerifyCustomerResponse> {
     return this._verifyCustomerUseCase.execute(request);
+  }
+
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.LIST_CUSTOMERS,
+  )
+  async listCustomers(request: ListCustomersRequest): Promise<ListCustomersResponse> {
+    return this._listCustomersUseCase.execute(request);
   }
 
   @GrpcMethod(

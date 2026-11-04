@@ -49,6 +49,9 @@ export default function AgentOnboardingWizard() {
     isSandboxTyping,
     sendSandboxMessage,
     resetSandbox,
+    sandboxHasMore,
+    isFetchingOlderSandboxMessages,
+    fetchOlderSandboxMessages,
   } = useAgentOnboarding({ agentId });
 
   const [showDiffDrawer, setShowDiffDrawer] = useState(false);
@@ -260,6 +263,9 @@ export default function AgentOnboardingWizard() {
                     `Hello! Welcome to ${clinicName}. I'm your AI booking coordinator. How can I assist you with scheduling or consultations today?`,
                   )
                 }
+                hasMoreMessages={sandboxHasMore}
+                isLoadingOlder={isFetchingOlderSandboxMessages}
+                onLoadOlderMessages={fetchOlderSandboxMessages}
               />
             )}
 

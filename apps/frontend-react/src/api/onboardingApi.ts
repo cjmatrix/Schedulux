@@ -40,6 +40,7 @@ export interface SendSandboxMessageRequest {
   tenant_id?: string;
   agent_id?: string;
   session_id?: string;
+  token?: string;
   message: string;
   customer_name?: string;
   customer_phone?: string;
@@ -48,12 +49,34 @@ export interface SendSandboxMessageRequest {
 export interface SendSandboxMessageResponse {
   reply: string;
   session_id?: string;
+  token?: string;
   history?: Array<{
     id?: string;
     role: string;
     content: string;
     created_at?: string;
   }>;
+}
+
+export interface InitSandboxSessionRequest {
+  tenant_id?: string;
+  agent_id?: string;
+  token?: string;
+  session_id?: string;
+}
+
+export interface InitSandboxSessionResponse {
+  is_first_time: boolean;
+  session_id: string;
+  token: string;
+  messages: Array<{
+    id?: string;
+    role: string;
+    content: string;
+    created_at?: string;
+  }>;
+  next_cursor?: string | null;
+  has_more?: boolean;
 }
 
 export const onboardingApi = {
@@ -94,6 +117,41 @@ export const onboardingApi = {
     const response = await axiosClient.post<ApiResponse<SendSandboxMessageResponse>>(
       '/api/v1/tenant/knowledge/onboarding/sandbox',
       payload,
+    );
+    return response.data;
+  },
+
+  initSandboxSession: async (
+    payload: InitSandboxSessionRequest,
+  ): Promise<ApiResponse<InitSandboxSessionResponse>> => {
+    const response = await axiosClient.post<ApiResponse<InitSandboxSessionResponse>>(
+      '/api/v1/tenant/knowledge/onboarding/sandbox/init',
+      payload,
+    );
+    return response.data;
+  },
+
+  getSandboxMessages: async (params: {
+    agent_id?: string;
+    session_id?: string;
+    token?: string;
+    before?: string;
+    limit?: number;
+  }): Promise<
+    ApiResponse<{
+      messages: Array<{
+        id?: string;
+        role: string;
+        content: string;
+        created_at?: string;
+      }>;
+      next_cursor?: string | null;
+      has_more?: boolean;
+    }>
+  > => {
+    const response = await axiosClient.get(
+      '/api/v1/tenant/knowledge/onboarding/sandbox/messages',
+      { params },
     );
     return response.data;
   },

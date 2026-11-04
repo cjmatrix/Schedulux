@@ -3,15 +3,30 @@ import React, { useEffect, useRef } from 'react';
 
 interface SandboxSimulationProps {
   clinicName: string;
-  sandboxMessages: Array<{ role: 'user' | 'agent'; text: string }>;
+  sandboxMessages: Array<{
+    id?: string;
+    role: 'user' | 'agent';
+    text: string;
+    created_at?: string;
+  }>;
   setSandboxMessages: React.Dispatch<
-    React.SetStateAction<Array<{ role: 'user' | 'agent'; text: string }>>
+    React.SetStateAction<
+      Array<{
+        id?: string;
+        role: 'user' | 'agent';
+        text: string;
+        created_at?: string;
+      }>
+    >
   >;
   sandboxInput: string;
   setSandboxInput: (val: string) => void;
   isSandboxTyping: boolean;
   onSendSandboxMessage: (e: React.FormEvent) => void;
   onResetSandbox?: () => void;
+  hasMoreMessages?: boolean;
+  isLoadingOlder?: boolean;
+  onLoadOlderMessages?: () => void;
 }
 
 const QUICK_PROMPTS = [
@@ -29,6 +44,9 @@ export const SandboxSimulation: React.FC<SandboxSimulationProps> = ({
   isSandboxTyping,
   onSendSandboxMessage,
   onResetSandbox,
+  hasMoreMessages,
+  isLoadingOlder,
+  onLoadOlderMessages,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -85,6 +103,18 @@ export const SandboxSimulation: React.FC<SandboxSimulationProps> = ({
 
       {/* Sandbox Message Feed */}
       <div className="flex-1 overflow-y-auto py-4 space-y-3 pr-1">
+        {hasMoreMessages && (
+          <div className="flex justify-center pb-2">
+            <button
+              type="button"
+              onClick={onLoadOlderMessages}
+              disabled={isLoadingOlder}
+              className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 bg-slate-50 border border-slate-200 rounded-full px-3 py-1 transition cursor-pointer disabled:opacity-50"
+            >
+              {isLoadingOlder ? 'Loading older messages...' : 'Load older messages'}
+            </button>
+          </div>
+        )}
         {sandboxMessages.map((m, idx) => (
           <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div

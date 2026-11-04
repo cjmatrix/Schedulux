@@ -120,6 +120,10 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
         navigate(`/tenant/agents/${currentAgentId}/services`);
         return;
       }
+      if (itemPath === '/tenant/customers') {
+        navigate(`/tenant/agents/${currentAgentId}/customers`);
+        return;
+      }
       if (itemPath === '/tenant/inventory') {
         navigate(`/tenant/agents/${currentAgentId}/resources`);
         return;
@@ -141,6 +145,8 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
       navigate(`/tenant/agents/${newAgentId}/bookings`);
     } else if (location.pathname.includes('/services')) {
       navigate(`/tenant/agents/${newAgentId}/services`);
+    } else if (location.pathname.includes('/customers')) {
+      navigate(`/tenant/agents/${newAgentId}/customers`);
     } else if (
       location.pathname.includes('/resources') ||
       location.pathname.includes('/inventory')
@@ -227,6 +233,7 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
               const isAgentsTab = item.path === '/tenant/agents';
               const isBookingsTab = item.path === '/tenant/bookings';
               const isServicesTab = item.path === '/tenant/services';
+              const isCustomersTab = item.path === '/tenant/customers';
               const isInventoryTab = item.path === '/tenant/inventory';
               const isKnowledgeTab = item.path === '/tenant/knowledge';
               const isSettingsTab = item.path === '/tenant/settings';
@@ -235,6 +242,7 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
                 (!isAgentsTab &&
                   !isBookingsTab &&
                   !isServicesTab &&
+                  !isCustomersTab &&
                   !isInventoryTab &&
                   !isKnowledgeTab &&
                   !isSettingsTab &&
@@ -242,6 +250,7 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
                 (isAgentsTab && location.pathname === '/tenant/agents') ||
                 (isBookingsTab && location.pathname.includes('/bookings')) ||
                 (isServicesTab && location.pathname.includes('/services')) ||
+                (isCustomersTab && location.pathname.includes('/customers')) ||
                 (isInventoryTab &&
                   (location.pathname.includes('/inventory') ||
                     location.pathname.includes('/resources'))) ||

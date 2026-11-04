@@ -22,6 +22,7 @@ const roles_decorator_js_1 = require("../../decorators/roles.decorator.js");
 const roles_guard_js_1 = require("../../guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
 const knowledge_dto_js_1 = require("./dtos/knowledge.dto.js");
+const session_token_util_js_1 = require("../../utils/session-token.util.js");
 let KnowledgeController = class KnowledgeController {
     _client;
     _schemaCacheService;
@@ -117,13 +118,130 @@ let KnowledgeController = class KnowledgeController {
             },
         };
     }
+    async sandboxInit(req, body) {
+        const tenantId = body.tenant_id || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+        }
+        const agentId = body.agent_id || 'default';
+        let resolvedSessionId;
+        let resolvedToken;
+        let isFirstTime = true;
+        let messages = [];
+        if (body.token) {
+            const verified = (0, session_token_util_js_1.verifySessionToken)(body.token);
+            if (verified.valid && verified.sessionId) {
+                resolvedSessionId = verified.sessionId;
+                resolvedToken = body.token;
+            }
+        }
+        else if (body.session_id) {
+            resolvedSessionId = body.session_id;
+            resolvedToken = (0, session_token_util_js_1.signSessionId)(body.session_id);
+        }
+        if (resolvedSessionId && resolvedToken) {
+            try {
+                const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getCustomerMessages({
+                    tenant_id: tenantId,
+                    agent_id: agentId,
+                    session_id: resolvedSessionId,
+                    limit: 20,
+                }));
+                messages = response.messages || [];
+                isFirstTime = messages.length === 0;
+                return {
+                    message: messages_constant_js_1.RESPONSE_MESSAGES.CHAT.SESSION_INITIALIZED,
+                    data: {
+                        is_first_time: isFirstTime,
+                        session_id: resolvedSessionId,
+                        token: resolvedToken,
+                        messages,
+                        next_cursor: response.next_cursor || null,
+                        has_more: Boolean(response.has_more),
+                    },
+                };
+            }
+            catch {
+                isFirstTime = true;
+                messages = [];
+            }
+        }
+        else {
+            const session = (0, session_token_util_js_1.createSignedSession)(`sandbox_${tenantId}_${agentId}`);
+            resolvedSessionId = session.sessionId;
+            resolvedToken = session.token;
+            isFirstTime = true;
+            messages = [];
+        }
+        return {
+            message: messages_constant_js_1.RESPONSE_MESSAGES.CHAT.SESSION_INITIALIZED,
+            data: {
+                is_first_time: isFirstTime,
+                session_id: resolvedSessionId,
+                token: resolvedToken,
+                messages,
+                next_cursor: null,
+                has_more: false,
+            },
+        };
+    }
+    async getSandboxMessages(req, agentIdParam, sessionIdParam, token, before, limitStr) {
+        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+        }
+        const agentId = agentIdParam || 'default';
+        let resolvedSessionId = sessionIdParam;
+        if (token) {
+            const verified = (0, session_token_util_js_1.verifySessionToken)(token);
+            if (!verified.valid || !verified.sessionId) {
+                throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
+            }
+            resolvedSessionId = verified.sessionId;
+        }
+        if (!resolvedSessionId) {
+            throw new common_1.BadRequestException(messages_constant_js_1.RESPONSE_MESSAGES.CHAT.REQUIRED_FIELDS);
+        }
+        const limit = limitStr ? parseInt(limitStr, 10) : 20;
+        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getCustomerMessages({
+            tenant_id: tenantId,
+            agent_id: agentId,
+            session_id: resolvedSessionId,
+            limit,
+            before,
+        }));
+        return {
+            message: messages_constant_js_1.RESPONSE_MESSAGES.CHAT.MESSAGES_RETRIEVED,
+            data: {
+                messages: response.messages || [],
+                next_cursor: response.next_cursor || null,
+                has_more: Boolean(response.has_more),
+            },
+        };
+    }
     async sandboxChat(req, body) {
         const tenantId = body.tenant_id || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
         if (!tenantId) {
             throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
         }
         const agentId = body.agent_id || 'default';
-        const sessionId = body.session_id || `sandbox_${tenantId}_${agentId}`;
+        let sessionId = body.session_id;
+        let token = body.token;
+        if (token) {
+            const verified = (0, session_token_util_js_1.verifySessionToken)(token);
+            if (!verified.valid || !verified.sessionId) {
+                throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
+            }
+            sessionId = verified.sessionId;
+        }
+        else if (sessionId) {
+            token = (0, session_token_util_js_1.signSessionId)(sessionId);
+        }
+        else {
+            const session = (0, session_token_util_js_1.createSignedSession)(`sandbox_${tenantId}_${agentId}`);
+            sessionId = session.sessionId;
+            token = session.token;
+        }
         const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.customerChat({
             tenant_id: tenantId,
             agent_id: agentId,
@@ -138,6 +256,7 @@ let KnowledgeController = class KnowledgeController {
             data: {
                 reply: response.response,
                 session_id: response.session_id,
+                token,
                 history: response.history || [],
             },
         };
@@ -327,6 +446,28 @@ __decorate([
     __metadata("design:paramtypes", [knowledge_dto_js_1.ResumeOnboardingDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "resumeOnboarding", null);
+__decorate([
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_INIT),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.InitCustomerChatDto]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "sandboxInit", null);
+__decorate([
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_MESSAGES),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)('agent_id')),
+    __param(2, (0, common_1.Query)('session_id')),
+    __param(3, (0, common_1.Query)('token')),
+    __param(4, (0, common_1.Query)('before')),
+    __param(5, (0, common_1.Query)('limit')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String, String, String, String]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "getSandboxMessages", null);
 __decorate([
     (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),

@@ -240,13 +240,27 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
         self, request: knowledge_pb2.GetCustomerMessagesRequest, context: grpc.aio.ServicerContext
     ) -> knowledge_pb2.GetCustomerMessagesResponse:
         try:
+            from datetime import datetime
+
             from agent_orchestrator.repositories.customer_message_repository import (
                 CustomerMessageRepository,
             )
 
             repo = CustomerMessageRepository()
-            limit = request.limit if request.limit > 0 else 10
-            msgs = await repo.get_recent_messages(request.session_id, limit=limit)
+            limit = min(max(1, request.limit), 100) if request.limit > 0 else 20
+            before_dt: datetime | None = None
+            if request.before:
+                try:
+                    iso_clean = request.before.replace("Z", "+00:00")
+                    before_dt = datetime.fromisoformat(iso_clean)
+                except Exception:
+                    pass
+
+            msgs, has_more, next_cursor = await repo.get_messages(
+                session_id=request.session_id,
+                before=before_dt,
+                limit=limit,
+            )
             return knowledge_pb2.GetCustomerMessagesResponse(
                 messages=[
                     knowledge_pb2.CustomerChatMessageInfo(
@@ -259,7 +273,9 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                         created_at=m.created_at.isoformat(),
                     )
                     for m in msgs
-                ]
+                ],
+                next_cursor=next_cursor,
+                has_more=has_more,
             )
         except Exception as e:
             print(f"[gRPC Error] GetCustomerMessages failed: {e}")

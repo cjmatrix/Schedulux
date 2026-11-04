@@ -212,11 +212,22 @@ async def verify_booking_otp(
     cleaned_phone = phone.strip()
     cleaned_code = code.strip()
 
-    valid = await verify_otp_code(cleaned_phone, cleaned_code)
+    valid, reason = await verify_otp_code(cleaned_phone, cleaned_code)
     if not valid:
+        if reason == "max_attempts_exceeded":
+            message = "Too many failed verification attempts. This verification code has been invalidated for security. Please request a new verification code."
+        elif reason.startswith("invalid_code:"):
+            remaining = reason.split(":")[1]
+            attempts_str = "attempt" if remaining == "1" else "attempts"
+            message = f"Invalid verification code. You have {remaining} {attempts_str} remaining. Please double-check the 6-digit code sent to your phone."
+        elif reason == "expired_or_not_found":
+            message = "Verification code has expired or was not found. Please request a new verification code."
+        else:
+            message = "Invalid or expired verification code. Please check and try again."
+
         return json.dumps({
             "status": "failed",
-            "message": "Invalid or expired verification code. Please check and try again.",
+            "message": message,
         })
 
     await set_session_auth(session_id=session_id, phone=cleaned_phone, ttl=86400)

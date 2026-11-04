@@ -4,6 +4,8 @@ import {
   GetAvailabilityRequest,
   GetAvailabilityResponse,
   ListBookingsRequest,
+  ListCustomersRequest,
+  ListCustomersResponse,
   RescheduleBookingRequest,
   VerifyCustomerRequest,
   VerifyCustomerResponse,
@@ -16,6 +18,7 @@ export const RESCHEDULE_BOOKING_USE_CASE = 'IRescheduleBookingUseCase';
 export const GET_AVAILABILITY_USE_CASE = 'IGetAvailabilityUseCase';
 export const LIST_BOOKINGS_USE_CASE = 'IListBookingsUseCase';
 export const VERIFY_CUSTOMER_USE_CASE = 'IVerifyCustomerUseCase';
+export const LIST_CUSTOMERS_USE_CASE = 'IListCustomersUseCase';
 
 export interface ICreateBookingUseCase {
   execute(dto: CreateBookingRequest): Promise<BookingEntity>;
@@ -44,4 +47,8 @@ export interface IListBookingsUseCase {
 
 export interface IVerifyCustomerUseCase {
   execute(dto: VerifyCustomerRequest): Promise<VerifyCustomerResponse>;
+}
+
+export interface IListCustomersUseCase {
+  execute(dto: ListCustomersRequest): Promise<ListCustomersResponse>;
 }

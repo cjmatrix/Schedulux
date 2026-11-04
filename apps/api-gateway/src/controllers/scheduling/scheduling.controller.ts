@@ -45,6 +45,7 @@ import {
   UpdateTenantScheduleDto,
 } from './dtos/schedule.dto.js';
 import { CreateServiceDto, ListServicesQueryDto, UpdateServiceDto } from './dtos/service.dto.js';
+import { ListCustomersQueryDto } from './dtos/customer.dto.js';
 
 @Controller(API_ROUTES.SCHEDULING.BASE)
 @UseGuards(TenantAuthGuard, RolesGuard)
@@ -498,6 +499,35 @@ export class SchedulingController implements OnModuleInit {
     return {
       message: response.message,
       data: response.schedule,
+    };
+  }
+
+  @Get(API_ROUTES.SCHEDULING.CUSTOMERS)
+  @UsePipes(ZodValidationPipe)
+  async listCustomers(
+    @Req() req: AuthenticatedTenantRequest,
+    @Query() query: ListCustomersQueryDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const response = await lastValueFrom(
+      this._schedulingService.listCustomers({
+        tenant_id: tenantId,
+        agent_id: query.agent_id || '',
+        page: query.page,
+        limit: query.limit,
+        search: query.search || '',
+      }),
+    );
+
+    return {
+      message: RESPONSE_MESSAGES.SCHEDULING.CUSTOMERS_RETRIEVED,
+      data: response.customers || [],
+      pagination: {
+        total: response.total,
+        page: response.page,
+        limit: response.limit,
+        total_pages: response.total_pages,
+      },
     };
   }
 }

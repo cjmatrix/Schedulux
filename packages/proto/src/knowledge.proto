@@ -157,10 +157,13 @@ message GetCustomerMessagesRequest {
   string agent_id = 2;
   string session_id = 3;
   optional int32 limit = 4;
+  optional string before = 5;
 }
 
 message GetCustomerMessagesResponse {
   repeated CustomerChatMessageInfo messages = 1;
+  optional string next_cursor = 2;
+  bool has_more = 3;
 }
 
 message GetDocumentUploadUrlRequest {

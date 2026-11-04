@@ -44,10 +44,20 @@ export const SaveInitialAgentDraftSchema = z.object({
 
 export class SaveInitialAgentDraftDto extends createZodDto(SaveInitialAgentDraftSchema) {}
 
+export const InitCustomerChatSchema = z.object({
+  tenant_id: z.string().min(1, 'Tenant ID is required'),
+  agent_id: z.string().min(1, 'Agent ID is required'),
+  token: z.string().optional(),
+  session_id: z.string().optional(),
+});
+
+export class InitCustomerChatDto extends createZodDto(InitCustomerChatSchema) {}
+
 export const CustomerChatSchema = z.object({
   tenant_id: z.string().min(1, 'Tenant ID is required'),
   agent_id: z.string().min(1, 'Agent ID is required'),
-  session_id: z.string().min(1, 'Session ID is required'),
+  session_id: z.string().optional(),
+  token: z.string().optional(),
   message: z.string().min(1, 'Message cannot be empty'),
   customer_id: z.string().optional(),
   customer_phone: z.string().optional(),
@@ -60,6 +70,7 @@ export const SendSandboxMessageSchema = z.object({
   tenant_id: z.string().optional(),
   agent_id: z.string().optional(),
   session_id: z.string().optional(),
+  token: z.string().optional(),
   message: z.string().min(1, 'Message cannot be empty'),
   customer_id: z.string().optional(),
   customer_phone: z.string().optional(),

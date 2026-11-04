@@ -46,6 +46,10 @@ def _build_faq_system_prompt(
 ) -> str:
     now_iso = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
     supervisor_prompt = biz_context.get("supervisor_prompt") or ""
+    formatted_hours = biz_context.get("formatted_operating_hours") or "Operating hours not specified."
+    public_phone = biz_context.get("public_phone") or "Not provided"
+    support_email = biz_context.get("support_email") or "Not provided"
+    address = biz_context.get("address") or "Not provided"
 
     custom_instructions_block = ""
     if supervisor_prompt.strip():
@@ -55,7 +59,7 @@ def _build_faq_system_prompt(
 """
 
     return f"""You are the Knowledge & Policy specialist for {biz_context.get("business_name")}.
-Your sole purpose: answer customer questions about business policies, procedures, rules, preparation guidelines, and general knowledge accurately.{custom_instructions_block}
+Your sole purpose: answer customer questions about business policies, operating hours, contact info, procedures, rules, preparation guidelines, and general knowledge accurately.{custom_instructions_block}
 
 [Context]
 Current UTC Time: {now_iso}
@@ -63,13 +67,23 @@ Business Timezone: {biz_context.get("timezone")}
 Tenant ID: {tenant_id}
 Agent ID: {agent_id}
 
+[Business Profile & Operating Hours]
+Business: {biz_context.get("business_name")}
+Phone: {public_phone}
+Email: {support_email}
+Address: {address}
+Operating Hours & Schedule:
+{formatted_hours}
+
 [Protocol]
-1. For any question about policies, refund/cancellation rules, procedures, preparation guidelines, or general business information:
+1. For questions about operating hours, opening/closing times, days open/closed, phone number, email, address, or location:
+   Answer DIRECTLY using [Business Profile & Operating Hours]. Do NOT call search_knowledge_base for these facts.
+2. For questions about policies, refund/cancellation rules, procedures, preparation guidelines, or general business information:
    Invoke `search_knowledge_base(query=..., tenant_id="{tenant_id}", agent_id="{agent_id}")`.
-2. Ground every answer STRICTLY on retrieved content from the knowledge base. Do NOT fabricate policies, terms, or guidelines.
-3. If no matching information is found in the knowledge base, say: "I don't have that information on file — our team will be happy to assist you directly."
-4. If the customer indicates they want to schedule an appointment or book, let them know our booking concierge can assist them right away.
-5. Tone: knowledgeable, warm, concise, and helpful.
+3. Ground answers to policy/procedure questions STRICTLY on retrieved content from the knowledge base. Do NOT fabricate policies, terms, or guidelines.
+4. If no matching information is found in the knowledge base (and not answered by [Business Profile & Operating Hours]), say: "I don't have that information on file — our team will be happy to assist you directly."
+5. If the customer indicates they want to schedule an appointment or book, let them know our booking concierge can assist them right away.
+6. Tone: knowledgeable, warm, concise, and helpful.
 """
 
 
@@ -87,7 +101,7 @@ async def run_faq_agent(
     for m in conversation_history:
         langchain_msgs.append(m)
     langchain_msgs.append(HumanMessage(content=message))
-
+    print(biz_context,"hereeeee",flush=True)
     system_prompt = _build_faq_system_prompt(tenant_id, agent_id, biz_context)
     model = _get_chat_model(temperature=0.1)
 

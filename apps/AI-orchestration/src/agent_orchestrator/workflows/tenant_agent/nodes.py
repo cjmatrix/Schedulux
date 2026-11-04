@@ -459,9 +459,13 @@ async def node_apply_draft_update(state: GraphState) -> dict:
 
         if tenant_id and agent_id:
             try:
-                from agent_orchestrator.clients.redis_client import set_cached_draft
+                from agent_orchestrator.clients.redis_client import (
+                    delete_cached_biz_context,
+                    set_cached_draft,
+                )
 
                 await set_cached_draft(tenant_id, agent_id, updated_draft)
+                await delete_cached_biz_context(tenant_id, agent_id)
             except Exception as re:
                 print(f"[Patch Node] Redis cache write warning: {re}", flush=True)
 

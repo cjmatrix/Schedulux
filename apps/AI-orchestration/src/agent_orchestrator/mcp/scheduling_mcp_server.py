@@ -1,9 +1,7 @@
-import asyncio
-from datetime import datetime, timezone
 import json
 import logging
-import os
 import secrets
+from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -11,7 +9,6 @@ from langchain_core.tools import BaseTool, StructuredTool
 from mcp.server.fastmcp import FastMCP
 
 from agent_orchestrator.clients.redis_client import (
-    get_session_auth,
     is_session_verified,
     set_session_auth,
     store_otp,
@@ -110,11 +107,14 @@ async def check_availability(
         JSON string containing available dates, operating hours, and open time slots.
     """
     logger.info(
-        "[MCP Tool check_availability] tenant=%s, agent=%s, service=%s, start_date=%s",
+        "[MCP Tool: check_availability] Invoked with arguments: tenant_id=%s, agent_id=%s, service_id=%s, start_date=%s, end_date=%s, resource_id=%s, timezone=%s",
         tenant_id,
         agent_id,
         service_id,
         start_date,
+        end_date,
+        resource_id,
+        timezone,
     )
     result = await get_availability(
         tenant_id=tenant_id,
@@ -170,12 +170,17 @@ async def send_booking_otp(
     agent_id: str,
     phone: str,
 ) -> str:
- 
+    logger.info(
+        "[MCP Tool: send_booking_otp] Invoked with arguments: tenant_id=%s, agent_id=%s, phone=%s",
+        tenant_id,
+        agent_id,
+        phone,
+    )
     cleaned_phone = phone.strip()
     if not cleaned_phone:
         return json.dumps({"status": "failed", "message": "Valid phone number is required."})
 
-   
+
     code = f"{secrets.randbelow(900000) + 100000}"
     await store_otp(cleaned_phone, code, ttl=300)
 
@@ -199,7 +204,8 @@ async def verify_booking_otp(
     session_id: str,
     phone: str,
     code: str,
-    tenant_id: str | None = None,
+    tenant_id: str,
+    agent_id: str,
 ) -> str:
     """Verify customer's 6-digit OTP code and authenticate their chat session.
 
@@ -207,8 +213,17 @@ async def verify_booking_otp(
         session_id: Active customer chat session ID.
         phone: Customer mobile phone number.
         code: 6-digit code provided by customer.
-        tenant_id: Optional business / tenant ID.
+        tenant_id: The ID of the business/tenant.
+        agent_id: The ID of the agent managing the business.
     """
+    logger.info(
+        "[MCP Tool: verify_booking_otp] Invoked with arguments: session_id=%s, phone=%s, code=%s, tenant_id=%s, agent_id=%s",
+        session_id,
+        phone,
+        code,
+        tenant_id,
+        agent_id,
+    )
     cleaned_phone = phone.strip()
     cleaned_code = code.strip()
 
@@ -235,7 +250,7 @@ async def verify_booking_otp(
     repo = CustomerMessageRepository()
     await repo.mark_conversation_verified(session_id=session_id, customer_phone=cleaned_phone)
 
-    
+
     try:
         await verify_customer(tenant_id=tenant_id or "", customer_phone=cleaned_phone)
         logger.info("[MCP Tool verify_booking_otp] Synced is_guest: false via gRPC for %s", cleaned_phone)
@@ -289,29 +304,57 @@ async def book_appointment(
         JSON string containing the booking confirmation, booking reference code, and status.
     """
     logger.info(
-        "[MCP Tool book_appointment] tenant=%s, service=%s, customer=%s, phone=%s, time=%s",
+        "[MCP Tool: book_appointment] Invoked with arguments: tenant_id=%s, agent_id=%s, service_id=%s, start_time=%s, customer_name=%s, customer_phone=%s, customer_email=%s, end_time=%s, resource_id=%s, notes=%s, session_id=%s",
         tenant_id,
+        agent_id,
         service_id,
+        start_time,
         customer_name,
         customer_phone,
-        start_time,
+        customer_email,
+        end_time,
+        resource_id,
+        notes,
+        session_id,
     )
 
-    runtime = await AgentRuntimeConfig.find_one({"tenant_id": tenant_id})
+    query: dict[str, Any] = {"tenant_id": tenant_id, "agent_id": agent_id}
+    runtime = await AgentRuntimeConfig.find_one(query)
     service_doc = next((s for s in (runtime.services if runtime else []) if s.service_id == service_id), None)
 
-    service_otp_override = (
-        service_doc.verification.require_otp
-        if (service_doc and service_doc.verification and service_doc.verification.require_otp is not None)
-        else None
-    )
-    deposit_required = bool(service_doc and service_doc.deposit and service_doc.deposit.required)
-    global_otp = bool(
-        runtime
-        and runtime.guardrails
-        and runtime.guardrails.verification_policy
-        and runtime.guardrails.verification_policy.require_otp_for_new_booking
-    )
+    draft = None
+    if not runtime or not service_doc:
+        draft = await AgentDraft.find_one(query)
+
+    draft_guardrails: dict[str, Any] = {}
+    if draft and isinstance(draft.current_draft, dict):
+        raw_gr = draft.current_draft.get("guardrails")
+        if isinstance(raw_gr, dict):
+            draft_guardrails = raw_gr
+
+    service_otp_override: bool | None = None
+    deposit_required = False
+
+    if service_doc:
+        if service_doc.verification and service_doc.verification.require_otp is not None:
+            service_otp_override = service_doc.verification.require_otp
+        deposit_required = bool(service_doc.deposit and service_doc.deposit.required)
+    elif draft and isinstance(draft.current_draft, dict):
+        raw_services = draft.current_draft.get("services")
+        draft_services = raw_services if isinstance(raw_services, list) else []
+        draft_s = next((s for s in draft_services if isinstance(s, dict) and s.get("service_id") == service_id), None)
+        if draft_s:
+            v_dict = draft_s.get("verification") or {}
+            if isinstance(v_dict, dict) and "require_otp" in v_dict and v_dict["require_otp"] is not None:
+                service_otp_override = bool(v_dict["require_otp"])
+            d_dict = draft_s.get("deposit") or {}
+            deposit_required = bool(d_dict.get("required")) if isinstance(d_dict, dict) else False
+
+    global_otp = False
+    if runtime and runtime.guardrails and runtime.guardrails.verification_policy:
+        global_otp = bool(runtime.guardrails.verification_policy.require_otp_for_new_booking)
+    elif draft_guardrails.get("verification_policy"):
+        global_otp = bool(draft_guardrails["verification_policy"].get("require_otp_for_new_booking"))
 
     requires_otp = service_otp_override if service_otp_override is not None else (deposit_required or global_otp)
 
@@ -415,10 +458,12 @@ async def cancel_appointment(
         reason: Optional reason for the cancellation.
     """
     logger.info(
-        "[MCP Tool cancel_appointment] tenant=%s, agent=%s, booking=%s, reason=%s",
+        "[MCP Tool: cancel_appointment] Invoked with arguments: tenant_id=%s, agent_id=%s, booking_id=%s, session_id=%s, customer_phone=%s, reason=%s",
         tenant_id,
         agent_id,
         booking_id,
+        session_id,
+        customer_phone,
         reason,
     )
 
@@ -494,11 +539,16 @@ async def reschedule_appointment(
         notes: Optional rescheduling notes.
     """
     logger.info(
-        "[MCP Tool reschedule_appointment] tenant=%s, agent=%s, booking=%s, new_time=%s",
+        "[MCP Tool: reschedule_appointment] Invoked with arguments: tenant_id=%s, agent_id=%s, booking_id=%s, new_start_time=%s, new_end_time=%s, resource_id=%s, session_id=%s, customer_phone=%s, notes=%s",
         tenant_id,
         agent_id,
         booking_id,
         new_start_time,
+        new_end_time,
+        resource_id,
+        session_id,
+        customer_phone,
+        notes,
     )
 
     is_verified = await is_session_verified(session_id, customer_phone) if session_id else False
@@ -536,12 +586,19 @@ async def reschedule_appointment(
         )
 
     bk = result.get("booking", {})
-    runtime = await AgentRuntimeConfig.find_one({"tenant_id": tenant_id})
+    query: dict[str, Any] = {"tenant_id": tenant_id, "agent_id": agent_id}
+    runtime = await AgentRuntimeConfig.find_one(query)
     tz_str = (
         runtime.business_profile.timezone
         if (runtime and runtime.business_profile and runtime.business_profile.timezone)
         else "UTC"
     )
+    if tz_str == "UTC":
+        draft = await AgentDraft.find_one(query)
+        if draft and isinstance(draft.current_draft, dict):
+            bp = draft.current_draft.get("business_profile") or {}
+            if isinstance(bp, dict) and bp.get("timezone"):
+                tz_str = str(bp["timezone"])
     start_utc = bk.get("start_time")
     end_utc = bk.get("end_time")
 
@@ -566,7 +623,7 @@ async def get_customer_bookings(
     session_id: str,
     phone: str,
     tenant_id: str,
-    agent_id: str | None = None,
+    agent_id: str,
     status: str | None = None,
     limit: int = 20,
 ) -> str:
@@ -582,13 +639,22 @@ async def get_customer_bookings(
         session_id: Active customer chat session ID.
         phone: Customer mobile phone number (E.164 or 10-digit).
         tenant_id: The business / tenant ID.
-        agent_id: Optional agent ID.
+        agent_id: The specific agent ID responsible for the scheduling flow.
         status: Optional filter by booking status (e.g. 'confirmed', 'pending', 'cancelled').
         limit: Max number of bookings to return (default 20, max 20).
 
     Returns:
         JSON string containing the list of recent bookings.
     """
+    logger.info(
+        "[MCP Tool: get_customer_bookings] Invoked with arguments: session_id=%s, phone=%s, tenant_id=%s, agent_id=%s, status=%s, limit=%s",
+        session_id,
+        phone,
+        tenant_id,
+        agent_id,
+        status,
+        limit,
+    )
     cleaned_phone = phone.strip()
     if not cleaned_phone:
         return json.dumps({
@@ -596,7 +662,7 @@ async def get_customer_bookings(
             "message": "Valid customer phone number is required to look up bookings.",
         })
 
-    
+
     verified = await is_session_verified(session_id, cleaned_phone)
     if not verified:
         logger.warning(
@@ -638,12 +704,19 @@ async def get_customer_bookings(
         if not bk.get("customer_phone") or last10 in bk.get("customer_phone", "")
     ]
 
-    runtime = await AgentRuntimeConfig.find_one({"tenant_id": tenant_id})
+    query: dict[str, Any] = {"tenant_id": tenant_id, "agent_id": agent_id}
+    runtime = await AgentRuntimeConfig.find_one(query)
     tz_str = (
         runtime.business_profile.timezone
         if (runtime and runtime.business_profile and runtime.business_profile.timezone)
         else "UTC"
     )
+    if tz_str == "UTC":
+        draft = await AgentDraft.find_one(query)
+        if draft and isinstance(draft.current_draft, dict):
+            bp = draft.current_draft.get("business_profile") or {}
+            if isinstance(bp, dict) and bp.get("timezone"):
+                tz_str = str(bp["timezone"])
 
     enriched_bookings = []
     for bk in matched:
@@ -756,8 +829,9 @@ async def search_resources(
         JSON string containing matching resources with their name, title, category, description, and status.
     """
     logger.info(
-        "[MCP Tool search_resources (CQRS Local Read)] tenant=%s, query=%s, resource_id=%s, type=%s",
+        "[MCP Tool: search_resources] Invoked with arguments: tenant_id=%s, agent_id=%s, query=%s, resource_id=%s, resource_type=%s",
         tenant_id,
+        agent_id,
         query,
         resource_id,
         resource_type,
@@ -981,8 +1055,9 @@ async def search_services(
         JSON string containing matching services with their service_id, name, category, price, duration, and staff requirements.
     """
     logger.info(
-        "[MCP Tool search_services (CQRS Local Read)] tenant=%s, query=%s, category=%s, service_id=%s",
+        "[MCP Tool: search_services] Invoked with arguments: tenant_id=%s, agent_id=%s, query=%s, category=%s, service_id=%s",
         tenant_id,
+        agent_id,
         query,
         category,
         service_id,
@@ -1035,7 +1110,6 @@ async def search_services(
 
 @mcp.tool()
 async def search_knowledge_base(
-
     tenant_id: str,
     agent_id: str,
     query: str,
@@ -1050,6 +1124,12 @@ async def search_knowledge_base(
     Returns:
         JSON string containing the most relevant excerpts and answers from official documents.
     """
+    logger.info(
+        "[MCP Tool: search_knowledge_base] Invoked with arguments: tenant_id=%s, agent_id=%s, query=%s",
+        tenant_id,
+        agent_id,
+        query,
+    )
     try:
         from agent_orchestrator.adapters.bm25_embedder import BM25SparseEmbedder
         from agent_orchestrator.adapters.qdrant_stores import QdrantKnowledgeStore
@@ -1113,6 +1193,7 @@ def get_scheduling_mcp_tools() -> list[BaseTool]:
 
         def _make_caller(tool_name: str):
             async def _execute_mcp_tool(**kwargs: Any) -> str:
+                logger.info("[MCP Tool Call] Executing '%s' with arguments: %s", tool_name, json.dumps(kwargs, default=str))
                 res = await mcp.call_tool(tool_name, arguments=kwargs)
                 contents = res[0] if isinstance(res, tuple) else res
                 if isinstance(contents, list):

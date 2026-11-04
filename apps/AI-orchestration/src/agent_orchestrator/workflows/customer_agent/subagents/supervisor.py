@@ -67,7 +67,7 @@ Analyze the user message and conversation context to identify which specialist a
 
 Possible intents:
   "booking"  — user is asking about services, pricing, available staff/practitioners/specialists (e.g. "who does shirt stitching?", "who does haircuts?"), checking availability, booking an appointment, cancelling, rescheduling, or viewing bookings
-  "faq"      — user is asking about business policies, repayment/refund rules, clinic/shop guidelines, preparation instructions, parking, or general knowledge base topics
+  "faq"      — user is asking about operating hours, opening/closing times, address, location, contact details, business policies, repayment/refund rules, clinic/shop guidelines, preparation instructions, parking, or general knowledge base topics
   "handoff"  — user is expressing a complaint, legal threat, refund dispute, or demanding to speak with a human
 
 Rules:

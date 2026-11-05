@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Annotated, Any
+
 from langchain_core.messages import BaseMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph.message import add_messages
@@ -21,4 +22,5 @@ class CustomerGraphState(TypedDict):
     handoff_response: str | None
     response: str
     error: str | None
+    is_sandbox: bool
 

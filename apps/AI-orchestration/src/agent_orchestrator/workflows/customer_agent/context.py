@@ -52,17 +52,26 @@ def format_operating_hours(operating_hours: dict[str, Any] | None) -> str:
     return "\n".join(lines) if has_any else "Operating hours not specified."
 
 
-async def resolve_business_context(tenant_id: str, agent_id: str) -> dict[str, Any]:
-    cached = await get_cached_biz_context(tenant_id, agent_id)
+async def resolve_business_context(
+    tenant_id: str,
+    agent_id: str,
+    is_sandbox: bool = False,
+) -> dict[str, Any]:
+    mode_str = "sandbox" if is_sandbox else "live"
+    cached = await get_cached_biz_context(tenant_id, agent_id, mode=mode_str)
     if cached and "formatted_operating_hours" in cached:
         return cached
 
-    ctx = await _load_from_db(tenant_id, agent_id)
-    await set_cached_biz_context(tenant_id, agent_id, ctx, ttl=3600)
+    ctx = await _load_from_db(tenant_id, agent_id, is_sandbox=is_sandbox)
+    await set_cached_biz_context(tenant_id, agent_id, ctx, ttl=3600, mode=mode_str)
     return ctx
 
 
-async def _load_from_db(tenant_id: str, agent_id: str) -> dict[str, Any]:
+async def _load_from_db(
+    tenant_id: str,
+    agent_id: str,
+    is_sandbox: bool = False,
+) -> dict[str, Any]:
     biz_name: str | None = None
     timezone: str | None = None
     currency: str | None = None
@@ -81,92 +90,145 @@ async def _load_from_db(tenant_id: str, agent_id: str) -> dict[str, Any]:
     if agent_id:
         query["agent_id"] = agent_id
 
-    runtime = await AgentRuntimeConfig.find_one(query)
-
-    if runtime:
-        if runtime.business_profile:
-            biz_name = runtime.business_profile.name or biz_name
-            timezone = runtime.business_profile.timezone or timezone
-            currency = runtime.business_profile.currency or currency
-            address = runtime.business_profile.address or address
-            if runtime.business_profile.contact:
-                public_phone = runtime.business_profile.contact.public_phone or public_phone
-                support_email = runtime.business_profile.contact.support_email or support_email
-
-        supervisor_prompt = runtime.supervisor_prompt
-
-        if runtime.operating_hours:
-            operating_hours = runtime.operating_hours.model_dump()
-
-        if runtime.scheduling_engine:
-            scheduling_engine = runtime.scheduling_engine.model_dump()
-
-        if runtime.guardrails:
-            guardrails = runtime.guardrails.model_dump()
-
-        if runtime.sub_agents:
-            sub_agents = [sa.model_dump() for sa in runtime.sub_agents]
-
-        for r in runtime.resources:
-            if not getattr(r, "is_bookable", True) or getattr(r, "is_deleted", False):
-                continue
-            resources.append({
-                "id": r.resource_id,
-                "name": r.name,
-            })
-
-        for s in runtime.services:
-            if getattr(s, "is_deleted", False):
-                continue
-            services.append({
-                "id": s.service_id,
-                "name": s.name,
-            })
-
-    if not runtime or not services or not biz_name:
+    if is_sandbox:
+       
         draft = await AgentDraft.find_one(query)
         if draft and draft.current_draft:
             biz: dict[str, Any] = draft.current_draft.get("business_profile") or {}  # type: ignore[assignment]
             if isinstance(biz, dict):
-                biz_name = biz_name or biz.get("name")
-                timezone = timezone or biz.get("timezone")
-                currency = currency or biz.get("currency")
-                address = address or biz.get("address")
+                biz_name = biz.get("name")
+                timezone = biz.get("timezone")
+                currency = biz.get("currency")
+                address = biz.get("address")
                 contact_dict = biz.get("contact") or {}
                 if isinstance(contact_dict, dict):
-                    public_phone = public_phone or contact_dict.get("public_phone")
-                    support_email = support_email or contact_dict.get("support_email")
+                    public_phone = contact_dict.get("public_phone")
+                    support_email = contact_dict.get("support_email")
             if not timezone:
                 engine: dict[str, Any] = draft.current_draft.get("scheduling_engine") or {}  # type: ignore[assignment]
                 if isinstance(engine, dict):
                     timezone = engine.get("timezone")
-            if not operating_hours:
-                raw_oh = draft.current_draft.get("operating_hours")
-                if isinstance(raw_oh, dict):
-                    operating_hours = raw_oh
-            supervisor_prompt = supervisor_prompt or draft.current_draft.get("supervisor_prompt")  # type: ignore[assignment]
 
-            if not resources:
-                raw_resources = draft.current_draft.get("resources")
-                if isinstance(raw_resources, list):
-                    for r_raw in raw_resources:
-                        if not isinstance(r_raw, dict) or not r_raw.get("is_bookable", True) or r_raw.get("is_deleted", False):
-                            continue
-                        r_id = r_raw.get("resource_id", "")
-                        r_name = r_raw.get("name", "Unnamed")
-                        if r_id and r_name:
-                            resources.append({"id": r_id, "name": r_name})
+            raw_oh = draft.current_draft.get("operating_hours")
+            if isinstance(raw_oh, dict):
+                operating_hours = raw_oh
 
-            if not services:
-                raw_services = draft.current_draft.get("services")
-                if isinstance(raw_services, list):
-                    for s_raw in raw_services:
-                        if not isinstance(s_raw, dict) or s_raw.get("is_deleted", False):
+            supervisor_prompt = draft.current_draft.get("supervisor_prompt")  # type: ignore[assignment]
+
+            raw_gr = draft.current_draft.get("guardrails")
+            if isinstance(raw_gr, dict):
+                guardrails = raw_gr
+
+            raw_se = draft.current_draft.get("scheduling_engine")
+            if isinstance(raw_se, dict):
+                scheduling_engine = raw_se
+
+            raw_sa = draft.current_draft.get("sub_agents")
+            if isinstance(raw_sa, list):
+                sub_agents = raw_sa
+
+            raw_resources = draft.current_draft.get("resources")
+            if isinstance(raw_resources, list):
+                for r_raw in raw_resources:
+                    if (
+                        not isinstance(r_raw, dict)
+                        or not r_raw.get("is_bookable", True)
+                        or r_raw.get("is_deleted", False)
+                    ):
+                        continue
+                    r_id = r_raw.get("resource_id", "")
+                    r_name = r_raw.get("name", "Unnamed")
+                    if r_id and r_name:
+                        resources.append({"id": r_id, "name": r_name})
+
+            raw_services = draft.current_draft.get("services")
+            if isinstance(raw_services, list):
+                for s_raw in raw_services:
+                    if not isinstance(s_raw, dict) or s_raw.get("is_deleted", False):
+                        continue
+                    s_id = s_raw.get("service_id", "")
+                    s_name = s_raw.get("name", "Unnamed")
+                    if s_id and s_name:
+                        services.append({"id": s_id, "name": s_name})
+
+        
+        if not draft or not services or not biz_name:
+            runtime = await AgentRuntimeConfig.find_one(query)
+            if runtime:
+                if not biz_name and runtime.business_profile:
+                    biz_name = runtime.business_profile.name
+                if not timezone and runtime.business_profile:
+                    timezone = runtime.business_profile.timezone
+                if not currency and runtime.business_profile:
+                    currency = runtime.business_profile.currency
+                if not address and runtime.business_profile:
+                    address = runtime.business_profile.address
+                if not public_phone and runtime.business_profile and runtime.business_profile.contact:
+                    public_phone = runtime.business_profile.contact.public_phone
+                if not support_email and runtime.business_profile and runtime.business_profile.contact:
+                    support_email = runtime.business_profile.contact.support_email
+
+                if not supervisor_prompt:
+                    supervisor_prompt = runtime.supervisor_prompt
+                if not operating_hours and runtime.operating_hours:
+                    operating_hours = runtime.operating_hours.model_dump()
+                if not scheduling_engine and runtime.scheduling_engine:
+                    scheduling_engine = runtime.scheduling_engine.model_dump()
+                if not guardrails and runtime.guardrails:
+                    guardrails = runtime.guardrails.model_dump()
+                if not sub_agents and runtime.sub_agents:
+                    sub_agents = [sa.model_dump() for sa in runtime.sub_agents]
+
+                if not resources and runtime.resources:
+                    for r in runtime.resources:
+                        if not getattr(r, "is_bookable", True) or getattr(r, "is_deleted", False):
                             continue
-                        s_id = s_raw.get("service_id", "")
-                        s_name = s_raw.get("name", "Unnamed")
-                        if s_id and s_name:
-                            services.append({"id": s_id, "name": s_name})
+                        resources.append({"id": r.resource_id, "name": r.name})
+
+                if not services and runtime.services:
+                    for s in runtime.services:
+                        if getattr(s, "is_deleted", False):
+                            continue
+                        services.append({"id": s.service_id, "name": s.name})
+    else:
+      
+        runtime = await AgentRuntimeConfig.find_one(query)
+        if runtime:
+            if runtime.business_profile:
+                biz_name = runtime.business_profile.name
+                timezone = runtime.business_profile.timezone
+                currency = runtime.business_profile.currency
+                address = runtime.business_profile.address
+                if runtime.business_profile.contact:
+                    public_phone = runtime.business_profile.contact.public_phone
+                    support_email = runtime.business_profile.contact.support_email
+
+            supervisor_prompt = runtime.supervisor_prompt
+
+            if runtime.operating_hours:
+                operating_hours = runtime.operating_hours.model_dump()
+            if runtime.scheduling_engine:
+                scheduling_engine = runtime.scheduling_engine.model_dump()
+            if runtime.guardrails:
+                guardrails = runtime.guardrails.model_dump()
+            if runtime.sub_agents:
+                sub_agents = [sa.model_dump() for sa in runtime.sub_agents]
+
+            for r in runtime.resources:
+                if not getattr(r, "is_bookable", True) or getattr(r, "is_deleted", False):
+                    continue
+                resources.append({"id": r.resource_id, "name": r.name})
+
+            for s in runtime.services:
+                if getattr(s, "is_deleted", False):
+                    continue
+                services.append({"id": s.service_id, "name": s.name})
+        else:
+            logger.warning(
+                "[CustomerContext] Live mode: No active AgentRuntimeConfig found for tenant %s, agent %s",
+                tenant_id,
+                agent_id,
+            )
 
     return {
         "business_name": biz_name or "Schedulux Business",

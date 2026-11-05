@@ -250,6 +250,7 @@ let KnowledgeController = class KnowledgeController {
             customer_id: body.customer_id || '',
             customer_phone: body.customer_phone || '',
             customer_name: body.customer_name || 'Sandbox Tester',
+            mode: 'sandbox',
         }));
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.SANDBOX_CHAT_PROCESSED,

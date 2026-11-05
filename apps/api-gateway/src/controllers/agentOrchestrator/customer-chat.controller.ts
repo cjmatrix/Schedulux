@@ -51,6 +51,9 @@ export class CustomerChatController implements OnModuleInit {
         resolvedToken = body.token;
       }
     } else if (body.session_id) {
+      if (body.session_id.startsWith('sandbox_')) {
+        throw new BadRequestException('Sandbox sessions are not allowed in public live chat.');
+      }
       resolvedSessionId = body.session_id;
       resolvedToken = signSessionId(body.session_id);
     }
@@ -118,6 +121,9 @@ export class CustomerChatController implements OnModuleInit {
       }
       sessionId = verified.sessionId;
     } else if (sessionId) {
+      if (sessionId.startsWith('sandbox_')) {
+        throw new BadRequestException('Sandbox sessions are not allowed in public live chat.');
+      }
       token = signSessionId(sessionId);
     } else {
       const session = createSignedSession('sess');
@@ -134,6 +140,7 @@ export class CustomerChatController implements OnModuleInit {
         customer_id: body.customer_id,
         customer_phone: body.customer_phone,
         customer_name: body.customer_name,
+        mode: 'live',
       }),
     );
 

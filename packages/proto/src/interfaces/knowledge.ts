@@ -134,6 +134,7 @@ export interface CustomerChatRequest {
   customer_id?: string | undefined;
   customer_phone?: string | undefined;
   customer_name?: string | undefined;
+  mode?: string | undefined;
 }
 
 export interface CustomerChatResponse {

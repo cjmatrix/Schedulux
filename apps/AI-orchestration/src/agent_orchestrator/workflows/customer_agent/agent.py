@@ -247,7 +247,15 @@ async def process_customer_chat(
     customer_id: str | None = None,
     customer_phone: str | None = None,
     customer_name: str | None = None,
+    mode: str | None = None,
 ) -> dict[str, Any]:
+    if mode == "sandbox":
+        is_sandbox = True
+    elif mode == "live":
+        is_sandbox = False
+    else:
+        is_sandbox = bool(session_id and session_id.startswith("sandbox_"))
+
     await _customer_msg_repo.get_or_create_conversation(session_id, tenant_id, agent_id)
 
     if customer_id or customer_phone or customer_name:
@@ -275,7 +283,7 @@ async def process_customer_chat(
         elif m.role == "assistant":
             langchain_messages.append(AIMessage(content=m.content))
 
-    biz_context = await resolve_business_context(tenant_id, agent_id)
+    biz_context = await resolve_business_context(tenant_id, agent_id, is_sandbox=is_sandbox)
     all_tools = get_scheduling_mcp_tools()
 
     initial_state: CustomerGraphState = {
@@ -292,6 +300,7 @@ async def process_customer_chat(
         "handoff_response": None,
         "response": "",
         "error": None,
+        "is_sandbox": is_sandbox,
     }
 
     try:

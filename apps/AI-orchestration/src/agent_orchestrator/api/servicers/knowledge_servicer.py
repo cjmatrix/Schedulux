@@ -201,6 +201,7 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
         try:
             from agent_orchestrator.workflows.customer_agent import process_customer_chat
 
+            mode = getattr(request, "mode", None) or None
             result = await process_customer_chat(
                 tenant_id=request.tenant_id,
                 agent_id=request.agent_id,
@@ -209,6 +210,7 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                 customer_id=request.customer_id if request.customer_id else None,
                 customer_phone=request.customer_phone if request.customer_phone else None,
                 customer_name=request.customer_name if request.customer_name else None,
+                mode=mode,
             )
             history_proto = [
                 knowledge_pb2.CustomerChatMessageInfo(

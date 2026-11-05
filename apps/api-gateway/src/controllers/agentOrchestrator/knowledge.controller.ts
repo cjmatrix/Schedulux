@@ -328,6 +328,7 @@ export class KnowledgeController implements OnModuleInit {
         customer_id: body.customer_id || '',
         customer_phone: body.customer_phone || '',
         customer_name: body.customer_name || 'Sandbox Tester',
+        mode: 'sandbox',
       }),
     );
 

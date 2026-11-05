@@ -141,6 +141,7 @@ message CustomerChatRequest {
   optional string customer_id = 5;
   optional string customer_phone = 6;
   optional string customer_name = 7;
+  optional string mode = 8;
 }
 
 message CustomerChatResponse {

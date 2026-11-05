@@ -34,6 +34,12 @@ _MERGE_SCHEMA = {
 _DRAFT_MERGER = Merger(_MERGE_SCHEMA)
 
 
+def _generate_semantic_id(prefix: str, name: str, suffix_len: int = 6) -> str:
+    slug = _slugify(name)[:20] if name else ""
+    suffix = secrets.token_hex(suffix_len // 2)
+    return f"{prefix}_{slug}_{suffix}" if slug else f"{prefix}_{suffix}"
+
+
 def apply_draft_merge(base_draft: dict[str, Any], update_data: dict[str, Any]) -> dict[str, Any]:
     if not update_data:
         return base_draft
@@ -60,10 +66,7 @@ def apply_draft_merge(base_draft: dict[str, Any], update_data: dict[str, Any]) -
                     pass
 
                 elif not s.get("service_id"):
-                    if name_key:
-                        s["service_id"] = f"srv_{_slugify(name_key)}"
-                    else:
-                        s["service_id"] = f"srv_{secrets.token_hex(4)}"
+                    s["service_id"] = _generate_semantic_id("srv", name_key)
                 if s.get("is_deleted"):
                     s.setdefault("deleted_at", datetime.now(UTC).isoformat())
 
@@ -87,10 +90,7 @@ def apply_draft_merge(base_draft: dict[str, Any], update_data: dict[str, Any]) -
                     pass
 
                 elif not r.get("resource_id"):
-                    if name_key:
-                        r["resource_id"] = f"res_{_slugify(name_key)}"
-                    else:
-                        r["resource_id"] = f"res_{secrets.token_hex(4)}"
+                    r["resource_id"] = _generate_semantic_id("res", name_key)
                 if "custom_shift_overrides" in r and isinstance(r["custom_shift_overrides"], str):
                     try:
                         r["custom_shift_overrides"] = json.loads(r["custom_shift_overrides"])

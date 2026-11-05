@@ -3,6 +3,7 @@ import { BookingEntity } from '../entities/booking.entity.js';
 export interface FindBookingsFilter {
   page: number;
   limit: number;
+  agentId?: string;
   serviceId?: string;
   resourceId?: string;
   customerId?: string;

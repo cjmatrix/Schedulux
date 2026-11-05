@@ -44,6 +44,7 @@ export class ListBookingsUseCase implements IListBookingsUseCase {
     const result = await this._bookingRepository.findAll(tenantId, {
       page,
       limit,
+      agentId: dto.agent_id?.trim() || undefined,
       serviceId: dto.service_id?.trim() || undefined,
       resourceId: dto.resource_id?.trim() || undefined,
       status: dto.status?.trim() || undefined,

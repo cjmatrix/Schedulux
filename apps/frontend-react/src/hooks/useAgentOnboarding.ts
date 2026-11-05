@@ -33,6 +33,7 @@ export function useAgentOnboarding({
   const [inputValue, setInputValue] = useState('');
   const [draftSchema, setDraftSchema] = useState<AgentDraftSchema>({});
   const [baselineSchema, setBaselineSchema] = useState<AgentDraftSchema | null>(null);
+  const [liveSchema, setLiveSchema] = useState<AgentDraftSchema | null>(null);
   const [status, setStatus] = useState<OnboardingWizardStatus>('idle');
   const [isLive, setIsLive] = useState(false);
   const [isSavingChanges, setIsSavingChanges] = useState(false);
@@ -230,6 +231,7 @@ export function useAgentOnboarding({
       setFirstItemIndex(START_INDEX);
       setDraftSchema({});
       setBaselineSchema(null);
+      setLiveSchema(null);
       setIsLive(false);
       setSandboxMessages([]);
     }
@@ -246,31 +248,30 @@ export function useAgentOnboarding({
         });
 
         const resData = res.data;
-        if (resData?.draft_schema) {
-          setDraftSchema(resData.draft_schema);
+        if (resData) {
+          if (resData.draft_schema) {
+            setDraftSchema(resData.draft_schema);
+          }
+
+          const rawLive = resData.live_schema;
+          const liveObj =
+            rawLive && typeof rawLive === 'object' && Object.keys(rawLive).length > 0
+              ? rawLive
+              : null;
+          setLiveSchema(liveObj);
 
           const hasLive = Boolean(
-            resData.live_schema &&
-              typeof resData.live_schema === 'object' &&
-              Object.keys(resData.live_schema).length > 0 &&
-              (resData.live_schema.business_profile || resData.live_schema.schema_version),
+            liveObj &&
+              (liveObj.business_profile || liveObj.schema_version || liveObj.services || Object.keys(liveObj).length > 0),
           );
 
           if (hasLive) {
-            setBaselineSchema(resData.live_schema ?? null);
+            setBaselineSchema(liveObj);
             setIsLive(true);
           } else {
-            setBaselineSchema(resData.draft_schema);
+            setBaselineSchema(resData.draft_schema ?? null);
+            setIsLive(false);
           }
-        }
-
-        const isCompleted =
-          resData.status === 'complete' ||
-          resData.draft_schema?.status === 'complete' ||
-          resData.draft_schema?.status === 'created';
-
-        if (isCompleted) {
-          setIsLive(true);
         }
 
         if (resData.question) {
@@ -376,20 +377,29 @@ export function useAgentOnboarding({
           setDraftSchema(resData.draft_schema);
         }
 
-        const isCompleted =
-          resData.status === 'complete' ||
-          resData.draft_schema?.status === 'complete' ||
-          resData.draft_schema?.status === 'created';
-
-        if (isCompleted) {
-          setIsLive(true);
-          if (resData.draft_schema) {
-            setBaselineSchema(resData.draft_schema);
+        const rawLive = resData?.live_schema;
+        if (rawLive !== undefined) {
+          const liveObj =
+            rawLive && typeof rawLive === 'object' && Object.keys(rawLive).length > 0
+              ? rawLive
+              : null;
+          setLiveSchema(liveObj);
+          const hasLive = Boolean(
+            liveObj &&
+              (liveObj.business_profile || liveObj.schema_version || liveObj.services || Object.keys(liveObj).length > 0),
+          );
+          setIsLive(hasLive);
+          if (hasLive) {
+            setBaselineSchema(liveObj);
           }
         }
 
+        const isCompleted =
+          resData?.status === 'complete' ||
+          resData?.draft_schema?.status === 'complete';
+
         const agentReplyText =
-          resData.question ||
+          resData?.question ||
           (isCompleted
             ? 'Your agent configuration is complete and saved to the database. You are ready to go live!'
             : '');
@@ -495,19 +505,11 @@ export function useAgentOnboarding({
       }
 
       const isCompleted =
-        resData.status === 'complete' ||
-        resData.draft_schema?.status === 'complete' ||
-        resData.draft_schema?.status === 'created';
-
-      if (isCompleted) {
-        setIsLive(true);
-        if (resData.draft_schema) {
-          setBaselineSchema(resData.draft_schema);
-        }
-      }
+        resData?.status === 'complete' ||
+        resData?.draft_schema?.status === 'complete';
 
       const agentReplyText =
-        resData.question ||
+        resData?.question ||
         (isCompleted
           ? 'Your agent configuration is complete and saved to the database. You are ready to go live!'
           : '');
@@ -542,16 +544,22 @@ export function useAgentOnboarding({
       });
 
       const sessionData = sessionRes.data;
-      if (sessionData?.draft_schema) {
-        setDraftSchema(sessionData.draft_schema);
+      if (sessionData) {
+        if (sessionData.draft_schema) {
+          setDraftSchema(sessionData.draft_schema);
+        }
+        const rawLive = sessionData.live_schema;
+        const liveObj =
+          rawLive && typeof rawLive === 'object' && Object.keys(rawLive).length > 0
+            ? rawLive
+            : null;
+        setLiveSchema(liveObj);
         const hasLive = Boolean(
-          sessionData.live_schema &&
-            typeof sessionData.live_schema === 'object' &&
-            Object.keys(sessionData.live_schema).length > 0 &&
-            (sessionData.live_schema.business_profile || sessionData.live_schema.schema_version),
+          liveObj &&
+            (liveObj.business_profile || liveObj.schema_version || liveObj.services || Object.keys(liveObj).length > 0),
         );
-        setBaselineSchema(hasLive ? (sessionData.live_schema ?? null) : sessionData.draft_schema);
-        setIsLive(true);
+        setBaselineSchema(hasLive ? liveObj : (sessionData.draft_schema ?? null));
+        setIsLive(hasLive);
       }
     } catch (err) {
       console.error('Failed to publish agent configuration:', err);
@@ -674,6 +682,7 @@ export function useAgentOnboarding({
 
     draftSchema,
     baselineSchema,
+    liveSchema,
     setDraftSchema,
     setBaselineSchema,
     diffPatches,

@@ -196,6 +196,9 @@ export class MongoBookingRepository implements IBookingRepository {
       is_deleted: { $ne: true },
     };
 
+    if (filter.agentId?.trim()) {
+      query.agent_id = filter.agentId.trim();
+    }
     if (filter.serviceId) {
       query.service_id = filter.serviceId;
     }

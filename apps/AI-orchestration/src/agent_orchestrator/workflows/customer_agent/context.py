@@ -89,7 +89,36 @@ async def _load_from_db(
     if agent_id:
         query["agent_id"] = agent_id
 
-    if is_sandbox:
+    runtime = await AgentRuntimeConfig.find_one(query)
+    if runtime:
+        if runtime.business_profile:
+            biz_name = runtime.business_profile.name
+            timezone = runtime.business_profile.timezone
+            currency = runtime.business_profile.currency
+            address = runtime.business_profile.address
+            if runtime.business_profile.contact:
+                public_phone = runtime.business_profile.contact.public_phone
+                support_email = runtime.business_profile.contact.support_email
+
+        supervisor_prompt = runtime.supervisor_prompt
+
+        if runtime.operating_hours:
+            operating_hours = runtime.operating_hours.model_dump()
+        if runtime.scheduling_engine:
+            scheduling_engine = runtime.scheduling_engine.model_dump()
+        if runtime.guardrails:
+            guardrails = runtime.guardrails.model_dump()
+
+        for r in runtime.resources:
+            if not getattr(r, "is_bookable", True) or getattr(r, "is_deleted", False):
+                continue
+            resources.append({"id": r.resource_id, "name": r.name})
+
+        for s in runtime.services:
+            if getattr(s, "is_deleted", False):
+                continue
+            services.append({"id": s.service_id, "name": s.name})
+    else:
         draft = await AgentDraft.find_one(query)
         if draft and draft.current_draft:
             cd = draft.current_draft
@@ -115,88 +144,17 @@ async def _load_from_db(
 
             if cd.resources:
                 for r in cd.resources:
-                    if not getattr(r, "is_bookable", True):
+                    if not getattr(r, "is_bookable", True) or getattr(r, "is_deleted", False):
                         continue
                     if r.resource_id and r.name:
                         resources.append({"id": r.resource_id, "name": r.name})
 
             if cd.services:
                 for s in cd.services:
+                    if getattr(s, "is_deleted", False):
+                        continue
                     if s.service_id and s.name:
                         services.append({"id": s.service_id, "name": s.name})
-
-        if not draft or not services or not biz_name:
-            runtime = await AgentRuntimeConfig.find_one(query)
-            if runtime:
-                if not biz_name and runtime.business_profile:
-                    biz_name = runtime.business_profile.name
-                if not timezone and runtime.business_profile:
-                    timezone = runtime.business_profile.timezone
-                if not currency and runtime.business_profile:
-                    currency = runtime.business_profile.currency
-                if not address and runtime.business_profile:
-                    address = runtime.business_profile.address
-                if not public_phone and runtime.business_profile and runtime.business_profile.contact:
-                    public_phone = runtime.business_profile.contact.public_phone
-                if not support_email and runtime.business_profile and runtime.business_profile.contact:
-                    support_email = runtime.business_profile.contact.support_email
-
-                if not supervisor_prompt:
-                    supervisor_prompt = runtime.supervisor_prompt
-                if not operating_hours and runtime.operating_hours:
-                    operating_hours = runtime.operating_hours.model_dump()
-                if not scheduling_engine and runtime.scheduling_engine:
-                    scheduling_engine = runtime.scheduling_engine.model_dump()
-                if not guardrails and runtime.guardrails:
-                    guardrails = runtime.guardrails.model_dump()
-
-                if not resources and runtime.resources:
-                    for r in runtime.resources:
-                        if not getattr(r, "is_bookable", True) or getattr(r, "is_deleted", False):
-                            continue
-                        resources.append({"id": r.resource_id, "name": r.name})
-
-                if not services and runtime.services:
-                    for s in runtime.services:
-                        if getattr(s, "is_deleted", False):
-                            continue
-                        services.append({"id": s.service_id, "name": s.name})
-    else:
-        runtime = await AgentRuntimeConfig.find_one(query)
-        if runtime:
-            if runtime.business_profile:
-                biz_name = runtime.business_profile.name
-                timezone = runtime.business_profile.timezone
-                currency = runtime.business_profile.currency
-                address = runtime.business_profile.address
-                if runtime.business_profile.contact:
-                    public_phone = runtime.business_profile.contact.public_phone
-                    support_email = runtime.business_profile.contact.support_email
-
-            supervisor_prompt = runtime.supervisor_prompt
-
-            if runtime.operating_hours:
-                operating_hours = runtime.operating_hours.model_dump()
-            if runtime.scheduling_engine:
-                scheduling_engine = runtime.scheduling_engine.model_dump()
-            if runtime.guardrails:
-                guardrails = runtime.guardrails.model_dump()
-
-            for r in runtime.resources:
-                if not getattr(r, "is_bookable", True) or getattr(r, "is_deleted", False):
-                    continue
-                resources.append({"id": r.resource_id, "name": r.name})
-
-            for s in runtime.services:
-                if getattr(s, "is_deleted", False):
-                    continue
-                services.append({"id": s.service_id, "name": s.name})
-        else:
-            logger.warning(
-                "[CustomerContext] Live mode: No active AgentRuntimeConfig found for tenant %s, agent %s",
-                tenant_id,
-                agent_id,
-            )
 
     return {
         "business_name": biz_name or "Schedulux Business",
@@ -215,4 +173,3 @@ async def _load_from_db(
         "guardrails": guardrails,
         "scheduling_engine": scheduling_engine,
     }
-

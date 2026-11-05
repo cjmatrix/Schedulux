@@ -1,2 +1,53 @@
 //prarelle call
 implcit caching
+
+
+
+Please build and configure my complete booking agent with the following specifications:
+
+1. Business Profile:
+- Business Name: Nano Carwash & Auto Care
+- Industry / Vertical: auto_repair
+- Timezone: Asia/Kolkata
+- Currency: USD
+- Public Phone: +1-555-019-2834
+- Support Email: support@nanocarwash.com
+
+2. Weekly Operating Hours:
+- Monday to Friday: 09:00 to 18:00
+- Saturday: 09:00 to 16:00
+- Sunday: Closed
+
+3. Staff & Equipment Resources:
+- Resource 1: "Arun" (Type: staff, Title: Senior Service Technician, Category: Maintenance, Bookable: true)
+- Resource 2: "Mithul GP" (Type: staff, Title: Lead Repair Specialist, Category: Repair, Bookable: true)
+- Resource 3: "Wash Bay 1" (Type: bay, Title: Main Washing Bay, Category: Maintenance, Bookable: true)
+
+4. Services & Pricing:
+- Service 1: "Car Wash"
+  * Duration: 30 minutes
+  * Cleanup Buffer: 10 minutes
+  * Price: $30
+  * Assigned Resources: Arun, Wash Bay 1
+  * Description: Exterior hand wash, foam rinse, tire polish, and vacuuming.
+
+- Service 2: "Tire Puncture Repair"
+  * Duration: 45 minutes
+  * Cleanup Buffer: 5 minutes
+  * Price: $50
+  * Assigned Resources: Mithul GP
+  * Description: Full inspection, wheel removal, and inner patch repair.
+
+- Service 3: "Comprehensive Service"
+  * Duration: 60 minutes
+  * Cleanup Buffer: 15 minutes
+  * Price: $100
+  * Assigned Resources: Arun, Mithul GP, Wash Bay 1
+  * Description: Oil check, fluid top-up, filter clean, and complete car wash.
+
+5. Booking Policies & Guardrails:
+- Advance Booking Notice (Lead Time): 2 hours
+- Cancellation Window: Up to 12 hours before appointment
+- Max Advance Booking: 30 days
+- Require OTP Verification for Bookings: Yes
+- Booking Mode: time_slot

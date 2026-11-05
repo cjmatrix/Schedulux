@@ -22,7 +22,7 @@ from agent_orchestrator.clients.scheduling_client import (
     reschedule_booking,
     verify_customer,
 )
-from agent_orchestrator.models import AgentDraft, AgentRuntimeConfig
+from agent_orchestrator.models import AgentRuntimeConfig
 from agent_orchestrator.queues.sms_queue import get_sms_queue
 from agent_orchestrator.repositories.customer_message_repository import CustomerMessageRepository
 
@@ -116,6 +116,16 @@ async def check_availability(
         resource_id,
         timezone,
     )
+    query: dict[str, Any] = {"tenant_id": tenant_id, "agent_id": agent_id}
+    runtime = await AgentRuntimeConfig.find_one(query)
+    if not runtime:
+        return json.dumps(
+            {
+                "status": "failed",
+                "error": "This agent is currently in draft mode and has not been published yet. Please click 'Publish Agent' in Admin Studio to check availability.",
+            }
+        )
+
     result = await get_availability(
         tenant_id=tenant_id,
         agent_id=agent_id,
@@ -180,7 +190,6 @@ async def send_booking_otp(
     if not cleaned_phone:
         return json.dumps({"status": "failed", "message": "Valid phone number is required."})
 
-
     code = f"{secrets.randbelow(900000) + 100000}"
     await store_otp(cleaned_phone, code, ttl=300)
 
@@ -191,12 +200,16 @@ async def send_booking_otp(
         agent_id=agent_id,
     )
 
-    logger.info("[MCP Tool send_booking_otp] Enqueued OTP for %s for agent %s", cleaned_phone, agent_id)
-    return json.dumps({
-        "status": "sent",
-        "phone": cleaned_phone,
-        "message": f"Verification code sent to {cleaned_phone}. Please ask customer to provide the 6-digit code.",
-    })
+    logger.info(
+        "[MCP Tool send_booking_otp] Enqueued OTP for %s for agent %s", cleaned_phone, agent_id
+    )
+    return json.dumps(
+        {
+            "status": "sent",
+            "phone": cleaned_phone,
+            "message": f"Verification code sent to {cleaned_phone}. Please ask customer to provide the 6-digit code.",
+        }
+    )
 
 
 @mcp.tool()
@@ -240,29 +253,38 @@ async def verify_booking_otp(
         else:
             message = "Invalid or expired verification code. Please check and try again."
 
-        return json.dumps({
-            "status": "failed",
-            "message": message,
-        })
+        return json.dumps(
+            {
+                "status": "failed",
+                "message": message,
+            }
+        )
 
     await set_session_auth(session_id=session_id, phone=cleaned_phone, ttl=86400)
 
     repo = CustomerMessageRepository()
     await repo.mark_conversation_verified(session_id=session_id, customer_phone=cleaned_phone)
 
-
     try:
         await verify_customer(tenant_id=tenant_id or "", customer_phone=cleaned_phone)
-        logger.info("[MCP Tool verify_booking_otp] Synced is_guest: false via gRPC for %s", cleaned_phone)
+        logger.info(
+            "[MCP Tool verify_booking_otp] Synced is_guest: false via gRPC for %s", cleaned_phone
+        )
     except Exception as e:
-        logger.warning("[MCP Tool verify_booking_otp] Could not sync customer verification via gRPC: %s", e)
+        logger.warning(
+            "[MCP Tool verify_booking_otp] Could not sync customer verification via gRPC: %s", e
+        )
 
-    logger.info("[MCP Tool verify_booking_otp] Session %s verified for phone %s", session_id, cleaned_phone)
-    return json.dumps({
-        "status": "verified",
-        "phone": cleaned_phone,
-        "message": f"Phone number {cleaned_phone} successfully verified! Session is now authenticated.",
-    })
+    logger.info(
+        "[MCP Tool verify_booking_otp] Session %s verified for phone %s", session_id, cleaned_phone
+    )
+    return json.dumps(
+        {
+            "status": "verified",
+            "phone": cleaned_phone,
+            "message": f"Phone number {cleaned_phone} successfully verified! Session is now authenticated.",
+        }
+    )
 
 
 @mcp.tool()
@@ -322,78 +344,52 @@ async def book_appointment(
     is_sandbox = bool(session_id and session_id.startswith("sandbox_"))
 
     runtime: AgentRuntimeConfig | None = None
-    draft: AgentDraft | None = None
     service_doc = None
     service_otp_override: bool | None = None
     deposit_required = False
     global_otp = False
     tz_str = "UTC"
 
-    if is_sandbox:
-        draft = await AgentDraft.find_one(query)
-        if draft and draft.current_draft:
-            cd = draft.current_draft
-            if cd.services:
-                service_doc = next(
-                    (s for s in cd.services if s.service_id == service_id),
-                    None,
-                )
-            if cd.guardrails and cd.guardrails.verification_policy:
-                global_otp = bool(cd.guardrails.verification_policy.require_otp_for_new_booking)
-            if cd.business_profile and cd.business_profile.timezone:
-                tz_str = str(cd.business_profile.timezone)
-
-        if not service_doc or tz_str == "UTC":
-            runtime = await AgentRuntimeConfig.find_one(query)
-            if runtime:
-                if not service_doc and runtime.services:
-                    service_doc = next((s for s in runtime.services if s.service_id == service_id), None)
-                if tz_str == "UTC" and runtime.business_profile and runtime.business_profile.timezone:
-                    tz_str = runtime.business_profile.timezone
-                if not global_otp and runtime.guardrails and runtime.guardrails.verification_policy:
-                    global_otp = bool(runtime.guardrails.verification_policy.require_otp_for_new_booking)
-
-        if service_doc:
-            if service_doc.verification and service_doc.verification.require_otp is not None:
-                service_otp_override = service_doc.verification.require_otp
-            deposit_required = bool(service_doc.deposit and service_doc.deposit.required)
-
-    else:
-        runtime = await AgentRuntimeConfig.find_one(query)
-        if not runtime:
-            return json.dumps({
+    runtime = await AgentRuntimeConfig.find_one(query)
+    if not runtime:
+        return json.dumps(
+            {
                 "status": "failed",
-                "error": "The booking service is currently inactive or not yet published. Please contact support.",
-            })
+                "error": "This agent is currently in draft mode and has not been published yet. Please click 'Publish Agent' in Admin Studio to enable live appointment bookings.",
+            }
+        )
 
-        if runtime.services:
-            service_doc = next((s for s in runtime.services if s.service_id == service_id), None)
+    if runtime.services:
+        service_doc = next((s for s in runtime.services if s.service_id == service_id), None)
+    if service_doc:
+        if service_doc.verification and service_doc.verification.require_otp is not None:
+            service_otp_override = service_doc.verification.require_otp
+        deposit_required = bool(service_doc.deposit and service_doc.deposit.required)
+    if runtime.guardrails and runtime.guardrails.verification_policy:
+        global_otp = bool(runtime.guardrails.verification_policy.require_otp_for_new_booking)
+    if runtime.business_profile and runtime.business_profile.timezone:
+        tz_str = runtime.business_profile.timezone
 
-        if service_doc:
-            if service_doc.verification and service_doc.verification.require_otp is not None:
-                service_otp_override = service_doc.verification.require_otp
-            deposit_required = bool(service_doc.deposit and service_doc.deposit.required)
-
-        if runtime.guardrails and runtime.guardrails.verification_policy:
-            global_otp = bool(runtime.guardrails.verification_policy.require_otp_for_new_booking)
-
-        if runtime.business_profile and runtime.business_profile.timezone:
-            tz_str = runtime.business_profile.timezone
-
-    requires_otp = service_otp_override if service_otp_override is not None else (deposit_required or global_otp)
+    requires_otp = (
+        service_otp_override
+        if service_otp_override is not None
+        else (deposit_required or global_otp)
+    )
 
     if requires_otp:
         is_verified = await is_session_verified(session_id, customer_phone) if session_id else False
         if not is_verified:
-            return json.dumps({
-                "status": "requires_verification",
-                "phone": customer_phone,
-                "message": (
-                    f"Phone verification is required to confirm this booking for {customer_phone}. "
-                    "Inform the customer that a 6-digit verification code is being sent to their phone, "
-                    "and call send_booking_otp followed by verify_booking_otp."
-                ),
-            })
+            return json.dumps(
+                {
+                    "status": "requires_verification",
+                    "phone": customer_phone,
+                    "message": (
+                        f"Phone verification is required to confirm this booking for {customer_phone}. "
+                        "Inform the customer that a 6-digit verification code is being sent to their phone, "
+                        "and call send_booking_otp followed by verify_booking_otp."
+                    ),
+                }
+            )
 
     booking_source = "sandbox_simulation" if is_sandbox else "customer_agent"
     result = await create_booking(
@@ -492,19 +488,23 @@ async def cancel_appointment(
 
     if not is_verified:
         if customer_phone:
-            return json.dumps({
+            return json.dumps(
+                {
+                    "status": "requires_verification",
+                    "phone": customer_phone,
+                    "message": (
+                        f"For security, cancellation strictly requires phone verification for {customer_phone}. "
+                        "Inform the customer that a 6-digit verification code is being sent to their phone, "
+                        "and call send_booking_otp followed by verify_booking_otp."
+                    ),
+                }
+            )
+        return json.dumps(
+            {
                 "status": "requires_verification",
-                "phone": customer_phone,
-                "message": (
-                    f"For security, cancellation strictly requires phone verification for {customer_phone}. "
-                    "Inform the customer that a 6-digit verification code is being sent to their phone, "
-                    "and call send_booking_otp followed by verify_booking_otp."
-                ),
-            })
-        return json.dumps({
-            "status": "requires_verification",
-            "message": "Cancellation strictly requires phone verification. Please provide your phone number so we can text you a 6-digit verification code.",
-        })
+                "message": "Cancellation strictly requires phone verification. Please provide your phone number so we can text you a 6-digit verification code.",
+            }
+        )
 
     result = await cancel_booking(
         tenant_id=tenant_id,
@@ -576,19 +576,23 @@ async def reschedule_appointment(
 
     if not is_verified:
         if customer_phone:
-            return json.dumps({
+            return json.dumps(
+                {
+                    "status": "requires_verification",
+                    "phone": customer_phone,
+                    "message": (
+                        f"For security, rescheduling strictly requires phone verification for {customer_phone}. "
+                        "Inform the customer that a 6-digit verification code is being sent to their phone, "
+                        "and call send_booking_otp followed by verify_booking_otp."
+                    ),
+                }
+            )
+        return json.dumps(
+            {
                 "status": "requires_verification",
-                "phone": customer_phone,
-                "message": (
-                    f"For security, rescheduling strictly requires phone verification for {customer_phone}. "
-                    "Inform the customer that a 6-digit verification code is being sent to their phone, "
-                    "and call send_booking_otp followed by verify_booking_otp."
-                ),
-            })
-        return json.dumps({
-            "status": "requires_verification",
-            "message": "Rescheduling strictly requires phone verification. Please provide your phone number so we can text you a 6-digit verification code.",
-        })
+                "message": "Rescheduling strictly requires phone verification. Please provide your phone number so we can text you a 6-digit verification code.",
+            }
+        )
     result = await reschedule_booking(
         tenant_id=tenant_id,
         agent_id=agent_id,
@@ -608,25 +612,10 @@ async def reschedule_appointment(
 
     bk = result.get("booking", {})
     query: dict[str, Any] = {"tenant_id": tenant_id, "agent_id": agent_id}
-    is_sandbox = bool(session_id and session_id.startswith("sandbox_"))
     tz_str = "UTC"
-    if is_sandbox:
-        draft = await AgentDraft.find_one(query)
-        if (
-            draft
-            and draft.current_draft
-            and draft.current_draft.business_profile
-            and draft.current_draft.business_profile.timezone
-        ):
-            tz_str = str(draft.current_draft.business_profile.timezone)
-        if tz_str == "UTC":
-            runtime = await AgentRuntimeConfig.find_one(query)
-            if runtime and runtime.business_profile and runtime.business_profile.timezone:
-                tz_str = runtime.business_profile.timezone
-    else:
-        runtime = await AgentRuntimeConfig.find_one(query)
-        if runtime and runtime.business_profile and runtime.business_profile.timezone:
-            tz_str = runtime.business_profile.timezone
+    runtime = await AgentRuntimeConfig.find_one(query)
+    if runtime and runtime.business_profile and runtime.business_profile.timezone:
+        tz_str = runtime.business_profile.timezone
     start_utc = bk.get("start_time")
     end_utc = bk.get("end_time")
 
@@ -685,11 +674,12 @@ async def get_customer_bookings(
     )
     cleaned_phone = phone.strip()
     if not cleaned_phone:
-        return json.dumps({
-            "status": "failed",
-            "message": "Valid customer phone number is required to look up bookings.",
-        })
-
+        return json.dumps(
+            {
+                "status": "failed",
+                "message": "Valid customer phone number is required to look up bookings.",
+            }
+        )
 
     verified = await is_session_verified(session_id, cleaned_phone)
     if not verified:
@@ -698,15 +688,17 @@ async def get_customer_bookings(
             session_id,
             cleaned_phone,
         )
-        return json.dumps({
-            "status": "requires_verification",
-            "phone": cleaned_phone,
-            "message": (
-                f"Customer phone number {cleaned_phone} has not been verified for this session. "
-                "For privacy and security, inform the customer that an OTP verification is required "
-                "before showing their booking details. Call send_booking_otp to send a verification code."
-            ),
-        })
+        return json.dumps(
+            {
+                "status": "requires_verification",
+                "phone": cleaned_phone,
+                "message": (
+                    f"Customer phone number {cleaned_phone} has not been verified for this session. "
+                    "For privacy and security, inform the customer that an OTP verification is required "
+                    "before showing their booking details. Call send_booking_otp to send a verification code."
+                ),
+            }
+        )
 
     clamped_limit = min(20, max(1, limit))
 
@@ -720,38 +712,26 @@ async def get_customer_bookings(
     )
 
     if not result.get("success"):
-        return json.dumps({
-            "status": "failed",
-            "error": result.get("error", "Failed to retrieve customer bookings"),
-        })
+        return json.dumps(
+            {
+                "status": "failed",
+                "error": result.get("error", "Failed to retrieve customer bookings"),
+            }
+        )
 
     raw_bookings = result.get("bookings", [])
     last10 = cleaned_phone[-10:] if len(cleaned_phone) >= 10 else cleaned_phone
     matched = [
-        bk for bk in raw_bookings
+        bk
+        for bk in raw_bookings
         if not bk.get("customer_phone") or last10 in bk.get("customer_phone", "")
     ]
 
     query: dict[str, Any] = {"tenant_id": tenant_id, "agent_id": agent_id}
-    is_sandbox = bool(session_id and session_id.startswith("sandbox_"))
     tz_str = "UTC"
-    if is_sandbox:
-        draft = await AgentDraft.find_one(query)
-        if (
-            draft
-            and draft.current_draft
-            and draft.current_draft.business_profile
-            and draft.current_draft.business_profile.timezone
-        ):
-            tz_str = str(draft.current_draft.business_profile.timezone)
-        if tz_str == "UTC":
-            runtime = await AgentRuntimeConfig.find_one(query)
-            if runtime and runtime.business_profile and runtime.business_profile.timezone:
-                tz_str = runtime.business_profile.timezone
-    else:
-        runtime = await AgentRuntimeConfig.find_one(query)
-        if runtime and runtime.business_profile and runtime.business_profile.timezone:
-            tz_str = runtime.business_profile.timezone
+    runtime = await AgentRuntimeConfig.find_one(query)
+    if runtime and runtime.business_profile and runtime.business_profile.timezone:
+        tz_str = runtime.business_profile.timezone
 
     enriched_bookings = []
     for bk in matched:
@@ -786,89 +766,52 @@ async def _load_tenant_resources(
     tenant_id: str,
     agent_id: str,
     is_sandbox: bool = False,
-) -> list[dict[str, Any]]:
-    """Load resources directly from the local CQRS Read Model (AgentDraft in sandbox, AgentRuntimeConfig in live)."""
+) -> list[dict[str, Any]] | None:
+    """Load resources directly from the local CQRS Read Model (AgentRuntimeConfig).
+
+    Returns None if the agent has not been published to AgentRuntimeConfig yet.
+    """
     query: dict[str, Any] = {"tenant_id": tenant_id, "agent_id": agent_id}
     resources: list[dict[str, Any]] = []
 
-    if is_sandbox:
-        draft = await AgentDraft.find_one(query)
-        if draft and draft.current_draft and draft.current_draft.resources:
-            for r in draft.current_draft.resources:
-                r_type = (
-                    r.resource_type.value
-                    if hasattr(r.resource_type, "value")
-                    else str(r.resource_type or "staff")
-                )
-                d_status = (
-                    r.dispatch_status.value
-                    if hasattr(r.dispatch_status, "value")
-                    else str(r.dispatch_status or "active")
-                )
-                resources.append(
-                    {
-                        "resource_id": r.resource_id,
-                        "name": r.name or "Unnamed",
-                        "title": r.title or "",
-                        "category": r.category or "General",
-                        "description": r.description or "",
-                        "resource_type": r_type,
-                        "is_bookable": bool(r.is_bookable),
-                        "dispatch_status": d_status,
-                    }
-                )
-        if not resources:
-            runtime = await AgentRuntimeConfig.find_one(query)
-            if runtime and runtime.resources:
-                for r in runtime.resources:
-                    r_type = (
-                        r.resource_type.value
-                        if hasattr(r.resource_type, "value")
-                        else str(r.resource_type or "staff")
-                    )
-                    d_status = (
-                        r.dispatch_status.value
-                        if hasattr(r.dispatch_status, "value")
-                        else str(r.dispatch_status or "active")
-                    )
-                    resources.append(
-                        {
-                            "resource_id": r.resource_id,
-                            "name": r.name,
-                            "title": r.title or "",
-                            "category": r.category or "General",
-                            "description": r.description or "",
-                            "resource_type": r_type,
-                            "is_bookable": r.is_bookable,
-                            "dispatch_status": d_status,
-                        }
-                    )
-    else:
+    try:
         runtime = await AgentRuntimeConfig.find_one(query)
-        if runtime and runtime.resources:
-            for r in runtime.resources:
-                r_type = (
-                    r.resource_type.value
-                    if hasattr(r.resource_type, "value")
-                    else str(r.resource_type or "staff")
-                )
-                d_status = (
-                    r.dispatch_status.value
-                    if hasattr(r.dispatch_status, "value")
-                    else str(r.dispatch_status or "active")
-                )
-                resources.append(
-                    {
-                        "resource_id": r.resource_id,
-                        "name": r.name,
-                        "title": r.title or "",
-                        "category": r.category or "General",
-                        "description": r.description or "",
-                        "resource_type": r_type,
-                        "is_bookable": r.is_bookable,
-                        "dispatch_status": d_status,
-                    }
-                )
+    except Exception as e:
+        logger.warning("[MCP _load_tenant_resources] AgentRuntimeConfig lookup failed: %s", e)
+        runtime = None
+
+    if runtime is None:
+        logger.info(
+            "[MCP _load_tenant_resources] No AgentRuntimeConfig found for tenant_id=%s, agent_id=%s (agent unpublished)",
+            tenant_id,
+            agent_id,
+        )
+        return None
+
+    if runtime.resources:
+        for r in runtime.resources:
+            r_type = (
+                r.resource_type.value
+                if hasattr(r.resource_type, "value")
+                else str(r.resource_type or "staff")
+            )
+            d_status = (
+                r.dispatch_status.value
+                if hasattr(r.dispatch_status, "value")
+                else str(r.dispatch_status or "active")
+            )
+            resources.append(
+                {
+                    "resource_id": r.resource_id,
+                    "name": r.name,
+                    "title": r.title or "",
+                    "category": r.category or "General",
+                    "description": r.description or "",
+                    "resource_type": r_type,
+                    "is_bookable": r.is_bookable,
+                    "dispatch_status": d_status,
+                }
+            )
 
     return resources
 
@@ -914,6 +857,14 @@ async def search_resources(
     all_resources = await _load_tenant_resources(
         tenant_id=tenant_id, agent_id=agent_id, is_sandbox=is_sandbox
     )
+
+    if all_resources is None:
+        return json.dumps(
+            {
+                "status": "failed",
+                "error": "This agent is currently in draft mode and has not been published yet. Please click 'Publish Agent' in Admin Studio to enable live resources.",
+            }
+        )
 
     if resource_id:
         match = next((r for r in all_resources if r["resource_id"] == resource_id), None)
@@ -963,8 +914,11 @@ async def _load_tenant_services(
     tenant_id: str,
     agent_id: str,
     is_sandbox: bool = False,
-) -> list[dict[str, Any]]:
-    """Load full service catalog directly from local CQRS Read Model (AgentDraft in sandbox, AgentRuntimeConfig in live)."""
+) -> list[dict[str, Any]] | None:
+    """Load full service catalog directly from local CQRS Read Model (AgentRuntimeConfig).
+
+    Returns None if the agent has not been published to AgentRuntimeConfig yet.
+    """
     query: dict[str, Any] = {"tenant_id": tenant_id}
     if agent_id:
         query["agent_id"] = agent_id
@@ -972,203 +926,84 @@ async def _load_tenant_services(
     services: list[dict[str, Any]] = []
     resource_map: dict[str, dict[str, Any]] = {}
 
-    if is_sandbox:
-        try:
-            draft = await AgentDraft.find_one(query)
-        except Exception as e:
-            logger.warning("[MCP _load_tenant_services] AgentDraft lookup failed: %s", e)
-            draft = None
+    try:
+        runtime = await AgentRuntimeConfig.find_one(query)
+    except Exception as e:
+        logger.warning("[MCP _load_tenant_services] AgentRuntimeConfig lookup failed: %s", e)
+        runtime = None
 
-        if draft and draft.current_draft:
-            if draft.current_draft.resources:
-                for r in draft.current_draft.resources:
-                    resource_map[r.resource_id] = {
-                        "resource_id": r.resource_id,
-                        "name": r.name or "Unnamed",
-                        "title": r.title or "",
-                        "category": r.category or "General",
-                        "description": r.description or "",
-                    }
+    if runtime is None:
+        logger.info(
+            "[MCP _load_tenant_services] No AgentRuntimeConfig found for query=%s (agent unpublished)",
+            query,
+        )
+        return None
 
-            if draft.current_draft.services:
-                for s in draft.current_draft.services:
-                    raw_reqs = s.resource_requirements or []
-                    selectable_staff = []
-                    auto_assigned = []
-                    for req in raw_reqs:
-                        draft_req_mode = str(
-                            getattr(req.selection_mode, "value", req.selection_mode) or ""
-                        )
-                        req_r_type = str(
-                            getattr(req.resource_type, "value", req.resource_type) or "staff"
-                        ).lower()
-                        eligible_ids = req.eligible_resource_ids or []
-                        resolved = [
-                            resource_map[rid] for rid in eligible_ids if rid in resource_map
-                        ]
-                        if draft_req_mode == "user_selectable" or (
-                            not draft_req_mode and req_r_type == "staff"
-                        ):
-                            for res in resolved:
-                                selectable_staff.append({
-                                    "resource_id": res["resource_id"],
-                                    "name": res["name"],
-                                    "title": res["title"],
-                                    "category": res["category"],
-                                    "role": req.role or "Provider",
-                                })
-                        else:
-                            auto_assigned.append({
-                                "role": req.role or "Resource",
-                                "resource_type": req_r_type,
-                                "count": req.count or 1,
-                            })
+    if runtime.resources:
+        for r in runtime.resources:
+            resource_map[r.resource_id] = {
+                "resource_id": r.resource_id,
+                "name": r.name,
+                "title": r.title or "",
+                "category": r.category or "General",
+                "description": r.description or "",
+            }
 
-                    price_str = (
-                        f"{s.price.amount} {s.price.currency}"
-                        if s.price and getattr(s.price, "amount", None) is not None
-                        else "Free"
-                    )
+    if runtime.services:
+        for s in runtime.services:
+            if getattr(s, "is_deleted", False):
+                continue
+            selectable_staff = []
+            auto_assigned = []
 
-                    bm_str = getattr(s.booking_mode, "value", str(s.booking_mode or "time_slot"))
+            for req in s.resource_requirements:
+                req_mode = str(getattr(req.selection_mode, "value", req.selection_mode) or "")
+                r_type = str(getattr(req.resource_type, "value", req.resource_type) or "staff")
 
-                    services.append({
-                        "service_id": s.service_id,
-                        "name": s.name or "Unnamed",
-                        "category": s.category or "General",
-                        "description": s.description or "",
-                        "duration_minutes": s.duration_minutes or 30,
-                        "price": price_str,
-                        "booking_mode": bm_str,
-                        "selectable_staff": selectable_staff,
-                        "auto_assigned_resources": auto_assigned,
-                    })
-
-        if not services:
-            try:
-                runtime = await AgentRuntimeConfig.find_one(query)
-            except Exception as e:
-                logger.warning("[MCP _load_tenant_services] AgentRuntimeConfig lookup failed: %s", e)
-                runtime = None
-
-            if runtime and runtime.resources:
-                for r in runtime.resources:
-                    resource_map[r.resource_id] = {
-                        "resource_id": r.resource_id,
-                        "name": r.name,
-                        "title": r.title or "",
-                        "category": r.category or "General",
-                        "description": r.description or "",
-                    }
-
-            if runtime and runtime.services:
-                for s in runtime.services:
-                    if getattr(s, "is_deleted", False):
-                        continue
-                    selectable_staff = []
-                    auto_assigned = []
-
-                    for req in s.resource_requirements:
-                        req_mode = str(getattr(req.selection_mode, "value", req.selection_mode) or "")
-                        r_type = str(getattr(req.resource_type, "value", req.resource_type) or "staff")
-
-                        resolved = [resource_map[rid] for rid in req.eligible_resource_ids if rid in resource_map]
-                        if req_mode == "user_selectable" or (not req_mode and r_type.lower() == "staff"):
-                            for res in resolved:
-                                selectable_staff.append({
-                                    "resource_id": res["resource_id"],
-                                    "name": res["name"],
-                                    "title": res["title"],
-                                    "category": res["category"],
-                                    "role": req.role or "Provider",
-                                })
-                        else:
-                            auto_assigned.append({
-                                "role": req.role or "Resource",
-                                "resource_type": r_type,
-                                "count": req.count,
-                            })
-
-                    price_str = (
-                        f"{s.price.amount} {s.price.currency}"
-                        if s.price and getattr(s.price, "amount", None) is not None
-                        else "Free"
-                    )
-
-                    services.append({
-                        "service_id": s.service_id,
-                        "name": s.name,
-                        "category": s.category or "General",
-                        "description": s.description or "",
-                        "duration_minutes": s.duration_minutes,
-                        "price": price_str,
-                        "booking_mode": s.booking_mode,
-                        "selectable_staff": selectable_staff,
-                        "auto_assigned_resources": auto_assigned,
-                    })
-    else:
-        # Live mode: AgentRuntimeConfig exclusively
-        try:
-            runtime = await AgentRuntimeConfig.find_one(query)
-        except Exception as e:
-            logger.warning("[MCP _load_tenant_services] AgentRuntimeConfig lookup failed: %s", e)
-            runtime = None
-
-        if runtime and runtime.resources:
-            for r in runtime.resources:
-                resource_map[r.resource_id] = {
-                    "resource_id": r.resource_id,
-                    "name": r.name,
-                    "title": r.title or "",
-                    "category": r.category or "General",
-                    "description": r.description or "",
-                }
-
-        if runtime and runtime.services:
-            for s in runtime.services:
-                if getattr(s, "is_deleted", False):
-                    continue
-                selectable_staff = []
-                auto_assigned = []
-
-                for req in s.resource_requirements:
-                    req_mode = str(getattr(req.selection_mode, "value", req.selection_mode) or "")
-                    r_type = str(getattr(req.resource_type, "value", req.resource_type) or "staff")
-
-                    resolved = [resource_map[rid] for rid in req.eligible_resource_ids if rid in resource_map]
-                    if req_mode == "user_selectable" or (not req_mode and r_type.lower() == "staff"):
-                        for res in resolved:
-                            selectable_staff.append({
+                resolved = [
+                    resource_map[rid] for rid in req.eligible_resource_ids if rid in resource_map
+                ]
+                if req_mode == "user_selectable" or (not req_mode and r_type.lower() == "staff"):
+                    for res in resolved:
+                        selectable_staff.append(
+                            {
                                 "resource_id": res["resource_id"],
                                 "name": res["name"],
                                 "title": res["title"],
                                 "category": res["category"],
                                 "role": req.role or "Provider",
-                            })
-                    else:
-                        auto_assigned.append({
+                            }
+                        )
+                else:
+                    auto_assigned.append(
+                        {
                             "role": req.role or "Resource",
                             "resource_type": r_type,
                             "count": req.count,
-                        })
+                        }
+                    )
 
-                price_str = (
-                    f"{s.price.amount} {s.price.currency}"
-                    if s.price and getattr(s.price, "amount", None) is not None
-                    else "Free"
-                )
+            price_str = (
+                f"{s.price.amount} {s.price.currency}"
+                if s.price and getattr(s.price, "amount", None) is not None
+                else "Free"
+            )
 
-                services.append({
+            services.append(
+                {
                     "service_id": s.service_id,
                     "name": s.name,
                     "category": s.category or "General",
                     "description": s.description or "",
                     "duration_minutes": s.duration_minutes,
                     "price": price_str,
-                    "booking_mode": s.booking_mode,
+                    "booking_mode": getattr(
+                        s.booking_mode, "value", str(s.booking_mode or "time_slot")
+                    ),
                     "selectable_staff": selectable_staff,
                     "auto_assigned_resources": auto_assigned,
-                })
+                }
+            )
 
     return services
 
@@ -1214,6 +1049,14 @@ async def search_services(
     all_services = await _load_tenant_services(
         tenant_id=tenant_id, agent_id=agent_id, is_sandbox=is_sandbox
     )
+
+    if all_services is None:
+        return json.dumps(
+            {
+                "status": "failed",
+                "error": "This agent is currently in draft mode and has not been published yet. Please click 'Publish Agent' in Admin Studio to enable live services.",
+            }
+        )
 
     if service_id:
         match = next((s for s in all_services if s["service_id"] == service_id.strip()), None)
@@ -1343,7 +1186,11 @@ def get_scheduling_mcp_tools() -> list[BaseTool]:
 
         def _make_caller(tool_name: str):
             async def _execute_mcp_tool(**kwargs: Any) -> str:
-                logger.info("[MCP Tool Call] Executing '%s' with arguments: %s", tool_name, json.dumps(kwargs, default=str))
+                logger.info(
+                    "[MCP Tool Call] Executing '%s' with arguments: %s",
+                    tool_name,
+                    json.dumps(kwargs, default=str),
+                )
                 res = await mcp.call_tool(tool_name, arguments=kwargs)
                 contents = res[0] if isinstance(res, tuple) else res
                 if isinstance(contents, list):

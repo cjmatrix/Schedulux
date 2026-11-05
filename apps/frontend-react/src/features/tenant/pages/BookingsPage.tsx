@@ -20,10 +20,21 @@ import { CancelBookingModal } from '../components/CancelBookingModal';
 import { CreateBookingModal } from '../components/CreateBookingModal';
 import { RescheduleBookingModal } from '../components/RescheduleBookingModal';
 import { useBookingsList } from '../hooks/useBookings';
+import { useTenantAgents } from '../hooks/useKnowledgeDocuments';
 import { useResourcesList, useServicesList } from '../hooks/useServices';
 
 export default function BookingsPage() {
-  const { agentId } = useParams<{ agentId?: string }>();
+  const { agentId: routeAgentId } = useParams<{ agentId?: string }>();
+  const { data: agents = [] } = useTenantAgents();
+  const [selectedAgentId, setSelectedAgentId] = useState<string>(routeAgentId || 'all');
+
+  useEffect(() => {
+    if (routeAgentId) {
+      setSelectedAgentId(routeAgentId);
+    }
+  }, [routeAgentId]);
+
+  const activeAgentId = selectedAgentId === 'all' ? undefined : selectedAgentId;
 
   const [page, setPage] = useState<number>(1);
   const [limit, setLimit] = useState<number>(20);
@@ -42,7 +53,7 @@ export default function BookingsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, statusFilter]);
+  }, [debouncedSearch, statusFilter, selectedAgentId]);
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -55,11 +66,11 @@ export default function BookingsPage() {
     return {
       page,
       limit,
-      agent_id: agentId,
+      agent_id: activeAgentId,
       status: statusFilter === 'all' ? undefined : statusFilter,
       search: debouncedSearch.trim() || undefined,
     };
-  }, [page, limit, agentId, statusFilter, debouncedSearch]);
+  }, [page, limit, activeAgentId, statusFilter, debouncedSearch]);
 
   const {
     data: bookingsResponse,
@@ -68,12 +79,12 @@ export default function BookingsPage() {
   } = useBookingsList(queryParams);
 
   const { data: servicesResponse } = useServicesList({
-    agent_id: agentId,
+    agent_id: activeAgentId,
     limit: 100,
   });
 
   const { data: resourcesResponse } = useResourcesList({
-    agent_id: agentId,
+    agent_id: activeAgentId,
     limit: 100,
   });
 
@@ -317,6 +328,27 @@ export default function BookingsPage() {
         </div>
 
         <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+          {agents.length > 0 && (
+            <div className="relative">
+              <select
+                value={selectedAgentId}
+                onChange={(e) => {
+                  setSelectedAgentId(e.target.value);
+                  setPage(1);
+                }}
+                className="appearance-none bg-white border border-slate-200/90 rounded-full px-4 py-2 pr-8 text-xs font-medium text-slate-700 shadow-2xs focus:outline-none focus:ring-2 focus:ring-slate-900 cursor-pointer"
+              >
+                <option value="all">All Agents</option>
+                {agents.map((ag) => (
+                  <option key={ag.agent_id} value={ag.agent_id}>
+                    {ag.name || ag.agent_id}
+                  </option>
+                ))}
+              </select>
+              <Filter className="w-3 h-3 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          )}
+
           <div className="relative">
             <select
               value={statusFilter}
@@ -382,7 +414,7 @@ export default function BookingsPage() {
         isOpen={!!bookingToReschedule}
         onClose={() => setBookingToReschedule(null)}
         booking={bookingToReschedule}
-        agentId={agentId || bookingToReschedule?.agent_id || ''}
+        agentId={activeAgentId || bookingToReschedule?.agent_id || ''}
         onSuccess={handleBookingRescheduled}
       />
 
@@ -391,7 +423,7 @@ export default function BookingsPage() {
         isOpen={!!bookingToCancel}
         onClose={() => setBookingToCancel(null)}
         booking={bookingToCancel}
-        agentId={agentId || bookingToCancel?.agent_id || ''}
+        agentId={activeAgentId || bookingToCancel?.agent_id || ''}
         onSuccess={handleBookingCancelled}
       />
 
@@ -400,7 +432,7 @@ export default function BookingsPage() {
         isOpen={isNewBookingModalOpen}
         onClose={() => setIsNewBookingModalOpen(false)}
         onBookingCreated={handleBookingCreated}
-        agentId={agentId}
+        agentId={activeAgentId}
       />
     </div>
   );

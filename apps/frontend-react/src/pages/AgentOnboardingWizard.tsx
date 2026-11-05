@@ -59,6 +59,12 @@ export default function AgentOnboardingWizard() {
   const [canvasModule, setCanvasModule] = useState<CanvasModule>('all');
   const [copiedJson, setCopiedJson] = useState(false);
 
+  useEffect(() => {
+    if (!isLive && rightViewMode === 'sandbox') {
+      setRightViewMode('rules');
+    }
+  }, [isLive, rightViewMode]);
+
   const businessProfile = draftSchema?.business_profile || {};
   const clinicName = businessProfile.name || 'AI Scheduling Agent';
   const timezone = businessProfile.timezone || '';
@@ -200,6 +206,7 @@ export default function AgentOnboardingWizard() {
             pendingChangesCount={diffPatches.length}
             isSavingChanges={isSavingChanges}
             onSaveChanges={handleSaveChanges}
+            isLive={isLive}
           />
 
           {/* Canvas Scroll Area */}

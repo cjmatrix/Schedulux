@@ -63,22 +63,14 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
     ]);
 
     const existingResById = new Map(existingResources.map((r) => [r.id, r]));
-    const existingResByName = new Map(
-      existingResources.map((r) => [r.name.trim().toLowerCase(), r]),
-    );
-
     const existingSvcById = new Map(existingServices.map((s) => [s.id, s]));
-    const existingSvcByName = new Map(
-      existingServices.map((s) => [s.name.trim().toLowerCase(), s]),
-    );
 
     const resourceEntities: ResourceEntity[] = [];
     const resourceIdMap = new Map<string, string>();
 
     for (const r of dto.resources) {
       const nameKey = (r.name || '').trim().toLowerCase();
-      const existing =
-        (r.resource_id && existingResById.get(r.resource_id)) || existingResByName.get(nameKey);
+      const existing = r.resource_id ? existingResById.get(r.resource_id) : undefined;
       const resourceId = existing
         ? existing.id
         : r.resource_id?.trim() || generateSemanticId('res', r.name);
@@ -117,8 +109,7 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
 
     for (const s of dto.services) {
       const nameKey = (s.name || '').trim().toLowerCase();
-      const existing =
-        (s.service_id && existingSvcById.get(s.service_id)) || existingSvcByName.get(nameKey);
+      const existing = s.service_id ? existingSvcById.get(s.service_id) : undefined;
       const serviceId = existing
         ? existing.id
         : s.service_id?.trim() || generateSemanticId('srv', s.name);

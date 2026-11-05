@@ -84,74 +84,47 @@ async def _load_from_db(
     guardrails: dict[str, Any] = {}
     scheduling_engine: dict[str, Any] = {}
     operating_hours: dict[str, Any] = {}
-    sub_agents: list[dict[str, Any]] = []
 
     query: dict[str, Any] = {"tenant_id": tenant_id}
     if agent_id:
         query["agent_id"] = agent_id
 
     if is_sandbox:
-       
         draft = await AgentDraft.find_one(query)
         if draft and draft.current_draft:
-            biz: dict[str, Any] = draft.current_draft.get("business_profile") or {}  # type: ignore[assignment]
-            if isinstance(biz, dict):
-                biz_name = biz.get("name")
-                timezone = biz.get("timezone")
-                currency = biz.get("currency")
-                address = biz.get("address")
-                contact_dict = biz.get("contact") or {}
-                if isinstance(contact_dict, dict):
-                    public_phone = contact_dict.get("public_phone")
-                    support_email = contact_dict.get("support_email")
-            if not timezone:
-                engine: dict[str, Any] = draft.current_draft.get("scheduling_engine") or {}  # type: ignore[assignment]
-                if isinstance(engine, dict):
-                    timezone = engine.get("timezone")
+            cd = draft.current_draft
+            if cd.business_profile:
+                biz_name = cd.business_profile.name
+                timezone = cd.business_profile.timezone
+                currency = cd.business_profile.currency
+                address = cd.business_profile.address
+                if cd.business_profile.contact:
+                    public_phone = cd.business_profile.contact.public_phone
+                    support_email = cd.business_profile.contact.support_email
 
-            raw_oh = draft.current_draft.get("operating_hours")
-            if isinstance(raw_oh, dict):
-                operating_hours = raw_oh
+            if cd.operating_hours:
+                operating_hours = cd.operating_hours.model_dump()
 
-            supervisor_prompt = draft.current_draft.get("supervisor_prompt")  # type: ignore[assignment]
+            supervisor_prompt = cd.supervisor_prompt
 
-            raw_gr = draft.current_draft.get("guardrails")
-            if isinstance(raw_gr, dict):
-                guardrails = raw_gr
+            if cd.guardrails:
+                guardrails = cd.guardrails.model_dump()
 
-            raw_se = draft.current_draft.get("scheduling_engine")
-            if isinstance(raw_se, dict):
-                scheduling_engine = raw_se
+            if cd.scheduling_engine:
+                scheduling_engine = cd.scheduling_engine.model_dump()
 
-            raw_sa = draft.current_draft.get("sub_agents")
-            if isinstance(raw_sa, list):
-                sub_agents = raw_sa
-
-            raw_resources = draft.current_draft.get("resources")
-            if isinstance(raw_resources, list):
-                for r_raw in raw_resources:
-                    if (
-                        not isinstance(r_raw, dict)
-                        or not r_raw.get("is_bookable", True)
-                        or r_raw.get("is_deleted", False)
-                    ):
+            if cd.resources:
+                for r in cd.resources:
+                    if not getattr(r, "is_bookable", True):
                         continue
-                    r_id = r_raw.get("resource_id", "")
-                    r_name = r_raw.get("name", "Unnamed")
-                    if r_id and r_name:
-                        resources.append({"id": r_id, "name": r_name})
+                    if r.resource_id and r.name:
+                        resources.append({"id": r.resource_id, "name": r.name})
 
-            raw_services = draft.current_draft.get("services")
-            if isinstance(raw_services, list):
-                for s_raw in raw_services:
-                    if not isinstance(s_raw, dict) or s_raw.get("is_deleted", False):
-                        continue
-                    s_id = s_raw.get("service_id", "")
-                    s_name = s_raw.get("name", "Unnamed")
-                    if s_id and s_name:
-                        services.append({"id": s_id, "name": s_name})
+            if cd.services:
+                for s in cd.services:
+                    if s.service_id and s.name:
+                        services.append({"id": s.service_id, "name": s.name})
 
-        
         if not draft or not services or not biz_name:
             runtime = await AgentRuntimeConfig.find_one(query)
             if runtime:
@@ -176,8 +149,6 @@ async def _load_from_db(
                     scheduling_engine = runtime.scheduling_engine.model_dump()
                 if not guardrails and runtime.guardrails:
                     guardrails = runtime.guardrails.model_dump()
-                if not sub_agents and runtime.sub_agents:
-                    sub_agents = [sa.model_dump() for sa in runtime.sub_agents]
 
                 if not resources and runtime.resources:
                     for r in runtime.resources:
@@ -191,7 +162,6 @@ async def _load_from_db(
                             continue
                         services.append({"id": s.service_id, "name": s.name})
     else:
-      
         runtime = await AgentRuntimeConfig.find_one(query)
         if runtime:
             if runtime.business_profile:
@@ -211,8 +181,6 @@ async def _load_from_db(
                 scheduling_engine = runtime.scheduling_engine.model_dump()
             if runtime.guardrails:
                 guardrails = runtime.guardrails.model_dump()
-            if runtime.sub_agents:
-                sub_agents = [sa.model_dump() for sa in runtime.sub_agents]
 
             for r in runtime.resources:
                 if not getattr(r, "is_bookable", True) or getattr(r, "is_deleted", False):
@@ -246,6 +214,5 @@ async def _load_from_db(
         "supervisor_prompt": supervisor_prompt,
         "guardrails": guardrails,
         "scheduling_engine": scheduling_engine,
-        "sub_agents": sub_agents,
     }
 

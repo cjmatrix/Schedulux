@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Annotated, Any, Literal
+
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
@@ -109,12 +110,15 @@ class SemanticAction(BaseModel):
     )
     question: str = Field(
         description=(
-            "MANDATORY. The conversational response and follow-up question sent to the user. "
+            "MANDATORY. The conversational response, expert guidance, and next conversational step for the user. "
             "Must ALWAYS be a non-empty string. "
-            "When updating the schema ('update_schema'): briefly acknowledge the applied changes (1 sentence) "
-            "AND proactively ask the next specific question from the deployment checklist or suggest an optional feature. "
-            "For 'ask_user': ask a specific, contextual follow-up question based on what is missing in the draft. "
-            "For 'finalize': confirm the save and summarise next steps. "
+            "Act as an expert booking architect and business mentor. If the user is asking questions, exploring how to build their agent, "
+            "or seeking advice (e.g. 'how to do it'), explain the industry appointment workflow thoroughly, provide actionable mentorship, "
+            "and propose standard starter packages. "
+            "When updating the schema ('update_schema'): warmly acknowledge the applied configuration in professional language and guide "
+            "the user on the next operational design step or offer domain suggestions. "
+            "For 'ask_user': ask an insightful, domain-relevant question or provide consultative advice. "
+            "For 'finalize': confirm the deployment and summarise next steps. "
             "NEVER leave this field empty or null."
         ),
     )

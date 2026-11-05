@@ -163,6 +163,7 @@ Two specialist agents provided the following verified facts:
 Merge these two answers into a single, cohesive, seamless, warm, and natural response for the customer.
 - Answer their question thoroughly using the Knowledge answer.
 - Present their scheduling/availability options clearly using the Booking answer.
+- CRITICAL CONTRADICTION & FALLBACK RESOLUTION: If one specialist provided genuine facts (e.g. available services, pricing, operating hours, or appointments) while the other specialist returned a fallback disclaimer (such as "I don't have that information on file" or "our team will be happy to assist you directly"), COMPLETELY OMIT the fallback disclaimer! Never tell the customer you don't have the information when the other specialist provided it.
 - Do NOT hallucinate any new dates, times, prices, or policies not present in the specialist answers.
 - Speak in a single natural voice as the assistant for {biz_name}."""
 

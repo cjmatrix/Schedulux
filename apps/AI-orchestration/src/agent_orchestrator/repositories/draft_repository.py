@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from agent_orchestrator.domain.protocols import DraftRepository
-from agent_orchestrator.models import AgentDraft
+from agent_orchestrator.models import AgentDraft, AgentDraftConfig
 
 
 class MongoDraftRepository(DraftRepository):
@@ -24,33 +24,38 @@ class MongoDraftRepository(DraftRepository):
         draft_dict: dict[str, Any],
     ) -> AgentDraft:
         agent_draft = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
+        config_obj = (
+            AgentDraftConfig.model_validate(draft_dict)
+            if draft_dict
+            else AgentDraftConfig()
+        )
         if not agent_draft:
             agent_draft = AgentDraft(
                 tenant_id=tenant_id,
                 agent_id=agent_id,
                 name=name,
                 creation_source=creation_source,
-                current_draft=draft_dict,
+                current_draft=config_obj,
             )
             agent_draft.add_checkpoint(
                 checkpoint_id=f"cp_{secrets.token_hex(4)}",
                 message_id="initial_creation",
                 user_prompt=f"Initial agent creation ({creation_source})",
                 summary=f"Created agent draft from {creation_source}",
-                draft_snapshot=draft_dict,
+                draft_snapshot=config_obj,
             )
             await agent_draft.save()
         else:
             agent_draft.name = name
             agent_draft.creation_source = creation_source
-            agent_draft.current_draft = draft_dict
+            agent_draft.current_draft = config_obj
             agent_draft.updated_at = datetime.utcnow()
             agent_draft.add_checkpoint(
                 checkpoint_id=f"cp_{secrets.token_hex(4)}",
                 message_id="update_draft",
                 user_prompt=f"Updated draft ({creation_source})",
                 summary=f"Updated draft snapshot ({creation_source})",
-                draft_snapshot=draft_dict,
+                draft_snapshot=config_obj,
             )
             await agent_draft.save()
 

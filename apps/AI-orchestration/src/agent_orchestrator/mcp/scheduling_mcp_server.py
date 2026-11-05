@@ -324,7 +324,6 @@ async def book_appointment(
     runtime: AgentRuntimeConfig | None = None
     draft: AgentDraft | None = None
     service_doc = None
-    draft_service: dict[str, Any] | None = None
     service_otp_override: bool | None = None
     deposit_required = False
     global_otp = False
@@ -332,38 +331,29 @@ async def book_appointment(
 
     if is_sandbox:
         draft = await AgentDraft.find_one(query)
-        if draft and isinstance(draft.current_draft, dict):
-            raw_services = draft.current_draft.get("services")
-            if isinstance(raw_services, list):
-                draft_service = next(
-                    (s for s in raw_services if isinstance(s, dict) and s.get("service_id") == service_id),
+        if draft and draft.current_draft:
+            cd = draft.current_draft
+            if cd.services:
+                service_doc = next(
+                    (s for s in cd.services if s.service_id == service_id),
                     None,
                 )
-            raw_gr = draft.current_draft.get("guardrails")
-            if isinstance(raw_gr, dict) and raw_gr.get("verification_policy"):
-                global_otp = bool(raw_gr["verification_policy"].get("require_otp_for_new_booking"))
+            if cd.guardrails and cd.guardrails.verification_policy:
+                global_otp = bool(cd.guardrails.verification_policy.require_otp_for_new_booking)
+            if cd.business_profile and cd.business_profile.timezone:
+                tz_str = str(cd.business_profile.timezone)
 
-            bp = draft.current_draft.get("business_profile") or {}
-            if isinstance(bp, dict) and bp.get("timezone"):
-                tz_str = str(bp["timezone"])
-
-        if not draft_service or tz_str == "UTC":
+        if not service_doc or tz_str == "UTC":
             runtime = await AgentRuntimeConfig.find_one(query)
             if runtime:
-                if not draft_service and runtime.services:
+                if not service_doc and runtime.services:
                     service_doc = next((s for s in runtime.services if s.service_id == service_id), None)
                 if tz_str == "UTC" and runtime.business_profile and runtime.business_profile.timezone:
                     tz_str = runtime.business_profile.timezone
                 if not global_otp and runtime.guardrails and runtime.guardrails.verification_policy:
                     global_otp = bool(runtime.guardrails.verification_policy.require_otp_for_new_booking)
 
-        if draft_service:
-            v_dict = draft_service.get("verification") or {}
-            if isinstance(v_dict, dict) and "require_otp" in v_dict and v_dict["require_otp"] is not None:
-                service_otp_override = bool(v_dict["require_otp"])
-            d_dict = draft_service.get("deposit") or {}
-            deposit_required = bool(d_dict.get("required")) if isinstance(d_dict, dict) else False
-        elif service_doc:
+        if service_doc:
             if service_doc.verification and service_doc.verification.require_otp is not None:
                 service_otp_override = service_doc.verification.require_otp
             deposit_required = bool(service_doc.deposit and service_doc.deposit.required)
@@ -622,10 +612,13 @@ async def reschedule_appointment(
     tz_str = "UTC"
     if is_sandbox:
         draft = await AgentDraft.find_one(query)
-        if draft and isinstance(draft.current_draft, dict):
-            bp = draft.current_draft.get("business_profile") or {}
-            if isinstance(bp, dict) and bp.get("timezone"):
-                tz_str = str(bp["timezone"])
+        if (
+            draft
+            and draft.current_draft
+            and draft.current_draft.business_profile
+            and draft.current_draft.business_profile.timezone
+        ):
+            tz_str = str(draft.current_draft.business_profile.timezone)
         if tz_str == "UTC":
             runtime = await AgentRuntimeConfig.find_one(query)
             if runtime and runtime.business_profile and runtime.business_profile.timezone:
@@ -744,10 +737,13 @@ async def get_customer_bookings(
     tz_str = "UTC"
     if is_sandbox:
         draft = await AgentDraft.find_one(query)
-        if draft and isinstance(draft.current_draft, dict):
-            bp = draft.current_draft.get("business_profile") or {}
-            if isinstance(bp, dict) and bp.get("timezone"):
-                tz_str = str(bp["timezone"])
+        if (
+            draft
+            and draft.current_draft
+            and draft.current_draft.business_profile
+            and draft.current_draft.business_profile.timezone
+        ):
+            tz_str = str(draft.current_draft.business_profile.timezone)
         if tz_str == "UTC":
             runtime = await AgentRuntimeConfig.find_one(query)
             if runtime and runtime.business_profile and runtime.business_profile.timezone:
@@ -797,24 +793,30 @@ async def _load_tenant_resources(
 
     if is_sandbox:
         draft = await AgentDraft.find_one(query)
-        if draft and draft.current_draft:
-            raw_resources = draft.current_draft.get("resources") or []
-            if isinstance(raw_resources, list):
-                for r in raw_resources:
-                    if not isinstance(r, dict):
-                        continue
-                    resources.append(
-                        {
-                            "resource_id": r.get("resource_id", ""),
-                            "name": r.get("name", "Unnamed"),
-                            "title": r.get("title", ""),
-                            "category": r.get("category", "General"),
-                            "description": r.get("description", ""),
-                            "resource_type": str(r.get("resource_type", "staff")),
-                            "is_bookable": bool(r.get("is_bookable", True)),
-                            "dispatch_status": str(r.get("dispatch_status", "active")),
-                        }
-                    )
+        if draft and draft.current_draft and draft.current_draft.resources:
+            for r in draft.current_draft.resources:
+                r_type = (
+                    r.resource_type.value
+                    if hasattr(r.resource_type, "value")
+                    else str(r.resource_type or "staff")
+                )
+                d_status = (
+                    r.dispatch_status.value
+                    if hasattr(r.dispatch_status, "value")
+                    else str(r.dispatch_status or "active")
+                )
+                resources.append(
+                    {
+                        "resource_id": r.resource_id,
+                        "name": r.name or "Unnamed",
+                        "title": r.title or "",
+                        "category": r.category or "General",
+                        "description": r.description or "",
+                        "resource_type": r_type,
+                        "is_bookable": bool(r.is_bookable),
+                        "dispatch_status": d_status,
+                    }
+                )
         if not resources:
             runtime = await AgentRuntimeConfig.find_one(query)
             if runtime and runtime.resources:
@@ -978,66 +980,66 @@ async def _load_tenant_services(
             draft = None
 
         if draft and draft.current_draft:
-            raw_resources = draft.current_draft.get("resources") or []
-            if isinstance(raw_resources, list):
-                for r in raw_resources:
-                    if isinstance(r, dict):
-                        resource_map[r.get("resource_id", "")] = {
-                            "resource_id": r.get("resource_id", ""),
-                            "name": r.get("name", "Unnamed"),
-                            "title": r.get("title", ""),
-                            "category": r.get("category", "General"),
-                            "description": r.get("description", ""),
-                        }
+            if draft.current_draft.resources:
+                for r in draft.current_draft.resources:
+                    resource_map[r.resource_id] = {
+                        "resource_id": r.resource_id,
+                        "name": r.name or "Unnamed",
+                        "title": r.title or "",
+                        "category": r.category or "General",
+                        "description": r.description or "",
+                    }
 
-            raw_services = draft.current_draft.get("services") or []
-            if isinstance(raw_services, list):
-                for s in raw_services:
-                    if not isinstance(s, dict) or s.get("is_deleted", False):
-                        continue
-                    price_val = s.get("price")
-                    if isinstance(price_val, dict):
-                        price_str = f"{price_val.get('amount', 0)} {price_val.get('currency', 'USD')}"
-                    elif price_val is not None:
-                        price_str = str(price_val)
-                    else:
-                        price_str = "Free"
-
-                    raw_reqs = s.get("resource_requirements") or []
+            if draft.current_draft.services:
+                for s in draft.current_draft.services:
+                    raw_reqs = s.resource_requirements or []
                     selectable_staff = []
                     auto_assigned = []
-                    if isinstance(raw_reqs, list):
-                        for req in raw_reqs:
-                            if not isinstance(req, dict):
-                                continue
-                            draft_req_mode = str(req.get("selection_mode") or "")
-                            req_r_type = str(req.get("resource_type") or "staff").lower()
-                            eligible_ids = req.get("eligible_resource_ids") or []
-                            resolved = [resource_map[rid] for rid in eligible_ids if rid in resource_map]
-                            if draft_req_mode == "user_selectable" or (not draft_req_mode and req_r_type == "staff"):
-                                for res in resolved:
-                                    selectable_staff.append({
-                                        "resource_id": res["resource_id"],
-                                        "name": res["name"],
-                                        "title": res["title"],
-                                        "category": res["category"],
-                                        "role": req.get("role", "Provider"),
-                                    })
-                            else:
-                                auto_assigned.append({
-                                    "role": req.get("role", "Resource"),
-                                    "resource_type": req.get("resource_type", ""),
-                                    "count": req.get("count", 1),
+                    for req in raw_reqs:
+                        draft_req_mode = str(
+                            getattr(req.selection_mode, "value", req.selection_mode) or ""
+                        )
+                        req_r_type = str(
+                            getattr(req.resource_type, "value", req.resource_type) or "staff"
+                        ).lower()
+                        eligible_ids = req.eligible_resource_ids or []
+                        resolved = [
+                            resource_map[rid] for rid in eligible_ids if rid in resource_map
+                        ]
+                        if draft_req_mode == "user_selectable" or (
+                            not draft_req_mode and req_r_type == "staff"
+                        ):
+                            for res in resolved:
+                                selectable_staff.append({
+                                    "resource_id": res["resource_id"],
+                                    "name": res["name"],
+                                    "title": res["title"],
+                                    "category": res["category"],
+                                    "role": req.role or "Provider",
                                 })
+                        else:
+                            auto_assigned.append({
+                                "role": req.role or "Resource",
+                                "resource_type": req_r_type,
+                                "count": req.count or 1,
+                            })
+
+                    price_str = (
+                        f"{s.price.amount} {s.price.currency}"
+                        if s.price and getattr(s.price, "amount", None) is not None
+                        else "Free"
+                    )
+
+                    bm_str = getattr(s.booking_mode, "value", str(s.booking_mode or "time_slot"))
 
                     services.append({
-                        "service_id": s.get("service_id", ""),
-                        "name": s.get("name", "Unnamed"),
-                        "category": s.get("category", "General"),
-                        "description": s.get("description", ""),
-                        "duration_minutes": s.get("duration_minutes", 30),
+                        "service_id": s.service_id,
+                        "name": s.name or "Unnamed",
+                        "category": s.category or "General",
+                        "description": s.description or "",
+                        "duration_minutes": s.duration_minutes or 30,
                         "price": price_str,
-                        "booking_mode": s.get("booking_mode", "time_slot"),
+                        "booking_mode": bm_str,
                         "selectable_staff": selectable_staff,
                         "auto_assigned_resources": auto_assigned,
                     })

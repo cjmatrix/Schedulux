@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any
 
 import aio_pika
 
@@ -13,7 +12,7 @@ SMS_QUEUE_NAME = os.getenv("SMS_QUEUE_NAME", "sms-queue")
 
 
 class RabbitMQSmsQueue:
-    
+
 
     def __init__(self, rabbitmq_uri: str | None = None):
         self.uri = rabbitmq_uri or os.environ.get(

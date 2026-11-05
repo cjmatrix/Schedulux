@@ -21,19 +21,15 @@ def build_default_agent_template(
     final_name = (name or "").strip() or default_name
 
     return {
-        "schema_ref": "https://schedulux.ai/schema/v2/agent_runtime_config.json",
         "schema_version": "2.4",
         "status": "draft",
         "tenant_id": tenant_id,
         "agent_id": agent_id,
+        "creation_source": "custom",
         "business_profile": {
             "name": final_name,
             "vertical": clean_vertical,
         },
         "services": [],
         "resources": [],
-        "runtime_meta": {
-            "template_id": f"tpl_{clean_vertical}_v1",
-            "compiler_mode": "manual_template",
-        },
     }

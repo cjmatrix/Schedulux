@@ -7,7 +7,7 @@ import secrets
 import urllib.parse
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Any
 
 from beanie import Document, init_beanie
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -380,26 +380,6 @@ class UpiConfigEmbed(TolerantBaseModel):
     accepted_apps: list[str] = Field(default_factory=list)
 
 
-class PaymentGatewayEmbed(TolerantBaseModel):
-    model: str | None = "pass_through"
-    supported_processors: list[str] = Field(default_factory=lambda: ["upi_direct"])
-    active_processor: str | None = "upi_direct"
-    upi_config: UpiConfigEmbed | None = None
-    confirmation_method: str | None = "utr_reference"
-    refund_policy: str | None = "tenant_managed"
-
-
-class IntegrationsEmbed(TolerantBaseModel):
-    stripe: dict[str, object] = Field(default_factory=dict)
-    payment_gateway: PaymentGatewayEmbed | None = None
-    twilio: dict[str, object] = Field(default_factory=dict)
-
-
-class SubscriptionEmbed(TolerantBaseModel):
-    tier: str | None = "starter"
-    tokens_used_this_month: int = 0
-
-
 class AgentRuntimeConfig(Document):
     """
     Top-level document for a compiled Schedulux agent runtime configuration.
@@ -439,7 +419,6 @@ class AgentRuntimeConfig(Document):
     widget_config: WidgetConfigEmbed | None = None
     llm_engine: LlmEngineEmbed | None = None
     supervisor_prompt: str | None = None
-    knowledge_base: KnowledgeBaseEmbed | None = None
     scheduling_engine: SchedulingEngineEmbed | None = None
     operating_hours: OperatingHoursEmbed | None = None
 
@@ -447,10 +426,6 @@ class AgentRuntimeConfig(Document):
     services: list[ServiceEmbed] = Field(default_factory=list)
 
     guardrails: GuardrailsEmbed | None = None
-    sub_agents: list[SubAgentEmbed] = Field(default_factory=list)
-
-    integrations: IntegrationsEmbed | None = None
-    subscription: SubscriptionEmbed | None = None
 
     class Settings:
         name = "agent_runtime_configs"
@@ -508,7 +483,7 @@ class StrictDepositSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     required: bool | None = None
     amount: float | None = None
-    processor: Literal["upi_direct"] | None = None
+    processor: str | None = None
     upi_id: str | None = None
     qr_code_url: str | None = None
     confirmation_method: str | None = None
@@ -624,15 +599,6 @@ class StrictWidgetConfigSchema(BaseModel):
     whitelisted_domains: list[str] | None = None
 
 
-class StrictComplianceSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    hipaa_mode: bool | None = None
-    phi_scrubbing: bool | None = None
-    data_retention_policy: str | None = None
-    zero_hallucination_mode: bool | None = None
-    audit_trail_enabled: bool | None = None
-
-
 class StrictPhiScrubSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     enabled: bool | None = None
@@ -669,8 +635,16 @@ class StrictGuardrailsSchema(BaseModel):
     human_handoff: StrictHumanHandoffSchema | None = None
 
 
+class StrictLlmEngineSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    fallback_trigger_latency_ms: int | None = None
+    temperature: float | None = None
+    semantic_caching: bool | None = None
+    prompt_compiler_token_limit: int | None = None
+
+
 class StrictDraftPatchValidator(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
     schema_version: str | None = "2.4"
     status: str | None = "draft"
     tenant_id: str | None = None
@@ -700,13 +674,13 @@ class StrictDraftPatchValidator(BaseModel):
         default=None,
         description="ONLY include if customizing widget styling, greeting, or platforms. Omit if unchanged.",
     )
-    compliance: StrictComplianceSchema | None = Field(
-        default=None,
-        description="ONLY include if updating HIPAA or compliance settings. Omit if unchanged.",
-    )
     guardrails: StrictGuardrailsSchema | None = Field(
         default=None,
         description="ONLY include if updating verification policies (OTP), triage, or human handoff. Omit if unchanged.",
+    )
+    llm_engine: StrictLlmEngineSchema | None = Field(
+        default=None,
+        description="ONLY include if customizing LLM engine settings (temperature, caching). Omit if unchanged.",
     )
     supervisor_prompt: str | None = Field(
         default=None,
@@ -714,11 +688,31 @@ class StrictDraftPatchValidator(BaseModel):
     )
 
 
-def canonicalize_agent_schema(data: dict[str, object], status: str = "draft") -> dict[str, object]:
+class AgentDraftConfig(TolerantBaseModel):
+    schema_version: str = "2.4"
+    status: str = "draft"
+    tenant_id: str | None = None
+    agent_id: str | None = None
+    creation_source: str = "custom"
+    business_profile: BusinessProfileEmbed | None = None
+    widget_config: WidgetConfigEmbed | None = None
+    llm_engine: LlmEngineEmbed | None = None
+    supervisor_prompt: str | None = None
+    scheduling_engine: SchedulingEngineEmbed | None = None
+    operating_hours: OperatingHoursEmbed | None = None
+    resources: list[ResourceEmbed] = Field(default_factory=list)
+    services: list[ServiceEmbed] = Field(default_factory=list)
+    guardrails: GuardrailsEmbed | None = None
+
+
+def canonicalize_agent_schema(
+    data: dict[str, object] | Any, status: str = "draft"
+) -> dict[str, object]:
     if not data:
         return {}
 
-    clean_data = copy.deepcopy(data)
+    raw_dict = data.model_dump() if hasattr(data, "model_dump") else data
+    clean_data = copy.deepcopy(raw_dict)
     clean_data["status"] = status
     if "tenant_id" not in clean_data:
         clean_data["tenant_id"] = ""
@@ -727,7 +721,7 @@ def canonicalize_agent_schema(data: dict[str, object], status: str = "draft") ->
 
     if status == "draft":
         try:
-            validated = StrictDraftPatchValidator.model_validate(clean_data)
+            validated = AgentDraftConfig.model_validate(clean_data)
             res_draft = validated.model_dump(exclude_unset=True)
         except Exception:
             res_draft = clean_data
@@ -744,19 +738,10 @@ def canonicalize_agent_schema(data: dict[str, object], status: str = "draft") ->
         res_draft.setdefault("resources", clean_data.get("resources") or [])
         res_draft.setdefault("guardrails", clean_data.get("guardrails") or {})
         res_draft.setdefault("widget_config", clean_data.get("widget_config") or {})
-        res_draft.setdefault("compliance", clean_data.get("compliance") or {})
         if "supervisor_prompt" in clean_data:
             res_draft["supervisor_prompt"] = clean_data["supervisor_prompt"]
         if "llm_engine" in clean_data:
             res_draft["llm_engine"] = clean_data["llm_engine"]
-        if "knowledge_base" in clean_data:
-            res_draft["knowledge_base"] = clean_data["knowledge_base"]
-        if "sub_agents" in clean_data:
-            res_draft["sub_agents"] = clean_data["sub_agents"]
-        if "integrations" in clean_data:
-            res_draft["integrations"] = clean_data["integrations"]
-        if "subscription" in clean_data:
-            res_draft["subscription"] = clean_data["subscription"]
         return res_draft
 
     resources_data = clean_data.get("resources")
@@ -793,16 +778,6 @@ def canonicalize_agent_schema(data: dict[str, object], status: str = "draft") ->
             "llm_engine": cfg.llm_engine.model_dump()
             if cfg.llm_engine
             else LlmEngineEmbed().model_dump(),
-            "knowledge_base": cfg.knowledge_base.model_dump()
-            if cfg.knowledge_base
-            else KnowledgeBaseEmbed().model_dump(),
-            "sub_agents": [sa.model_dump() for sa in cfg.sub_agents],
-            "integrations": cfg.integrations.model_dump()
-            if cfg.integrations
-            else IntegrationsEmbed().model_dump(),
-            "subscription": cfg.subscription.model_dump()
-            if cfg.subscription
-            else SubscriptionEmbed().model_dump(),
         }
         if cfg.supervisor_prompt:
             res["supervisor_prompt"] = cfg.supervisor_prompt
@@ -817,16 +792,11 @@ def canonicalize_agent_schema(data: dict[str, object], status: str = "draft") ->
         gr_raw = clean_data.get("guardrails")
         wc_raw = clean_data.get("widget_config")
         llm_raw = clean_data.get("llm_engine")
-        kb_raw = clean_data.get("knowledge_base")
-        int_raw = clean_data.get("integrations")
-        sub_raw = clean_data.get("subscription")
 
         raw_services = clean_data.get("services")
         raw_resources = clean_data.get("resources")
-        raw_sub_agents = clean_data.get("sub_agents")
         services_list = raw_services if isinstance(raw_services, list) else []
         resources_list = raw_resources if isinstance(raw_resources, list) else []
-        sub_agents_list = raw_sub_agents if isinstance(raw_sub_agents, list) else []
 
         res_fallback: dict[str, object] = {
             "schema_version": clean_data.get("schema_version", "2.4"),
@@ -857,18 +827,6 @@ def canonicalize_agent_schema(data: dict[str, object], status: str = "draft") ->
             "llm_engine": LlmEngineEmbed(**llm_raw).model_dump()
             if isinstance(llm_raw, dict)
             else LlmEngineEmbed().model_dump(),
-            "knowledge_base": KnowledgeBaseEmbed(**kb_raw).model_dump()
-            if isinstance(kb_raw, dict)
-            else KnowledgeBaseEmbed().model_dump(),
-            "sub_agents": [
-                SubAgentEmbed(**sa).model_dump() for sa in sub_agents_list if isinstance(sa, dict)
-            ],
-            "integrations": IntegrationsEmbed(**int_raw).model_dump()
-            if isinstance(int_raw, dict)
-            else IntegrationsEmbed().model_dump(),
-            "subscription": SubscriptionEmbed(**sub_raw).model_dump()
-            if isinstance(sub_raw, dict)
-            else SubscriptionEmbed().model_dump(),
         }
         if clean_data.get("supervisor_prompt"):
             res_fallback["supervisor_prompt"] = clean_data["supervisor_prompt"]
@@ -903,7 +861,7 @@ class AgentDraft(Document):
     status: str = "pending"
     last_edited_by: str | None = None
 
-    current_draft: dict[str, object] = Field(default_factory=dict)
+    current_draft: AgentDraftConfig = Field(default_factory=AgentDraftConfig)
     active_message_id: str | None = None
 
     conversation_summary: str = ""
@@ -913,6 +871,13 @@ class AgentDraft(Document):
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    @field_validator("current_draft", mode="before")
+    @classmethod
+    def parse_current_draft(cls, v: Any) -> Any:
+        if isinstance(v, dict):
+            return AgentDraftConfig.model_validate(v)
+        return v
 
     class Settings:
         name = "agent_drafts"
@@ -925,18 +890,23 @@ class AgentDraft(Document):
         self,
         checkpoint_id: str,
         message_id: str,
-        draft_snapshot: dict[str, object],
+        draft_snapshot: dict[str, object] | AgentDraftConfig,
         user_prompt: str = "",
         summary: str = "",
         max_checkpoints: int = 20,
     ) -> None:
         """Appends a new message checkpoint and enforces a rolling window of max 20."""
+        raw_dict = (
+            draft_snapshot.model_dump()
+            if hasattr(draft_snapshot, "model_dump")
+            else (copy.deepcopy(draft_snapshot) if draft_snapshot else {})
+        )
         new_cp = DraftCheckpointEmbed(
             checkpoint_id=checkpoint_id,
             message_id=message_id,
             user_prompt=user_prompt,
             summary=summary,
-            draft_snapshot=copy.deepcopy(draft_snapshot) if draft_snapshot else {},
+            draft_snapshot=raw_dict,
             timestamp=datetime.utcnow(),
         )
         self.checkpoints.append(new_cp)
@@ -944,7 +914,7 @@ class AgentDraft(Document):
         if len(self.checkpoints) > max_checkpoints:
             self.checkpoints = self.checkpoints[-max_checkpoints:]
 
-        self.current_draft = new_cp.draft_snapshot
+        self.current_draft = AgentDraftConfig.model_validate(raw_dict)
         self.active_message_id = message_id
         self.updated_at = datetime.utcnow()
 
@@ -966,7 +936,7 @@ class AgentDraft(Document):
         target_cp = self.checkpoints[target_idx]
 
         self.checkpoints = self.checkpoints[: target_idx + 1]
-        self.current_draft = copy.deepcopy(target_cp.draft_snapshot)
+        self.current_draft = AgentDraftConfig.model_validate(target_cp.draft_snapshot)
         self.active_message_id = target_cp.message_id
         self.updated_at = datetime.utcnow()
 

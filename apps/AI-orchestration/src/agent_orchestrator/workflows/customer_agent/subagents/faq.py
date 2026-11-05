@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 from datetime import UTC, datetime
@@ -13,9 +14,25 @@ from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from pydantic import SecretStr
 
+try:
+    import toon  # type: ignore[import-untyped]
+
+    _has_toon = True
+except ImportError:
+    _has_toon = False
+
 logger = logging.getLogger(__name__)
 
-_FAQ_TOOLS = {"search_knowledge_base"}
+_FAQ_TOOLS = {"search_knowledge_base", "search_services", "search_resources"}
+
+
+def _format_services_catalog(services: list[dict[str, Any]]) -> str:
+    if _has_toon:
+        try:
+            return toon.encode(services)
+        except Exception:
+            pass
+    return json.dumps(services, indent=2)
 
 
 def _get_chat_model(temperature: float = 0.1) -> Any:
@@ -50,6 +67,8 @@ def _build_faq_system_prompt(
     public_phone = biz_context.get("public_phone") or "Not provided"
     support_email = biz_context.get("support_email") or "Not provided"
     address = biz_context.get("address") or "Not provided"
+    services = biz_context.get("services", [])
+    services_catalog = _format_services_catalog(services) if services else "No services listed."
 
     custom_instructions_block = ""
     if supervisor_prompt.strip():
@@ -59,13 +78,16 @@ def _build_faq_system_prompt(
 """
 
     return f"""You are the Knowledge & Policy specialist for {biz_context.get("business_name")}.
-Your sole purpose: answer customer questions about business policies, operating hours, contact info, procedures, rules, preparation guidelines, and general knowledge accurately.{custom_instructions_block}
+Your sole purpose: answer customer questions about business services, offerings, pricing, operating hours, contact info, procedures, rules, preparation guidelines, and general knowledge accurately.{custom_instructions_block}
 
 [Context]
 Current UTC Time: {now_iso}
 Business Timezone: {biz_context.get("timezone")}
 Tenant ID: {tenant_id}
 Agent ID: {agent_id}
+
+[Services & Offerings Catalog]
+{services_catalog}
 
 [Business Profile & Operating Hours]
 Business: {biz_context.get("business_name")}
@@ -76,12 +98,13 @@ Operating Hours & Schedule:
 {formatted_hours}
 
 [Protocol]
-1. For questions about operating hours, opening/closing times, days open/closed, phone number, email, address, or location:
-   Answer DIRECTLY using [Business Profile & Operating Hours]. Do NOT call search_knowledge_base for these facts.
+1. For questions about services, offerings, pricing, operating hours, opening/closing times, days open/closed, phone number, email, address, or location:
+   Answer DIRECTLY using [Services & Offerings Catalog] and [Business Profile & Operating Hours].
+   If the customer asks for deeper details on services or specialists/practitioners, invoke `search_services` or `search_resources`.
 2. For questions about policies, refund/cancellation rules, procedures, preparation guidelines, or general business information:
    Invoke `search_knowledge_base(query=..., tenant_id="{tenant_id}", agent_id="{agent_id}")`.
-3. Ground answers to policy/procedure questions STRICTLY on retrieved content from the knowledge base. Do NOT fabricate policies, terms, or guidelines.
-4. If no matching information is found in the knowledge base (and not answered by [Business Profile & Operating Hours]), say: "I don't have that information on file — our team will be happy to assist you directly."
+3. Ground answers to policy/procedure questions STRICTLY on retrieved content from the knowledge base, services, or business profile. Do NOT fabricate policies, terms, or guidelines.
+4. If no matching information is found in the knowledge base, services catalog, or business profile, say: "I don't have that information on file — our team will be happy to assist you directly."
 5. If the customer indicates they want to schedule an appointment or book, let them know our booking concierge can assist them right away.
 6. Tone: knowledgeable, warm, concise, and helpful.
 """
@@ -101,7 +124,7 @@ async def run_faq_agent(
     for m in conversation_history:
         langchain_msgs.append(m)
     langchain_msgs.append(HumanMessage(content=message))
-    print(biz_context,"hereeeee",flush=True)
+
     system_prompt = _build_faq_system_prompt(tenant_id, agent_id, biz_context)
     model = _get_chat_model(temperature=0.1)
 

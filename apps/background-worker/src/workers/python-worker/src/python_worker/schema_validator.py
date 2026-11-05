@@ -162,14 +162,6 @@ class StrictWidgetConfigSchema(BaseModel):
     platform_sources: Optional[list[str]] = None
     whitelisted_domains: Optional[list[str]] = None
 
-class StrictComplianceSchema(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    hipaa_mode: Optional[bool] = None
-    phi_scrubbing: Optional[bool] = None
-    data_retention_policy: Optional[str] = None
-    zero_hallucination_mode: Optional[bool] = None
-    audit_trail_enabled: Optional[bool] = None
-
 class StrictPhiScrubSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
     enabled: Optional[bool] = None
@@ -213,7 +205,6 @@ class StrictDraftPatchValidator(BaseModel):
     operating_hours: Optional[StrictOperatingHoursSchema] = None
     scheduling_engine: Optional[StrictSchedulingEngineSchema] = None
     widget_config: Optional[StrictWidgetConfigSchema] = None
-    compliance: Optional[StrictComplianceSchema] = None
     guardrails: Optional[StrictGuardrailsSchema] = None
     supervisor_prompt: Optional[str] = None
     runtime_meta: Optional[dict] = None

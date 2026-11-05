@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, StateGraph
 
@@ -99,7 +98,11 @@ async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: 
 
             ad = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
             if ad and ad.current_draft:
-                draft = ad.current_draft
+                draft = (
+                    ad.current_draft.model_dump()
+                    if hasattr(ad.current_draft, "model_dump")
+                    else ad.current_draft
+                )
             else:
                 cfg = await AgentRuntimeConfig.find_one(
                     {"tenant_id": tenant_id, "agent_id": agent_id}

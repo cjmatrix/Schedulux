@@ -138,6 +138,12 @@ export class CreateBookingUseCase implements ICreateBookingUseCase {
             : [],
         resourceRepository: this._resourceRepository,
         bookingRepository: this._bookingRepository,
+        timezone: tenantSchedule?.timezone || 'UTC',
+        tenantOperatingHours: tenantSchedule?.operating_hours as unknown as Record<
+          string,
+          Array<{ start: string; end: string }>
+        >,
+        blackoutDates: tenantSchedule?.blackout_dates,
       }),
       !existingCustomerByPhone && customerEmail
         ? this._customerRepository.findByEmail(tenantId, customerEmail, agentId)

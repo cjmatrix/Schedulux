@@ -49,6 +49,21 @@ def _format_services_catalog(services: list[dict[str, Any]]) -> str:
     return json.dumps(services, indent=2)
 
 
+def _get_gemini_model(temperature: float = 0.2, max_tokens: int = 4096) -> BaseChatModel | None:
+    gemini_api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not gemini_api_key:
+        return None
+    model_name = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+    if "gemma" in model_name.lower():
+        model_name = "gemini-1.5-flash"
+    return ChatGoogleGenerativeAI(
+        model=model_name,
+        google_api_key=gemini_api_key,
+        temperature=temperature,
+        max_output_tokens=max_tokens,
+    )
+
+
 def _get_chat_model(temperature: float = 0.2) -> BaseChatModel:
     groq_api_key = os.environ.get("GROQ_API_KEY")
     gemini_api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -150,33 +165,59 @@ async def node_synthesizer(state: CustomerGraphState) -> dict[str, Any]:
         biz_name = state.get("biz_context", {}).get("business_name", "our business")
         user_msg = state.get("message", "")
 
+
         synth_system = f"""You are the AI Concierge for {biz_name}.
-A customer asked: "{user_msg}"
+Your job is to merge specialist agent answers into a single, cohesive, seamless, warm, and natural response for the customer.
 
-Two specialist agents provided the following verified facts:
-[Policy / Knowledge Specialist Answer]:
-{faq_resp}
-
-[Booking & Availability Specialist Answer]:
-{booking_resp}
-
-Merge these two answers into a single, cohesive, seamless, warm, and natural response for the customer.
-- Answer their question thoroughly using the Knowledge answer.
+[Synthesis Guidelines & Instructions]
+- Answer the customer's question thoroughly using the Knowledge answer.
 - Present their scheduling/availability options clearly using the Booking answer.
 - CRITICAL CONTRADICTION & FALLBACK RESOLUTION: If one specialist provided genuine facts (e.g. available services, pricing, operating hours, or appointments) while the other specialist returned a fallback disclaimer (such as "I don't have that information on file" or "our team will be happy to assist you directly"), COMPLETELY OMIT the fallback disclaimer! Never tell the customer you don't have the information when the other specialist provided it.
 - Do NOT hallucinate any new dates, times, prices, or policies not present in the specialist answers.
 - Speak in a single natural voice as the assistant for {biz_name}."""
 
+
+        synth_input = f"""[Customer Inquiry]
+"{user_msg}"
+
+[Verified Specialist Facts to Merge]
+[Policy / Knowledge Specialist Answer]:
+{faq_resp}
+
+[Booking & Availability Specialist Answer]:
+{booking_resp}"""
+
+        synth_messages: list[BaseMessage] = [
+            SystemMessage(content=synth_system),
+            HumanMessage(content=synth_input),
+        ]
+
         try:
-            synth_result = await model.ainvoke([SystemMessage(content=synth_system)])
+            synth_result = await model.ainvoke(synth_messages)
             final_text = (
                 synth_result.content
                 if isinstance(synth_result.content, str)
                 else str(synth_result.content)
             )
         except Exception as e:
-            logger.error("[CustomerGraph:SynthesizerNode] Synthesis LLM error (%s) → fallback join", e)
-            final_text = f"{faq_resp}\n\n{booking_resp}"
+            logger.warning("[CustomerGraph:SynthesizerNode] Primary LLM error (%s) → trying Gemini fallback", e)
+            gemini_model = _get_gemini_model(temperature=0.2, max_tokens=4096)
+            if gemini_model and not isinstance(model, ChatGoogleGenerativeAI):
+                try:
+                    synth_result = await gemini_model.ainvoke(synth_messages)
+                    final_text = (
+                        synth_result.content
+                        if isinstance(synth_result.content, str)
+                        else str(synth_result.content)
+                    )
+                except Exception as fb_err:
+                    logger.error(
+                        "[CustomerGraph:SynthesizerNode] Gemini synthesis fallback failed (%s) → fallback join",
+                        fb_err,
+                    )
+                    final_text = f"{faq_resp}\n\n{booking_resp}"
+            else:
+                final_text = f"{faq_resp}\n\n{booking_resp}"
     elif booking_resp:
         final_text = booking_resp
     elif faq_resp:
@@ -275,7 +316,7 @@ async def process_customer_chat(
         content=message,
     )
 
-    recent_messages = await _customer_msg_repo.get_recent_messages(session_id, limit=10)
+    recent_messages = await _customer_msg_repo.get_recent_messages(session_id, limit=20)
 
     langchain_messages: list[BaseMessage] = []
     for m in recent_messages:
@@ -325,7 +366,7 @@ async def process_customer_chat(
         content=response_text,
     )
 
-    updated_history = await _customer_msg_repo.get_recent_messages(session_id, limit=10)
+    updated_history = await _customer_msg_repo.get_recent_messages(session_id, limit=20)
 
     return {
         "session_id": session_id,

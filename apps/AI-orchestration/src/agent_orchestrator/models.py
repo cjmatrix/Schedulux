@@ -521,6 +521,37 @@ class StrictServiceSchema(BaseModel):
     deleted_at: str | None = None
 
 
+class StrictShiftIntervalSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    start: str = Field(description="Shift start time in 24-hr format HH:MM (e.g. '09:00')")
+    end: str = Field(description="Shift end time in 24-hr format HH:MM (e.g. '17:00')")
+
+
+class StrictCustomShiftOverridesSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    monday: list[StrictShiftIntervalSchema] | None = Field(
+        default=None, description="Shifts for Monday. Empty list [] means day off."
+    )
+    tuesday: list[StrictShiftIntervalSchema] | None = Field(
+        default=None, description="Shifts for Tuesday. Empty list [] means day off."
+    )
+    wednesday: list[StrictShiftIntervalSchema] | None = Field(
+        default=None, description="Shifts for Wednesday. Empty list [] means day off."
+    )
+    thursday: list[StrictShiftIntervalSchema] | None = Field(
+        default=None, description="Shifts for Thursday. Empty list [] means day off."
+    )
+    friday: list[StrictShiftIntervalSchema] | None = Field(
+        default=None, description="Shifts for Friday. Empty list [] means day off."
+    )
+    saturday: list[StrictShiftIntervalSchema] | None = Field(
+        default=None, description="Shifts for Saturday. Empty list [] means day off."
+    )
+    sunday: list[StrictShiftIntervalSchema] | None = Field(
+        default=None, description="Shifts for Sunday. Empty list [] means day off."
+    )
+
+
 class StrictResourceSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     resource_id: str | None = None
@@ -531,13 +562,16 @@ class StrictResourceSchema(BaseModel):
     description: str | None = None
     is_bookable: bool | None = None
     dispatch_status: DispatchStatus | None = None
-    custom_shift_overrides: dict | None = None
+    custom_shift_overrides: StrictCustomShiftOverridesSchema | dict | None = Field(
+        default=None,
+        description="Optional custom working shifts overriding global operating hours for this resource (e.g. friday: [{start: '09:00', end: '12:00'}], saturday: [] for day off).",
+    )
     is_deleted: bool | None = None
     deleted_at: str | None = None
 
     @field_validator("custom_shift_overrides", mode="before")
     @classmethod
-    def parse_custom_shift_overrides(cls, v: object) -> dict:
+    def parse_custom_shift_overrides(cls, v: object) -> object:
         if not v:
             return {}
         if isinstance(v, str):
@@ -546,9 +580,7 @@ class StrictResourceSchema(BaseModel):
                 return parsed if isinstance(parsed, dict) else {}
             except Exception:
                 return {}
-        if isinstance(v, dict):
-            return v
-        return {}
+        return v
 
 
 class StrictTimeSlotSchema(BaseModel):
@@ -1084,5 +1116,3 @@ async def init_db(mongo_uri: str | None = None):
         ],
     )
     _db_initialized = True
-
-

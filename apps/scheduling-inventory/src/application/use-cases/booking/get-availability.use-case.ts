@@ -27,6 +27,7 @@ import {
 import type { ICacheRepository } from '../../../infrastructure/cache/cache-repository.interface.js';
 import { IGetAvailabilityUseCase } from '../../interfaces/booking-use-cases.interface.js';
 import { getCachedService } from '../../utils/service-cache.helper.js';
+import { isResourceOnShift } from '../../utils/shift-evaluation.helper.js';
 
 const DAY_NAMES = [
   'sunday',
@@ -127,6 +128,41 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
       });
     });
     const allEligibleIds = Array.from(allEligibleIdsSet);
+
+   
+    if (requestedResourceIds.length > 0) {
+      const hasIneligible =
+        requirements.length === 0 || requestedResourceIds.some((id) => !allEligibleIdsSet.has(id));
+      if (hasIneligible) {
+        const ineligibleDays: DayAvailabilityInfo[] = [];
+        let currDay = startObj;
+        let loopCount = 0;
+        while (
+          (currDay.isBefore(endObj) || currDay.isSame(endObj, 'day')) &&
+          loopCount < MAX_DAYS_LIMIT
+        ) {
+          loopCount++;
+          const dateStr = currDay.format('YYYY-MM-DD');
+          ineligibleDays.push({
+            date: dateStr,
+            is_closed: false,
+            closure_reason: `Requested resource(s) not eligible for service "${service.name}"`,
+            has_availability: false,
+            slots: [],
+          });
+          currDay = currDay.add(1, 'day');
+        }
+
+        return {
+          service_id: serviceId,
+          booking_mode: bookingMode,
+          timezone,
+          days: ineligibleDays,
+          resources: [],
+          blocked_dates: ineligibleDays.map((d) => d.date),
+        };
+      }
+    }
 
     const [rawEligibleResources, activeBookings] = await Promise.all([
       allEligibleIds.length > 0
@@ -265,6 +301,20 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
               effectiveEndDate,
             );
 
+            const isResAvailable = (id: string): boolean => {
+              if (busyResourceIds.has(id)) return false;
+              const res = activeEligibleResources.find((r) => r.id === id);
+              if (!res) return false;
+              return isResourceOnShift(
+                res,
+                slotStartDate,
+                effectiveEndDate,
+                timezone,
+                operatingHours as unknown as Record<string, Array<{ start: string; end: string }>>,
+                bookingMode,
+              );
+            };
+
             let isSlotAvailable = !isSlotPast;
             const availableResourceIdsForSlot: string[] = [];
 
@@ -281,10 +331,7 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
                 const matchingRequested = requestedResourceIds.filter((id) => reqPool.includes(id));
 
                 if (matchingRequested.length > 0) {
-                  const hasUnavailable = matchingRequested.some(
-                    (id) =>
-                      busyResourceIds.has(id) || !activeEligibleResources.some((r) => r.id === id),
-                  );
+                  const hasUnavailable = matchingRequested.some((id) => !isResAvailable(id));
                   if (hasUnavailable) {
                     isSlotAvailable = false;
                     break;
@@ -292,10 +339,7 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
                   const remainingNeeded = Math.max(1, req.count || 1) - matchingRequested.length;
                   if (remainingNeeded > 0) {
                     const otherFreeCount = reqPool.filter(
-                      (id) =>
-                        !matchingRequested.includes(id) &&
-                        !busyResourceIds.has(id) &&
-                        activeEligibleResources.some((r) => r.id === id),
+                      (id) => !matchingRequested.includes(id) && isResAvailable(id),
                     ).length;
                     if (otherFreeCount < remainingNeeded) {
                       isSlotAvailable = false;
@@ -303,10 +347,7 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
                     }
                   }
                 } else {
-                  const freeCount = reqPool.filter(
-                    (id) =>
-                      !busyResourceIds.has(id) && activeEligibleResources.some((r) => r.id === id),
-                  ).length;
+                  const freeCount = reqPool.filter((id) => isResAvailable(id)).length;
                   if (freeCount < Math.max(1, req.count || 1)) {
                     isSlotAvailable = false;
                     break;
@@ -315,15 +356,13 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
               }
 
               if (isSlotAvailable) {
-                const freeActive = activeEligibleResources.filter(
-                  (r) => !busyResourceIds.has(r.id),
-                );
+                const freeActive = activeEligibleResources.filter((r) => isResAvailable(r.id));
                 const selectableReqs = requirements.filter(
                   (r) => r.selectionMode === 'user_selectable',
                 );
                 if (requestedResourceIds.length > 0) {
                   requestedResourceIds.forEach((id) => {
-                    if (!busyResourceIds.has(id)) {
+                    if (isResAvailable(id)) {
                       availableResourceIdsForSlot.push(id);
                     }
                   });

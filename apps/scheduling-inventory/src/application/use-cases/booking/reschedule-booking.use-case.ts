@@ -140,6 +140,12 @@ export class RescheduleBookingUseCase implements IRescheduleBookingUseCase {
       excludeBookingId: booking.id,
       resourceRepository: this._resourceRepository,
       bookingRepository: this._bookingRepository,
+      timezone: tenantSchedule?.timezone || 'UTC',
+      tenantOperatingHours: tenantSchedule?.operating_hours as unknown as Record<
+        string,
+        Array<{ start: string; end: string }>
+      >,
+      blackoutDates: tenantSchedule?.blackout_dates,
     });
 
     const previousStartTime = booking.startTime;

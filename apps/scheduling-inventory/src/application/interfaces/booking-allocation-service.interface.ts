@@ -24,6 +24,9 @@ export interface AllocateResourcesParams {
   excludeBookingId?: string;
   resourceRepository: IResourceRepository;
   bookingRepository: IBookingRepository;
+  timezone?: string;
+  tenantOperatingHours?: Record<string, Array<{ start: string; end: string }>>;
+  blackoutDates?: Array<{ date: string; reason?: string; is_closed?: boolean }>;
 }
 
 export interface AllocateResourcesResult {

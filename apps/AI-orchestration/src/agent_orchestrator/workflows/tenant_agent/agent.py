@@ -75,6 +75,7 @@ async def start_onboarding_session(tenant_id: str, draft: dict, agent_id: str = 
         "pending_draft_update": None,
         "status": "onboarding",
         "patch_retries": 0,
+        "react_step_count": 0,
     }
 
     try:
@@ -177,6 +178,7 @@ async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: 
         "pending_draft_update": None,
         "status": "onboarding",
         "patch_retries": 0,
+        "react_step_count": 0,
     }
 
     result_state = await _graph.ainvoke(initial)
@@ -215,4 +217,3 @@ async def get_current_draft(tenant_id: str, agent_id: str = "") -> dict:
             print(f"[get_current_draft Warning] {e}", flush=True)
 
     return {}
-

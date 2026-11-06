@@ -21,6 +21,7 @@ class GraphState(TypedDict):
     pending_draft_update: dict[str, Any] | None
     status: str
     patch_retries: int
+    react_step_count: int
 
 
 STRUCTURAL_REQUIREMENTS: list[dict] = [
@@ -129,4 +130,3 @@ class SemanticAction(BaseModel):
             "Use this whenever the user provides services, staff/resources, hours, prices, or business details."
         ),
     )
-

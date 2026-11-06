@@ -13,4 +13,3 @@ __all__ = [
     "resume_onboarding_session",
     "get_current_draft",
 ]
-

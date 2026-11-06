@@ -15,6 +15,7 @@ import {
   BookingIntervalResult,
   IBookingAllocationService,
 } from '../interfaces/booking-allocation-service.interface.js';
+import { isDateBlackout, isResourceOnShift } from '../utils/shift-evaluation.helper.js';
 
 export type {
   AllocateResourcesParams,
@@ -137,7 +138,19 @@ export class BookingAllocationService implements IBookingAllocationService {
       excludeBookingId,
       resourceRepository,
       bookingRepository,
+      timezone = 'UTC',
+      tenantOperatingHours,
+      blackoutDates = [],
     } = params;
+
+    if (blackoutDates.length > 0) {
+      const blackout = isDateBlackout(effectiveStartTime, timezone, blackoutDates);
+      if (blackout.isBlackout) {
+        throw new BadRequestException(
+          `Cannot schedule a booking on a closed blackout date (${blackout.reason})`,
+        );
+      }
+    }
 
     const sanitizedExplicit: string[] = [];
     for (const id of explicitResourceIds) {
@@ -195,6 +208,20 @@ export class BookingAllocationService implements IBookingAllocationService {
             `Selected resource (${id}) for role "${req.role}" is currently inactive, on leave, or not bookable`,
           );
         }
+        if (
+          !isResourceOnShift(
+            res,
+            effectiveStartTime,
+            effectiveEndTime,
+            timezone,
+            tenantOperatingHours,
+            service.bookingMode,
+          )
+        ) {
+          throw new ConflictException(
+            `Resource "${res.name || 'Resource'}" for role "${req.role}" is not on duty during this time slot`,
+          );
+        }
         if (busyResourceIds.has(id)) {
           throw new ConflictException(
             `Resource "${res.name || 'Resource'}" for role "${req.role}" is already booked for this time slot`,
@@ -224,10 +251,21 @@ export class BookingAllocationService implements IBookingAllocationService {
           );
         }
 
-        const freeCandidates = activeCandidates.filter((c) => !busyResourceIds.has(c.id));
+        const freeCandidates = activeCandidates.filter(
+          (c) =>
+            !busyResourceIds.has(c.id) &&
+            isResourceOnShift(
+              c,
+              effectiveStartTime,
+              effectiveEndTime,
+              timezone,
+              tenantOperatingHours,
+              service.bookingMode,
+            ),
+        );
         if (freeCandidates.length < remainingNeeded) {
           throw new ConflictException(
-            `Conflict: Not enough available resources for role "${req.role}" (${requiredCount} required, only ${freeCandidates.length + matchingExplicit.length} available for this slot)`,
+            `Conflict: Not enough available on-duty resources for role "${req.role}" (${requiredCount} required, only ${freeCandidates.length + matchingExplicit.length} available on shift for this slot)`,
           );
         }
 

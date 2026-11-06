@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
-import re
 from typing import Any, Literal
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
@@ -19,6 +17,21 @@ class SupervisorRouting(BaseModel):
     intents: list[Literal["booking", "faq", "handoff"]] = Field(
         default_factory=lambda: ["booking"],
         description="List of specialist agent intents to handle the customer query. Use ['faq', 'booking'] for compound queries.",
+    )
+
+
+def _get_gemini_model(temperature: float = 0.0) -> Any | None:
+    gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not gemini_key:
+        return None
+    model_name = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+    if "gemma" in model_name.lower():
+        model_name = "gemini-1.5-flash"
+    return ChatGoogleGenerativeAI(
+        model=model_name,
+        google_api_key=gemini_key,
+        temperature=temperature,
+        max_output_tokens=256,
     )
 
 
@@ -81,6 +94,14 @@ No other text.
 """
 
 
+async def _classify_with_model(model: Any, messages: list[BaseMessage]) -> list[str]:
+    structured = model.with_structured_output(SupervisorRouting)
+    result = await structured.ainvoke(messages)
+    intents = result.intents if isinstance(result, SupervisorRouting) else result.get("intents", [])
+    valid = [i for i in intents if i in ("booking", "faq", "handoff")]
+    return valid or ["booking"]
+
+
 async def classify_intent(
     message: str,
     conversation_history: list[BaseMessage],
@@ -98,7 +119,15 @@ async def classify_intent(
 
     model = _get_chat_model(temperature=0.0)
 
-    recent: list[BaseMessage] = conversation_history[-6:] if conversation_history else []
+    prior: list[BaseMessage] = list(conversation_history)
+    if (
+        prior
+        and isinstance(prior[-1], HumanMessage)
+        and prior[-1].content == message
+    ):
+        prior = prior[:-1]
+
+    recent: list[BaseMessage] = prior[-6:] if prior else []
     classify_messages: list[BaseMessage] = [
         SystemMessage(content=_ROUTER_SYSTEM),
         *recent,
@@ -106,48 +135,23 @@ async def classify_intent(
     ]
 
     try:
-        structured_model = model.with_structured_output(SupervisorRouting)
-        routing = await structured_model.ainvoke(classify_messages)
-        if isinstance(routing, SupervisorRouting) and routing.intents:
-            logger.info("[Supervisor] Classified intents: %s", routing.intents)
-            return list(routing.intents)
-        if isinstance(routing, dict) and routing.get("intents"):
-            return list(routing["intents"])
+        intents = await _classify_with_model(model, classify_messages)
+        logger.info("[Supervisor] Classified intents: %s", intents)
+        return intents
     except Exception as e:
         logger.warning(
-            "[Supervisor] Structured output classification warning (%s) → trying safe text fallback", e
+            "[Supervisor] Primary classifier (%s) failed: %s. Attempting Gemini fallback...",
+            type(model).__name__,
+            e,
         )
+        gemini_model = _get_gemini_model(temperature=0.0)
+        if gemini_model and not isinstance(model, ChatGoogleGenerativeAI):
+            try:
+                intents = await _classify_with_model(gemini_model, classify_messages)
+                logger.info("[Supervisor] Classified intents via Gemini fallback: %s", intents)
+                return intents
+            except Exception as fb_err:
+                logger.error("[Supervisor] Gemini fallback classifier also failed: %s", fb_err)
 
-    try:
-        result = await model.ainvoke(classify_messages)
-        if isinstance(result.content, str):
-            text_content = result.content
-        elif isinstance(result.content, list):
-            text_content = "".join(
-                b.get("text", "") if isinstance(b, dict) else str(b) for b in result.content
-            )
-        else:
-            text_content = str(result.content)
-
-        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text_content.strip(), flags=re.MULTILINE).strip()
-        parsed = json.loads(cleaned)
-
-        raw_intents = parsed.get("intents")
-        if not raw_intents:
-            single = parsed.get("intent")
-            raw_intents = [single] if single else ["booking"]
-        elif isinstance(raw_intents, str):
-            raw_intents = [raw_intents]
-
-        valid_intents = [i for i in raw_intents if i in ("booking", "faq", "handoff")]
-        if not valid_intents:
-            valid_intents = ["booking"]
-
-        logger.info("[Supervisor] Classified intents via fallback: %s", valid_intents)
-        return valid_intents
-    except Exception as fe:
-        logger.warning(
-            "[Supervisor] All intent classification attempts failed (%s) → defaulting to ['booking']", fe
-        )
         return ["booking"]
 

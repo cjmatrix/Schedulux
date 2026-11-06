@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import secrets
 from datetime import UTC, datetime
@@ -43,12 +44,14 @@ async def node_load_draft(state: GraphState) -> dict:
         "decision": None,
         "pending_draft_update": None,
         "patch_retries": 0,
+        "react_step_count": 0,
     }
 
 
 async def node_llm_semantic_review(state: GraphState) -> dict:
     llm = _get_llm().with_structured_output(SemanticAction)
 
+    print(_format_draft_toon(state["draft"]),flush=True)
     all_msgs = state.get("messages", [])
     history_msgs = all_msgs
 
@@ -67,6 +70,12 @@ async def node_llm_semantic_review(state: GraphState) -> dict:
     last_msg = all_msgs[-1] if all_msgs else None
     is_system_feedback = isinstance(last_msg, SystemMessage)
     system_feedback_text = str(last_msg.content) if isinstance(last_msg, SystemMessage) else ""
+
+    obs_block = ""
+    for m in reversed(all_msgs):
+        if isinstance(m, SystemMessage) and "[SYSTEM OBSERVATION" in str(m.content):
+            obs_block = f"\n*** POST-UPDATE CANVAS OBSERVATION (GROUND TRUTH) ***\n{m.content}\n"
+            break
 
     _early_draft = state.get("draft", {})
     _early_gaps = _compute_structural_gaps(_early_draft)
@@ -183,7 +192,7 @@ SUGGESTION TIMING RULES:
     prompt = f"""You are the Schedulux Lead Booking Architect & Business Mentor.
 Your mission is to collaborate with business owners (doctors, tailors, salon owners, mechanics, hoteliers, consultants) to design, configure, and refine their automated AI booking receptionist.
 You are NOT a bureaucratic form-filler; you are an experienced operations partner who understands how appointments and client workflows operate in the real world.
-{summary_block}{facts_block}{gaps_block}{optional_features_block}
+{summary_block}{facts_block}{gaps_block}{obs_block}{optional_features_block}
 
 CORE ARCHITECTURAL ROLES & INTENT DISPATCH:
 Whenever the user speaks, analyze their intent into one of these 3 operational modes:
@@ -216,6 +225,13 @@ MODE 3: ADVICE & POLICY INQUIRIES
 - Behavior: Give balanced, experienced industry recommendations (pros vs. cons), explain how other businesses in their vertical handle it, and offer to configure the recommended option for them.
 
 CRITICAL RULES FOR REASONING & ACTIONS:
+0. RE-ACT EVALUATION & CANVAS GROUNDING:
+   - When *** POST-UPDATE CANVAS OBSERVATION (GROUND TRUTH) *** is present above:
+     * This observation reflects the exact current state of the draft canvas.
+     * Check if any services, resources, or policies the user asked for are STILL MISSING from the canvas.
+     * If items are missing: Choose 'update_schema' and emit ONLY the missing entities/fields in `draft_update`.
+     * If ALL requested items are confirmed present on the canvas: Choose 'ask_user' (or 'finalize' if explicitly commanded).
+     * In `question`, describe ONLY what is genuinely verified on the canvas. NEVER claim something is added unless you verify it in the canvas observation!
 1. NEVER FINALIZE / NEVER SAVE TO RUNTIME CONFIG WITHOUT EXPLICIT USER COMMAND:
    - YOU ARE STRICTLY FORBIDDEN from choosing 'finalize' or executing final saving to live AgentRuntimeConfig autonomously, even if all configuration checklist items are 100% complete!
    - Finalizing pushes the agent directly to live customers. You must NEVER deploy autonomously.
@@ -280,7 +296,7 @@ DOMAIN INTEGRITY & DEPENDENCY RULES:
 4. HEALTHCARE / HIPAA PRIVACY GUARDRAILS:
    - For healthcare, medical, or dental clinics, ensure `guardrails.phi_scrubbing.enabled` is True so patient health information is automatically redacted.
 5. SERVICES & RESOURCES (AUTOMATIC SYSTEM ID CREATION):
-   - NEVER ASK THE USER FOR A `resource_id` OR `service_id`: End-users speak naturally (e.g. "Add Dr. Shijisha", "she is a staff add her", "Add Deep Cleaning"). Internal technical slugs like `res_...` and `srv_...` are system-managed.
+   - NEVER ASK THE USER FOR A `resource_id` OR `service_id`: End-users speak naturally (e.g. "Add Dr. Shijisha", "she is a staff add her", "Add Deep Cleaning"). Internal technical slugs like `res_...` and `srv_...` are system-managed. The backend automatically assigns permanent unique semantic IDs with entropy (e.g. res_shijisha_a8f9c1). You can leave resource_id/service_id omitted or provide a slug; the backend guarantees canonical IDs.
    - ALWAYS automatically derive IDs yourself from entity names:
      * For resources: "res_" + sanitized name (e.g., "Dr. Shijisha" -> `res_shijisha`, "Nurse Bob" -> `res_nurse_bob`, "Chair 1" -> `res_chair_1`).
      * For services: "srv_" + sanitized name (e.g., "Deep Cleaning" -> `srv_deep_cleaning`).
@@ -371,7 +387,7 @@ CRITICAL: When generating `draft_update`, adhere strictly to the MINIMAL DELTA r
 Provide a structured partial configuration using ONLY the specific section(s) being modified right now:
 - business_profile: (ONLY if modifying profile) name, vertical, timezone, locale, currency, address, contact, terminology, brand
 - services[]: (ONLY changed or newly added services) service_id, name, category, description, duration_minutes, buffer_minutes, booking_mode ("time_slot"|"date_range"), price, deposit, verification, resource_requirements, is_deleted
-- resources[]: (ONLY changed or newly added resources) resource_id, resource_type (staff|room|chair|bay|equipment|asset|vehicle), name, title, category, description, is_bookable, dispatch_status (active|on_leave|maintenance|retired|inactive), custom_shift_overrides, is_deleted
+- resources[]: (ONLY changed or newly added resources) resource_id, resource_type (staff|room|chair|bay|equipment|asset|vehicle), name, title, category, description, is_bookable, dispatch_status (active|on_leave|maintenance|retired|inactive), custom_shift_overrides (e.g. {{"friday": [{{"start": "09:00", "end": "12:00"}}], "saturday": []}}), is_deleted
 - operating_hours: (ONLY if changing schedule) monday, tuesday, wednesday, thursday, friday, saturday, sunday (each is list of {{start: "HH:MM", end: "HH:MM"}}), blackout_dates (list of {{date: "YYYY-MM-DD", reason, is_closed}})
 - scheduling_engine: (ONLY if changing engine settings) booking_mode ("time_slot"|"date_range"), default_lead_time_hours, max_advance_booking_days, cancellation_window_hours, hold_duration_minutes
 - widget_config: (ONLY if changing widget styling) agent_name, avatar_url, initial_greeting, fallback_message, position, launcher_style, sound_on_load, auto_expand_delay_seconds, platform_sources, whitelisted_domains
@@ -436,9 +452,7 @@ CRITICAL OUTPUT RULE — QUESTION FIELD IS MANDATORY:
     except Exception as e:
         print(f"[Semantic Agent Error] {e}", flush=True)
 
-        gemini_api_key = (
-            os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or ""
-        )
+        gemini_api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or ""
         if gemini_api_key:
             try:
                 print("[Semantic Agent] Attempting fallback to Gemini...", flush=True)
@@ -547,13 +561,40 @@ async def node_apply_draft_update(state: GraphState) -> dict:
             except Exception as re:
                 print(f"[Patch Node] Redis cache write warning: {re}", flush=True)
 
+        step_count = state.get("react_step_count", 0) + 1
+        gaps = _compute_structural_gaps(updated_draft)
+        gap_fields = [g["field"] for g in gaps]
+
+        try:
+            patch_json = json.dumps(draft_update, indent=2, default=str)
+        except Exception:
+            patch_json = str(draft_update)
+
+        obs_msg = SystemMessage(
+            content=(
+                f"[SYSTEM OBSERVATION - STEP {step_count}]:\n"
+                f"Action 'update_schema' applied to draft canvas successfully.\n\n"
+                f"APPLIED JSON PATCH:\n{patch_json}\n\n"
+                f"REMAINING DEPLOYMENT CHECKLIST GAPS ({len(gap_fields)}):\n{gap_fields}\n\n"
+                f"EVALUATION INSTRUCTION:\n"
+                f"Compare the user's latest request against the APPLIED JSON PATCH above:\n"
+                f"- If any items, services, staff, or policy changes requested by the user are missing or only partially applied in the patch, emit an 'update_schema' action with the missing fields now.\n"
+                f"- If all requested updates are confirmed present in the patch or canvas, choose 'ask_user' (or 'finalize' if explicitly commanded) and summarize the verified updates for the user."
+            )
+        )
+
+        MAX_REACT_STEPS = 2
+        decision = "ask_user" if step_count >= MAX_REACT_STEPS else "evaluate"
+
         return {
             "draft": updated_draft,
-            "decision": "ask_user",
+            "decision": decision,
             "pending_draft_update": None,
             "patch_retries": 0,
-            "structural_gaps": _compute_structural_gaps(updated_draft),
+            "react_step_count": step_count,
+            "structural_gaps": gaps,
             "semantic_note": state.get("semantic_note"),
+            "messages": [obs_msg],
         }
     except Exception as e:
         retries = state.get("patch_retries", 0) + 1
@@ -576,7 +617,7 @@ async def node_apply_draft_update(state: GraphState) -> dict:
                 ),
             }
         return {
-            "decision": None,
+            "decision": "evaluate",
             "pending_draft_update": None,
             "patch_retries": retries,
             "messages": [
@@ -771,7 +812,7 @@ def route_semantic(state: GraphState) -> str:
         if gaps:
             return "block_incomplete_finalize"
 
-        # Programmatic guardrail: NEVER finalize and save without explicit user confirmation
+      
         last_msgs = state.get("messages", [])
         last_user_text = ""
         for m in reversed(last_msgs):
@@ -809,7 +850,6 @@ def route_semantic(state: GraphState) -> str:
 
 
 def route_after_patch(state: GraphState) -> str:
-    if state.get("decision") == "ask_user":
+    if state.get("decision") == "ask_user" or state.get("react_step_count", 0) >= 2:
         return "ask_human_semantic"
     return "llm_semantic_review"
-

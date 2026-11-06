@@ -174,21 +174,63 @@ async def check_availability(
     )
 
 
+async def _check_session_verified(session_id: str | None, phone: str | None) -> bool:
+    """Check if a session is verified for the given phone number via Redis (authoritative session store)."""
+    if not session_id or not phone:
+        return False
+    cleaned_phone = phone.strip()
+    if not cleaned_phone:
+        return False
+    return await is_session_verified(session_id, cleaned_phone)
+
+
 @mcp.tool()
 async def send_booking_otp(
     tenant_id: str,
     agent_id: str,
     phone: str,
+    session_id: str | None = None,
 ) -> str:
+    """Send a 6-digit verification code to a customer's phone number via SMS.
+
+    If session_id is provided and the session is ALREADY verified for this customer,
+    sending OTP is automatically skipped, and status 'already_verified' is returned.
+
+    Args:
+        tenant_id: The ID of the business/tenant.
+        agent_id: The ID of the agent managing the business.
+        phone: Customer mobile phone number.
+        session_id: Optional active chat session ID (e.g. sandbox_... or web session).
+    """
     logger.info(
-        "[MCP Tool: send_booking_otp] Invoked with arguments: tenant_id=%s, agent_id=%s, phone=%s",
+        "[MCP Tool: send_booking_otp] Invoked with arguments: tenant_id=%s, agent_id=%s, phone=%s, session_id=%s",
         tenant_id,
         agent_id,
         phone,
+        session_id,
     )
     cleaned_phone = phone.strip()
     if not cleaned_phone:
         return json.dumps({"status": "failed", "message": "Valid phone number is required."})
+
+    if session_id and await _check_session_verified(session_id, cleaned_phone):
+        logger.info(
+            "[MCP Tool send_booking_otp] Session %s is ALREADY VERIFIED for phone %s. Skipping OTP dispatch.",
+            session_id,
+            cleaned_phone,
+        )
+        return json.dumps(
+            {
+                "status": "already_verified",
+                "phone": cleaned_phone,
+                "session_id": session_id,
+                "message": (
+                    f"Customer phone {cleaned_phone} in session {session_id} is ALREADY VERIFIED. "
+                    "Do NOT ask the customer for a code or send another OTP! "
+                    "Immediately call book_appointment (or reschedule/cancel) directly."
+                ),
+            }
+        )
 
     code = f"{secrets.randbelow(900000) + 100000}"
     await store_otp(cleaned_phone, code, ttl=300)
@@ -377,7 +419,7 @@ async def book_appointment(
     )
 
     if requires_otp:
-        is_verified = await is_session_verified(session_id, customer_phone) if session_id else False
+        is_verified = await _check_session_verified(session_id, customer_phone)
         if not is_verified:
             return json.dumps(
                 {
@@ -484,7 +526,7 @@ async def cancel_appointment(
         reason,
     )
 
-    is_verified = await is_session_verified(session_id, customer_phone) if session_id else False
+    is_verified = await _check_session_verified(session_id, customer_phone)
 
     if not is_verified:
         if customer_phone:
@@ -572,7 +614,7 @@ async def reschedule_appointment(
         notes,
     )
 
-    is_verified = await is_session_verified(session_id, customer_phone) if session_id else False
+    is_verified = await _check_session_verified(session_id, customer_phone)
 
     if not is_verified:
         if customer_phone:
@@ -681,7 +723,7 @@ async def get_customer_bookings(
             }
         )
 
-    verified = await is_session_verified(session_id, cleaned_phone)
+    verified = await _check_session_verified(session_id, cleaned_phone)
     if not verified:
         logger.warning(
             "[MCP Security Gatekeeper] Blocked unauthorized booking lookup for session=%s, phone=%s",

@@ -12,7 +12,7 @@ export const CreateBookingDtoSchema = z.object({
   customer_phone: z.string().min(1, 'customer_phone is required').trim(),
   customer_email: z.string().email('Invalid email address').optional().or(z.literal('')).or(z.null()),
   notes: z.string().optional(),
-  source: z.enum(['manual', 'customer_agent', 'web_portal']).optional().default('manual'),
+  source: z.enum(['manual', 'customer_agent', 'web_portal', 'sandbox_simulation']).optional().default('manual'),
   deposit_status: z.enum(['not_required', 'pending', 'verified', 'waived']).optional(),
   created_by: z.string().optional(),
 });

@@ -179,6 +179,14 @@ Operating Hours & Schedule:
    - ALWAYS distinguish between human personnel (`type: staff`, e.g. Arun GP, Mithul GP) and physical facilities/assets (`type: bay`, `room`, `chair`, `equipment`, e.g. Wash Bay 1).
    - Facilities (like bays or rooms) are automated backend equipment assignments. You must NEVER speak to the customer as if the facility is a person! (e.g. NEVER say: "with Wash Bay 1" or "Wash Bay 1 will perform your service").
    - If a customer asks who is doing the service, refer to the human staff technician (e.g. "Arun GP") who operates at that facility, or say "our technician / our team".
+7. ZERO REDUNDANT OTP / RE-VERIFICATION FOR ACTIVE VERIFIED SESSIONS:
+   - When [Active Request Context] contains `Verification Status: VERIFIED` or an `[Authenticated Customer Profile]`:
+     The customer's phone number is ALREADY 100% verified for this active session.
+     You are STRICTLY FORBIDDEN from calling `send_booking_otp` or asking the customer for an OTP code again!
+   - ERROR RETRIES RETAIN AUTHENTICATION:
+     If a previous `book_appointment` call failed due to a backend system or validation error, and the user asks to "try again" or replies "yes":
+     NEVER re-send OTP or claim the verification code expired! The session remains 100% VERIFIED!
+     Immediately execute `book_appointment` directly with their confirmed details and verified phone number!
 
 [Standard Conversational Booking Funnel (Follow Step-by-Step)]
 When a customer wants to schedule or book an appointment, guide them strictly through these sequential phases:
@@ -207,6 +215,8 @@ Phase 4 — Execution & Security Verification:
 - Always pass the `session_id`, `tenant_id`, and `agent_id` from [Active Request Context] into `book_appointment`.
 - If `book_appointment` returns `status: "requires_verification"`:
   Immediately trigger the OTP Protocol below (`send_booking_otp` -> prompt user for code -> `verify_booking_otp` -> retry `book_appointment`).
+- If `book_appointment` returns `status: "failed"`:
+  Politely explain the issue. If the customer wants to retry or replies "yes", DO NOT ask for OTP again if the session is already verified! Re-execute `book_appointment` directly.
 - Once confirmed: share the booking reference code and present the appointment date and time in the customer's local business timezone using `start_time_local`.
 
 [Scheduling Engine Rules]
@@ -220,8 +230,11 @@ Phase 4 — Execution & Security Verification:
 3. New Bookings: {'Requires OTP verification before confirmation.' if require_otp_new else 'Direct booking permitted unless the specific service requires deposit/verification.'}
 4. OTP Protocol:
    - When verification is required (or when a tool returns `requires_verification`):
-     Call `send_booking_otp(phone=customer_phone, tenant_id=..., agent_id=...)`.
-     Ask the customer politely: "For security and privacy, I've sent a 6-digit verification code to [phone]. Please reply with the code to proceed."
+     Call `send_booking_otp(phone=customer_phone, session_id=session_id, tenant_id=..., agent_id=...)`.
+     - If `send_booking_otp` returns `status: "already_verified"`:
+       The customer's session is ALREADY verified! Do NOT ask for OTP or code. Immediately call `book_appointment` (or reschedule/cancel).
+     - If `send_booking_otp` returns `status: "sent"`:
+       Ask the customer politely: "For security and privacy, I've sent a 6-digit verification code to [phone]. Please reply with the code to proceed."
    - When customer shares any 6-digit code:
      You MUST invoke `verify_booking_otp(phone=customer_phone, code=user_code, session_id=..., tenant_id=..., agent_id=...)`.
    - If `verify_booking_otp` returns `status: "failed"`:
@@ -272,9 +285,10 @@ def _build_booking_request_context(
 {name_line}Verified Phone: {auth_phone}
 Verification Status: VERIFIED
 Instructions for Authenticated Customer:
-- This customer has already verified their phone via OTP. Do NOT ask them for an OTP code again.
+- This customer has ALREADY verified their phone via OTP for this active session.
+- You are STRICTLY FORBIDDEN from calling send_booking_otp or asking them for an OTP code again!
 - When they want to book, view appointments, cancel, or reschedule, use their verified phone ({auth_phone}).
-- ALWAYS confirm with the customer before finalizing: "Shall I proceed under {auth_name or 'your phone'} ({auth_phone})?"
+- If they are continuing or retrying a booking (or replying 'yes' after a previous attempt), DO NOT ask for verification or confirmation; execute book_appointment immediately!
 """
 
     return f"""[Active Request Context]

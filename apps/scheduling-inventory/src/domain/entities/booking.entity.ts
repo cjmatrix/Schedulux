@@ -2,7 +2,7 @@ import { DepositVO } from '../value-objects/deposit.vo.js';
 import { PriceVO } from '../value-objects/price.vo.js';
 
 export type BookingMode = 'time_slot' | 'date_range';
-export type BookingSource = 'manual' | 'customer_agent' | 'web_portal';
+export type BookingSource = 'manual' | 'customer_agent' | 'web_portal' | 'sandbox_simulation';
 export type BookingStatus = 'confirmed' | 'pending_deposit' | 'cancelled' | 'completed' | 'no_show';
 export type BookingDepositStatus = 'not_required' | 'pending' | 'verified' | 'waived';
 

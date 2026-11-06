@@ -1,5 +1,6 @@
 import type { BookingInfo, ResourceInfo, ServiceInfo } from '@repo/proto/scheduling';
 import {
+  Bot,
   CalendarX,
   Clock,
   Globe,
@@ -69,6 +70,11 @@ export function BookingDetailsModal({
         return {
           label: 'AI Voice Agent',
           icon: <PhoneCall className="w-3.5 h-3.5 text-indigo-600" />,
+        };
+      case 'sandbox_simulation':
+        return {
+          label: 'Sandbox Simulation',
+          icon: <Bot className="w-3.5 h-3.5 text-purple-600" />,
         };
       case 'web_portal':
         return {
@@ -210,8 +216,8 @@ export function BookingDetailsModal({
             </div>
           )}
 
-          {/* AI Transcript Summary if from voice agent */}
-          {booking.source === 'customer_agent' && (
+          {/* AI Transcript Summary if from voice agent or sandbox simulation */}
+          {(booking.source === 'customer_agent' || booking.source === 'sandbox_simulation') && (
             <div className="p-3.5 bg-indigo-50/60 border border-indigo-100 rounded-2xl text-xs text-indigo-900 space-y-1">
               <div className="flex items-center gap-1.5 font-bold">
                 <Sparkles className="w-3.5 h-3.5 text-indigo-600" />

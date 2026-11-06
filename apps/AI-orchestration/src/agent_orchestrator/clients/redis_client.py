@@ -157,16 +157,16 @@ async def get_session_auth(session_id: str) -> dict[str, Any] | None:
 
 
 async def is_session_verified(session_id: str, phone: str | None = None) -> bool:
+    if not session_id or not phone:
+        return False
     auth = await get_session_auth(session_id)
     if not auth or not auth.get("is_verified"):
         return False
-    if phone:
-        target_clean = "".join(ch for ch in phone if ch.isdigit())
-        auth_clean = "".join(ch for ch in str(auth.get("phone", "")) if ch.isdigit())
-        if len(target_clean) >= 10 and len(auth_clean) >= 10:
-            return target_clean[-10:] == auth_clean[-10:]
-        return bool(target_clean and auth_clean and target_clean == auth_clean)
-    return True
+    target_clean = "".join(ch for ch in phone if ch.isdigit())
+    auth_clean = "".join(ch for ch in str(auth.get("phone", "")) if ch.isdigit())
+    if len(target_clean) >= 10 and len(auth_clean) >= 10:
+        return target_clean[-10:] == auth_clean[-10:]
+    return bool(target_clean and auth_clean and target_clean == auth_clean)
 
 
 MAX_OTP_ATTEMPTS = 5

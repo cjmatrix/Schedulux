@@ -1,5 +1,6 @@
 import type { BookingInfo, ResourceInfo, ServiceInfo } from '@repo/proto/scheduling';
 import {
+  Bot,
   CalendarDays,
   CalendarX,
   CheckCircle2,
@@ -82,6 +83,11 @@ export function BookingsTableView({
         return {
           label: 'AI Voice Agent',
           icon: <PhoneCall className="w-3 h-3 text-indigo-600" />,
+        };
+      case 'sandbox_simulation':
+        return {
+          label: 'Sandbox Simulation',
+          icon: <Bot className="w-3 h-3 text-purple-600" />,
         };
       case 'web_portal':
         return {

@@ -74,7 +74,7 @@ export const BookingMongooseSchema = new Schema<IBookingDoc>(
     duration_minutes: { type: Number, required: true, min: 0 },
     source: {
       type: String,
-      enum: ['manual', 'customer_agent', 'web_portal'],
+      enum: ['manual', 'customer_agent', 'web_portal', 'sandbox_simulation'],
       default: 'manual',
       index: true,
     },

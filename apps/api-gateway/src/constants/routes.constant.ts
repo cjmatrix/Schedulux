@@ -57,6 +57,7 @@ export const API_ROUTES = {
     ROOT: '',
     INIT: 'init',
     MESSAGES: 'messages',
+    CONFIG: 'config',
   },
   KNOWLEDGE: {
     BASE: 'api/v1/tenant/knowledge',
@@ -68,6 +69,7 @@ export const API_ROUTES = {
     ONBOARDING_SANDBOX: 'onboarding/sandbox',
     ONBOARDING_SANDBOX_INIT: 'onboarding/sandbox/init',
     ONBOARDING_SANDBOX_MESSAGES: 'onboarding/sandbox/messages',
+    ONBOARDING_SANDBOX_CONFIG: 'onboarding/sandbox/config',
     AGENTS_DRAFT: 'agents/draft',
     AGENTS: 'agents',
     AGENT_MESSAGES: 'agents/:agentId/messages',

@@ -51,7 +51,8 @@ export default function CustomersPage() {
 
   const rawCustomers = customersResponse?.data || [];
   const total = customersResponse?.pagination?.total ?? 0;
-  const totalPages = customersResponse?.pagination?.total_pages ?? Math.max(1, Math.ceil(total / limit));
+  const totalPages =
+    customersResponse?.pagination?.total_pages ?? Math.max(1, Math.ceil(total / limit));
 
   const filteredCustomers = rawCustomers.filter((c) => {
     if (statusFilter === 'verified') return !c.is_guest;
@@ -141,7 +142,9 @@ export default function CustomersPage() {
           disabled={isLoading || isRefetching}
           className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200/90 rounded-2xl hover:bg-slate-50 hover:border-slate-300 transition shadow-2xs cursor-pointer disabled:opacity-50"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-emerald-600' : 'text-slate-500'}`} />
+          <RefreshCw
+            className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-emerald-600' : 'text-slate-500'}`}
+          />
           <span>Refresh</span>
         </button>
       </div>
@@ -149,7 +152,9 @@ export default function CustomersPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Customers</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              Total Customers
+            </p>
             <p className="text-2xl font-black text-slate-900 mt-1">{total}</p>
           </div>
           <div className="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-600 font-bold">
@@ -159,7 +164,9 @@ export default function CustomersPage() {
 
         <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Verified Clients</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              Verified Clients
+            </p>
             <p className="text-2xl font-black text-emerald-600 mt-1">{verifiedCount}</p>
           </div>
           <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
@@ -169,7 +176,9 @@ export default function CustomersPage() {
 
         <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Guest Visitors</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              Guest Visitors
+            </p>
             <p className="text-2xl font-black text-amber-600 mt-1">{guestCount}</p>
           </div>
           <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">

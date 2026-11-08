@@ -193,28 +193,32 @@ export default function BookingsPage() {
 
         <div className="flex items-center gap-2.5">
           <div className="flex items-center bg-white border border-slate-200/90 rounded-full p-1 shadow-2xs">
-            {false&&<button
-              type="button"
-              onClick={() => setViewMode('list')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                viewMode === 'list'
-                  ? 'bg-slate-950 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              List View
-            </button>}
-            {false&&<button
-              type="button"
-              onClick={() => setViewMode('calendar')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                viewMode === 'calendar'
-                  ? 'bg-slate-950 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Calendar View
-            </button>}
+            {false && (
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                  viewMode === 'list'
+                    ? 'bg-slate-950 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                List View
+              </button>
+            )}
+            {false && (
+              <button
+                type="button"
+                onClick={() => setViewMode('calendar')}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                  viewMode === 'calendar'
+                    ? 'bg-slate-950 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Calendar View
+              </button>
+            )}
           </div>
 
           <button

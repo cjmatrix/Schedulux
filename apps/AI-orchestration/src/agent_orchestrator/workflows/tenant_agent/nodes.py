@@ -51,7 +51,7 @@ async def node_load_draft(state: GraphState) -> dict:
 async def node_llm_semantic_review(state: GraphState) -> dict:
     llm = _get_llm().with_structured_output(SemanticAction)
 
-    print(_format_draft_toon(state["draft"]),flush=True)
+    print(_format_draft_toon(state["draft"]), flush=True)
     all_msgs = state.get("messages", [])
     history_msgs = all_msgs
 
@@ -174,9 +174,10 @@ These features are fully configurable and can dramatically improve the user's bo
    - Ask: "If the AI can't handle a query, should it transfer the customer to a human? (e.g. for complex cases or emergencies)"
    - Fields: enabled, trigger_topics, reception_contact, handoff_message.
 
-6. WIDGET CUSTOMISATION (widget_config):
-   - Ask: "Would you like to customise the booking widget? (e.g. chatbot name, greeting message, brand color, or which platforms to enable it on)"
-   - Fields: agent_name, initial_greeting, fallback_message, primary_color, platform_sources.
+6. WIDGET CUSTOMISATION & BRANDING (widget_config):
+   - Ask: "Would you like to customize the chat booking widget's appearance? (e.g. chatbot name, greeting message, theme color palette, launcher style, or opening delay)"
+   - Relevant when: business profile and core services are configured, allowing the business owner to brand their customer-facing chat widget.
+   - Fields: agent_name, agent_subtitle, avatar_url, logo_url, initial_greeting, placeholder_text, quick_prompts, fallback_message, position, bottom_spacing_px, side_spacing_px, launcher_style, launcher_icon, sound_on_load, auto_expand_delay_seconds, platform_sources, whitelisted_domains, theme (primary_color, secondary_color, background_color, header_background, header_text_color, user_bubble_bg, user_bubble_text, agent_bubble_bg, agent_bubble_text, border_radius, font_family, theme_mode).
 
 7. SUPERVISOR / CUSTOM AI INSTRUCTIONS (supervisor_prompt):
    - Ask: "Do you want to give the AI any special instructions? (e.g. 'Always upsell the premium package' or 'Never book Sundays')"
@@ -382,15 +383,114 @@ DOMAIN INTEGRITY & DEPENDENCY RULES:
    - Schedulux requires standard IANA timezone identifiers (e.g., "Asia/Kolkata", "America/New_York", "America/Los_Angeles", "Europe/London", "Asia/Dubai", etc.).
    - If the user mentions a location, state, city, or local timezone acronym (e.g., "we're in California", "Mumbai", "London", "EST", "IST"), map it to the proper IANA timezone (e.g. "America/Los_Angeles", "Asia/Kolkata", "Europe/London", "America/New_York") and include `business_profile: {{"timezone": "..."}}` in `draft_update`.
    - Timezone is a mandatory deployment item: if `business_profile.timezone` is missing from the checklist, actively ask the user what timezone their business operates in before finalizing.
+9. WIDGET CONFIGURATION & COHESIVE THEME HARMONIZATION (widget_config):
+   When configuring or updating the customer booking widget, you have full control over both functional widget behavior and its complete visual theme design:
+
+   A. WIDGET FUNCTIONAL & BEHAVIORAL FIELDS:
+      • agent_name (str): The public display name of the assistant shown in the header and message bubbles (e.g. "Nano Carwash Concierge", "Apex Health Assistant").
+      • agent_subtitle (str): Status / availability subtitle beneath the name (e.g. "Typically replies in seconds", "Online Booking Assistant").
+      • avatar_url (str): Public image URL for the agent's circular avatar.
+      • logo_url (str): Public image URL for the business logo shown in the header.
+      • initial_greeting (str): The opening message automatically displayed in the chat window when a customer opens it (e.g. "Hello! Welcome to Nano Carwash. How can I help you book today?").
+      • placeholder_text (str): Placeholder prompt inside the chat input box (e.g. "Type a message or select a service...").
+      • quick_prompts (list of str): 2 to 4 interactive clickable starter chips (e.g. ["Book a Car Wash", "Check available times", "Our pricing"]).
+      • fallback_message (str): Friendly fallback message if an unexpected network or server error occurs.
+      • position (str): Screen placement of the floating widget launcher button ("bottom-right", "bottom-left", "top-right", "top-left").
+      • bottom_spacing_px (int): Vertical distance in pixels from the bottom edge of the screen (default: 20).
+      • side_spacing_px (int): Horizontal distance in pixels from the side edge of the screen (default: 20).
+      • launcher_style (str): The shape and visual style of the launcher button:
+        - "bubble": Circular floating action button with icon (58x58px).
+        - "pill": Elongated rounded pill button with icon and label text.
+        - "bar": Sleek compact rounded horizontal bar.
+      • launcher_icon (str): Icon glyph rendered inside the launcher button ("chat", "calendar", "help").
+      • sound_on_load (bool): True to play a subtle audio chime when the chat widget loads, False otherwise.
+      • auto_expand_delay_seconds (int | null): Seconds to wait before automatically expanding the chat window on desktop (e.g. 5, or null to stay minimized until clicked).
+      • platform_sources (list of str): Enabled platforms/channels (e.g. ["web", "whatsapp", "instagram"]).
+      • whitelisted_domains (list of str): Domains authorized to embed the widget (e.g. ["example.com"]).
+
+   B. COMPREHENSIVE THEME FIELDS (theme):
+      • primary_color (hex str): The primary brand signature color. Used for primary accents, launcher button background, and key highlights (e.g. Emerald "#059669", Cobalt "#2563EB", Amber "#D97706", Rose "#E11D48", Dark Slate "#0F172A").
+      • secondary_color (hex str): Complementary accent or hover/active state color (e.g. "#10B981" for emerald, "#3B82F6" for cobalt, "#F59E0B" for amber).
+      • background_color (hex str): Background color of the main chat window body. Crisp white ("#FFFFFF") or soft tint in light mode; deep slate/obsidian ("#0F172A", "#111827") in dark mode.
+      • header_background (hex str): Background of the top header bar. Typically matches primary_color, a rich deep tone of the theme (e.g. "#047857" for emerald, "#1E40AF" for navy), or modern dark slate ("#0F172A").
+      • header_text_color (hex str): Color of text and icons inside the header. MUST have high WCAG contrast against header_background (e.g. "#FFFFFF" for dark/saturated headers; "#111827" for light headers).
+      • user_bubble_bg (hex str): Background color of customer/user message bubbles. Typically matches primary_color (e.g. "#059669") or a rich brand tone.
+      • user_bubble_text (hex str): Text color inside user message bubbles. MUST have high contrast against user_bubble_bg (e.g. "#FFFFFF").
+      • agent_bubble_bg (hex str): Background color of receptionist/agent message bubbles. In light mode: a soft, subtle pastel tint harmonious with the theme (e.g. light mint "#F0FDF4" for green theme, ice blue "#EFF6FF" for blue theme, warm cream "#FEF3C7" for gold theme, soft lavender "#F5F3FF" for purple theme, or clean neutral "#F1F5F9"). In dark mode: elevated dark surface ("#1F2937", "#1E293B").
+      • agent_bubble_text (hex str): Text color inside agent bubbles. MUST have crisp, legible contrast against agent_bubble_bg (e.g. deep pine "#064E3B" for green theme, deep navy "#1E3A8A" for blue theme, "#111827" for neutral light mode, "#F8FAFC" for dark mode).
+      • border_radius (str): Corner curvature of the widget window, message bubbles, and inputs (e.g. "16px" for modern smooth default, "12px" for corporate clean, "24px" for ultra-rounded friendly, "8px" for compact/sharp).
+      • font_family (str): CSS font family stack (e.g. "inherit", "Inter, system-ui, sans-serif", "Plus Jakarta Sans, sans-serif", "system-ui, -apple-system, sans-serif").
+      • theme_mode (str): Overall widget visual mode ("light", "dark", "auto").
+
+   C. CRITICAL THEME HARMONIZATION DIRECTIVE (NEVER CHANGE JUST PRIMARY COLOR IN ISOLATION):
+      Whenever the user asks to change or set a theme color or visual style (e.g., "make green color themed agent", "change theme to blue", "give it a dark luxury theme", "make it purple", "sunset orange theme"):
+      - YOU ARE STRICTLY FORBIDDEN from merely setting `primary_color` while leaving other theme fields untouched or mismatched!
+      - You MUST comprehensively adjust and harmonize EVERY aspect of `widget_config.theme` so the entire widget looks professionally designed, cohesive, and visually stunning.
+      - Always emit all 12 theme fields together in `widget_config.theme`:
+        1. primary_color: Signature brand color.
+        2. secondary_color: Complementary supporting accent.
+        3. background_color: Clean body canvas background.
+        4. header_background: Deep/rich header banner background.
+        5. header_text_color: High contrast header text.
+        6. user_bubble_bg: User message bubble background.
+        7. user_bubble_text: User message bubble text color.
+        8. agent_bubble_bg: Soft, pastel-tinted agent bubble background harmonized with the theme.
+        9. agent_bubble_text: High contrast readable agent bubble text.
+        10. border_radius: Consistent border curvature.
+        11. font_family: Clean typography.
+        12. theme_mode: "light", "dark", or "auto".
+
+      CURATED HARMONIOUS COLOR RECIPES:
+      • Green / Emerald (e.g. "make green color themed agent", "mint green", "eco / nature"):
+        primary_color: "#059669", secondary_color: "#10B981", background_color: "#FFFFFF",
+        header_background: "#047857", header_text_color: "#FFFFFF",
+        user_bubble_bg: "#059669", user_bubble_text: "#FFFFFF",
+        agent_bubble_bg: "#F0FDF4", agent_bubble_text: "#064E3B",
+        border_radius: "16px", font_family: "inherit", theme_mode: "light"
+
+      • Blue / Ocean / Corporate (e.g. "blue theme", "navy blue", "medical / clinic"):
+        primary_color: "#2563EB", secondary_color: "#3B82F6", background_color: "#FFFFFF",
+        header_background: "#1E40AF", header_text_color: "#FFFFFF",
+        user_bubble_bg: "#2563EB", user_bubble_text: "#FFFFFF",
+        agent_bubble_bg: "#EFF6FF", agent_bubble_text: "#1E3A8A",
+        border_radius: "16px", font_family: "inherit", theme_mode: "light"
+
+      • Dark Luxury / Gold (e.g. "dark gold theme", "luxury spa", "executive salon"):
+        primary_color: "#D97706", secondary_color: "#F59E0B", background_color: "#0F172A",
+        header_background: "#1E293B", header_text_color: "#F8FAFC",
+        user_bubble_bg: "#D97706", user_bubble_text: "#FFFFFF",
+        agent_bubble_bg: "#1E293B", agent_bubble_text: "#F1F5F9",
+        border_radius: "18px", font_family: "inherit", theme_mode: "dark"
+
+      • Purple / Violet / Boutique (e.g. "purple theme", "lavender", "beauty / salon"):
+        primary_color: "#7C3AED", secondary_color: "#8B5CF6", background_color: "#FFFFFF",
+        header_background: "#5B21B6", header_text_color: "#FFFFFF",
+        user_bubble_bg: "#7C3AED", user_bubble_text: "#FFFFFF",
+        agent_bubble_bg: "#F5F3FF", agent_bubble_text: "#4C1D95",
+        border_radius: "16px", font_family: "inherit", theme_mode: "light"
+
+      • Rose / Crimson / Aesthetics (e.g. "rose theme", "red / pink", "wellness"):
+        primary_color: "#E11D48", secondary_color: "#F43F5E", background_color: "#FFFFFF",
+        header_background: "#BE123C", header_text_color: "#FFFFFF",
+        user_bubble_bg: "#E11D48", user_bubble_text: "#FFFFFF",
+        agent_bubble_bg: "#FFF1F2", agent_bubble_text: "#881337",
+        border_radius: "16px", font_family: "inherit", theme_mode: "light"
+
+      • Modern Minimalist / Black & Slate (e.g. "black theme", "minimalist", "monochrome"):
+        primary_color: "#18181B", secondary_color: "#27272A", background_color: "#FFFFFF",
+        header_background: "#09090B", header_text_color: "#FAFAFA",
+        user_bubble_bg: "#18181B", user_bubble_text: "#FFFFFF",
+        agent_bubble_bg: "#F4F4F5", agent_bubble_text: "#09090B",
+        border_radius: "12px", font_family: "inherit", theme_mode: "light"
 {post_patch_instruction}
 CRITICAL: When generating `draft_update`, adhere strictly to the MINIMAL DELTA rule (STRICT NO-ECHO).
 Provide a structured partial configuration using ONLY the specific section(s) being modified right now:
-- business_profile: (ONLY if modifying profile) name, vertical, timezone, locale, currency, address, contact, terminology, brand
+- business_profile: (ONLY if modifying profile) name, vertical, timezone, locale, currency, address, contact, terminology
 - services[]: (ONLY changed or newly added services) service_id, name, category, description, duration_minutes, buffer_minutes, booking_mode ("time_slot"|"date_range"), price, deposit, verification, resource_requirements, is_deleted
 - resources[]: (ONLY changed or newly added resources) resource_id, resource_type (staff|room|chair|bay|equipment|asset|vehicle), name, title, category, description, is_bookable, dispatch_status (active|on_leave|maintenance|retired|inactive), custom_shift_overrides (e.g. {{"friday": [{{"start": "09:00", "end": "12:00"}}], "saturday": []}}), is_deleted
 - operating_hours: (ONLY if changing schedule) monday, tuesday, wednesday, thursday, friday, saturday, sunday (each is list of {{start: "HH:MM", end: "HH:MM"}}), blackout_dates (list of {{date: "YYYY-MM-DD", reason, is_closed}})
 - scheduling_engine: (ONLY if changing engine settings) booking_mode ("time_slot"|"date_range"), default_lead_time_hours, max_advance_booking_days, cancellation_window_hours, hold_duration_minutes
-- widget_config: (ONLY if changing widget styling) agent_name, avatar_url, initial_greeting, fallback_message, position, launcher_style, sound_on_load, auto_expand_delay_seconds, platform_sources, whitelisted_domains
+- widget_config: (ONLY if changing widget styling/theme) agent_name, agent_subtitle, avatar_url, logo_url, initial_greeting, placeholder_text, quick_prompts, fallback_message, position, bottom_spacing_px, side_spacing_px, launcher_style, launcher_icon, sound_on_load, auto_expand_delay_seconds, platform_sources, whitelisted_domains, theme (primary_color, secondary_color, background_color, header_background, header_text_color, user_bubble_bg, user_bubble_text, agent_bubble_bg, agent_bubble_text, border_radius, font_family, theme_mode)
 - guardrails: (ONLY if modifying guardrails/OTP/handoff) verification_policy, phi_scrubbing, triage_emergency, human_handoff
 - supervisor_prompt: (ONLY if modifying supervisor prompt) (string)
 
@@ -812,7 +912,6 @@ def route_semantic(state: GraphState) -> str:
         if gaps:
             return "block_incomplete_finalize"
 
-      
         last_msgs = state.get("messages", [])
         last_user_text = ""
         for m in reversed(last_msgs):

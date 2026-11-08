@@ -61,7 +61,6 @@ async def _run_all():
         return_when=asyncio.FIRST_EXCEPTION,
     )
 
-
     for task in done:
         exc = task.exception()
         if exc:

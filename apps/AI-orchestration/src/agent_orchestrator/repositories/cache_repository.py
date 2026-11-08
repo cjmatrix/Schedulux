@@ -40,4 +40,3 @@ class RedisCacheRepository(CacheRepository):
     async def get_raw_crawl_draft(self, tenant_id: str) -> str | None:
         client = get_redis_client()
         return await client.get(f"agent:draft:{tenant_id}")
-

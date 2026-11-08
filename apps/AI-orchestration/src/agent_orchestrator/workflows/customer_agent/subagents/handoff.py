@@ -43,4 +43,3 @@ def run_handoff_agent(
         biz_context.get("business_name"),
     )
     return handoff_message
-

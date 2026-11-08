@@ -376,6 +376,7 @@ export interface GetAvailabilityResponse {
 export interface VerifyCustomerRequest {
     tenant_id: string;
     customer_phone: string;
+    agent_id?: string | undefined;
 }
 export interface VerifyCustomerResponse {
     success: boolean;

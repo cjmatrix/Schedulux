@@ -56,6 +56,9 @@ export interface SendSandboxMessageResponse {
     content: string;
     created_at?: string;
   }>;
+  booking_reference?: string;
+  booking_id?: string;
+  status?: string;
 }
 
 export interface InitSandboxSessionRequest {
@@ -131,6 +134,25 @@ export const onboardingApi = {
     return response.data;
   },
 
+  getSandboxWidgetConfig: async (params: {
+    tenant_id?: string;
+    agent_id?: string;
+  }): Promise<
+    ApiResponse<{
+      tenant_id: string;
+      agent_id: string;
+      widget_config: Record<string, unknown>;
+    }>
+  > => {
+    const query = new URLSearchParams();
+    if (params.tenant_id) query.append('tenant_id', params.tenant_id);
+    if (params.agent_id) query.append('agent_id', params.agent_id);
+    const response = await axiosClient.get(
+      `/api/v1/tenant/knowledge/onboarding/sandbox/config?${query.toString()}`,
+    );
+    return response.data;
+  },
+
   getSandboxMessages: async (params: {
     agent_id?: string;
     session_id?: string;
@@ -149,10 +171,9 @@ export const onboardingApi = {
       has_more?: boolean;
     }>
   > => {
-    const response = await axiosClient.get(
-      '/api/v1/tenant/knowledge/onboarding/sandbox/messages',
-      { params },
-    );
+    const response = await axiosClient.get('/api/v1/tenant/knowledge/onboarding/sandbox/messages', {
+      params,
+    });
     return response.data;
   },
 };

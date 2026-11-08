@@ -103,7 +103,6 @@ export default function ScheduleSettingsPage() {
   const [saveSuccessMessage, setSaveSuccessMessage] = useState('');
   const [saveErrorMessage, setSaveErrorMessage] = useState('');
 
- 
   useEffect(() => {
     if (scheduleResponse?.data) {
       const data = scheduleResponse.data;
@@ -140,7 +139,6 @@ export default function ScheduleSettingsPage() {
       }
     }
   }, [scheduleResponse]);
-
 
   const handleAddTimeSlot = (day: keyof OperatingHours) => {
     setOperatingHours((prev) => ({
@@ -184,7 +182,6 @@ export default function ScheduleSettingsPage() {
     });
   };
 
-
   const handleAddBlackoutDate = () => {
     if (!newBlackoutDate) return;
     setBlackoutDates((prev) => [
@@ -203,7 +200,6 @@ export default function ScheduleSettingsPage() {
     setBlackoutDates((prev) => prev.filter((_, idx) => idx !== index));
   };
 
- 
   const handleSave = () => {
     if (!selectedAgentId) {
       setSaveErrorMessage('Please select an agent first.');
@@ -320,7 +316,9 @@ export default function ScheduleSettingsPage() {
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium text-slate-700">Primary Timezone</label>
-            <p className="text-xs text-slate-500 mb-2">Used to calculate and convert available time slots.</p>
+            <p className="text-xs text-slate-500 mb-2">
+              Used to calculate and convert available time slots.
+            </p>
             <select
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
@@ -336,7 +334,9 @@ export default function ScheduleSettingsPage() {
 
           <div>
             <label className="block text-sm font-medium text-slate-700">Billing Currency</label>
-            <p className="text-xs text-slate-500 mb-2">Default currency used across service pricing.</p>
+            <p className="text-xs text-slate-500 mb-2">
+              Default currency used across service pricing.
+            </p>
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
@@ -359,7 +359,8 @@ export default function ScheduleSettingsPage() {
           <h2 className="text-lg font-semibold text-slate-900">Weekly Operating Hours</h2>
         </div>
         <p className="text-xs text-slate-500 mb-6">
-          Set regular opening hours for each day. Customers and the AI Agent will only schedule bookings within these windows.
+          Set regular opening hours for each day. Customers and the AI Agent will only schedule
+          bookings within these windows.
         </p>
 
         <div className="divide-y divide-slate-100">
@@ -371,9 +372,7 @@ export default function ScheduleSettingsPage() {
               <div key={day} className="py-4 first:pt-0 last:pb-0">
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                   <div className="w-32 shrink-0">
-                    <span className="text-sm font-semibold capitalize text-slate-800">
-                      {day}
-                    </span>
+                    <span className="text-sm font-semibold capitalize text-slate-800">{day}</span>
                     <button
                       type="button"
                       onClick={() => handleToggleDayClosed(day)}
@@ -446,7 +445,9 @@ export default function ScheduleSettingsPage() {
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium text-slate-700">Default Booking Mode</label>
-            <p className="text-xs text-slate-500 mb-2">Controls whether appointments use discrete time slots or multi-day ranges.</p>
+            <p className="text-xs text-slate-500 mb-2">
+              Controls whether appointments use discrete time slots or multi-day ranges.
+            </p>
             <select
               value={schedulingEngine.booking_mode}
               onChange={(e) =>
@@ -464,7 +465,9 @@ export default function ScheduleSettingsPage() {
 
           <div>
             <label className="block text-sm font-medium text-slate-700">Lead Time (Hours)</label>
-            <p className="text-xs text-slate-500 mb-2">Minimum advance notice required prior to booking.</p>
+            <p className="text-xs text-slate-500 mb-2">
+              Minimum advance notice required prior to booking.
+            </p>
             <input
               type="number"
               min="0"
@@ -480,8 +483,12 @@ export default function ScheduleSettingsPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700">Max Advance Booking (Days)</label>
-            <p className="text-xs text-slate-500 mb-2">How far in advance customers are allowed to schedule.</p>
+            <label className="block text-sm font-medium text-slate-700">
+              Max Advance Booking (Days)
+            </label>
+            <p className="text-xs text-slate-500 mb-2">
+              How far in advance customers are allowed to schedule.
+            </p>
             <input
               type="number"
               min="1"
@@ -497,8 +504,12 @@ export default function ScheduleSettingsPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700">Cancellation Window (Hours)</label>
-            <p className="text-xs text-slate-500 mb-2">Cut-off window before start time for cancellations.</p>
+            <label className="block text-sm font-medium text-slate-700">
+              Cancellation Window (Hours)
+            </label>
+            <p className="text-xs text-slate-500 mb-2">
+              Cut-off window before start time for cancellations.
+            </p>
             <input
               type="number"
               min="0"
@@ -514,9 +525,12 @@ export default function ScheduleSettingsPage() {
           </div>
 
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-slate-700">Slot Hold Duration (Minutes)</label>
+            <label className="block text-sm font-medium text-slate-700">
+              Slot Hold Duration (Minutes)
+            </label>
             <p className="text-xs text-slate-500 mb-2">
-              How long a slot is reserved while the user completes payment or details before releasing.
+              How long a slot is reserved while the user completes payment or details before
+              releasing.
             </p>
             <input
               type="number"
@@ -613,7 +627,8 @@ export default function ScheduleSettingsPage() {
                 Require OTP Verification for New Bookings
               </p>
               <p className="text-xs text-slate-500 mt-0.5">
-                When enabled, first-time customers must verify their phone number via SMS OTP before their booking is confirmed.
+                When enabled, first-time customers must verify their phone number via SMS OTP before
+                their booking is confirmed.
               </p>
             </div>
           </div>

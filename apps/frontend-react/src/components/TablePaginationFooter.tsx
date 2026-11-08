@@ -25,8 +25,7 @@ export function TablePaginationFooter({
   pageSizeOptions = [10, 20, 50, 100],
   className = '',
 }: TablePaginationFooterProps) {
-  const calculatedTotalPages =
-    totalPages ?? Math.max(1, Math.ceil(totalCount / pageSize));
+  const calculatedTotalPages = totalPages ?? Math.max(1, Math.ceil(totalCount / pageSize));
 
   const startEntry = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const endEntry = Math.min(totalCount, currentPage * pageSize);
@@ -132,4 +131,3 @@ export function TablePaginationFooter({
     </div>
   );
 }
-

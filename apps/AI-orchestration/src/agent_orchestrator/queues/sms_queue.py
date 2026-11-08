@@ -12,8 +12,6 @@ SMS_QUEUE_NAME = os.getenv("SMS_QUEUE_NAME", "sms-queue")
 
 
 class RabbitMQSmsQueue:
-
-
     def __init__(self, rabbitmq_uri: str | None = None):
         self.uri = rabbitmq_uri or os.environ.get(
             "RABBITMQ_URI", "amqp://guest:guest@localhost:5672"

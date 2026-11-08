@@ -120,11 +120,7 @@ async def classify_intent(
     model = _get_chat_model(temperature=0.0)
 
     prior: list[BaseMessage] = list(conversation_history)
-    if (
-        prior
-        and isinstance(prior[-1], HumanMessage)
-        and prior[-1].content == message
-    ):
+    if prior and isinstance(prior[-1], HumanMessage) and prior[-1].content == message:
         prior = prior[:-1]
 
     recent: list[BaseMessage] = prior[-6:] if prior else []
@@ -154,4 +150,3 @@ async def classify_intent(
                 logger.error("[Supervisor] Gemini fallback classifier also failed: %s", fb_err)
 
         return ["booking"]
-

@@ -212,22 +212,12 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                 customer_name=request.customer_name if request.customer_name else None,
                 mode=mode,
             )
-            history_proto = [
-                knowledge_pb2.CustomerChatMessageInfo(
-                    id=h["id"],
-                    session_id=h["session_id"],
-                    tenant_id=h["tenant_id"],
-                    agent_id=h["agent_id"],
-                    role=h["role"],
-                    content=h["content"],
-                    created_at=h["created_at"],
-                )
-                for h in result.get("history", [])
-            ]
             return knowledge_pb2.CustomerChatResponse(
                 session_id=result["session_id"],
                 response=result["response"],
-                history=history_proto,
+                user_message_id=result.get("user_message_id") or "",
+                agent_message_id=result.get("agent_message_id") or "",
+                created_at=result.get("created_at") or "",
             )
         except Exception as e:
             print(f"[gRPC Error] CustomerChat failed: {e}")
@@ -284,6 +274,63 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"GET_CUSTOMER_MESSAGES_ERROR: {str(e)}")
             return knowledge_pb2.GetCustomerMessagesResponse()
+
+    async def GetWidgetConfig(
+        self, request: knowledge_pb2.GetWidgetConfigRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.GetWidgetConfigResponse:
+        print(
+            f"[gRPC] GetWidgetConfig for tenant: {request.tenant_id}, agent: {request.agent_id}, source: {request.source}"
+        )
+        try:
+            import json
+
+            from agent_orchestrator.models import (
+                AgentDraft,
+                AgentRuntimeConfig,
+                WidgetConfigEmbed,
+            )
+
+            widget_config = None
+            if request.source == "draft":
+                agent_draft = await AgentDraft.find_one(
+                    {"tenant_id": request.tenant_id, "agent_id": request.agent_id}
+                )
+                if (
+                    agent_draft
+                    and agent_draft.current_draft
+                    and agent_draft.current_draft.widget_config
+                ):
+                    widget_config = agent_draft.current_draft.widget_config.model_dump()
+            else:
+                runtime_cfg = await AgentRuntimeConfig.find_one(
+                    {
+                        "tenant_id": request.tenant_id,
+                        "agent_id": request.agent_id,
+                        "status": "live",
+                    }
+                )
+                if runtime_cfg and runtime_cfg.widget_config:
+                    widget_config = runtime_cfg.widget_config.model_dump()
+
+            if not widget_config:
+                widget_config = WidgetConfigEmbed().model_dump()
+
+            return knowledge_pb2.GetWidgetConfigResponse(
+                tenant_id=request.tenant_id,
+                agent_id=request.agent_id,
+                widget_config_json=json.dumps(widget_config),
+            )
+        except Exception as e:
+            import json
+
+            print(f"[gRPC Error] GetWidgetConfig failed: {e}")
+            from agent_orchestrator.models import WidgetConfigEmbed
+
+            return knowledge_pb2.GetWidgetConfigResponse(
+                tenant_id=request.tenant_id,
+                agent_id=request.agent_id,
+                widget_config_json=json.dumps(WidgetConfigEmbed().model_dump()),
+            )
 
     async def GetDocumentUploadUrl(
         self, request: knowledge_pb2.GetDocumentUploadUrlRequest, context: grpc.aio.ServicerContext

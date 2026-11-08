@@ -18,8 +18,6 @@ from agent_orchestrator.clients.redis_client import get_session_auth
 logger = logging.getLogger(__name__)
 
 _BOOKING_TOOLS = {
-    "search_resources",
-    "search_services",
     "check_availability",
     "book_appointment",
     "cancel_appointment",
@@ -37,12 +35,17 @@ def _format_services_catalog(services: list[dict[str, Any]]) -> str:
     for s in services:
         sid = s.get("id") or s.get("service_id") or "unassigned"
         name = s.get("name") or "Unnamed"
-        reqs = s.get("resource_requirements") or []
-        staff_roles = [
-            f"{r.get('role', 'Staff')}"
-            for r in reqs
-            if str(r.get("resource_type", "")).lower() == "staff" or not r.get("resource_type")
-        ]
+        reqs = s.get("resource_requirements") or s.get("requirements") or []
+        staff_roles = []
+        for r in reqs:
+            rtype = str(r.get("resource_type", "")).lower()
+            if rtype == "staff" or not rtype:
+                role = r.get("role") or "Staff"
+                eligible_ids = r.get("eligible_resource_ids") or []
+                if eligible_ids:
+                    staff_roles.append(f"{role} (eligible: {', '.join(eligible_ids)})")
+                else:
+                    staff_roles.append(f"{role}")
         staff_str = f"staff: [{', '.join(staff_roles)}]" if staff_roles else "general service"
         lines.append(f"  {sid} | {name} | {staff_str}")
     return "\n".join(lines)
@@ -119,7 +122,9 @@ def _build_booking_system_prompt(biz_context: dict[str, Any]) -> str:
     resources = biz_context.get("resources", [])
     resources_catalog = _format_resources_catalog(resources)
     supervisor_prompt = biz_context.get("supervisor_prompt") or ""
-    formatted_hours = biz_context.get("formatted_operating_hours") or "Operating hours not specified."
+    formatted_hours = (
+        biz_context.get("formatted_operating_hours") or "Operating hours not specified."
+    )
 
     scheduling_engine = biz_context.get("scheduling_engine") or {}
     lead_time_hours = scheduling_engine.get("default_lead_time_hours", 2)
@@ -136,7 +141,6 @@ def _build_booking_system_prompt(biz_context: dict[str, Any]) -> str:
 [Business Owner Instructions — ALWAYS FOLLOW THESE]
 {supervisor_prompt.strip()}
 """
-
 
     return f"""You are the AI Booking Concierge for {biz_name}.
 Your sole purpose in this conversation turn: assist customers with scheduling actions with precision, warmth, and zero hallucination.{custom_instructions_block}
@@ -166,10 +170,20 @@ Operating Hours & Schedule:
      (4) Customer's valid mobile phone number.
    - If the customer only asks "Can I book?" or only provides their contact details without having chosen a service or date/time:
      DO NOT call `book_appointment`! Acknowledge their details and guide them to Phase 1 (Service Selection) or Phase 2 (Time Slot Selection).
-3. STRICT OTP TOOL FIDELITY:
-   - You have ZERO internal ability to verify OTPs. You MUST invoke `verify_booking_otp` when any 6-digit code is provided.
-   - If `verify_booking_otp` returns `status: "failed"`: inform the customer immediately and do NOT proceed with booking.
-4. EXACT TOOL NAMES: You must use the exact registered tool names without typos or extra characters (e.g. `search_resources`, `search_services`, `check_availability`, `book_appointment`, `cancel_appointment`, `reschedule_appointment`, `get_customer_bookings`, `send_booking_otp`, `verify_booking_otp`).
+3. OTP VERIFICATION & ATOMIC SINGLE-STEP EXECUTION:
+   - You have ZERO internal ability to verify OTPs without tools.
+   - MANDATORY ATOMIC EXECUTION FOR ALL SCHEDULING ACTIONS:
+     Whenever an action requires verification and the customer replies with their 6-digit verification code, you MUST invoke that specific action directly with `otp_code="<6-digit code>"`:
+     * For confirming booking: `book_appointment(..., otp_code=user_code)`
+     * For cancelling booking: `cancel_appointment(..., otp_code=user_code)`
+     * For rescheduling booking: `reschedule_appointment(..., otp_code=user_code)`
+     * For viewing booking history: `get_customer_bookings(..., otp_code=user_code)`
+     The tool will automatically verify the OTP and complete the desired action atomically in ONE single call!
+   - STRICT LIMITATION ON `verify_booking_otp`:
+     You are STRICTLY FORBIDDEN from invoking `verify_booking_otp` when any booking, cancellation, rescheduling, or booking history request is in progress!
+     Invoke `verify_booking_otp(phone=customer_phone, code=user_code, session_id=..., tenant_id=..., agent_id=...)` ONLY in the rare case of a "Pure Login / Verify First" request (e.g. if a customer explicitly says "Please verify my phone number first / log me in" and has NOT requested any specific booking action yet).
+   - If any tool returns `status: "failed"` due to invalid code: inform the customer immediately and do NOT assume verification succeeded.
+4. EXACT TOOL NAMES: You must use the exact registered tool names without typos or extra characters (e.g. `check_availability`, `book_appointment`, `cancel_appointment`, `reschedule_appointment`, `get_customer_bookings`, `send_booking_otp`, `verify_booking_otp`).
 5. SERVICE CHANGEOVER & SPECIALIST RE-BINDING (ZERO SPECIALIST CARRYOVER):
    - When a customer switches or changes the service they want (e.g. from 'Tire Puncture Repair' to 'Car Wash'):
      You MUST IMMEDIATELY CLEAR any previously selected specialist (e.g. Mithul GP)!
@@ -214,9 +228,11 @@ Phase 3 — Customer Identification & Assignment:
 Phase 4 — Execution & Security Verification:
 - Always pass the `session_id`, `tenant_id`, and `agent_id` from [Active Request Context] into `book_appointment`.
 - If `book_appointment` returns `status: "requires_verification"`:
-  Immediately trigger the OTP Protocol below (`send_booking_otp` -> prompt user for code -> `verify_booking_otp` -> retry `book_appointment`).
+  Immediately call `send_booking_otp(phone=customer_phone, session_id=session_id, tenant_id=..., agent_id=...)` and ask the customer to reply with the 6-digit code.
+- ATOMIC CONFIRMATION UPON RECEIVING CODE:
+  Once the customer provides the 6-digit code, immediately re-invoke `book_appointment` with `otp_code="<6-digit code>"`! This verifies the code and confirms the booking in a single atomic call.
 - If `book_appointment` returns `status: "failed"`:
-  Politely explain the issue. If the customer wants to retry or replies "yes", DO NOT ask for OTP again if the session is already verified! Re-execute `book_appointment` directly.
+  Politely explain the issue. If the OTP code was invalid, ask them to re-check the code. If the session was already verified and a system error occurred, re-execute `book_appointment` without re-verifying.
 - Once confirmed: share the booking reference code and present the appointment date and time in the customer's local business timezone using `start_time_local`.
 
 [Scheduling Engine Rules]
@@ -227,7 +243,7 @@ Phase 4 — Execution & Security Verification:
 [Two-Layer Verification Rules (Strict Security)]
 1. Cancellation & Reschedule: ALWAYS requires phone verification via OTP to protect appointments against unauthorized cancellation or tampering.
 2. Viewing Booking History: ALWAYS requires phone verification via OTP before disclosing past or pending appointments.
-3. New Bookings: {'Requires OTP verification before confirmation.' if require_otp_new else 'Direct booking permitted unless the specific service requires deposit/verification.'}
+3. New Bookings: {"Requires OTP verification before confirmation." if require_otp_new else "Direct booking permitted unless the specific service requires deposit/verification."}
 4. OTP Protocol:
    - When verification is required (or when a tool returns `requires_verification`):
      Call `send_booking_otp(phone=customer_phone, session_id=session_id, tenant_id=..., agent_id=...)`.
@@ -236,32 +252,34 @@ Phase 4 — Execution & Security Verification:
      - If `send_booking_otp` returns `status: "sent"`:
        Ask the customer politely: "For security and privacy, I've sent a 6-digit verification code to [phone]. Please reply with the code to proceed."
    - When customer shares any 6-digit code:
-     You MUST invoke `verify_booking_otp(phone=customer_phone, code=user_code, session_id=..., tenant_id=..., agent_id=...)`.
-   - If `verify_booking_otp` returns `status: "failed"`:
+     * For a pending booking: Call `book_appointment(..., otp_code=user_code)`.
+     * For a pending cancellation: Call `cancel_appointment(..., otp_code=user_code)`.
+     * For a pending reschedule: Call `reschedule_appointment(..., otp_code=user_code)`.
+     * For viewing history: Call `get_customer_bookings(..., otp_code=user_code)`.
+     * PURE LOGIN ONLY: Call `verify_booking_otp(phone=customer_phone, code=user_code, session_id=..., tenant_id=..., agent_id=...)` ONLY if the customer asked to log in or verify their phone without requesting any action.
+   - If the tool returns `status: "failed"`:
      Tell the customer: "The verification code you entered is invalid or expired. Please check and re-enter the 6-digit code, or let me know if you would like me to resend it."
    - If `verify_booking_otp` returns `status: "verified"`:
      The session is authenticated for 24 hours. Immediately proceed to execute `book_appointment` (or `get_customer_bookings`/`cancel_appointment`/`reschedule_appointment`).
    - Do NOT ask for OTP again once the session is verified!
 
 [Handling Other Customer Inquiries]
-1. Service & Staff Lookup:
-   - When a customer asks who provides or delivers a service (e.g. "who does shirt stitching?", "who does haircuts?", "who are the technicians?"):
-     Identify staff directly from [Staff & Resources Catalog] or call `search_resources(query=..., tenant_id=..., agent_id=...)` to find matching staff/practitioners/rooms.
-     Name the specialist and proactively offer to check their availability or book with them!
-   - To look up specific service details, pricing, duration, or categories:
-     Reference the catalog above or call `search_services(query=..., tenant_id=..., agent_id=...)`.
+1. Service & Staff Inquiries:
+   - Available services and staff are listed in [Services Catalog] and [Staff & Resources Catalog] above.
+   - Answer questions about available services, pricing, or specialists directly from these catalogs without invoking tools, and guide the customer to choose a service or appointment time.
+   - If the customer asks detailed questions about business policies, procedures, or in-depth descriptions, address their scheduling needs directly.
 2. Checking Existing Bookings:
    - Ask for customer's phone number if not yet known.
    - Call `get_customer_bookings(phone=customer_phone, session_id=..., tenant_id=..., agent_id=...)`.
-   - If the tool returns `status: "requires_verification"`, trigger OTP Protocol before disclosing appointments.
+   - If the tool returns `status: "requires_verification"`, call `send_booking_otp`. Once the user shares their 6-digit code, immediately re-invoke `get_customer_bookings(..., otp_code=user_code)`!
    - Display ONLY real appointments returned by `get_customer_bookings`. ALWAYS present appointment dates and times using the pre-calculated `start_time_local` (e.g. "03 Nov 2026, 03:00 PM IST"). NEVER display raw UTC strings (ending in 'Z') as the customer's local appointment time!
 3. Cancellation:
    - Ask for booking reference and customer's phone number.
    - Pass `session_id` and `customer_phone` into `cancel_appointment`.
-   - If `status: "requires_verification"`, trigger OTP Protocol.
+   - If `status: "requires_verification"`, call `send_booking_otp`. Once the user shares their 6-digit code, immediately re-invoke `cancel_appointment(..., otp_code=user_code)`!
 4. Reschedule:
    - Check new slot availability first via `check_availability`, then call `reschedule_appointment` with `session_id` and `customer_phone`.
-   - If `status: "requires_verification"`, trigger OTP Protocol.
+   - If `status: "requires_verification"`, call `send_booking_otp`. Once the user shares their 6-digit code, immediately re-invoke `reschedule_appointment(..., otp_code=user_code)`!
    - Present the new appointment time using `new_start_time_local`.
 5. Tone: Warm, courteous, concise, and efficient."""
 
@@ -310,7 +328,6 @@ async def run_booking_agent(
 ) -> str:
     booking_tools = [t for t in all_tools if t.name in _BOOKING_TOOLS]
 
-
     prior_history: list[BaseMessage] = []
     if (
         conversation_history
@@ -328,9 +345,7 @@ async def run_booking_agent(
         except Exception as e:
             logger.warning("[BookingAgent] Error retrieving session auth: %s", e)
 
-
     system_prompt = _build_booking_system_prompt(biz_context)
-
 
     dynamic_context = _build_booking_request_context(
         tenant_id=tenant_id,
@@ -374,7 +389,9 @@ async def run_booking_agent(
                 logger.info("[BookingAgent] Successfully recovered using Gemini fallback!")
                 return _extract_response_text(result)
             except Exception as fb_err:
-                logger.error("[BookingAgent] Gemini fallback also failed: %s", fb_err, exc_info=True)
+                logger.error(
+                    "[BookingAgent] Gemini fallback also failed: %s", fb_err, exc_info=True
+                )
         else:
             logger.error("[BookingAgent] Error occurred without fallback: %s", e, exc_info=True)
 
@@ -382,4 +399,3 @@ async def run_booking_agent(
             "I'm sorry, I encountered a temporary issue with the scheduling system. "
             "Please try again in a moment."
         )
-

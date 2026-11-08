@@ -50,9 +50,19 @@ class TerminologyEmbed(TolerantBaseModel):
     action_metric: str | None = None
 
 
-class BrandEmbed(TolerantBaseModel):
-    primary_color: str | None = None
-    logo_url: str | None = None
+class WidgetThemeEmbed(TolerantBaseModel):
+    primary_color: str = "#4F46E5"
+    secondary_color: str | None = None
+    background_color: str = "#FFFFFF"
+    header_background: str | None = None
+    header_text_color: str = "#FFFFFF"
+    user_bubble_bg: str | None = None
+    user_bubble_text: str = "#FFFFFF"
+    agent_bubble_bg: str = "#F3F4F6"
+    agent_bubble_text: str = "#111827"
+    border_radius: str = "16px"
+    font_family: str = "inherit"
+    theme_mode: str = "light"
 
 
 class BusinessProfileEmbed(TolerantBaseModel):
@@ -64,20 +74,33 @@ class BusinessProfileEmbed(TolerantBaseModel):
     address: str | None = None
     contact: ContactEmbed | None = None
     terminology: TerminologyEmbed | None = None
-    brand: BrandEmbed | None = None
 
 
 class WidgetConfigEmbed(TolerantBaseModel):
-    agent_name: str | None = None
+    agent_name: str = "AI Assistant"
+    agent_subtitle: str | None = "Typically replies instantly"
     avatar_url: str | None = None
-    initial_greeting: str | None = None
+    logo_url: str | None = None
+    initial_greeting: str | None = "Hi there! How can I assist you with scheduling today?"
+    placeholder_text: str = "Type a message or ask a question..."
+    quick_prompts: list[str] = Field(
+        default_factory=lambda: [
+            "What services do you provide?",
+            "Check available appointment times",
+            "What are your operating hours?",
+        ]
+    )
     fallback_message: str | None = None
-    position: str | None = "right"
-    launcher_style: str | None = None
+    position: str = "bottom-right"
+    bottom_spacing_px: int = 20
+    side_spacing_px: int = 20
+    launcher_style: str | None = "bubble"
+    launcher_icon: str = "chat"
     sound_on_load: bool = False
     auto_expand_delay_seconds: int | None = None
     platform_sources: list[str] = Field(default_factory=list)
     whitelisted_domains: list[str] = Field(default_factory=list)
+    theme: WidgetThemeEmbed = Field(default_factory=WidgetThemeEmbed)
 
 
 class LlmEngineEmbed(TolerantBaseModel):
@@ -453,12 +476,6 @@ class StrictTerminologySchema(BaseModel):
     action_metric: str | None = None
 
 
-class StrictBrandSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    primary_color: str | None = None
-    logo_url: str | None = None
-
-
 class StrictBusinessProfileSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = None
@@ -469,7 +486,6 @@ class StrictBusinessProfileSchema(BaseModel):
     address: str | None = None
     contact: StrictContactSchema | None = None
     terminology: StrictTerminologySchema | None = None
-    brand: StrictBrandSchema | None = None
 
 
 class StrictPriceSchema(BaseModel):
@@ -617,18 +633,42 @@ class StrictSchedulingEngineSchema(BaseModel):
     hold_duration_minutes: int | None = None
 
 
+class StrictWidgetThemeSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    primary_color: str | None = None
+    secondary_color: str | None = None
+    background_color: str | None = None
+    header_background: str | None = None
+    header_text_color: str | None = None
+    user_bubble_bg: str | None = None
+    user_bubble_text: str | None = None
+    agent_bubble_bg: str | None = None
+    agent_bubble_text: str | None = None
+    border_radius: str | None = None
+    font_family: str | None = None
+    theme_mode: str | None = None
+
+
 class StrictWidgetConfigSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     agent_name: str | None = None
+    agent_subtitle: str | None = None
     avatar_url: str | None = None
+    logo_url: str | None = None
     initial_greeting: str | None = None
+    placeholder_text: str | None = None
+    quick_prompts: list[str] | None = None
     fallback_message: str | None = None
     position: str | None = None
+    bottom_spacing_px: int | None = None
+    side_spacing_px: int | None = None
     launcher_style: str | None = None
+    launcher_icon: str | None = None
     sound_on_load: bool | None = None
     auto_expand_delay_seconds: int | None = None
     platform_sources: list[str] | None = None
     whitelisted_domains: list[str] | None = None
+    theme: StrictWidgetThemeSchema | None = None
 
 
 class StrictPhiScrubSchema(BaseModel):

@@ -663,13 +663,17 @@ async def list_bookings(
 async def verify_customer(
     tenant_id: str,
     customer_phone: str,
+    agent_id: str | None = None,
 ) -> dict[str, Any]:
     """Mark a customer as verified (is_guest: false) in scheduling-inventory service via gRPC."""
     target_url = SCHEDULING_SERVICE_URL
-    req = scheduling_pb2.VerifyCustomerRequest(
-        tenant_id=tenant_id.strip(),
-        customer_phone=customer_phone.strip(),
-    )
+    kwargs: dict[str, Any] = {
+        "tenant_id": tenant_id.strip(),
+        "customer_phone": customer_phone.strip(),
+    }
+    if agent_id and agent_id.strip():
+        kwargs["agent_id"] = agent_id.strip()
+    req = scheduling_pb2.VerifyCustomerRequest(**kwargs)
     try:
         async with grpc.aio.insecure_channel(target_url) as channel:
             stub = scheduling_pb2_grpc.SchedulingInventoryServiceStub(channel)
@@ -688,5 +692,3 @@ async def verify_customer(
     except Exception as e:
         logger.error("[SchedulingClient Error] Unexpected VerifyCustomer error: %s", e)
         return {"success": False, "error": str(e), "updated_count": 0}
-
-

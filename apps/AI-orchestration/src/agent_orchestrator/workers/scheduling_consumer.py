@@ -79,7 +79,9 @@ async def handle_service_event(payload: dict[str, Any]) -> None:
         else:
             existing_svc = None
             if config:
-                existing_svc = next((s for s in config.services if s.service_id == service_id), None)
+                existing_svc = next(
+                    (s for s in config.services if s.service_id == service_id), None
+                )
             if not existing_svc and agent_draft and agent_draft.current_draft:
                 existing_svc = next(
                     (s for s in agent_draft.current_draft.services if s.service_id == service_id),
@@ -91,7 +93,11 @@ async def handle_service_event(payload: dict[str, Any]) -> None:
                 verification = ServiceVerificationEmbed()
 
         raw_bm = data.get("booking_mode", "time_slot")
-        bm = BookingMode(raw_bm) if raw_bm in BookingMode._value2member_map_ else BookingMode.TIME_SLOT
+        bm = (
+            BookingMode(raw_bm)
+            if raw_bm in BookingMode._value2member_map_
+            else BookingMode.TIME_SLOT
+        )
 
         new_embed = ServiceEmbed(
             service_id=service_id,
@@ -164,9 +170,17 @@ async def handle_resource_event(payload: dict[str, Any]) -> None:
     new_embed: ResourceEmbed | None = None
     if data:
         raw_rt = data.get("resource_type", "staff")
-        rt = ResourceType(raw_rt) if raw_rt in ResourceType._value2member_map_ else ResourceType.STAFF
+        rt = (
+            ResourceType(raw_rt)
+            if raw_rt in ResourceType._value2member_map_
+            else ResourceType.STAFF
+        )
         raw_ds = data.get("dispatch_status", "active")
-        ds = DispatchStatus(raw_ds) if raw_ds in DispatchStatus._value2member_map_ else DispatchStatus.ACTIVE
+        ds = (
+            DispatchStatus(raw_ds)
+            if raw_ds in DispatchStatus._value2member_map_
+            else DispatchStatus.ACTIVE
+        )
 
         new_embed = ResourceEmbed(
             resource_id=resource_id,
@@ -269,9 +283,7 @@ async def handle_schedule_event(payload: dict[str, Any]) -> None:
 
     raw_engine = data.get("scheduling_engine", {})
     raw_mode = (
-        raw_engine.get("booking_mode", "time_slot")
-        if isinstance(raw_engine, dict)
-        else "time_slot"
+        raw_engine.get("booking_mode", "time_slot") if isinstance(raw_engine, dict) else "time_slot"
     )
     scheduling_engine = SchedulingEngineEmbed(
         booking_mode=BookingMode(raw_mode)
@@ -356,9 +368,7 @@ async def handle_schedule_event(payload: dict[str, Any]) -> None:
             await set_cached_draft(
                 agent_draft.tenant_id, agent_id or agent_draft.agent_id, cd.model_dump()
             )
-            await delete_cached_biz_context(
-                agent_draft.tenant_id, agent_id or agent_draft.agent_id
-            )
+            await delete_cached_biz_context(agent_draft.tenant_id, agent_id or agent_draft.agent_id)
         except Exception:
             pass
         logger.info(

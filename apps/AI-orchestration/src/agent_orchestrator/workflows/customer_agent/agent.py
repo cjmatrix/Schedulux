@@ -45,7 +45,9 @@ def _format_services_catalog(services: list[dict[str, Any]]) -> str:
         try:
             return toon.encode(services)
         except Exception as e:
-            logger.warning("[CustomerAgent] Failed to toonify services, falling back to JSON: %s", e)
+            logger.warning(
+                "[CustomerAgent] Failed to toonify services, falling back to JSON: %s", e
+            )
     return json.dumps(services, indent=2)
 
 
@@ -165,7 +167,6 @@ async def node_synthesizer(state: CustomerGraphState) -> dict[str, Any]:
         biz_name = state.get("biz_context", {}).get("business_name", "our business")
         user_msg = state.get("message", "")
 
-
         synth_system = f"""You are the AI Concierge for {biz_name}.
 Your job is to merge specialist agent answers into a single, cohesive, seamless, warm, and natural response for the customer.
 
@@ -175,7 +176,6 @@ Your job is to merge specialist agent answers into a single, cohesive, seamless,
 - CRITICAL CONTRADICTION & FALLBACK RESOLUTION: If one specialist provided genuine facts (e.g. available services, pricing, operating hours, or appointments) while the other specialist returned a fallback disclaimer (such as "I don't have that information on file" or "our team will be happy to assist you directly"), COMPLETELY OMIT the fallback disclaimer! Never tell the customer you don't have the information when the other specialist provided it.
 - Do NOT hallucinate any new dates, times, prices, or policies not present in the specialist answers.
 - Speak in a single natural voice as the assistant for {biz_name}."""
-
 
         synth_input = f"""[Customer Inquiry]
 "{user_msg}"
@@ -200,7 +200,9 @@ Your job is to merge specialist agent answers into a single, cohesive, seamless,
                 else str(synth_result.content)
             )
         except Exception as e:
-            logger.warning("[CustomerGraph:SynthesizerNode] Primary LLM error (%s) → trying Gemini fallback", e)
+            logger.warning(
+                "[CustomerGraph:SynthesizerNode] Primary LLM error (%s) → trying Gemini fallback", e
+            )
             gemini_model = _get_gemini_model(temperature=0.2, max_tokens=4096)
             if gemini_model and not isinstance(model, ChatGoogleGenerativeAI):
                 try:
@@ -308,7 +310,7 @@ async def process_customer_chat(
             customer_phone=customer_phone,
         )
 
-    await _customer_msg_repo.save_message(
+    user_msg = await _customer_msg_repo.save_message(
         session_id=session_id,
         tenant_id=tenant_id,
         agent_id=agent_id,
@@ -358,7 +360,7 @@ async def process_customer_chat(
             "Please try again in a moment."
         )
 
-    await _customer_msg_repo.save_message(
+    assistant_msg = await _customer_msg_repo.save_message(
         session_id=session_id,
         tenant_id=tenant_id,
         agent_id=agent_id,
@@ -366,22 +368,18 @@ async def process_customer_chat(
         content=response_text,
     )
 
-    updated_history = await _customer_msg_repo.get_recent_messages(session_id, limit=20)
+    user_msg_id = str(user_msg.id) if user_msg and hasattr(user_msg, "id") else ""
+    agent_msg_id = str(assistant_msg.id) if assistant_msg and hasattr(assistant_msg, "id") else ""
+    created_at_iso = (
+        assistant_msg.created_at.isoformat()
+        if assistant_msg and hasattr(assistant_msg, "created_at") and assistant_msg.created_at
+        else ""
+    )
 
     return {
         "session_id": session_id,
         "response": response_text,
-        "history": [
-            {
-                "id": str(m.id),
-                "session_id": m.session_id,
-                "tenant_id": m.tenant_id,
-                "agent_id": m.agent_id,
-                "role": m.role,
-                "content": m.content,
-                "created_at": m.created_at.isoformat(),
-            }
-            for m in updated_history
-        ],
+        "user_message_id": user_msg_id,
+        "agent_message_id": agent_msg_id,
+        "created_at": created_at_iso,
     }
-

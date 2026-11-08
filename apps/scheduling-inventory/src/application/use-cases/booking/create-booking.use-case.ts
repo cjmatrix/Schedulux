@@ -1,25 +1,17 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreateBookingRequest } from '@repo/proto/scheduling';
 import { RESPONSE_MESSAGES } from '../../../constants/index.js';
 import {
   BookingDepositStatus,
   BookingEntity,
-  BookingMode,
   BookingSource,
 } from '../../../domain/entities/booking.entity.js';
 import { CustomerEntity } from '../../../domain/entities/customer.entity.js';
-import { ResourceEntity } from '../../../domain/entities/resource.entity.js';
 import { IBookingRepository } from '../../../domain/repositories/booking.repository.interface.js';
 import { ICustomerRepository } from '../../../domain/repositories/customer.repository.interface.js';
 import { IResourceRepository } from '../../../domain/repositories/resource.repository.interface.js';
 import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
+import type { ITenantScheduleRepository } from '../../../domain/repositories/tenant-schedule.repository.interface.js';
 import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
 import {
   BOOKING_ALLOCATION_SERVICE,
@@ -32,7 +24,6 @@ import {
   TENANT_SCHEDULE_REPOSITORY,
   UNIT_OF_WORK,
 } from '../../../domain/tokens.js';
-import type { ITenantScheduleRepository } from '../../../domain/repositories/tenant-schedule.repository.interface.js';
 import {
   generateBookingReference,
   generateSemanticId,
@@ -154,6 +145,8 @@ export class CreateBookingUseCase implements ICreateBookingUseCase {
     const { startTime, endTime, effectiveEndTime, bufferMinutes, durationMinutes, bookingMode } =
       interval;
 
+    const source: BookingSource = (dto.source as BookingSource) || 'manual';
+
     let customer = existingCustomerByPhone || existingCustomerByEmail;
     const isExistingCustomer = Boolean(customer);
 
@@ -177,8 +170,6 @@ export class CreateBookingUseCase implements ICreateBookingUseCase {
         totalBookings: 1,
       });
     }
-
-    const source: BookingSource = (dto.source as BookingSource) || 'manual';
     const depositStatus: BookingDepositStatus = dto.deposit_status
       ? (dto.deposit_status as BookingDepositStatus)
       : service.deposit.required

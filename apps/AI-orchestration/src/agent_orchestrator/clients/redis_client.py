@@ -76,7 +76,10 @@ async def get_cached_biz_context(
         if val:
             return json.loads(val)
     except Exception as e:
-        print(f"[Redis] Error getting cached biz context ({tenant_id}/{agent_id}/{mode}): {e}", flush=True)
+        print(
+            f"[Redis] Error getting cached biz context ({tenant_id}/{agent_id}/{mode}): {e}",
+            flush=True,
+        )
     return None
 
 
@@ -92,7 +95,10 @@ async def set_cached_biz_context(
         key = get_biz_context_redis_key(tenant_id, agent_id, mode)
         await client.set(key, json.dumps(context), ex=ttl)
     except Exception as e:
-        print(f"[Redis] Error setting cached biz context ({tenant_id}/{agent_id}/{mode}): {e}", flush=True)
+        print(
+            f"[Redis] Error setting cached biz context ({tenant_id}/{agent_id}/{mode}): {e}",
+            flush=True,
+        )
 
 
 async def delete_cached_biz_context(tenant_id: str, agent_id: str) -> None:
@@ -104,7 +110,9 @@ async def delete_cached_biz_context(tenant_id: str, agent_id: str) -> None:
         legacy_key = f"biz_context:{tenant_id}:{agent_id}"
         await client.delete(live_key, sandbox_key, legacy_key)
     except Exception as e:
-        print(f"[Redis] Error deleting cached biz context ({tenant_id}/{agent_id}): {e}", flush=True)
+        print(
+            f"[Redis] Error deleting cached biz context ({tenant_id}/{agent_id}): {e}", flush=True
+        )
 
 
 # ── Session Authentication & OTP Cache ─────────────────────────────────────────
@@ -148,7 +156,6 @@ async def get_session_auth(session_id: str) -> dict[str, Any] | None:
         key = get_session_auth_redis_key(session_id)
         val = await client.get(key)
         if val:
-
             await client.expire(key, 86400)
             return json.loads(val)
     except Exception as e:
@@ -229,5 +236,3 @@ async def verify_otp_code(phone: str, code: str) -> tuple[bool, str]:
     except Exception as e:
         print(f"[Redis] Error verifying OTP for {phone}: {e}", flush=True)
         return False, "system_error"
-
-

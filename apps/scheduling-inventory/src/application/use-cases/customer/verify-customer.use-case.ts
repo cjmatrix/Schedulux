@@ -1,12 +1,17 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import type { VerifyCustomerRequest, VerifyCustomerResponse } from '@repo/proto/scheduling';
-import { generateSemanticId } from '../../../domain/utils/id-generator.js';
-import { CustomerModel } from '../../../infrastructure/database/schemas/customer.schema.js';
+import type { ICustomerRepository } from '../../../domain/repositories/customer.repository.interface.js';
+import { CUSTOMER_REPOSITORY } from '../../../domain/tokens.js';
 import type { IVerifyCustomerUseCase } from '../../interfaces/booking-use-cases.interface.js';
 
 @Injectable()
 export class VerifyCustomerUseCase implements IVerifyCustomerUseCase {
   private readonly _logger = new Logger(VerifyCustomerUseCase.name);
+
+  constructor(
+    @Inject(CUSTOMER_REPOSITORY)
+    private readonly _customerRepository: ICustomerRepository,
+  ) {}
 
   async execute(dto: VerifyCustomerRequest): Promise<VerifyCustomerResponse> {
     const phone = dto.customer_phone?.trim();
@@ -14,47 +19,18 @@ export class VerifyCustomerUseCase implements IVerifyCustomerUseCase {
       throw new BadRequestException('customer_phone is required for verification');
     }
 
-    const last10 = phone.length >= 10 ? phone.slice(-10) : phone;
-    const query: Record<string, unknown> = {
-      is_deleted: { $ne: true },
-      $or: [
-        { phone },
-        { phone: `+91${last10}` },
-        { phone: last10 },
-      ],
-    };
+    const tenantId = dto.tenant_id?.trim() || 'default';
+    const agentId = dto.agent_id?.trim() || undefined;
 
-    if (dto.tenant_id?.trim()) {
-      query.tenant_id = dto.tenant_id.trim();
-    }
+    const updatedCount = await this._customerRepository.markVerifiedByPhone(
+      tenantId,
+      phone,
+      agentId,
+    );
 
-    const result = await CustomerModel.updateMany(query, {
-      $set: {
-        is_guest: false,
-        updated_at: new Date(),
-      },
-    }).exec();
-
-    let updatedCount = result.modifiedCount;
-    if (result.matchedCount === 0) {
-      await CustomerModel.create({
-        _id: generateSemanticId('cus', phone),
-        tenant_id: dto.tenant_id?.trim() || 'default',
-        phone,
-        name: 'Guest',
-        is_guest: false,
-        total_bookings: 0,
-        is_deleted: false,
-      });
-      updatedCount = 1;
-      this._logger.log(
-        `[VerifyCustomerUseCase] Pre-created verified customer record for phone: ${phone}`,
-      );
-    } else {
-      this._logger.log(
-        `[VerifyCustomerUseCase] Marked ${result.modifiedCount} customer record(s) verified (phone: ${phone})`,
-      );
-    }
+    this._logger.log(
+      `[VerifyCustomerUseCase] Customer verified (phone: ${phone}, agent: ${agentId || 'any'}, count: ${updatedCount})`,
+    );
 
     return {
       success: true,

@@ -254,6 +254,132 @@ async def send_booking_otp(
     )
 
 
+async def _verify_and_authenticate_session(
+    phone: str,
+    otp_code: str,
+    session_id: str | None,
+    tenant_id: str,
+    agent_id: str,
+    action_name: str = "tool",
+) -> tuple[bool, str | None]:
+    """Validate OTP code, authenticate active Redis session, and sync verified state to DB.
+
+    Returns:
+        (True, None) if verification succeeded.
+        (False, error_message) if verification failed or was rejected.
+    """
+    cleaned_phone = phone.strip()
+    cleaned_code = otp_code.strip()
+
+    valid, reason = await verify_otp_code(cleaned_phone, cleaned_code)
+    if not valid:
+        if reason == "max_attempts_exceeded":
+            message = "Too many failed verification attempts. This verification code has been invalidated for security. Please request a new verification code."
+        elif reason.startswith("invalid_code:"):
+            remaining = reason.split(":")[1]
+            attempts_str = "attempt" if remaining == "1" else "attempts"
+            message = f"Invalid verification code. You have {remaining} {attempts_str} remaining. Please double-check the 6-digit code sent to your phone."
+        elif reason == "expired_or_not_found":
+            message = "Verification code has expired or was not found. Please request a new verification code."
+        else:
+            message = "Invalid or expired verification code. Please check and try again."
+
+        logger.warning(
+            "[MCP Tool: %s] Atomic OTP verification failed for %s: %s",
+            action_name,
+            cleaned_phone,
+            reason,
+        )
+        return False, message
+
+    if session_id:
+        await set_session_auth(session_id=session_id, phone=cleaned_phone, ttl=86400)
+        repo = CustomerMessageRepository()
+        await repo.mark_conversation_verified(session_id=session_id, customer_phone=cleaned_phone)
+        try:
+            await verify_customer(
+                tenant_id=tenant_id or "",
+                customer_phone=cleaned_phone,
+                agent_id=agent_id,
+            )
+            logger.info(
+                "[MCP Tool: %s] Synced is_guest: false via gRPC for %s (atomic OTP verification)",
+                action_name,
+                cleaned_phone,
+            )
+        except Exception as e:
+            logger.warning(
+                "[MCP Tool: %s] Could not sync customer verification via gRPC: %s",
+                action_name,
+                e,
+            )
+
+    return True, None
+
+
+async def _verify_and_authenticate_session(
+    phone: str,
+    otp_code: str,
+    session_id: str | None,
+    tenant_id: str,
+    agent_id: str,
+    action_name: str = "tool",
+) -> tuple[bool, str | None]:
+    """Validate OTP code, authenticate active Redis session, and sync verified state to DB.
+
+    Returns:
+        (True, None) if verification succeeded.
+        (False, error_message) if verification failed or was rejected.
+    """
+    cleaned_phone = phone.strip()
+    cleaned_code = otp_code.strip()
+
+    valid, reason = await verify_otp_code(cleaned_phone, cleaned_code)
+    if not valid:
+        if reason == "max_attempts_exceeded":
+            message = "Too many failed verification attempts. This verification code has been invalidated for security. Please request a new verification code."
+        elif reason.startswith("invalid_code:"):
+            remaining = reason.split(":")[1]
+            attempts_str = "attempt" if remaining == "1" else "attempts"
+            message = f"Invalid verification code. You have {remaining} {attempts_str} remaining. Please double-check the 6-digit code sent to your phone."
+        elif reason == "expired_or_not_found":
+            message = "Verification code has expired or was not found. Please request a new verification code."
+        else:
+            message = "Invalid or expired verification code. Please check and try again."
+
+        logger.warning(
+            "[MCP Tool: %s] Atomic OTP verification failed for %s: %s",
+            action_name,
+            cleaned_phone,
+            reason,
+        )
+        return False, message
+
+    if session_id:
+        await set_session_auth(session_id=session_id, phone=cleaned_phone, ttl=86400)
+        repo = CustomerMessageRepository()
+        await repo.mark_conversation_verified(session_id=session_id, customer_phone=cleaned_phone)
+        try:
+            await verify_customer(
+                tenant_id=tenant_id or "",
+                customer_phone=cleaned_phone,
+                agent_id=agent_id,
+            )
+            logger.info(
+                "[MCP Tool: %s] Synced is_guest: false via gRPC for %s (atomic OTP verification)",
+                action_name,
+                cleaned_phone,
+            )
+        except Exception as e:
+            logger.warning(
+                "[MCP Tool: %s] Could not sync customer verification via gRPC: %s",
+                action_name,
+                e,
+            )
+
+    return True, None
+
+
 @mcp.tool()
 async def verify_booking_otp(
     session_id: str,
@@ -262,7 +388,12 @@ async def verify_booking_otp(
     tenant_id: str,
     agent_id: str,
 ) -> str:
-    """Verify customer's 6-digit OTP code and authenticate their chat session.
+    """Verify customer's 6-digit OTP code to authenticate their chat session for standalone login.
+
+    NOTE: Call this tool ONLY for pure standalone verification or login (e.g. "Please verify my phone number first")
+    when the customer has NOT requested a specific booking, cancellation, rescheduling, or booking history check.
+    For all pending actions, pass `otp_code` directly to `book_appointment`, `cancel_appointment`, `reschedule_appointment`,
+    or `get_customer_bookings` for atomic 1-step verification and execution.
 
     Args:
         session_id: Active customer chat session ID.
@@ -282,39 +413,20 @@ async def verify_booking_otp(
     cleaned_phone = phone.strip()
     cleaned_code = code.strip()
 
-    valid, reason = await verify_otp_code(cleaned_phone, cleaned_code)
-    if not valid:
-        if reason == "max_attempts_exceeded":
-            message = "Too many failed verification attempts. This verification code has been invalidated for security. Please request a new verification code."
-        elif reason.startswith("invalid_code:"):
-            remaining = reason.split(":")[1]
-            attempts_str = "attempt" if remaining == "1" else "attempts"
-            message = f"Invalid verification code. You have {remaining} {attempts_str} remaining. Please double-check the 6-digit code sent to your phone."
-        elif reason == "expired_or_not_found":
-            message = "Verification code has expired or was not found. Please request a new verification code."
-        else:
-            message = "Invalid or expired verification code. Please check and try again."
-
+    success, err_msg = await _verify_and_authenticate_session(
+        phone=cleaned_phone,
+        otp_code=cleaned_code,
+        session_id=session_id,
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        action_name="verify_booking_otp",
+    )
+    if not success:
         return json.dumps(
             {
                 "status": "failed",
-                "message": message,
+                "message": err_msg,
             }
-        )
-
-    await set_session_auth(session_id=session_id, phone=cleaned_phone, ttl=86400)
-
-    repo = CustomerMessageRepository()
-    await repo.mark_conversation_verified(session_id=session_id, customer_phone=cleaned_phone)
-
-    try:
-        await verify_customer(tenant_id=tenant_id or "", customer_phone=cleaned_phone)
-        logger.info(
-            "[MCP Tool verify_booking_otp] Synced is_guest: false via gRPC for %s", cleaned_phone
-        )
-    except Exception as e:
-        logger.warning(
-            "[MCP Tool verify_booking_otp] Could not sync customer verification via gRPC: %s", e
         )
 
     logger.info(
@@ -342,14 +454,18 @@ async def book_appointment(
     resource_id: str | None = None,
     notes: str | None = None,
     session_id: str | None = None,
+    otp_code: str | None = None,
 ) -> str:
     """Create and confirm an appointment booking for a customer.
 
-    Call this tool ONLY when you have obtained:
+    Call this tool when you have obtained:
     1. The customer's desired service
     2. A valid start date and time
     3. The customer's full name
     4. The customer's phone number
+
+    If phone verification was requested (or OTP was sent) and the customer provides their 6-digit verification code,
+    pass the code directly in `otp_code`. This tool will verify the OTP and confirm the booking in a single atomic step!
 
     Args:
         tenant_id: The ID of the business/tenant.
@@ -363,12 +479,13 @@ async def book_appointment(
         resource_id: Optional specific staff or resource ID requested.
         notes: Optional customer requests or notes.
         session_id: Optional active chat session ID for session verification check.
+        otp_code: Optional 6-digit verification code provided by the customer to verify phone and confirm booking atomically in one step.
 
     Returns:
         JSON string containing the booking confirmation, booking reference code, and status.
     """
     logger.info(
-        "[MCP Tool: book_appointment] Invoked with arguments: tenant_id=%s, agent_id=%s, service_id=%s, start_time=%s, customer_name=%s, customer_phone=%s, customer_email=%s, end_time=%s, resource_id=%s, notes=%s, session_id=%s",
+        "[MCP Tool: book_appointment] Invoked with arguments: tenant_id=%s, agent_id=%s, service_id=%s, start_time=%s, customer_name=%s, customer_phone=%s, customer_email=%s, end_time=%s, resource_id=%s, notes=%s, session_id=%s, has_otp=%s",
         tenant_id,
         agent_id,
         service_id,
@@ -380,7 +497,28 @@ async def book_appointment(
         resource_id,
         notes,
         session_id,
+        bool(otp_code),
     )
+
+    cleaned_phone = customer_phone.strip()
+
+    if otp_code and otp_code.strip():
+        success, err_msg = await _verify_and_authenticate_session(
+            phone=cleaned_phone,
+            otp_code=otp_code,
+            session_id=session_id,
+            tenant_id=tenant_id,
+            agent_id=agent_id,
+            action_name="book_appointment",
+        )
+        if not success:
+            return json.dumps(
+                {
+                    "status": "failed",
+                    "error": err_msg,
+                    "message": err_msg,
+                }
+            )
 
     query: dict[str, Any] = {"tenant_id": tenant_id, "agent_id": agent_id}
     is_sandbox = bool(session_id and session_id.startswith("sandbox_"))
@@ -472,6 +610,20 @@ async def book_appointment(
             customer_name=customer_name,
             customer_phone=customer_phone,
         )
+        try:
+            await verify_customer(
+                tenant_id=tenant_id or "",
+                customer_phone=customer_phone,
+                agent_id=agent_id,
+            )
+            logger.info(
+                "[MCP Tool book_appointment] Synced is_guest: false via gRPC for %s",
+                customer_phone,
+            )
+        except Exception as e:
+            logger.warning(
+                "[MCP Tool book_appointment] Could not sync customer verification via gRPC: %s", e
+            )
 
     tz_str = tz_str or "UTC"
     start_utc = bk.get("start_time")
@@ -503,10 +655,13 @@ async def cancel_appointment(
     session_id: str | None = None,
     customer_phone: str | None = None,
     reason: str | None = None,
+    otp_code: str | None = None,
 ) -> str:
     """Cancel an existing confirmed booking or appointment.
 
     Requires mandatory phone verification via OTP to prevent unauthorized cancellations.
+    If OTP was sent and customer provides their 6-digit verification code, pass `otp_code` directly
+    to verify phone and cancel the booking atomically in a single step!
 
     Args:
         tenant_id: The tenant identifier.
@@ -515,16 +670,44 @@ async def cancel_appointment(
         session_id: Optional active chat session ID for verification status.
         customer_phone: Customer phone number for OTP verification.
         reason: Optional reason for the cancellation.
+        otp_code: Optional 6-digit verification code to verify phone and cancel booking atomically in one step.
     """
     logger.info(
-        "[MCP Tool: cancel_appointment] Invoked with arguments: tenant_id=%s, agent_id=%s, booking_id=%s, session_id=%s, customer_phone=%s, reason=%s",
+        "[MCP Tool: cancel_appointment] Invoked with arguments: tenant_id=%s, agent_id=%s, booking_id=%s, session_id=%s, customer_phone=%s, reason=%s, has_otp=%s",
         tenant_id,
         agent_id,
         booking_id,
         session_id,
         customer_phone,
         reason,
+        bool(otp_code),
     )
+
+    if otp_code and otp_code.strip():
+        if not customer_phone or not customer_phone.strip():
+            return json.dumps(
+                {
+                    "status": "failed",
+                    "error": "Customer phone number is required along with OTP code to verify cancellation.",
+                    "message": "Customer phone number is required along with OTP code to verify cancellation.",
+                }
+            )
+        success, err_msg = await _verify_and_authenticate_session(
+            phone=customer_phone,
+            otp_code=otp_code,
+            session_id=session_id,
+            tenant_id=tenant_id,
+            agent_id=agent_id,
+            action_name="cancel_appointment",
+        )
+        if not success:
+            return json.dumps(
+                {
+                    "status": "failed",
+                    "error": err_msg,
+                    "message": err_msg,
+                }
+            )
 
     is_verified = await _check_session_verified(session_id, customer_phone)
 
@@ -537,7 +720,7 @@ async def cancel_appointment(
                     "message": (
                         f"For security, cancellation strictly requires phone verification for {customer_phone}. "
                         "Inform the customer that a 6-digit verification code is being sent to their phone, "
-                        "and call send_booking_otp followed by verify_booking_otp."
+                        "and call send_booking_otp."
                     ),
                 }
             )
@@ -585,10 +768,13 @@ async def reschedule_appointment(
     session_id: str | None = None,
     customer_phone: str | None = None,
     notes: str | None = None,
+    otp_code: str | None = None,
 ) -> str:
     """Reschedule an existing booking to a new date and time.
 
     Requires mandatory phone verification via OTP to prevent unauthorized modifications.
+    If OTP was sent and customer provides their 6-digit verification code, pass `otp_code` directly
+    to verify phone and reschedule the booking atomically in a single step!
 
     Args:
         tenant_id: The tenant identifier.
@@ -600,9 +786,10 @@ async def reschedule_appointment(
         session_id: Optional active chat session ID for verification status.
         customer_phone: Customer phone number for OTP verification.
         notes: Optional rescheduling notes.
+        otp_code: Optional 6-digit verification code to verify phone and reschedule booking atomically in one step.
     """
     logger.info(
-        "[MCP Tool: reschedule_appointment] Invoked with arguments: tenant_id=%s, agent_id=%s, booking_id=%s, new_start_time=%s, new_end_time=%s, resource_id=%s, session_id=%s, customer_phone=%s, notes=%s",
+        "[MCP Tool: reschedule_appointment] Invoked with arguments: tenant_id=%s, agent_id=%s, booking_id=%s, new_start_time=%s, new_end_time=%s, resource_id=%s, session_id=%s, customer_phone=%s, notes=%s, has_otp=%s",
         tenant_id,
         agent_id,
         booking_id,
@@ -612,7 +799,34 @@ async def reschedule_appointment(
         session_id,
         customer_phone,
         notes,
+        bool(otp_code),
     )
+
+    if otp_code and otp_code.strip():
+        if not customer_phone or not customer_phone.strip():
+            return json.dumps(
+                {
+                    "status": "failed",
+                    "error": "Customer phone number is required along with OTP code to verify rescheduling.",
+                    "message": "Customer phone number is required along with OTP code to verify rescheduling.",
+                }
+            )
+        success, err_msg = await _verify_and_authenticate_session(
+            phone=customer_phone,
+            otp_code=otp_code,
+            session_id=session_id,
+            tenant_id=tenant_id,
+            agent_id=agent_id,
+            action_name="reschedule_appointment",
+        )
+        if not success:
+            return json.dumps(
+                {
+                    "status": "failed",
+                    "error": err_msg,
+                    "message": err_msg,
+                }
+            )
 
     is_verified = await _check_session_verified(session_id, customer_phone)
 
@@ -685,14 +899,15 @@ async def get_customer_bookings(
     agent_id: str,
     status: str | None = None,
     limit: int = 20,
+    otp_code: str | None = None,
 ) -> str:
     """Retrieve the recent booking records and history (up to 20) for a customer.
 
     CRITICAL SECURITY PROTOCOL:
     Before returning private customer appointment records, the customer's phone number MUST
     be verified via OTP in the active chat session (Layer 2 Deterministic Check).
-    If the session is not verified, this tool returns 'requires_verification'. You MUST
-    then call send_booking_otp and verify_booking_otp with the customer before retrying.
+    If OTP was sent and customer provides their 6-digit verification code, pass `otp_code` directly
+    to verify phone and retrieve booking history atomically in a single step!
 
     Args:
         session_id: Active customer chat session ID.
@@ -701,18 +916,20 @@ async def get_customer_bookings(
         agent_id: The specific agent ID responsible for the scheduling flow.
         status: Optional filter by booking status (e.g. 'confirmed', 'pending', 'cancelled').
         limit: Max number of bookings to return (default 20, max 20).
+        otp_code: Optional 6-digit verification code to verify phone and retrieve bookings atomically in one step.
 
     Returns:
         JSON string containing the list of recent bookings.
     """
     logger.info(
-        "[MCP Tool: get_customer_bookings] Invoked with arguments: session_id=%s, phone=%s, tenant_id=%s, agent_id=%s, status=%s, limit=%s",
+        "[MCP Tool: get_customer_bookings] Invoked with arguments: session_id=%s, phone=%s, tenant_id=%s, agent_id=%s, status=%s, limit=%s, has_otp=%s",
         session_id,
         phone,
         tenant_id,
         agent_id,
         status,
         limit,
+        bool(otp_code),
     )
     cleaned_phone = phone.strip()
     if not cleaned_phone:
@@ -722,6 +939,24 @@ async def get_customer_bookings(
                 "message": "Valid customer phone number is required to look up bookings.",
             }
         )
+
+    if otp_code and otp_code.strip():
+        success, err_msg = await _verify_and_authenticate_session(
+            phone=cleaned_phone,
+            otp_code=otp_code,
+            session_id=session_id,
+            tenant_id=tenant_id,
+            agent_id=agent_id,
+            action_name="get_customer_bookings",
+        )
+        if not success:
+            return json.dumps(
+                {
+                    "status": "failed",
+                    "error": err_msg,
+                    "message": err_msg,
+                }
+            )
 
     verified = await _check_session_verified(session_id, cleaned_phone)
     if not verified:

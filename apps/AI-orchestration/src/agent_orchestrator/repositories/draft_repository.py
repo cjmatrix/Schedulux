@@ -25,9 +25,7 @@ class MongoDraftRepository(DraftRepository):
     ) -> AgentDraft:
         agent_draft = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
         config_obj = (
-            AgentDraftConfig.model_validate(draft_dict)
-            if draft_dict
-            else AgentDraftConfig()
+            AgentDraftConfig.model_validate(draft_dict) if draft_dict else AgentDraftConfig()
         )
         if not agent_draft:
             agent_draft = AgentDraft(

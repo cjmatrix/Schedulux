@@ -150,10 +150,48 @@ export class CustomerChatController implements OnModuleInit {
         session_id: response.session_id,
         token,
         response: response.response,
-        history: response.history || [],
+        user_message_id: response.user_message_id,
+        agent_message_id: response.agent_message_id,
+        created_at: response.created_at,
         booking_id: response.booking_id || null,
         booking_reference: response.booking_reference || null,
         status: response.status || null,
+      },
+    };
+  }
+
+  @Get(API_ROUTES.PUBLIC_CHAT.CONFIG)
+  async getConfig(
+    @Query('tenant_id') tenantId: string,
+    @Query('agent_id') agentId: string,
+  ) {
+    if (!tenantId || !agentId) {
+      throw new BadRequestException(RESPONSE_MESSAGES.CHAT.REQUIRED_FIELDS);
+    }
+
+    const response = await lastValueFrom(
+      this._knowledgeService.getWidgetConfig({
+        tenant_id: tenantId,
+        agent_id: agentId,
+        source: 'live',
+      }),
+    );
+
+    let widgetConfig = {};
+    if (response.widget_config_json) {
+      try {
+        widgetConfig = JSON.parse(response.widget_config_json);
+      } catch {
+        widgetConfig = {};
+      }
+    }
+
+    return {
+      message: 'Widget configuration retrieved',
+      data: {
+        tenant_id: response.tenant_id || tenantId,
+        agent_id: response.agent_id || agentId,
+        widget_config: widgetConfig,
       },
     };
   }

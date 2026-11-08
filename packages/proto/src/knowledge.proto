@@ -12,6 +12,7 @@ service KnowledgeService {
   rpc GetAgentMessages (GetAgentMessagesRequest) returns (GetAgentMessagesResponse);
   rpc CustomerChat (CustomerChatRequest) returns (CustomerChatResponse);
   rpc GetCustomerMessages (GetCustomerMessagesRequest) returns (GetCustomerMessagesResponse);
+  rpc GetWidgetConfig (GetWidgetConfigRequest) returns (GetWidgetConfigResponse);
 
   rpc GetDocumentUploadUrl (GetDocumentUploadUrlRequest) returns (GetDocumentUploadUrlResponse);
   rpc ConfirmDocumentUpload (ConfirmDocumentUploadRequest) returns (ConfirmDocumentUploadResponse);
@@ -147,10 +148,12 @@ message CustomerChatRequest {
 message CustomerChatResponse {
   string session_id = 1;
   string response = 2;
-  repeated CustomerChatMessageInfo history = 3;
-  optional string booking_id = 4;
-  optional string booking_reference = 5;
-  optional string status = 6;
+  optional string booking_id = 3;
+  optional string booking_reference = 4;
+  optional string status = 5;
+  string user_message_id = 6;
+  string agent_message_id = 7;
+  string created_at = 8;
 }
 
 message GetCustomerMessagesRequest {
@@ -165,6 +168,18 @@ message GetCustomerMessagesResponse {
   repeated CustomerChatMessageInfo messages = 1;
   optional string next_cursor = 2;
   bool has_more = 3;
+}
+
+message GetWidgetConfigRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+  string source = 3; // "draft" or "live"
+}
+
+message GetWidgetConfigResponse {
+  string tenant_id = 1;
+  string agent_id = 2;
+  string widget_config_json = 3;
 }
 
 message GetDocumentUploadUrlRequest {

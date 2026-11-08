@@ -28,24 +28,45 @@
       "customer_plural": "Patients",
       "primary_metric": "Active Care Plans",
       "action_metric": "Upcoming Bookings"
-    },
-    "brand": {
-      "primary_color": "#0F0F11",
-      "logo_url": "https://cdn.schedulux.ai/tenants/apex/logo.png"
     }
   },
 
   "widget_config": {
     "agent_name": "Apex AI Assistant",
+    "agent_subtitle": "Typically replies in seconds",
     "avatar_url": "https://cdn.schedulux.ai/tenants/apex/avatar.png",
+    "logo_url": "https://cdn.schedulux.ai/tenants/apex/logo.png",
     "initial_greeting": "Hi! I'm the Apex Dental AI assistant. How can I help you book an appointment today?",
+    "placeholder_text": "Ask about appointments or dental care...",
+    "quick_prompts": [
+      "Book routine cleaning",
+      "Emergency toothache consultation",
+      "Do you accept Delta Dental?"
+    ],
     "fallback_message": "I'll connect you with our front desk team right away. Please hold for a moment.",
-    "position": "right",
-    "launcher_style": "icon_pill",
+    "position": "bottom-right",
+    "bottom_spacing_px": 20,
+    "side_spacing_px": 20,
+    "launcher_style": "bubble",
+    "launcher_icon": "chat",
     "sound_on_load": true,
     "auto_expand_delay_seconds": 6,
     "platform_sources": ["web_widget"],
-    "whitelisted_domains": ["apexclinic.com", "apexdental.com"]
+    "whitelisted_domains": ["apexclinic.com", "apexdental.com"],
+    "theme": {
+      "primary_color": "#0F0F11",
+      "secondary_color": "#2563EB",
+      "background_color": "#FFFFFF",
+      "header_background": "#0F0F11",
+      "header_text_color": "#FFFFFF",
+      "user_bubble_bg": "#0F0F11",
+      "user_bubble_text": "#FFFFFF",
+      "agent_bubble_bg": "#F3F4F6",
+      "agent_bubble_text": "#111827",
+      "border_radius": "16px",
+      "font_family": "inherit",
+      "theme_mode": "light"
+    }
   },
 
   "llm_engine": {

@@ -70,7 +70,9 @@ class CacheRepository(Protocol):
 
     async def delete_cached_draft(self, tenant_id: str, agent_id: str) -> None: ...
 
-    async def get_cached_biz_context(self, tenant_id: str, agent_id: str) -> dict[str, Any] | None: ...
+    async def get_cached_biz_context(
+        self, tenant_id: str, agent_id: str
+    ) -> dict[str, Any] | None: ...
 
     async def set_cached_biz_context(
         self, tenant_id: str, agent_id: str, context: dict[str, Any], ttl: int = 3600

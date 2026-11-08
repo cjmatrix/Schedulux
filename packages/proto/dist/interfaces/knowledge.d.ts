@@ -112,10 +112,12 @@ export interface CustomerChatRequest {
 export interface CustomerChatResponse {
     session_id: string;
     response: string;
-    history: CustomerChatMessageInfo[];
     booking_id?: string | undefined;
     booking_reference?: string | undefined;
     status?: string | undefined;
+    user_message_id: string;
+    agent_message_id: string;
+    created_at: string;
 }
 export interface GetCustomerMessagesRequest {
     tenant_id: string;
@@ -128,6 +130,17 @@ export interface GetCustomerMessagesResponse {
     messages: CustomerChatMessageInfo[];
     next_cursor?: string | undefined;
     has_more: boolean;
+}
+export interface GetWidgetConfigRequest {
+    tenant_id: string;
+    agent_id: string;
+    /** "draft" or "live" */
+    source: string;
+}
+export interface GetWidgetConfigResponse {
+    tenant_id: string;
+    agent_id: string;
+    widget_config_json: string;
 }
 export interface GetDocumentUploadUrlRequest {
     tenant_id: string;
@@ -187,6 +200,7 @@ export interface KnowledgeServiceClient {
     getAgentMessages(request: GetAgentMessagesRequest): Observable<GetAgentMessagesResponse>;
     customerChat(request: CustomerChatRequest): Observable<CustomerChatResponse>;
     getCustomerMessages(request: GetCustomerMessagesRequest): Observable<GetCustomerMessagesResponse>;
+    getWidgetConfig(request: GetWidgetConfigRequest): Observable<GetWidgetConfigResponse>;
     getDocumentUploadUrl(request: GetDocumentUploadUrlRequest): Observable<GetDocumentUploadUrlResponse>;
     confirmDocumentUpload(request: ConfirmDocumentUploadRequest): Observable<ConfirmDocumentUploadResponse>;
     listDocuments(request: ListDocumentsRequest): Observable<ListDocumentsResponse>;
@@ -202,6 +216,7 @@ export interface KnowledgeServiceController {
     getAgentMessages(request: GetAgentMessagesRequest): Promise<GetAgentMessagesResponse> | Observable<GetAgentMessagesResponse> | GetAgentMessagesResponse;
     customerChat(request: CustomerChatRequest): Promise<CustomerChatResponse> | Observable<CustomerChatResponse> | CustomerChatResponse;
     getCustomerMessages(request: GetCustomerMessagesRequest): Promise<GetCustomerMessagesResponse> | Observable<GetCustomerMessagesResponse> | GetCustomerMessagesResponse;
+    getWidgetConfig(request: GetWidgetConfigRequest): Promise<GetWidgetConfigResponse> | Observable<GetWidgetConfigResponse> | GetWidgetConfigResponse;
     getDocumentUploadUrl(request: GetDocumentUploadUrlRequest): Promise<GetDocumentUploadUrlResponse> | Observable<GetDocumentUploadUrlResponse> | GetDocumentUploadUrlResponse;
     confirmDocumentUpload(request: ConfirmDocumentUploadRequest): Promise<ConfirmDocumentUploadResponse> | Observable<ConfirmDocumentUploadResponse> | ConfirmDocumentUploadResponse;
     listDocuments(request: ListDocumentsRequest): Promise<ListDocumentsResponse> | Observable<ListDocumentsResponse> | ListDocumentsResponse;

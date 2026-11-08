@@ -25,12 +25,17 @@ def _format_services_catalog(services: list[dict[str, Any]]) -> str:
     for s in services:
         sid = s.get("id") or s.get("service_id") or "unassigned"
         name = s.get("name") or "Unnamed"
-        reqs = s.get("resource_requirements") or []
-        staff_roles = [
-            f"{r.get('role', 'Staff')}"
-            for r in reqs
-            if str(r.get("resource_type", "")).lower() == "staff" or not r.get("resource_type")
-        ]
+        reqs = s.get("resource_requirements") or s.get("requirements") or []
+        staff_roles = []
+        for r in reqs:
+            rtype = str(r.get("resource_type", "")).lower()
+            if rtype == "staff" or not rtype:
+                role = r.get("role") or "Staff"
+                eligible_ids = r.get("eligible_resource_ids") or []
+                if eligible_ids:
+                    staff_roles.append(f"{role} (eligible: {', '.join(eligible_ids)})")
+                else:
+                    staff_roles.append(f"{role}")
         staff_str = f"staff: [{', '.join(staff_roles)}]" if staff_roles else "general service"
         lines.append(f"  {sid} | {name} | {staff_str}")
     return "\n".join(lines)
@@ -103,7 +108,9 @@ def _build_faq_system_prompt(biz_context: dict[str, Any]) -> str:
     biz_name = biz_context.get("business_name") or "Schedulux Business"
     biz_timezone = biz_context.get("timezone") or "UTC"
     supervisor_prompt = biz_context.get("supervisor_prompt") or ""
-    formatted_hours = biz_context.get("formatted_operating_hours") or "Operating hours not specified."
+    formatted_hours = (
+        biz_context.get("formatted_operating_hours") or "Operating hours not specified."
+    )
     public_phone = biz_context.get("public_phone") or "Not provided"
     support_email = biz_context.get("support_email") or "Not provided"
     address = biz_context.get("address") or "Not provided"
@@ -119,7 +126,6 @@ def _build_faq_system_prompt(biz_context: dict[str, Any]) -> str:
 {supervisor_prompt.strip()}
 """
 
-   
     return f"""You are the Knowledge & Policy specialist for {biz_name}.
 Your sole purpose: answer customer questions about business services, offerings, pricing, operating hours, contact info, procedures, rules, preparation guidelines, and general knowledge accurately.{custom_instructions_block}
 
@@ -139,15 +145,19 @@ Operating Hours & Schedule:
 {resources_catalog}
 
 [Protocol]
-1. For questions about services, offerings, pricing, operating hours, opening/closing times, days open/closed, phone number, email, address, location, or available staff/specialists:
-   Answer DIRECTLY using [Services & Offerings Catalog], [Staff & Resources Catalog], and [Business Profile & Operating Hours].
-   If the customer asks for deeper details on services or specialists/practitioners, invoke `search_services` or `search_resources`.
-2. For questions about policies, refund/cancellation rules, procedures, preparation guidelines, or general business information:
+1. Primary In-Prompt Reference (Zero Tool Calls for Basic Inquiries):
+   - For basic questions about what services exist, offerings, pricing, operating hours, opening/closing times, days open/closed, phone number, email, address, location, or who the specialists are:
+     Answer DIRECTLY using [Services & Offerings Catalog], [Staff & Resources Catalog], and [Business Profile & Operating Hours].
+     You are STRICTLY FORBIDDEN from calling `search_services` or `search_resources` to list offerings or answer basic questions!
+2. On-Demand Deep Details (Tool Calls Allowed):
+   - Call `search_services(service_id=..., tenant_id=..., agent_id=...)` ONLY IF the customer explicitly asks for deeper details, full service descriptions, package inclusions, or specific preparation instructions not provided in the compact catalog.
+   - Call `search_resources(resource_id=..., tenant_id=..., agent_id=...)` ONLY IF the customer explicitly asks for a staff member's background, qualifications, or bio.
+3. For questions about policies, refund/cancellation rules, procedures, preparation guidelines, or general business information:
    Invoke `search_knowledge_base(query=..., tenant_id=..., agent_id=...)` using tenant_id and agent_id from [Active Request Context].
-3. Ground answers to policy/procedure questions STRICTLY on retrieved content from the knowledge base, services, or business profile. Do NOT fabricate policies, terms, or guidelines.
-4. If no matching information is found in the knowledge base, services catalog, or business profile, say: "I don't have that information on file — our team will be happy to assist you directly."
-5. If the customer indicates they want to schedule an appointment or book, let them know our booking concierge can assist them right away.
-6. Tone: knowledgeable, warm, concise, and helpful."""
+4. Ground answers to policy/procedure questions STRICTLY on retrieved content from the knowledge base, services, or business profile. Do NOT fabricate policies, terms, or guidelines.
+5. If no matching information is found in the knowledge base, services catalog, or business profile, say: "I don't have that information on file — our team will be happy to assist you directly."
+6. If the customer indicates they want to schedule an appointment or book, let them know our booking concierge can assist them right away.
+7. Tone: knowledgeable, warm, concise, and helpful."""
 
 
 def _build_faq_request_context(
@@ -172,7 +182,6 @@ async def run_faq_agent(
 ) -> str:
     faq_tools = [t for t in all_tools if t.name in _FAQ_TOOLS]
 
-    
     prior_history: list[BaseMessage] = []
     if (
         conversation_history
@@ -183,7 +192,7 @@ async def run_faq_agent(
     else:
         prior_history = list(conversation_history)
 
-   #l1+l2
+    # l1+l2
     system_prompt = _build_faq_system_prompt(biz_context)
 
     # l4
@@ -235,4 +244,3 @@ async def run_faq_agent(
             "I'm having trouble retrieving that information right now. "
             "Please feel free to call us directly or try again in a moment."
         )
-

@@ -23,4 +23,3 @@ class CustomerGraphState(TypedDict):
     response: str
     error: str | None
     is_sandbox: bool
-

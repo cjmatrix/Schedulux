@@ -456,6 +456,7 @@ message GetAvailabilityResponse {
 message VerifyCustomerRequest {
   string tenant_id = 1;
   string customer_phone = 2;
+  optional string agent_id = 3;
 }
 
 message VerifyCustomerResponse {

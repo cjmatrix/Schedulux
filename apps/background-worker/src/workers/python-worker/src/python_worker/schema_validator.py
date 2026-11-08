@@ -43,11 +43,6 @@ class StrictTerminologySchema(BaseModel):
     primary_metric: Optional[str] = None
     action_metric: Optional[str] = None
 
-class StrictBrandSchema(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    primary_color: Optional[str] = None
-    logo_url: Optional[str] = None
-
 class StrictBusinessProfileSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
     name: Optional[str] = None
@@ -58,7 +53,6 @@ class StrictBusinessProfileSchema(BaseModel):
     address: Optional[str] = None
     contact: Optional[StrictContactSchema] = None
     terminology: Optional[StrictTerminologySchema] = None
-    brand: Optional[StrictBrandSchema] = None
 
 class StrictPriceSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -149,18 +143,41 @@ class StrictSchedulingEngineSchema(BaseModel):
     cancellation_window_hours: Optional[int] = None
     hold_duration_minutes: Optional[int] = None
 
+class StrictWidgetThemeSchema(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    primary_color: Optional[str] = None
+    secondary_color: Optional[str] = None
+    background_color: Optional[str] = None
+    header_background: Optional[str] = None
+    header_text_color: Optional[str] = None
+    user_bubble_bg: Optional[str] = None
+    user_bubble_text: Optional[str] = None
+    agent_bubble_bg: Optional[str] = None
+    agent_bubble_text: Optional[str] = None
+    border_radius: Optional[str] = None
+    font_family: Optional[str] = None
+    theme_mode: Optional[str] = None
+
 class StrictWidgetConfigSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
     agent_name: Optional[str] = None
+    agent_subtitle: Optional[str] = None
     avatar_url: Optional[str] = None
+    logo_url: Optional[str] = None
     initial_greeting: Optional[str] = None
+    placeholder_text: Optional[str] = None
+    quick_prompts: Optional[list[str]] = None
     fallback_message: Optional[str] = None
     position: Optional[str] = None
+    bottom_spacing_px: Optional[int] = None
+    side_spacing_px: Optional[int] = None
     launcher_style: Optional[str] = None
+    launcher_icon: Optional[str] = None
     sound_on_load: Optional[bool] = None
     auto_expand_delay_seconds: Optional[int] = None
     platform_sources: Optional[list[str]] = None
     whitelisted_domains: Optional[list[str]] = None
+    theme: Optional[StrictWidgetThemeSchema] = None
 
 class StrictPhiScrubSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")

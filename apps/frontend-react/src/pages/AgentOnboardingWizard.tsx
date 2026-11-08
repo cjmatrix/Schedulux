@@ -27,6 +27,7 @@ export default function AgentOnboardingWizard() {
   const navigate = useNavigate();
 
   const {
+    tenantId,
     messages,
     inputValue,
     setInputValue,
@@ -42,16 +43,6 @@ export default function AgentOnboardingWizard() {
     isLive,
     isSavingChanges,
     saveChanges,
-    sandboxMessages,
-    setSandboxMessages,
-    sandboxInput,
-    setSandboxInput,
-    isSandboxTyping,
-    sendSandboxMessage,
-    resetSandbox,
-    sandboxHasMore,
-    isFetchingOlderSandboxMessages,
-    fetchOlderSandboxMessages,
   } = useAgentOnboarding({ agentId });
 
   const [showDiffDrawer, setShowDiffDrawer] = useState(false);
@@ -70,17 +61,6 @@ export default function AgentOnboardingWizard() {
   const timezone = businessProfile.timezone || '';
   const operatingHours = draftSchema?.operating_hours || {};
 
-  useEffect(() => {
-    if (sandboxMessages.length === 0) {
-      setSandboxMessages([
-        {
-          role: 'agent',
-          text: `Hello! Welcome to ${clinicName}. I'm your AI booking coordinator. How can I assist you with scheduling or consultations today?`,
-        },
-      ]);
-    }
-  }, [clinicName, sandboxMessages.length, setSandboxMessages]);
-
   const handleFormSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     sendMessage();
@@ -89,10 +69,6 @@ export default function AgentOnboardingWizard() {
   const handleSaveChanges = async () => {
     await saveChanges();
     setShowDiffDrawer(false);
-  };
-
-  const handleSendSandboxMessage = (e: React.FormEvent) => {
-    sendSandboxMessage(e, clinicName);
   };
 
   const scheduleGroups = getOperatingScheduleGroups(operatingHours);
@@ -156,9 +132,7 @@ export default function AgentOnboardingWizard() {
   }, [rawResources, rawServices]);
 
   const guardrails = draftSchema?.guardrails || {};
-  const requireOtp = Boolean(
-    guardrails?.verification_policy?.require_otp_for_new_booking ?? false,
-  );
+  const requireOtp = Boolean(guardrails?.verification_policy?.require_otp_for_new_booking ?? false);
   const phiScrubbing = Boolean(guardrails?.phi_scrubbing?.enabled);
   const emergencyTriage = Boolean(guardrails?.triage_emergency?.enabled);
 
@@ -259,20 +233,9 @@ export default function AgentOnboardingWizard() {
             {rightViewMode === 'sandbox' && (
               <SandboxSimulation
                 clinicName={clinicName}
-                sandboxMessages={sandboxMessages}
-                setSandboxMessages={setSandboxMessages}
-                sandboxInput={sandboxInput}
-                setSandboxInput={setSandboxInput}
-                isSandboxTyping={isSandboxTyping}
-                onSendSandboxMessage={handleSendSandboxMessage}
-                onResetSandbox={() =>
-                  resetSandbox(
-                    `Hello! Welcome to ${clinicName}. I'm your AI booking coordinator. How can I assist you with scheduling or consultations today?`,
-                  )
-                }
-                hasMoreMessages={sandboxHasMore}
-                isLoadingOlder={isFetchingOlderSandboxMessages}
-                onLoadOlderMessages={fetchOlderSandboxMessages}
+                tenantId={tenantId}
+                agentId={agentId}
+                widgetConfig={draftSchema?.widget_config as any}
               />
             )}
 

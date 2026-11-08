@@ -243,6 +243,45 @@ export class KnowledgeController implements OnModuleInit {
     };
   }
 
+  @Get(API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_CONFIG)
+  async getSandboxWidgetConfig(
+    @Req() req: AuthenticatedTenantRequest,
+    @Query('tenant_id') tenantIdParam?: string,
+    @Query('agent_id') agentIdParam?: string,
+  ) {
+    const tenantId = tenantIdParam || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+    }
+    const agentId = agentIdParam || 'default';
+
+    const response = await lastValueFrom(
+      this._knowledgeService.getWidgetConfig({
+        tenant_id: tenantId,
+        agent_id: agentId,
+        source: 'draft',
+      }),
+    );
+
+    let widgetConfig = {};
+    if (response.widget_config_json) {
+      try {
+        widgetConfig = JSON.parse(response.widget_config_json);
+      } catch {
+        widgetConfig = {};
+      }
+    }
+
+    return {
+      message: 'Sandbox widget configuration retrieved',
+      data: {
+        tenant_id: response.tenant_id || tenantId,
+        agent_id: response.agent_id || agentId,
+        widget_config: widgetConfig,
+      },
+    };
+  }
+
   @Get(API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_MESSAGES)
   async getSandboxMessages(
     @Req() req: AuthenticatedTenantRequest,
@@ -336,9 +375,15 @@ export class KnowledgeController implements OnModuleInit {
       message: RESPONSE_MESSAGES.KNOWLEDGE.SANDBOX_CHAT_PROCESSED,
       data: {
         reply: response.response,
+        response: response.response,
         session_id: response.session_id,
         token,
-        history: response.history || [],
+        user_message_id: response.user_message_id,
+        agent_message_id: response.agent_message_id,
+        created_at: response.created_at,
+        booking_id: response.booking_id || undefined,
+        booking_reference: response.booking_reference || undefined,
+        status: response.status || undefined,
       },
     };
   }

@@ -17,4 +17,3 @@ export function useCustomersList(params?: ListCustomersParams) {
     staleTime: 30 * 1000,
   });
 }
-

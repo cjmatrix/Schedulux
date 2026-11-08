@@ -70,7 +70,6 @@ export function CreateBookingModal({
 
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlotInfo | null>(null);
 
-
   const [customerName, setCustomerName] = useState<string>('');
   const [customerPhone, setCustomerPhone] = useState<string>('');
   const [customerEmail, setCustomerEmail] = useState<string>('');

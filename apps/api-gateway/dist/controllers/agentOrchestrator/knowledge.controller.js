@@ -185,6 +185,35 @@ let KnowledgeController = class KnowledgeController {
             },
         };
     }
+    async getSandboxWidgetConfig(req, tenantIdParam, agentIdParam) {
+        const tenantId = tenantIdParam || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+        }
+        const agentId = agentIdParam || 'default';
+        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getWidgetConfig({
+            tenant_id: tenantId,
+            agent_id: agentId,
+            source: 'draft',
+        }));
+        let widgetConfig = {};
+        if (response.widget_config_json) {
+            try {
+                widgetConfig = JSON.parse(response.widget_config_json);
+            }
+            catch {
+                widgetConfig = {};
+            }
+        }
+        return {
+            message: 'Sandbox widget configuration retrieved',
+            data: {
+                tenant_id: response.tenant_id || tenantId,
+                agent_id: response.agent_id || agentId,
+                widget_config: widgetConfig,
+            },
+        };
+    }
     async getSandboxMessages(req, agentIdParam, sessionIdParam, token, before, limitStr) {
         const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
         if (!tenantId) {
@@ -256,9 +285,15 @@ let KnowledgeController = class KnowledgeController {
             message: messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.SANDBOX_CHAT_PROCESSED,
             data: {
                 reply: response.response,
+                response: response.response,
                 session_id: response.session_id,
                 token,
-                history: response.history || [],
+                user_message_id: response.user_message_id,
+                agent_message_id: response.agent_message_id,
+                created_at: response.created_at,
+                booking_id: response.booking_id || undefined,
+                booking_reference: response.booking_reference || undefined,
+                status: response.status || undefined,
             },
         };
     }
@@ -457,6 +492,15 @@ __decorate([
     __metadata("design:paramtypes", [Object, knowledge_dto_js_1.InitCustomerChatDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "sandboxInit", null);
+__decorate([
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_CONFIG),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)('tenant_id')),
+    __param(2, (0, common_1.Query)('agent_id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "getSandboxWidgetConfig", null);
 __decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_MESSAGES),
     __param(0, (0, common_1.Req)()),

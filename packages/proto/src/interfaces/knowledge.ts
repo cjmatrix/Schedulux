@@ -140,10 +140,12 @@ export interface CustomerChatRequest {
 export interface CustomerChatResponse {
   session_id: string;
   response: string;
-  history: CustomerChatMessageInfo[];
   booking_id?: string | undefined;
   booking_reference?: string | undefined;
   status?: string | undefined;
+  user_message_id: string;
+  agent_message_id: string;
+  created_at: string;
 }
 
 export interface GetCustomerMessagesRequest {
@@ -158,6 +160,19 @@ export interface GetCustomerMessagesResponse {
   messages: CustomerChatMessageInfo[];
   next_cursor?: string | undefined;
   has_more: boolean;
+}
+
+export interface GetWidgetConfigRequest {
+  tenant_id: string;
+  agent_id: string;
+  /** "draft" or "live" */
+  source: string;
+}
+
+export interface GetWidgetConfigResponse {
+  tenant_id: string;
+  agent_id: string;
+  widget_config_json: string;
 }
 
 export interface GetDocumentUploadUrlRequest {
@@ -237,6 +252,8 @@ export interface KnowledgeServiceClient {
 
   getCustomerMessages(request: GetCustomerMessagesRequest): Observable<GetCustomerMessagesResponse>;
 
+  getWidgetConfig(request: GetWidgetConfigRequest): Observable<GetWidgetConfigResponse>;
+
   getDocumentUploadUrl(request: GetDocumentUploadUrlRequest): Observable<GetDocumentUploadUrlResponse>;
 
   confirmDocumentUpload(request: ConfirmDocumentUploadRequest): Observable<ConfirmDocumentUploadResponse>;
@@ -281,6 +298,10 @@ export interface KnowledgeServiceController {
     request: GetCustomerMessagesRequest,
   ): Promise<GetCustomerMessagesResponse> | Observable<GetCustomerMessagesResponse> | GetCustomerMessagesResponse;
 
+  getWidgetConfig(
+    request: GetWidgetConfigRequest,
+  ): Promise<GetWidgetConfigResponse> | Observable<GetWidgetConfigResponse> | GetWidgetConfigResponse;
+
   getDocumentUploadUrl(
     request: GetDocumentUploadUrlRequest,
   ): Promise<GetDocumentUploadUrlResponse> | Observable<GetDocumentUploadUrlResponse> | GetDocumentUploadUrlResponse;
@@ -310,6 +331,7 @@ export function KnowledgeServiceControllerMethods() {
       "getAgentMessages",
       "customerChat",
       "getCustomerMessages",
+      "getWidgetConfig",
       "getDocumentUploadUrl",
       "confirmDocumentUpload",
       "listDocuments",

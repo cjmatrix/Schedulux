@@ -60,18 +60,11 @@ class CustomerMessageRepository:
         if before:
             query["created_at"] = {"$lt": before}
 
-        messages = (
-            await CustomerMessage.find(query)
-            .sort("-created_at")
-            .limit(limit + 1)
-            .to_list()
-        )
+        messages = await CustomerMessage.find(query).sort("-created_at").limit(limit + 1).to_list()
         has_more = len(messages) > limit
         slice_msgs = messages[:limit]
 
-        next_cursor = (
-            slice_msgs[-1].created_at.isoformat() if slice_msgs and has_more else None
-        )
+        next_cursor = slice_msgs[-1].created_at.isoformat() if slice_msgs and has_more else None
 
         return list(reversed(slice_msgs)), has_more, next_cursor
 
@@ -120,4 +113,3 @@ class CustomerMessageRepository:
             updates["customer_id"] = customer_id
 
         await CustomerConversation.find({"session_id": session_id}).update({"$set": updates})
-

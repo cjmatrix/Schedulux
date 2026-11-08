@@ -271,6 +271,25 @@ def _format_draft_toon(draft: dict) -> str:
         if isinstance(vp, dict) and vp.get("require_otp_for_new_booking"):
             lines.append("guardrails.verification: require_otp=true")
 
+    wc = draft.get("widget_config")
+    if wc and isinstance(wc, dict):
+        lines.append("widget_config:")
+        for k in (
+            "agent_name",
+            "agent_subtitle",
+            "initial_greeting",
+            "position",
+            "launcher_style",
+            "launcher_icon",
+        ):
+            if wc.get(k):
+                lines.append(f"  {k}: {wc[k]}")
+        theme = wc.get("theme")
+        if isinstance(theme, dict):
+            theme_parts = [f"{tk}={tv}" for tk, tv in theme.items() if tv is not None]
+            if theme_parts:
+                lines.append(f"  theme: {', '.join(theme_parts)}")
+
     sp = draft.get("supervisor_prompt")
     if sp and str(sp).strip():
         lines.append(f"supervisor_prompt: {str(sp).strip()}")

@@ -37,7 +37,9 @@ export const CanvasHeader: React.FC<CanvasHeaderProps> = ({
         </button>
         <div
           className="inline-flex"
-          title={!isLive ? 'After publishing your agent, you can test it in the sandbox' : undefined}
+          title={
+            !isLive ? 'After publishing your agent, you can test it in the sandbox' : undefined
+          }
         >
           <button
             type="button"

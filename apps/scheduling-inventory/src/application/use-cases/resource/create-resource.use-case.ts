@@ -1,5 +1,8 @@
+import * as grpc from '@grpc/grpc-js';
 import { Inject, Injectable } from '@nestjs/common';
+import { RpcException } from '@nestjs/microservices';
 import { CreateResourceRequest } from '@repo/proto/scheduling';
+import { getTierConfig } from '../../../domain/constants/tiers.constant.js';
 import {
   DispatchStatus,
   ResourceEntity,
@@ -13,6 +16,8 @@ import {
   UNIT_OF_WORK,
 } from '../../../domain/tokens.js';
 import { generateSemanticId } from '../../../domain/utils/id-generator.js';
+import type { ICacheRepository } from '../../../infrastructure/cache/cache-repository.interface.js';
+import { CACHE_REPOSITORY } from '../../../infrastructure/cache/redis.module.js';
 import { ICreateResourceUseCase } from '../../interfaces/resource-use-cases.interface.js';
 import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-events-producer.interface.js';
 
@@ -25,9 +30,28 @@ export class CreateResourceUseCase implements ICreateResourceUseCase {
     private readonly _eventsProducer: ISchedulingEventsProducer,
     @Inject(UNIT_OF_WORK)
     private readonly _unitOfWork: IUnitOfWork,
+    @Inject(CACHE_REPOSITORY)
+    private readonly _cacheRepo: ICacheRepository,
   ) {}
 
   async execute(dto: CreateResourceRequest): Promise<ResourceEntity> {
+    
+    const tier = (await this._cacheRepo.get(`tenant:${dto.tenant_id}:tier`)) || 'free';
+    const tierConfig = getTierConfig(tier);
+
+    if (tierConfig.max_resources !== -1) {
+      const currentCount = await this._resourceRepository.countByTenant(
+        dto.tenant_id,
+        dto.agent_id || undefined,
+      );
+      if (currentCount >= tierConfig.max_resources) {
+        throw new RpcException({
+          code: grpc.status.RESOURCE_EXHAUSTED,
+          message: `Resource limit reached (${tierConfig.max_resources} resources per agent) for your tier (${tierConfig.name}). This agent currently has ${currentCount} resources. Please upgrade your tier.`,
+        });
+      }
+    }
+
     const resourceId = generateSemanticId('res', dto.name);
 
     const resource = new ResourceEntity({

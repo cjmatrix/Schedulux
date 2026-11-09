@@ -1,5 +1,7 @@
 import type { JSX } from 'preact';
+import { useMemo } from 'preact/hooks';
 import { CheckCircleIcon } from '../icons';
+import { renderMarkdown } from '../markdown';
 import type { WidgetChatMessage } from '../types';
 
 interface MessageBubbleProps {
@@ -22,13 +24,20 @@ export function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
   const isPending = message.delivery_status === 'pending';
   const timeText = formatTime(message.created_at);
 
+  const htmlContent = useMemo(() => {
+    return renderMarkdown(message.content || '');
+  }, [message.content]);
+
   return (
     <div
       className={`schedulux-msg-row ${isUser ? 'user' : 'agent'} ${isPending ? 'is-pending' : ''}`}
       style={isPending ? { opacity: 0.72 } : undefined}
     >
       <div className="schedulux-bubble">
-        {message.content}
+        <div
+          className="schedulux-markdown"
+          dangerouslySetInnerHTML={{ __html: htmlContent }}
+        />
         {message.booking_reference && (
           <div className="schedulux-booking-card">
             <div className="schedulux-booking-header">

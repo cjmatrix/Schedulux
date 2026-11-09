@@ -84,6 +84,113 @@ export class RedisService
     }
   }
 
+  getClient(): Redis {
+    return this._client;
+  }
+
+  /**
+   * Atomic sliding-window / counter rate check via Lua script.
+   * Returns allowed status, remaining requests, and reset TTL in seconds.
+   */
+  async checkRateLimit(
+    key: string,
+    limit: number,
+    windowSeconds = 60,
+  ): Promise<{ allowed: boolean; remaining: number; resetTime: number; total: number }> {
+    if (!this._client) {
+      return { allowed: true, remaining: limit, resetTime: windowSeconds, total: 1 };
+    }
+
+    const script = `
+      local current = redis.call('INCR', KEYS[1])
+      if current == 1 then
+        redis.call('EXPIRE', KEYS[1], ARGV[1])
+      end
+      local ttl = redis.call('TTL', KEYS[1])
+      return {current, ttl}
+    `;
+
+    try {
+      const res = (await this._client.eval(script, 1, key, windowSeconds)) as [number, number];
+      const total = Number(res[0]);
+      const ttl = Number(res[1]) > 0 ? Number(res[1]) : windowSeconds;
+
+      const allowed = total <= limit;
+      const remaining = Math.max(0, limit - total);
+
+      return {
+        allowed,
+        remaining,
+        resetTime: ttl,
+        total,
+      };
+    } catch (err) {
+      this._logger.warn(`Redis rate limit evaluation error for key ${key}, failing open:`, err);
+      return { allowed: true, remaining: 1, resetTime: windowSeconds, total: 1 };
+    }
+  }
+
+  async getTenantTier(tenantId: string): Promise<string | null> {
+    try {
+      return await this._client.get(`tenant:${tenantId}:tier`);
+    } catch (err) {
+      this._logger.error(`Failed to get cached tenant tier for ${tenantId}:`, err);
+      return null;
+    }
+  }
+
+  async setTenantTier(tenantId: string, tier: string, ttlSeconds = 3600): Promise<void> {
+    try {
+      await this._client.set(`tenant:${tenantId}:tier`, tier, 'EX', ttlSeconds);
+    } catch (err) {
+      this._logger.error(`Failed to cache tenant tier for ${tenantId}:`, err);
+    }
+  }
+
+  async getWeeklyTokenUsage(tenantId: string): Promise<number> {
+    try {
+      const raw = await this._client.get(`tenant:${tenantId}:tokens:weekly`);
+      return raw ? parseInt(raw, 10) || 0 : 0;
+    } catch (err) {
+      this._logger.error(`Failed to get weekly token usage for ${tenantId}:`, err);
+      return 0;
+    }
+  }
+
+  async recordTokenUsage(
+    tenantId: string,
+    tokens: number,
+    weeklyLimit: number,
+  ): Promise<{ current: number; limit: number; exceeded: boolean }> {
+    const key = `tenant:${tenantId}:tokens:weekly`;
+    try {
+      const multi = this._client.multi();
+      multi.incrby(key, tokens);
+      multi.ttl(key);
+      const results = await multi.exec();
+
+      let current = tokens;
+      let ttl = -1;
+      if (results && results[0] && !results[0][0]) {
+        current = Number(results[0][1]);
+      }
+      if (results && results[1] && !results[1][0]) {
+        ttl = Number(results[1][1]);
+      }
+
+      // If key doesn't have an expiration (ttl == -1), set it to 7 days
+      if (ttl < 0) {
+        await this._client.expire(key, 7 * 24 * 3600);
+      }
+
+      const exceeded = weeklyLimit !== -1 && current > weeklyLimit;
+      return { current, limit: weeklyLimit, exceeded };
+    } catch (err) {
+      this._logger.error(`Failed to record token usage for ${tenantId}:`, err);
+      return { current: tokens, limit: weeklyLimit, exceeded: false };
+    }
+  }
+
   async onModuleDestroy() {
     this._logger.log('Disconnecting from Redis');
     if (this._subscriber) await this._subscriber.quit();

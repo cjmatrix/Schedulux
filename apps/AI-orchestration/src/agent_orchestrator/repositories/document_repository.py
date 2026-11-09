@@ -75,6 +75,12 @@ class MongoDocumentRepository(DocumentRepository):
         docs = await KnowledgeDocument.find(*query).sort("-created_at").to_list()
         return docs
 
+    async def count_documents(self, tenant_id: str, agent_id: str | None = None) -> int:
+        query = [KnowledgeDocument.tenant_id == tenant_id]
+        if agent_id:
+            query.append(KnowledgeDocument.agent_id == agent_id)
+        return await KnowledgeDocument.find(*query).count()
+
     async def delete_document(self, tenant_id: str, document_id: str) -> bool:
         doc = await self.get_by_doc_id(tenant_id, document_id)
         if not doc:

@@ -42,6 +42,8 @@ class DraftRepository(Protocol):
 
     async def list_drafts(self, tenant_id: str) -> list[AgentDraft]: ...
 
+    async def count_drafts(self, tenant_id: str) -> int: ...
+
     async def upsert_agent_draft(
         self,
         tenant_id: str,
@@ -165,6 +167,10 @@ class DocumentRepository(Protocol):
     async def list_documents(
         self, tenant_id: str, agent_id: str | None = None
     ) -> list[KnowledgeDocument]: ...
+
+    async def count_documents(
+        self, tenant_id: str, agent_id: str | None = None
+    ) -> int: ...
 
     async def delete_document(self, tenant_id: str, document_id: str) -> bool: ...
 

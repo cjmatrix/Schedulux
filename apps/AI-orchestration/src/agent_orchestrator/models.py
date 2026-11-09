@@ -52,17 +52,17 @@ class TerminologyEmbed(TolerantBaseModel):
 
 class WidgetThemeEmbed(TolerantBaseModel):
     primary_color: str = "#4F46E5"
+    theme_mode: str = "light"
     secondary_color: str | None = None
-    background_color: str = "#FFFFFF"
+    background_color: str | None = None
     header_background: str | None = None
-    header_text_color: str = "#FFFFFF"
+    header_text_color: str | None = None
     user_bubble_bg: str | None = None
-    user_bubble_text: str = "#FFFFFF"
-    agent_bubble_bg: str = "#F3F4F6"
-    agent_bubble_text: str = "#111827"
+    user_bubble_text: str | None = None
+    agent_bubble_bg: str | None = None
+    agent_bubble_text: str | None = None
     border_radius: str = "16px"
     font_family: str = "inherit"
-    theme_mode: str = "light"
 
 
 class BusinessProfileEmbed(TolerantBaseModel):

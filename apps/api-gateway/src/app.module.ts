@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { CustomerChatController } from './controllers/agentOrchestrator/customer-chat.controller.js';
@@ -10,6 +10,7 @@ import { SuperAdminTenantController } from './controllers/superadmin/superadmin-
 import { TenantController } from './controllers/tenant/tenant.controller.js';
 import { RolesGuard } from './guards/roles.guard.js';
 import { TenantAuthGuard } from './guards/tenant-auth.guard.js';
+import { RateLimiterMiddleware } from './middleware/rate-limiter.middleware.js';
 import { RedisService } from './services/redis.service.js';
 import { SchemaGateway } from './websockets/schema.gateway.js';
 
@@ -123,6 +124,11 @@ import { SchemaGateway } from './websockets/schema.gateway.js';
     SchemaGateway,
     RolesGuard,
     TenantAuthGuard,
+    RateLimiterMiddleware,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RateLimiterMiddleware).forRoutes('*');
+  }
+}

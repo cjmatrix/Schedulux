@@ -6,7 +6,9 @@ import { getWidgetStyles } from './styles';
 import type { ScheduluxWidgetInstance, WidgetConfig, WidgetInitOptions } from './types';
 
 export { ChatWidget } from './components/ChatWidget';
+export { renderMarkdown } from './markdown';
 export { getWidgetStyles } from './styles';
+export * from './theme';
 export * from './types';
 
 const activeInstances = new Map<string, ScheduluxWidgetInstance>();

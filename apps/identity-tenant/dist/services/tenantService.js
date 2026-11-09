@@ -128,6 +128,7 @@ let TenantService = class TenantService {
             tenant_id: tenant._id,
             email: tenant.contact_email,
             role: 'tenant_owner',
+            tier: tenant.tier || 'starter',
         }, this._jwtSecret, { expiresIn: this._accessTokenExpiry });
         const tokenId = nanoid(16);
         const refreshToken = this._jwtService.sign({
@@ -201,6 +202,7 @@ let TenantService = class TenantService {
             tenant_id: tenant._id,
             email: tenant.contact_email,
             role: 'tenant_owner',
+            tier: tenant.tier || 'starter',
         }, this._jwtSecret, { expiresIn: this._accessTokenExpiry });
         const tokenId = nanoid(16);
         const refreshToken = this._jwtService.sign({
@@ -268,6 +270,7 @@ let TenantService = class TenantService {
             tenant_id: tenant._id,
             email: tenant.contact_email,
             role: 'tenant_owner',
+            tier: tenant.tier || 'starter',
         }, this._jwtSecret, { expiresIn: this._accessTokenExpiry });
         const newTokenId = nanoid(16);
         const newRefreshToken = this._jwtService.sign({

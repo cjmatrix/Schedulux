@@ -30,4 +30,5 @@ export interface IServiceRepository {
   delete(tenantId: string, serviceId: string): Promise<boolean>;
   bulkUpsert(services: ServiceEntity[]): Promise<ServiceEntity[]>;
   findByTenant(tenantId: string, agentId?: string): Promise<ServiceEntity[]>;
+  countByTenant(tenantId: string, agentId?: string): Promise<number>;
 }

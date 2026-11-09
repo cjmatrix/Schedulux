@@ -10,6 +10,9 @@ from typing import cast
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+from agent_orchestrator.clients.redis_client import get_redis_client
+from agent_orchestrator.config.tier_constants import get_tier_config
+from agent_orchestrator.domain.exceptions import TierQuotaExceededException
 from agent_orchestrator.models import StrictDraftPatchValidator
 from agent_orchestrator.workflows.tenant_agent.state import GraphState, SemanticAction
 from agent_orchestrator.workflows.tenant_agent.tools import apply_draft_merge
@@ -128,6 +131,48 @@ CRITICAL RULES FOR RECOVERY:
         except Exception:
             pass
     draft = state.get("draft", {})
+
+    tenant_tier = "free"
+    if tenant_id:
+        try:
+            redis_client = get_redis_client()
+            stored_tier = await redis_client.get(f"tenant:{tenant_id}:tier")
+            if stored_tier:
+                tenant_tier = stored_tier
+        except Exception as re:
+            print(f"[node_llm_semantic_review] Warning fetching tenant tier: {re}", flush=True)
+
+    tier_cfg = get_tier_config(tenant_tier)
+    max_services = tier_cfg["max_services"]
+    max_resources = tier_cfg["max_resources"]
+
+    current_services = [
+        s for s in draft.get("services", [])
+        if isinstance(s, dict) and not s.get("is_deleted", False)
+    ]
+    current_resources = [
+        r for r in draft.get("resources", [])
+        if isinstance(r, dict) and not r.get("is_deleted", False)
+    ]
+    svc_count = len(current_services)
+    res_count = len(current_resources)
+
+    svc_limit_str = "Unlimited" if max_services == -1 else str(max_services)
+    res_limit_str = "Unlimited" if max_resources == -1 else str(max_resources)
+
+    tier_quota_block = f"""
+SUBSCRIPTION TIER & CAPACITY CONSTRAINTS:
+- Tenant Subscription Plan: {tier_cfg['name']} ({tier_cfg['tier']})
+- Services Quota: {svc_count} / {svc_limit_str} active services used
+- Resources Quota: {res_count} / {res_limit_str} active resources used
+CRITICAL TIER ENFORCEMENT RULES:
+1. You MUST NEVER add more services than {svc_limit_str} or more resources than {res_limit_str}.
+2. If the user asks to add a service or resource that would exceed their quota:
+   - DO NOT emit an 'update_schema' action that exceeds the limit!
+   - Choose 'ask_user' and politely explain that their current {tier_cfg['name']} plan allows a maximum of {svc_limit_str} services and {res_limit_str} resources.
+   - Advise them to either replace/remove an existing entity or upgrade their subscription to unlock higher limits.
+"""
+
     gaps = _compute_structural_gaps(draft)
     gaps_block = ""
     if gaps:
@@ -177,7 +222,7 @@ These features are fully configurable and can dramatically improve the user's bo
 6. WIDGET CUSTOMISATION & BRANDING (widget_config):
    - Ask: "Would you like to customize the chat booking widget's appearance? (e.g. chatbot name, greeting message, theme color palette, launcher style, or opening delay)"
    - Relevant when: business profile and core services are configured, allowing the business owner to brand their customer-facing chat widget.
-   - Fields: agent_name, agent_subtitle, avatar_url, logo_url, initial_greeting, placeholder_text, quick_prompts, fallback_message, position, bottom_spacing_px, side_spacing_px, launcher_style, launcher_icon, sound_on_load, auto_expand_delay_seconds, platform_sources, whitelisted_domains, theme (primary_color, secondary_color, background_color, header_background, header_text_color, user_bubble_bg, user_bubble_text, agent_bubble_bg, agent_bubble_text, border_radius, font_family, theme_mode).
+   - Fields: agent_name, agent_subtitle, avatar_url, logo_url, initial_greeting, placeholder_text, quick_prompts, fallback_message, position, bottom_spacing_px, side_spacing_px, launcher_style, launcher_icon, sound_on_load, auto_expand_delay_seconds, platform_sources, whitelisted_domains, theme (primary_color, theme_mode, and optional overrides: secondary_color, background_color, header_background, header_text_color, user_bubble_bg, user_bubble_text, agent_bubble_bg, agent_bubble_text, border_radius, font_family).
 
 7. SUPERVISOR / CUSTOM AI INSTRUCTIONS (supervisor_prompt):
    - Ask: "Do you want to give the AI any special instructions? (e.g. 'Always upsell the premium package' or 'Never book Sundays')"
@@ -193,7 +238,7 @@ SUGGESTION TIMING RULES:
     prompt = f"""You are the Schedulux Lead Booking Architect & Business Mentor.
 Your mission is to collaborate with business owners (doctors, tailors, salon owners, mechanics, hoteliers, consultants) to design, configure, and refine their automated AI booking receptionist.
 You are NOT a bureaucratic form-filler; you are an experienced operations partner who understands how appointments and client workflows operate in the real world.
-{summary_block}{facts_block}{gaps_block}{obs_block}{optional_features_block}
+{summary_block}{facts_block}{tier_quota_block}{gaps_block}{obs_block}{optional_features_block}
 
 CORE ARCHITECTURAL ROLES & INTENT DISPATCH:
 Whenever the user speaks, analyze their intent into one of these 3 operational modes:
@@ -383,105 +428,40 @@ DOMAIN INTEGRITY & DEPENDENCY RULES:
    - Schedulux requires standard IANA timezone identifiers (e.g., "Asia/Kolkata", "America/New_York", "America/Los_Angeles", "Europe/London", "Asia/Dubai", etc.).
    - If the user mentions a location, state, city, or local timezone acronym (e.g., "we're in California", "Mumbai", "London", "EST", "IST"), map it to the proper IANA timezone (e.g. "America/Los_Angeles", "Asia/Kolkata", "Europe/London", "America/New_York") and include `business_profile: {{"timezone": "..."}}` in `draft_update`.
    - Timezone is a mandatory deployment item: if `business_profile.timezone` is missing from the checklist, actively ask the user what timezone their business operates in before finalizing.
-9. WIDGET CONFIGURATION & COHESIVE THEME HARMONIZATION (widget_config):
-   When configuring or updating the customer booking widget, you have full control over both functional widget behavior and its complete visual theme design:
+9. WIDGET CONFIGURATION & SMART THEME ENGINE (widget_config):
+   When configuring or updating the customer booking widget, you control both functional widget behavior and its visual theme:
 
    A. WIDGET FUNCTIONAL & BEHAVIORAL FIELDS:
-      • agent_name (str): The public display name of the assistant shown in the header and message bubbles (e.g. "Nano Carwash Concierge", "Apex Health Assistant").
+      • agent_name (str): Public display name shown in the header and message bubbles (e.g. "Nano Carwash Concierge", "Apex Health Assistant").
       • agent_subtitle (str): Status / availability subtitle beneath the name (e.g. "Typically replies in seconds", "Online Booking Assistant").
       • avatar_url (str): Public image URL for the agent's circular avatar.
       • logo_url (str): Public image URL for the business logo shown in the header.
-      • initial_greeting (str): The opening message automatically displayed in the chat window when a customer opens it (e.g. "Hello! Welcome to Nano Carwash. How can I help you book today?").
+      • initial_greeting (str): Opening message automatically displayed in the chat window when a customer opens it (e.g. "Hello! Welcome to Nano Carwash. How can I help you book today?").
       • placeholder_text (str): Placeholder prompt inside the chat input box (e.g. "Type a message or select a service...").
       • quick_prompts (list of str): 2 to 4 interactive clickable starter chips (e.g. ["Book a Car Wash", "Check available times", "Our pricing"]).
       • fallback_message (str): Friendly fallback message if an unexpected network or server error occurs.
       • position (str): Screen placement of the floating widget launcher button ("bottom-right", "bottom-left", "top-right", "top-left").
       • bottom_spacing_px (int): Vertical distance in pixels from the bottom edge of the screen (default: 20).
       • side_spacing_px (int): Horizontal distance in pixels from the side edge of the screen (default: 20).
-      • launcher_style (str): The shape and visual style of the launcher button:
-        - "bubble": Circular floating action button with icon (58x58px).
-        - "pill": Elongated rounded pill button with icon and label text.
-        - "bar": Sleek compact rounded horizontal bar.
+      • launcher_style (str): The shape and visual style of the launcher button: "bubble" (circular FAB 58x58px), "pill" (elongated button with icon & text), or "bar" (compact horizontal bar).
       • launcher_icon (str): Icon glyph rendered inside the launcher button ("chat", "calendar", "help").
       • sound_on_load (bool): True to play a subtle audio chime when the chat widget loads, False otherwise.
-      • auto_expand_delay_seconds (int | null): Seconds to wait before automatically expanding the chat window on desktop (e.g. 5, or null to stay minimized until clicked).
+      • auto_expand_delay_seconds (int | null): Seconds to wait before automatically expanding the chat window on desktop (or null to stay minimized until clicked).
       • platform_sources (list of str): Enabled platforms/channels (e.g. ["web", "whatsapp", "instagram"]).
       • whitelisted_domains (list of str): Domains authorized to embed the widget (e.g. ["example.com"]).
 
-   B. COMPREHENSIVE THEME FIELDS (theme):
-      • primary_color (hex str): The primary brand signature color. Used for primary accents, launcher button background, and key highlights (e.g. Emerald "#059669", Cobalt "#2563EB", Amber "#D97706", Rose "#E11D48", Dark Slate "#0F172A").
-      • secondary_color (hex str): Complementary accent or hover/active state color (e.g. "#10B981" for emerald, "#3B82F6" for cobalt, "#F59E0B" for amber).
-      • background_color (hex str): Background color of the main chat window body. Crisp white ("#FFFFFF") or soft tint in light mode; deep slate/obsidian ("#0F172A", "#111827") in dark mode.
-      • header_background (hex str): Background of the top header bar. Typically matches primary_color, a rich deep tone of the theme (e.g. "#047857" for emerald, "#1E40AF" for navy), or modern dark slate ("#0F172A").
-      • header_text_color (hex str): Color of text and icons inside the header. MUST have high WCAG contrast against header_background (e.g. "#FFFFFF" for dark/saturated headers; "#111827" for light headers).
-      • user_bubble_bg (hex str): Background color of customer/user message bubbles. Typically matches primary_color (e.g. "#059669") or a rich brand tone.
-      • user_bubble_text (hex str): Text color inside user message bubbles. MUST have high contrast against user_bubble_bg (e.g. "#FFFFFF").
-      • agent_bubble_bg (hex str): Background color of receptionist/agent message bubbles. In light mode: a soft, subtle pastel tint harmonious with the theme (e.g. light mint "#F0FDF4" for green theme, ice blue "#EFF6FF" for blue theme, warm cream "#FEF3C7" for gold theme, soft lavender "#F5F3FF" for purple theme, or clean neutral "#F1F5F9"). In dark mode: elevated dark surface ("#1F2937", "#1E293B").
-      • agent_bubble_text (hex str): Text color inside agent bubbles. MUST have crisp, legible contrast against agent_bubble_bg (e.g. deep pine "#064E3B" for green theme, deep navy "#1E3A8A" for blue theme, "#111827" for neutral light mode, "#F8FAFC" for dark mode).
-      • border_radius (str): Corner curvature of the widget window, message bubbles, and inputs (e.g. "16px" for modern smooth default, "12px" for corporate clean, "24px" for ultra-rounded friendly, "8px" for compact/sharp).
-      • font_family (str): CSS font family stack (e.g. "inherit", "Inter, system-ui, sans-serif", "Plus Jakarta Sans, sans-serif", "system-ui, -apple-system, sans-serif").
-      • theme_mode (str): Overall widget visual mode ("light", "dark", "auto").
-
-   C. CRITICAL THEME HARMONIZATION DIRECTIVE (NEVER CHANGE JUST PRIMARY COLOR IN ISOLATION):
-      Whenever the user asks to change or set a theme color or visual style (e.g., "make green color themed agent", "change theme to blue", "give it a dark luxury theme", "make it purple", "sunset orange theme"):
-      - YOU ARE STRICTLY FORBIDDEN from merely setting `primary_color` while leaving other theme fields untouched or mismatched!
-      - You MUST comprehensively adjust and harmonize EVERY aspect of `widget_config.theme` so the entire widget looks professionally designed, cohesive, and visually stunning.
-      - Always emit all 12 theme fields together in `widget_config.theme`:
-        1. primary_color: Signature brand color.
-        2. secondary_color: Complementary supporting accent.
-        3. background_color: Clean body canvas background.
-        4. header_background: Deep/rich header banner background.
-        5. header_text_color: High contrast header text.
-        6. user_bubble_bg: User message bubble background.
-        7. user_bubble_text: User message bubble text color.
-        8. agent_bubble_bg: Soft, pastel-tinted agent bubble background harmonized with the theme.
-        9. agent_bubble_text: High contrast readable agent bubble text.
-        10. border_radius: Consistent border curvature.
-        11. font_family: Clean typography.
-        12. theme_mode: "light", "dark", or "auto".
-
-      CURATED HARMONIOUS COLOR RECIPES:
-      • Green / Emerald (e.g. "make green color themed agent", "mint green", "eco / nature"):
-        primary_color: "#059669", secondary_color: "#10B981", background_color: "#FFFFFF",
-        header_background: "#047857", header_text_color: "#FFFFFF",
-        user_bubble_bg: "#059669", user_bubble_text: "#FFFFFF",
-        agent_bubble_bg: "#F0FDF4", agent_bubble_text: "#064E3B",
-        border_radius: "16px", font_family: "inherit", theme_mode: "light"
-
-      • Blue / Ocean / Corporate (e.g. "blue theme", "navy blue", "medical / clinic"):
-        primary_color: "#2563EB", secondary_color: "#3B82F6", background_color: "#FFFFFF",
-        header_background: "#1E40AF", header_text_color: "#FFFFFF",
-        user_bubble_bg: "#2563EB", user_bubble_text: "#FFFFFF",
-        agent_bubble_bg: "#EFF6FF", agent_bubble_text: "#1E3A8A",
-        border_radius: "16px", font_family: "inherit", theme_mode: "light"
-
-      • Dark Luxury / Gold (e.g. "dark gold theme", "luxury spa", "executive salon"):
-        primary_color: "#D97706", secondary_color: "#F59E0B", background_color: "#0F172A",
-        header_background: "#1E293B", header_text_color: "#F8FAFC",
-        user_bubble_bg: "#D97706", user_bubble_text: "#FFFFFF",
-        agent_bubble_bg: "#1E293B", agent_bubble_text: "#F1F5F9",
-        border_radius: "18px", font_family: "inherit", theme_mode: "dark"
-
-      • Purple / Violet / Boutique (e.g. "purple theme", "lavender", "beauty / salon"):
-        primary_color: "#7C3AED", secondary_color: "#8B5CF6", background_color: "#FFFFFF",
-        header_background: "#5B21B6", header_text_color: "#FFFFFF",
-        user_bubble_bg: "#7C3AED", user_bubble_text: "#FFFFFF",
-        agent_bubble_bg: "#F5F3FF", agent_bubble_text: "#4C1D95",
-        border_radius: "16px", font_family: "inherit", theme_mode: "light"
-
-      • Rose / Crimson / Aesthetics (e.g. "rose theme", "red / pink", "wellness"):
-        primary_color: "#E11D48", secondary_color: "#F43F5E", background_color: "#FFFFFF",
-        header_background: "#BE123C", header_text_color: "#FFFFFF",
-        user_bubble_bg: "#E11D48", user_bubble_text: "#FFFFFF",
-        agent_bubble_bg: "#FFF1F2", agent_bubble_text: "#881337",
-        border_radius: "16px", font_family: "inherit", theme_mode: "light"
-
-      • Modern Minimalist / Black & Slate (e.g. "black theme", "minimalist", "monochrome"):
-        primary_color: "#18181B", secondary_color: "#27272A", background_color: "#FFFFFF",
-        header_background: "#09090B", header_text_color: "#FAFAFA",
-        user_bubble_bg: "#18181B", user_bubble_text: "#FFFFFF",
-        agent_bubble_bg: "#F4F4F5", agent_bubble_text: "#09090B",
-        border_radius: "12px", font_family: "inherit", theme_mode: "light"
+   B. CLIENT-SIDE THEME ENGINE (SMART DEFAULTS WITH OPTIONAL OVERRIDES):
+      The chat widget features an intelligent client-side theme engine that computes all 12 visual tokens dynamically from a single base color:
+      • In `widget_config.theme`, you ONLY need to provide:
+        - `primary_color` (hex string): The primary brand signature color (e.g. Emerald "#059669", Cobalt "#2563EB", Amber "#D97706", Rose "#E11D48", Violet "#7C3AED", Minimalist Black "#18181B").
+        - `theme_mode` (optional): "light" (default), "dark", or "auto".
+      • The widget runtime automatically derives:
+        - Secondary & accent shades (calculated HSL lightness shifts).
+        - Canvas background & dark-mode surfaces.
+        - Deep saturated header banner background.
+        - Soft, pastel-tinted agent message bubble background.
+        - WCAG 2.1 relative luminance text colors (guaranteeing >= 4.5:1 accessible contrast against backgrounds).
+      • Optional overrides: If the user explicitly asks for specific custom overrides (e.g. "make the header pitch black", "use custom font Inter", "set border radius to 24px"), you may also include those specific fields: `secondary_color`, `background_color`, `header_background`, `header_text_color`, `user_bubble_bg`, `user_bubble_text`, `agent_bubble_bg`, `agent_bubble_text`, `border_radius`, `font_family`. Otherwise, omit them so the smart theme engine generates the ideal harmonious values.
 {post_patch_instruction}
 CRITICAL: When generating `draft_update`, adhere strictly to the MINIMAL DELTA rule (STRICT NO-ECHO).
 Provide a structured partial configuration using ONLY the specific section(s) being modified right now:
@@ -490,7 +470,7 @@ Provide a structured partial configuration using ONLY the specific section(s) be
 - resources[]: (ONLY changed or newly added resources) resource_id, resource_type (staff|room|chair|bay|equipment|asset|vehicle), name, title, category, description, is_bookable, dispatch_status (active|on_leave|maintenance|retired|inactive), custom_shift_overrides (e.g. {{"friday": [{{"start": "09:00", "end": "12:00"}}], "saturday": []}}), is_deleted
 - operating_hours: (ONLY if changing schedule) monday, tuesday, wednesday, thursday, friday, saturday, sunday (each is list of {{start: "HH:MM", end: "HH:MM"}}), blackout_dates (list of {{date: "YYYY-MM-DD", reason, is_closed}})
 - scheduling_engine: (ONLY if changing engine settings) booking_mode ("time_slot"|"date_range"), default_lead_time_hours, max_advance_booking_days, cancellation_window_hours, hold_duration_minutes
-- widget_config: (ONLY if changing widget styling/theme) agent_name, agent_subtitle, avatar_url, logo_url, initial_greeting, placeholder_text, quick_prompts, fallback_message, position, bottom_spacing_px, side_spacing_px, launcher_style, launcher_icon, sound_on_load, auto_expand_delay_seconds, platform_sources, whitelisted_domains, theme (primary_color, secondary_color, background_color, header_background, header_text_color, user_bubble_bg, user_bubble_text, agent_bubble_bg, agent_bubble_text, border_radius, font_family, theme_mode)
+- widget_config: (ONLY if changing widget styling/theme) agent_name, agent_subtitle, avatar_url, logo_url, initial_greeting, placeholder_text, quick_prompts, fallback_message, position, bottom_spacing_px, side_spacing_px, launcher_style, launcher_icon, sound_on_load, auto_expand_delay_seconds, platform_sources, whitelisted_domains, theme (primary_color, theme_mode, and optional overrides)
 - guardrails: (ONLY if modifying guardrails/OTP/handoff) verification_policy, phi_scrubbing, triage_emergency, human_handoff
 - supervisor_prompt: (ONLY if modifying supervisor prompt) (string)
 
@@ -649,6 +629,44 @@ async def node_apply_draft_update(state: GraphState) -> dict:
         tenant_id = state.get("tenant_id", "")
         agent_id = state.get("agent_id") or updated_draft.get("agent_id", "")
 
+        tenant_tier = "free"
+        if tenant_id:
+            try:
+                redis_client = get_redis_client()
+                stored_tier = await redis_client.get(f"tenant:{tenant_id}:tier")
+                if stored_tier:
+                    tenant_tier = stored_tier
+            except Exception as re:
+                print(f"[node_apply_draft_update] Warning fetching tenant tier: {re}", flush=True)
+
+        tier_cfg = get_tier_config(tenant_tier)
+        max_services = tier_cfg["max_services"]
+        max_resources = tier_cfg["max_resources"]
+
+        active_services = [
+            s
+            for s in updated_draft.get("services", [])
+            if isinstance(s, dict) and not s.get("is_deleted", False)
+        ]
+        if max_services != -1 and len(active_services) > max_services:
+            raise TierQuotaExceededException(
+                f"Tier quota exceeded: Your {tier_cfg['name']} plan allows a maximum of {max_services} services, "
+                f"but this update would result in {len(active_services)} active services. "
+                f"Please remove an existing service or upgrade your subscription tier."
+            )
+
+        active_resources = [
+            r
+            for r in updated_draft.get("resources", [])
+            if isinstance(r, dict) and not r.get("is_deleted", False)
+        ]
+        if max_resources != -1 and len(active_resources) > max_resources:
+            raise TierQuotaExceededException(
+                f"Tier quota exceeded: Your {tier_cfg['name']} plan allows a maximum of {max_resources} resources, "
+                f"but this update would result in {len(active_resources)} active resources. "
+                f"Please remove an existing resource or upgrade your subscription tier."
+            )
+
         if tenant_id and agent_id:
             try:
                 from agent_orchestrator.clients.redis_client import (
@@ -702,6 +720,24 @@ async def node_apply_draft_update(state: GraphState) -> dict:
             f"[Draft Update Error] Failed applying draft update [retry {retries}/3]: {e}",
             flush=True,
         )
+        if isinstance(e, TierQuotaExceededException):
+            if retries >= 2:
+                return {
+                    "decision": "ask_user",
+                    "pending_draft_update": None,
+                    "patch_retries": 0,
+                    "semantic_note": str(e),
+                }
+            return {
+                "decision": "evaluate",
+                "pending_draft_update": None,
+                "patch_retries": retries,
+                "messages": [
+                    SystemMessage(
+                        content=f"Tier Limit Error: {e}. The draft was NOT updated. Choose 'ask_user' to explain the tier quota limit to the user."
+                    )
+                ],
+            }
         if retries >= 3:
             print(
                 f"[Draft Update Error] Max retries reached ({retries}). Breaking loop to ask user.",
@@ -805,6 +841,56 @@ async def node_finalize_and_save(state: GraphState) -> dict:
     tenant_id = state.get("tenant_id") or draft.get("tenant_id", "")
     agent_id = draft.get("agent_id") or state.get("agent_id") or f"agent_{tenant_id}_v1"
 
+    tenant_tier = "free"
+    if tenant_id:
+        try:
+            redis_client = get_redis_client()
+            stored_tier = await redis_client.get(f"tenant:{tenant_id}:tier")
+            if stored_tier:
+                tenant_tier = stored_tier
+        except Exception as re:
+            print(f"[node_finalize_and_save] Warning fetching tenant tier: {re}", flush=True)
+
+    tier_cfg = get_tier_config(tenant_tier)
+    max_services = tier_cfg["max_services"]
+    max_resources = tier_cfg["max_resources"]
+
+    active_services = [
+        s
+        for s in draft.get("services", [])
+        if isinstance(s, dict) and not s.get("is_deleted", False)
+    ]
+    if max_services != -1 and len(active_services) > max_services:
+        note = (
+            f"Cannot finalize and deploy your agent: Your {tier_cfg['name']} plan allows a maximum of {max_services} services, "
+            f"but this agent currently has {len(active_services)} active services. "
+            f"Please remove excess services or upgrade your subscription tier."
+        )
+        return {
+            "status": "awaiting_input",
+            "decision": "ask_user",
+            "semantic_note": note,
+            "messages": [AIMessage(content=note)],
+        }
+
+    active_resources = [
+        r
+        for r in draft.get("resources", [])
+        if isinstance(r, dict) and not r.get("is_deleted", False)
+    ]
+    if max_resources != -1 and len(active_resources) > max_resources:
+        note = (
+            f"Cannot finalize and deploy your agent: Your {tier_cfg['name']} plan allows a maximum of {max_resources} resources, "
+            f"but this agent currently has {len(active_resources)} active resources. "
+            f"Please remove excess resources or upgrade your subscription tier."
+        )
+        return {
+            "status": "awaiting_input",
+            "decision": "ask_user",
+            "semantic_note": note,
+            "messages": [AIMessage(content=note)],
+        }
+
     sync_result: dict = {}
     try:
         from agent_orchestrator.clients.scheduling_client import sync_agent_inventory
@@ -817,10 +903,15 @@ async def node_finalize_and_save(state: GraphState) -> dict:
                 flush=True,
             )
         else:
-            print(
-                f"[TenantAgent Warning] Inventory sync warning: {sync_result.get('error')}",
-                flush=True,
-            )
+            err_msg = sync_result.get("error") or "Inventory synchronization failed"
+            print(f"[TenantAgent Warning] Inventory sync warning: {err_msg}", flush=True)
+            note = f"Cannot finalize agent: {err_msg}"
+            return {
+                "status": "awaiting_input",
+                "decision": "ask_user",
+                "semantic_note": note,
+                "messages": [AIMessage(content=note)],
+            }
     except Exception as se:
         print(f"[TenantAgent Warning] Unexpected exception during inventory sync: {se}", flush=True)
 

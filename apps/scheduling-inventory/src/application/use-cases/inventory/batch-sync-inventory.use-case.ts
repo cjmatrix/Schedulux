@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { BatchSyncInventoryRequest, BatchSyncInventoryResponse } from '@repo/proto/scheduling';
+import { getTierConfig } from '../../../domain/constants/tiers.constant.js';
 import { RESPONSE_MESSAGES } from '../../../constants/index.js';
 import {
   DispatchStatus,
@@ -56,6 +57,39 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
     this._logger.log(
       `Starting BatchSyncInventory for tenant: ${tenantId}, agent: ${agentId} (${dto.resources.length} resources, ${dto.services.length} services)`,
     );
+
+    const tier = (await this._cacheRepo.get(`tenant:${tenantId}:tier`)) || 'free';
+    const tierConfig = getTierConfig(tier);
+
+    const activeIncomingResources = dto.resources.filter((r) => !r.is_deleted);
+    const activeIncomingServices = dto.services.filter((s) => !s.is_deleted);
+
+    if (
+      tierConfig.max_resources !== -1 &&
+      activeIncomingResources.length > tierConfig.max_resources
+    ) {
+      this._logger.warn(
+        `BatchSyncInventory rejected: ${activeIncomingResources.length} resources exceeds max_resources (${tierConfig.max_resources}) for tier ${tierConfig.name}`,
+      );
+      return {
+        resources: [],
+        services: [],
+        success: false,
+        message: `Resource limit exceeded (${tierConfig.max_resources} resources allowed) for your tier (${tierConfig.name}). Attempted to sync ${activeIncomingResources.length} resources.`,
+      };
+    }
+
+    if (tierConfig.max_services !== -1 && activeIncomingServices.length > tierConfig.max_services) {
+      this._logger.warn(
+        `BatchSyncInventory rejected: ${activeIncomingServices.length} services exceeds max_services (${tierConfig.max_services}) for tier ${tierConfig.name}`,
+      );
+      return {
+        resources: [],
+        services: [],
+        success: false,
+        message: `Service limit exceeded (${tierConfig.max_services} services allowed) for your tier (${tierConfig.name}). Attempted to sync ${activeIncomingServices.length} services.`,
+      };
+    }
 
     const [existingResources, existingServices] = await Promise.all([
       this._resourceRepository.findByTenant(tenantId, agentId || undefined),

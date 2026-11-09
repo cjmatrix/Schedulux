@@ -4,7 +4,12 @@ import json
 import secrets
 from typing import Any
 
-from agent_orchestrator.domain.exceptions import InvalidDraftException
+from agent_orchestrator.domain.exceptions import (
+    InvalidDraftException,
+    TierQuotaExceededException,
+)
+from agent_orchestrator.config.tier_constants import get_tier_config
+from agent_orchestrator.clients.redis_client import get_redis_client
 from agent_orchestrator.domain.protocols import (
     CacheRepository,
     DraftRepository,
@@ -31,6 +36,20 @@ class AgentManagementService(AgentManagementServiceProtocol):
     async def save_initial_draft(
         self, tenant_id: str, creation_source: str, draft_json: str | None, name: str | None
     ) -> tuple[str, str]:
+       
+        redis_client = get_redis_client()
+        tenant_tier = await redis_client.get(f"tenant:{tenant_id}:tier")
+        tier_cfg = get_tier_config(tenant_tier)
+        max_agents = tier_cfg["max_agents"]
+
+        if max_agents != -1:
+            current_count = await self.draft_repo.count_drafts(tenant_id)
+            if current_count >= max_agents:
+                raise TierQuotaExceededException(
+                    f"Maximum agent limit reached ({max_agents} agents) for your tier ({tier_cfg['name']}). "
+                    f"You currently have {current_count} agent(s). Please upgrade your tier."
+                )
+
         source = (creation_source or "web_crawl").strip().lower()
         agent_id = f"agent_{secrets.token_urlsafe(16)}"
         draft_dict: dict[str, Any] = {}
@@ -56,6 +75,39 @@ class AgentManagementService(AgentManagementServiceProtocol):
 
         draft_dict["tenant_id"] = tenant_id
         draft_dict["agent_id"] = agent_id
+
+        max_services = tier_cfg.get("max_services", -1)
+        max_resources = tier_cfg.get("max_resources", -1)
+
+        if max_resources != -1 and isinstance(draft_dict.get("resources"), list):
+            active_resources = [
+                r for r in draft_dict["resources"] if isinstance(r, dict) and not r.get("is_deleted")
+            ]
+            if len(active_resources) > max_resources:
+                draft_dict["resources"] = active_resources[:max_resources]
+
+        if max_services != -1 and isinstance(draft_dict.get("services"), list):
+            active_services = [
+                s for s in draft_dict["services"] if isinstance(s, dict) and not s.get("is_deleted")
+            ]
+            if len(active_services) > max_services:
+                draft_dict["services"] = active_services[:max_services]
+
+        if isinstance(draft_dict.get("resources"), list):
+            valid_rids = {
+                r.get("resource_id")
+                for r in draft_dict["resources"]
+                if isinstance(r, dict) and r.get("resource_id")
+            }
+            if isinstance(draft_dict.get("services"), list):
+                for svc in draft_dict["services"]:
+                    if isinstance(svc, dict) and "resource_requirements" in svc:
+                        for req in svc.get("resource_requirements", []):
+                            if isinstance(req, dict) and "eligible_resource_ids" in req:
+                                req["eligible_resource_ids"] = [
+                                    rid for rid in req["eligible_resource_ids"] if rid in valid_rids
+                                ]
+
         from agent_orchestrator.models import canonicalize_agent_schema
 
         draft_dict = canonicalize_agent_schema(draft_dict, status="draft")

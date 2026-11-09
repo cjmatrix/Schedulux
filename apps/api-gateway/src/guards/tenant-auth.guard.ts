@@ -16,6 +16,7 @@ export interface AuthenticatedTenantRequest extends Request {
     tenant_id: string;
     email: string;
     role: string;
+    tier?: string;
     [key: string]: unknown;
   };
   dashboardUser?: {
@@ -24,6 +25,7 @@ export interface AuthenticatedTenantRequest extends Request {
     email: string;
     role: string;
     system_role: string;
+    tier?: string;
     [key: string]: unknown;
   };
 }
@@ -34,6 +36,7 @@ interface DecodedToken {
   email?: string;
   role?: string;
   system_role?: string;
+  tier?: string;
   [key: string]: unknown;
 }
 

@@ -1,5 +1,8 @@
+import * as grpc from '@grpc/grpc-js';
 import { Inject, Injectable } from '@nestjs/common';
+import { RpcException } from '@nestjs/microservices';
 import { CreateServiceRequest } from '@repo/proto/scheduling';
+import { getTierConfig } from '../../../domain/constants/tiers.constant.js';
 import { ServiceEntity } from '../../../domain/entities/service.entity.js';
 import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
 import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
@@ -11,6 +14,8 @@ import {
 import { generateSemanticId } from '../../../domain/utils/id-generator.js';
 import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
 import { PriceVO } from '../../../domain/value-objects/price.vo.js';
+import type { ICacheRepository } from '../../../infrastructure/cache/cache-repository.interface.js';
+import { CACHE_REPOSITORY } from '../../../infrastructure/cache/redis.module.js';
 import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-events-producer.interface.js';
 import { ICreateServiceUseCase } from '../../interfaces/service-use-cases.interface.js';
 
@@ -23,9 +28,28 @@ export class CreateServiceUseCase implements ICreateServiceUseCase {
     private readonly _eventsProducer: ISchedulingEventsProducer,
     @Inject(UNIT_OF_WORK)
     private readonly _unitOfWork: IUnitOfWork,
+    @Inject(CACHE_REPOSITORY)
+    private readonly _cacheRepo: ICacheRepository,
   ) {}
 
   async execute(dto: CreateServiceRequest): Promise<ServiceEntity> {
+   
+    const tier = (await this._cacheRepo.get(`tenant:${dto.tenant_id}:tier`)) || 'free';
+    const tierConfig = getTierConfig(tier);
+
+    if (tierConfig.max_services !== -1) {
+      const currentCount = await this._serviceRepository.countByTenant(
+        dto.tenant_id,
+        dto.agent_id || undefined,
+      );
+      if (currentCount >= tierConfig.max_services) {
+        throw new RpcException({
+          code: grpc.status.RESOURCE_EXHAUSTED,
+          message: `Service limit reached (${tierConfig.max_services} services per agent) for your tier (${tierConfig.name}). This agent currently has ${currentCount} services. Please upgrade your tier.`,
+        });
+      }
+    }
+
     const serviceId = generateSemanticId('srv', dto.name);
 
     const price = PriceVO.create(dto.price?.type, dto.price?.amount, dto.price?.currency);

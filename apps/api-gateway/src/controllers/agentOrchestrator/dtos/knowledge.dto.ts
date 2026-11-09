@@ -89,7 +89,7 @@ export const GetDocumentUploadUrlSchema = z.object({
   file_size_bytes: z
     .number()
     .nonnegative()
-    .max(25 * 1024 * 1024, 'File size exceeds maximum allowed limit of 25MB')
+    .max(250 * 1024 * 1024, 'File size exceeds maximum platform limit of 250MB')
     .optional()
     .default(0),
 });

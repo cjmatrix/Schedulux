@@ -169,4 +169,15 @@ export class MongoServiceRepository implements IServiceRepository {
     const docs = await ServiceModel.find(query).lean().exec();
     return docs.map((doc) => ServiceMapper.toDomain(doc as unknown as IServiceDoc));
   }
+
+  async countByTenant(tenantId: string, agentId?: string): Promise<number> {
+    const query: Record<string, unknown> = {
+      tenant_id: tenantId,
+      is_deleted: { $ne: true },
+    };
+    if (agentId) {
+      query.agent_id = agentId;
+    }
+    return ServiceModel.countDocuments(query).exec();
+  }
 }

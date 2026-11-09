@@ -8,3 +8,8 @@ class CrawlJobNotFoundException(Exception):
 
 class InvalidDraftException(Exception):
     pass
+
+
+class TierQuotaExceededException(Exception):
+    pass
+

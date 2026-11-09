@@ -37,4 +37,5 @@ export interface IResourceRepository {
     resourceIds: string[],
     agentId?: string,
   ): Promise<ResourceEntity[]>;
+  countByTenant(tenantId: string, agentId?: string): Promise<number>;
 }

@@ -19,9 +19,13 @@ const superadmin_tenant_controller_js_1 = require("./controllers/superadmin/supe
 const tenant_controller_js_1 = require("./controllers/tenant/tenant.controller.js");
 const roles_guard_js_1 = require("./guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("./guards/tenant-auth.guard.js");
+const rate_limiter_middleware_js_1 = require("./middleware/rate-limiter.middleware.js");
 const redis_service_js_1 = require("./services/redis.service.js");
 const schema_gateway_js_1 = require("./websockets/schema.gateway.js");
 let AppModule = class AppModule {
+    configure(consumer) {
+        consumer.apply(rate_limiter_middleware_js_1.RateLimiterMiddleware).forRoutes('*');
+    }
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
@@ -135,6 +139,7 @@ exports.AppModule = AppModule = __decorate([
             schema_gateway_js_1.SchemaGateway,
             roles_guard_js_1.RolesGuard,
             tenant_auth_guard_js_1.TenantAuthGuard,
+            rate_limiter_middleware_js_1.RateLimiterMiddleware,
         ],
     })
 ], AppModule);

@@ -15,6 +15,9 @@ class MongoDraftRepository(DraftRepository):
     async def list_drafts(self, tenant_id: str) -> list[AgentDraft]:
         return await AgentDraft.find({"tenant_id": tenant_id}).to_list()
 
+    async def count_drafts(self, tenant_id: str) -> int:
+        return await AgentDraft.find({"tenant_id": tenant_id}).count()
+
     async def upsert_agent_draft(
         self,
         tenant_id: str,

@@ -1,21 +1,19 @@
-import type { WidgetConfig, WidgetTheme } from './types';
+import { resolveTheme } from './theme';
+import type { WidgetConfig } from './types';
 
 export function getWidgetStyles(config?: Partial<WidgetConfig>, inline?: boolean): string {
-  const theme: WidgetTheme = config?.theme || {};
-  const primary = theme.primary_color || '#4F46E5';
-  const secondary = theme.secondary_color || '#6366F1';
-  const background = theme.background_color || '#FFFFFF';
-  const headerBg = theme.header_background || primary;
-  const headerText = theme.header_text_color || '#FFFFFF';
-  const userBubbleBg = theme.user_bubble_bg || primary;
-  const userBubbleText = theme.user_bubble_text || '#FFFFFF';
-  const agentBubbleBg = theme.agent_bubble_bg || '#F3F4F6';
-  const agentBubbleText = theme.agent_bubble_text || '#111827';
-  const radius = theme.border_radius || '16px';
-  const font =
-    theme.font_family && theme.font_family !== 'inherit'
-      ? theme.font_family
-      : 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  const theme = resolveTheme(config?.theme);
+  const primary = theme.primary_color;
+  const secondary = theme.secondary_color;
+  const background = theme.background_color;
+  const headerBg = theme.header_background;
+  const headerText = theme.header_text_color;
+  const userBubbleBg = theme.user_bubble_bg;
+  const userBubbleText = theme.user_bubble_text;
+  const agentBubbleBg = theme.agent_bubble_bg;
+  const agentBubbleText = theme.agent_bubble_text;
+  const radius = theme.border_radius;
+  const font = theme.font_family;
 
   const bottomSpacing = config?.bottom_spacing_px ?? 20;
   const sideSpacing = config?.side_spacing_px ?? 20;
@@ -397,7 +395,6 @@ export function getWidgetStyles(config?: Partial<WidgetConfig>, inline?: boolean
       font-size: 13.5px;
       line-height: 1.45;
       word-break: break-word;
-      white-space: pre-wrap;
     }
 
     .schedulux-msg-row.agent .schedulux-bubble {
@@ -410,6 +407,163 @@ export function getWidgetStyles(config?: Partial<WidgetConfig>, inline?: boolean
       background: var(--schedulux-user-bubble-bg);
       color: var(--schedulux-user-bubble-text);
       border-bottom-right-radius: 3px;
+    }
+
+    /* Markdown Styling Inside Message Bubbles */
+    .schedulux-markdown {
+      word-break: break-word;
+    }
+
+    .schedulux-markdown p {
+      margin: 0 0 8px 0;
+    }
+
+    .schedulux-markdown p:last-child {
+      margin-bottom: 0;
+    }
+
+    .schedulux-markdown strong,
+    .schedulux-markdown b {
+      font-weight: 700;
+    }
+
+    .schedulux-markdown em,
+    .schedulux-markdown i {
+      font-style: italic;
+    }
+
+    .schedulux-markdown ul,
+    .schedulux-markdown ol {
+      margin: 6px 0 8px 0;
+      padding-left: 18px;
+    }
+
+    .schedulux-markdown li {
+      margin-bottom: 3px;
+    }
+
+    .schedulux-markdown a {
+      color: inherit;
+      text-decoration: underline;
+      font-weight: 600;
+      transition: opacity 0.15s ease;
+    }
+
+    .schedulux-markdown a:hover {
+      opacity: 0.8;
+    }
+
+    .schedulux-markdown code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11.5px;
+      background: rgba(0, 0, 0, 0.06);
+      padding: 2px 5px;
+      border-radius: 4px;
+    }
+
+    .schedulux-markdown pre {
+      margin: 8px 0;
+      padding: 8px 10px;
+      background: rgba(0, 0, 0, 0.06);
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+
+    .schedulux-markdown pre code {
+      background: none;
+      padding: 0;
+    }
+
+    /* Markdown Tables */
+    .schedulux-markdown table {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      border-collapse: collapse;
+      margin: 10px 0;
+      border-radius: 8px;
+      border: 1px solid rgba(0, 0, 0, 0.09);
+      font-size: 12px;
+      line-height: 1.4;
+      background: rgba(255, 255, 255, 0.45);
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .schedulux-markdown th {
+      background: rgba(0, 0, 0, 0.04);
+      font-weight: 700;
+      padding: 7px 10px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.09);
+      border-right: 1px solid rgba(0, 0, 0, 0.05);
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    .schedulux-markdown td {
+      padding: 7px 10px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+      border-right: 1px solid rgba(0, 0, 0, 0.05);
+      vertical-align: top;
+    }
+
+    .schedulux-markdown tr:last-child td {
+      border-bottom: none;
+    }
+
+    .schedulux-markdown th:last-child,
+    .schedulux-markdown td:last-child {
+      border-right: none;
+    }
+
+    /* User Bubble Markdown Contrasts */
+    .schedulux-msg-row.user .schedulux-markdown code {
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    .schedulux-msg-row.user .schedulux-markdown pre {
+      background: rgba(255, 255, 255, 0.14);
+    }
+
+    .schedulux-msg-row.user .schedulux-markdown table {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    .schedulux-msg-row.user .schedulux-markdown th {
+      background: rgba(255, 255, 255, 0.12);
+      border-bottom-color: rgba(255, 255, 255, 0.18);
+      border-right-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .schedulux-msg-row.user .schedulux-markdown td {
+      border-bottom-color: rgba(255, 255, 255, 0.08);
+      border-right-color: rgba(255, 255, 255, 0.08);
+    }
+
+    /* Dark Mode Markdown Contrasts */
+    .schedulux-container.dark .schedulux-msg-row.agent .schedulux-markdown table {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .schedulux-container.dark .schedulux-msg-row.agent .schedulux-markdown th {
+      background: rgba(255, 255, 255, 0.06);
+      border-bottom-color: rgba(255, 255, 255, 0.12);
+      border-right-color: rgba(255, 255, 255, 0.06);
+    }
+
+    .schedulux-container.dark .schedulux-msg-row.agent .schedulux-markdown td {
+      border-bottom-color: rgba(255, 255, 255, 0.06);
+      border-right-color: rgba(255, 255, 255, 0.06);
+    }
+
+    .schedulux-container.dark .schedulux-msg-row.agent .schedulux-markdown code {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .schedulux-container.dark .schedulux-msg-row.agent .schedulux-markdown pre {
+      background: rgba(255, 255, 255, 0.08);
     }
 
     .schedulux-msg-time {

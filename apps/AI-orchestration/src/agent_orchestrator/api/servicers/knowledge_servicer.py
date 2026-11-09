@@ -9,6 +9,7 @@ from agent_orchestrator.domain.exceptions import (
     AgentNotFoundException,
     CrawlJobNotFoundException,
     InvalidDraftException,
+    TierQuotaExceededException,
 )
 from agent_orchestrator.services.protocols import (
     AgentManagementServiceProtocol,
@@ -157,6 +158,10 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                 agent_id=agent_id,
                 status=status,
             )
+        except TierQuotaExceededException as tqe:
+            context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            context.set_details(str(tqe))
+            return knowledge_pb2.SaveInitialAgentDraftResponse()
         except InvalidDraftException as ide:
             context.set_code(grpc.StatusCode.NOT_FOUND)
             context.set_details(str(ide))
@@ -351,6 +356,10 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                 s3_key=s3_key,
                 expires_in=expires_in,
             )
+        except TierQuotaExceededException as tqe:
+            context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            context.set_details(str(tqe))
+            return knowledge_pb2.GetDocumentUploadUrlResponse()
         except Exception as e:
             print(f"[gRPC Error] GetDocumentUploadUrl failed: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)

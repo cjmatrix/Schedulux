@@ -22,10 +22,12 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { lastValueFrom } from 'rxjs';
 import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
 import { API_ROUTES } from '../../constants/routes.constant.js';
+import { getTierConfig } from '../../constants/tiers.constant.js';
 import { Roles } from '../../decorators/roles.decorator.js';
 import { RolesGuard } from '../../guards/roles.guard.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
 import { ISchemaCacheService } from '../../interfaces/ISchemaEventSubscriber.js';
+import { RedisService } from '../../services/redis.service.js';
 import {
   ConfirmDocumentUploadDto,
   CrawlSiteDto,
@@ -53,6 +55,7 @@ export class KnowledgeController implements OnModuleInit {
   constructor(
     @Inject('KNOWLEDGE_PACKAGE') private readonly _client: ClientGrpc,
     @Inject('ISchemaCacheService') private readonly _schemaCacheService: ISchemaCacheService,
+    private readonly _redisService: RedisService,
   ) {}
 
   onModuleInit() {
@@ -516,6 +519,24 @@ export class KnowledgeController implements OnModuleInit {
     if (!tenantId) {
       throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
     }
+
+    const tenantTier =
+      req.tenant?.tier ||
+      req.dashboardUser?.tier ||
+      (await this._redisService.getTenantTier(tenantId)) ||
+      'free';
+    const tierConfig = getTierConfig(tenantTier);
+
+  
+    if (body.file_size_bytes && body.file_size_bytes > 0) {
+      const maxAllowedBytes = tierConfig.max_kb_doc_size_mb * 1024 * 1024;
+      if (body.file_size_bytes > maxAllowedBytes) {
+        throw new BadRequestException(
+          `File size (${(body.file_size_bytes / (1024 * 1024)).toFixed(2)} MB) exceeds the maximum allowed limit of ${tierConfig.max_kb_doc_size_mb} MB for your tier (${tierConfig.name}). Please upgrade your tier to upload larger files.`,
+        );
+      }
+    }
+
     const response = await lastValueFrom(
       this._knowledgeService.getDocumentUploadUrl({
         tenant_id: tenantId,

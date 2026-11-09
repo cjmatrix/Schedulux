@@ -3,6 +3,9 @@ from __future__ import annotations
 import re
 import secrets
 
+from agent_orchestrator.clients.redis_client import get_redis_client
+from agent_orchestrator.config.tier_constants import get_tier_config
+from agent_orchestrator.domain.exceptions import TierQuotaExceededException
 from agent_orchestrator.domain.protocols import (
     DocumentIndexingQueue,
     DocumentRepository,
@@ -34,15 +37,32 @@ class DocumentService(DocumentServiceProtocol):
         Generates presigned upload URL and creates pending KnowledgeDocument entity.
         Returns: (upload_url, document_id, s3_key, expires_in)
         """
+    
+        redis_client = get_redis_client()
+        tenant_tier = await redis_client.get(f"tenant:{tenant_id}:tier")
+        tier_cfg = get_tier_config(tenant_tier)
+        max_docs = tier_cfg["max_kb_docs"]
+
+        if max_docs != -1:
+            current_doc_count = await self.document_repo.count_documents(tenant_id, agent_id)
+            if current_doc_count >= max_docs:
+                raise TierQuotaExceededException(
+                    f"Maximum document upload limit reached ({max_docs} documents per agent) for your tier ({tier_cfg['name']}). "
+                    f"This agent currently has {current_doc_count} document(s). Please delete existing documents or upgrade your tier."
+                )
+
         doc_id = f"doc_{secrets.token_urlsafe(12)}"
         clean_name = re.sub(r"[^a-zA-Z0-9_.-]", "_", file_name)
         s3_key = f"tenants/{tenant_id}/agents/{agent_id}/documents/{doc_id}_{clean_name}"
-        expires_in = 900  # 15 minutes
+        expires_in = 900  # 15 minute
+
+        max_allowed_bytes = tier_cfg["max_kb_doc_size_mb"] * 1024 * 1024
 
         upload_url = self.storage.generate_presigned_upload_url(
             key=s3_key,
             content_type="application/pdf",
             expires_in=expires_in,
+            max_allowed_bytes=max_allowed_bytes
         )
 
         await self.document_repo.create_document(

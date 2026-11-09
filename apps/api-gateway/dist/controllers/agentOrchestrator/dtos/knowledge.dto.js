@@ -90,7 +90,7 @@ exports.GetDocumentUploadUrlSchema = zod_1.z.object({
     file_size_bytes: zod_1.z
         .number()
         .nonnegative()
-        .max(25 * 1024 * 1024, 'File size exceeds maximum allowed limit of 25MB')
+        .max(250 * 1024 * 1024, 'File size exceeds maximum platform limit of 250MB')
         .optional()
         .default(0),
 });

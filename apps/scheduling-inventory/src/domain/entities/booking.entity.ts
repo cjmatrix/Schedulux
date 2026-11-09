@@ -2,7 +2,7 @@ import { DepositVO } from '../value-objects/deposit.vo.js';
 import { PriceVO } from '../value-objects/price.vo.js';
 
 export type BookingMode = 'time_slot' | 'date_range';
-export type BookingSource = 'manual' | 'customer_agent' | 'web_portal';
+export type BookingSource = 'manual' | 'customer_agent' | 'web_portal' | 'sandbox_simulation';
 export type BookingStatus = 'confirmed' | 'pending_deposit' | 'cancelled' | 'completed' | 'no_show';
 export type BookingDepositStatus = 'not_required' | 'pending' | 'verified' | 'waived';
 
@@ -93,7 +93,11 @@ export class BookingEntity {
     this._tenantId = props.tenantId;
     this._agentId = props.agentId || '';
     this._serviceId = props.serviceId;
-    const rIds = props.resourceIds ? [...props.resourceIds] : (props.resourceId ? [props.resourceId] : []);
+    const rIds = props.resourceIds
+      ? [...props.resourceIds]
+      : props.resourceId
+        ? [props.resourceId]
+        : [];
     this._resourceIds = rIds;
     this._resourceId = props.resourceId !== undefined ? props.resourceId : (rIds[0] ?? null);
     this._assignedAssetIds = props.assignedAssetIds ?? [];
@@ -108,8 +112,7 @@ export class BookingEntity {
     this._endTime = props.endTime;
     this._bufferMinutes = props.bufferMinutes ?? 0;
     this._effectiveEndTime =
-      props.effectiveEndTime ??
-      new Date(this._endTime.getTime() + this._bufferMinutes * 60 * 1000);
+      props.effectiveEndTime ?? new Date(this._endTime.getTime() + this._bufferMinutes * 60 * 1000);
     this._durationMinutes = props.durationMinutes;
     this._source = props.source ?? 'manual';
     this._status = props.status ?? 'confirmed';
@@ -242,8 +245,57 @@ export class BookingEntity {
     this._updatedAt = new Date();
   }
 
-  cancel(): void {
+  cancel(reason?: string, cancelledBy?: string): void {
+    if (this._status === 'cancelled') {
+      throw new Error('Booking is already cancelled');
+    }
+    if (this._status === 'completed') {
+      throw new Error('Cannot cancel a completed booking');
+    }
     this._status = 'cancelled';
+    if (reason?.trim()) {
+      const prefix = cancelledBy ? `[Cancelled by ${cancelledBy}] ` : '';
+      this._notes = this._notes
+        ? `${this._notes} | ${prefix}${reason.trim()}`
+        : `${prefix}${reason.trim()}`;
+    }
+    this._updatedAt = new Date();
+  }
+
+  reschedule(props: {
+    startTime: Date;
+    endTime: Date;
+    effectiveEndTime: Date;
+    durationMinutes: number;
+    resourceIds?: string[];
+    assignedAssetIds?: string[];
+    notes?: string;
+  }): void {
+    if (this._status === 'cancelled') {
+      throw new Error('Cannot reschedule a cancelled booking');
+    }
+    if (this._status === 'completed') {
+      throw new Error('Cannot reschedule a completed booking');
+    }
+    if (props.startTime >= props.endTime) {
+      throw new Error('Booking start time must be before end time');
+    }
+    this._startTime = props.startTime;
+    this._endTime = props.endTime;
+    this._effectiveEndTime = props.effectiveEndTime;
+    this._durationMinutes = props.durationMinutes;
+    if (props.resourceIds && props.resourceIds.length > 0) {
+      this._resourceIds = [...props.resourceIds];
+      this._resourceId = props.resourceIds[0] ?? null;
+    }
+    if (props.assignedAssetIds) {
+      this._assignedAssetIds = [...props.assignedAssetIds];
+    }
+    if (props.notes?.trim()) {
+      this._notes = this._notes
+        ? `${this._notes} | Rescheduled: ${props.notes.trim()}`
+        : `Rescheduled: ${props.notes.trim()}`;
+    }
     this._updatedAt = new Date();
   }
 

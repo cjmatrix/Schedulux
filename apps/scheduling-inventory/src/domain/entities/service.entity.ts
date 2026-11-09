@@ -15,7 +15,6 @@ export interface ServiceEntityProps {
   deposit: DepositVO;
   verification?: { require_otp?: boolean | null };
   resourceRequirements?: ResourceRequirement[];
-  recallIntervalDays: number;
   isDeleted?: boolean;
   deletedAt?: Date | null;
   createdAt?: Date;
@@ -44,7 +43,6 @@ export class ServiceEntity {
   private _deposit: DepositVO;
   private _verification?: { require_otp?: boolean | null };
   private _resourceRequirements: ResourceRequirement[];
-  private _recallIntervalDays: number;
   private _isDeleted: boolean;
   private _deletedAt: Date | null;
   private readonly _createdAt: Date;
@@ -82,7 +80,6 @@ export class ServiceEntity {
       count: Math.max(1, r.count || 1),
       eligibleResourceIds: [...(r.eligibleResourceIds ?? [])],
     }));
-    this._recallIntervalDays = props.recallIntervalDays ?? 0;
     this._isDeleted = props.isDeleted ?? false;
     this._deletedAt = props.deletedAt ?? null;
     this._createdAt = props.createdAt ?? new Date();
@@ -146,9 +143,6 @@ export class ServiceEntity {
     }));
   }
 
-  get recallIntervalDays(): number {
-    return this._recallIntervalDays;
-  }
   get isDeleted(): boolean {
     return this._isDeleted;
   }
@@ -179,7 +173,6 @@ export class ServiceEntity {
     deposit?: DepositVO;
     verification?: { require_otp?: boolean | null };
     resourceRequirements?: ResourceRequirement[];
-    recallIntervalDays?: number;
   }): void {
     if (details.name !== undefined) {
       if (!details.name || details.name.trim() === '') {
@@ -224,9 +217,6 @@ export class ServiceEntity {
         count: Math.max(1, r.count || 1),
         eligibleResourceIds: [...(r.eligibleResourceIds ?? [])],
       }));
-    }
-    if (details.recallIntervalDays !== undefined) {
-      this._recallIntervalDays = details.recallIntervalDays;
     }
     this._updatedAt = new Date();
   }

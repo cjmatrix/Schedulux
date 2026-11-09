@@ -7,21 +7,23 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
+import { PinoLogger } from 'nestjs-pino';
 export const REDIS_CLIENT = 'REDIS_CLIENT';
 const redisProvider = {
     provide: REDIS_CLIENT,
-    inject: [ConfigService],
-    useFactory: (configService) => {
+    inject: [ConfigService, PinoLogger],
+    useFactory: (configService, logger) => {
+        logger.setContext('RedisModule');
         const redisUri = configService.get('REDIS_URI') || 'redis://localhost:6379';
         const client = new Redis(redisUri, {
             maxRetriesPerRequest: null,
             enableReadyCheck: false,
         });
         client.on('connect', () => {
-            console.log('Redis COnnected');
+            logger.info('Redis connected successfully');
         });
         client.on('error', (error) => {
-            console.log(`Redis connection error: ${error.message}`, error.stack);
+            logger.error({ err: error }, `Redis connection error: ${error.message}`);
         });
         return client;
     },

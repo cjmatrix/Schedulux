@@ -12,13 +12,13 @@ from agent_orchestrator.config import (
     MEMORY_TRIGGER_TOKEN_THRESHOLD,
 )
 from agent_orchestrator.domain.protocols import (
+    DenseEmbedder,
     DraftRepository,
     MemoryQueue,
+    MemoryVectorStore,
     MessageRepository,
 )
 from agent_orchestrator.services.protocols import MemoryServiceProtocol
-from agent_orchestrator.utils.embedding_util import embed_query, embed_texts
-from agent_orchestrator.utils.qdrant_util import get_qdrant_store
 
 
 class MemoryService(MemoryServiceProtocol):
@@ -27,11 +27,14 @@ class MemoryService(MemoryServiceProtocol):
         message_repo: MessageRepository,
         draft_repo: DraftRepository,
         memory_queue: MemoryQueue,
+        dense_embedder: DenseEmbedder,
+        memory_store: MemoryVectorStore,
     ):
         self.message_repo = message_repo
         self.draft_repo = draft_repo
         self.memory_queue = memory_queue
-        self.qdrant_store = get_qdrant_store()
+        self.dense_embedder = dense_embedder
+        self.memory_store = memory_store
 
     async def check_and_trigger_memory(self, tenant_id: str, agent_id: str) -> bool:
         if not tenant_id or not agent_id:
@@ -167,8 +170,10 @@ Transcript to analyze:
             if extracted_facts:
                 fact_texts = [f["fact"] for f in extracted_facts if f.get("fact")]
                 if fact_texts:
-                    vectors = await embed_texts(fact_texts, input_type="document")
-                    await self.qdrant_store.upsert_facts(
+                    vectors = await self.dense_embedder.embed_texts(
+                        fact_texts, input_type="document"
+                    )
+                    await self.memory_store.upsert_facts(
                         tenant_id=tenant_id,
                         agent_id=agent_id,
                         facts=extracted_facts,
@@ -199,15 +204,15 @@ Transcript to analyze:
         relevant_facts: list[str] = []
         if query:
             try:
-                query_vector = await embed_query(query)
-                relevant_facts = await self.qdrant_store.search_relevant_facts(
+                query_vector = await self.dense_embedder.embed_query(query)
+                relevant_facts = await self.memory_store.search_relevant_facts(
                     query_vector=query_vector,
                     tenant_id=tenant_id,
                     agent_id=agent_id,
                     limit=3,
                 )
             except Exception as qe:
-                print(f"[MemoryService Warning] Qdrant search skipped: {qe}", flush=True)
+                print(f"[MemoryService Warning] Vector search skipped: {qe}", flush=True)
 
         return {
             "conversation_summary": summary,

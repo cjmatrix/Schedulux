@@ -8,7 +8,7 @@ import {
 import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
 import { UNIT_OF_WORK } from '../../../domain/tokens.js';
 import { BookingMapper } from '../mappers/booking.mapper.js';
-import { BookingModel } from '../schemas/booking.schema.js';
+import { BookingModel, type IBookingDoc } from '../schemas/booking.schema.js';
 
 @Injectable()
 export class MongoBookingRepository implements IBookingRepository {
@@ -33,22 +33,35 @@ export class MongoBookingRepository implements IBookingRepository {
       _id: bookingId,
       tenant_id: tenantId,
       is_deleted: { $ne: true },
-    }).exec();
+    })
+      .lean()
+      .exec();
     if (!doc) return null;
-    return BookingMapper.toDomain(doc);
+    return BookingMapper.toDomain(doc as unknown as IBookingDoc);
   }
 
-  async findByReference(
-    tenantId: string,
-    bookingReference: string,
-  ): Promise<BookingEntity | null> {
+  async findByReference(tenantId: string, bookingReference: string): Promise<BookingEntity | null> {
     const doc = await BookingModel.findOne({
       booking_reference: bookingReference,
       tenant_id: tenantId,
       is_deleted: { $ne: true },
-    }).exec();
+    })
+      .lean()
+      .exec();
     if (!doc) return null;
-    return BookingMapper.toDomain(doc);
+    return BookingMapper.toDomain(doc as unknown as IBookingDoc);
+  }
+
+  async findByIdOrReference(tenantId: string, identifier: string): Promise<BookingEntity | null> {
+    const doc = await BookingModel.findOne({
+      tenant_id: tenantId,
+      is_deleted: { $ne: true },
+      $or: [{ _id: identifier }, { booking_reference: identifier }],
+    })
+      .lean()
+      .exec();
+    if (!doc) return null;
+    return BookingMapper.toDomain(doc as unknown as IBookingDoc);
   }
 
   async findOverlappingBookings(
@@ -64,18 +77,15 @@ export class MongoBookingRepository implements IBookingRepository {
       status: { $nin: ['cancelled', 'no_show'] },
       start_time: { $lt: endTime },
       end_time: { $gt: startTime },
-      $or: [
-        { resource_id: resourceId },
-        { assigned_asset_ids: resourceId },
-      ],
+      $or: [{ resource_id: resourceId }, { assigned_asset_ids: resourceId }],
     };
 
     if (excludeBookingId) {
       query._id = { $ne: excludeBookingId };
     }
 
-    const docs = await BookingModel.find(query).exec();
-    return docs.map((doc) => BookingMapper.toDomain(doc));
+    const docs = await BookingModel.find(query).lean().exec();
+    return docs.map((doc) => BookingMapper.toDomain(doc as unknown as IBookingDoc));
   }
 
   async findBusyResourceIds(
@@ -186,6 +196,9 @@ export class MongoBookingRepository implements IBookingRepository {
       is_deleted: { $ne: true },
     };
 
+    if (filter.agentId?.trim()) {
+      query.agent_id = filter.agentId.trim();
+    }
     if (filter.serviceId) {
       query.service_id = filter.serviceId;
     }
@@ -197,6 +210,13 @@ export class MongoBookingRepository implements IBookingRepository {
     }
     if (filter.status) {
       query.status = filter.status;
+    }
+    if (filter.customerPhone?.trim()) {
+      const phone = filter.customerPhone.trim();
+      const last10 = phone.length >= 10 ? phone.slice(-10) : phone;
+      query['customer_snapshot.phone'] = {
+        $in: [phone, `+91${last10}`, last10],
+      };
     }
     if (filter.startDate || filter.endDate) {
       const timeFilter: Record<string, unknown> = {};
@@ -219,12 +239,17 @@ export class MongoBookingRepository implements IBookingRepository {
 
     const skip = Math.max(0, (filter.page - 1) * filter.limit);
     const [docs, total] = await Promise.all([
-      BookingModel.find(query).sort({ start_time: -1 }).skip(skip).limit(filter.limit).exec(),
+      BookingModel.find(query)
+        .sort({ start_time: -1 })
+        .skip(skip)
+        .limit(filter.limit)
+        .lean()
+        .exec(),
       BookingModel.countDocuments(query).exec(),
     ]);
 
     return {
-      bookings: docs.map((doc) => BookingMapper.toDomain(doc)),
+      bookings: docs.map((doc) => BookingMapper.toDomain(doc as unknown as IBookingDoc)),
       total,
     };
   }
@@ -233,17 +258,17 @@ export class MongoBookingRepository implements IBookingRepository {
     const session = this._unitOfWork?.getSession();
     const persistenceData = BookingMapper.toPersistence(booking);
 
-    const doc = await BookingModel.findOneAndUpdate(
+    const result = await BookingModel.updateOne(
       {
         _id: booking.id,
         tenant_id: booking.tenantId,
         is_deleted: { $ne: true },
       },
       { $set: persistenceData },
-      { new: true, session },
+      { session },
     ).exec();
 
-    if (!doc) return null;
-    return BookingMapper.toDomain(doc);
+    if (result.matchedCount === 0) return null;
+    return booking;
   }
 }

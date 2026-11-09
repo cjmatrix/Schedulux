@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { CustomerEntity } from '../../../domain/entities/customer.entity.js';
 import {
   FindCustomersFilter,
@@ -6,6 +6,7 @@ import {
 } from '../../../domain/repositories/customer.repository.interface.js';
 import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
 import { UNIT_OF_WORK } from '../../../domain/tokens.js';
+import { generateSemanticId } from '../../../domain/utils/id-generator.js';
 import { CustomerMapper } from '../mappers/customer.mapper.js';
 import { CustomerModel } from '../schemas/customer.schema.js';
 
@@ -50,16 +51,18 @@ export class MongoCustomerRepository implements ICustomerRepository {
     phone: string,
     agentId?: string,
   ): Promise<CustomerEntity | null> {
-    const cleanPhone = phone.trim();
-    const query: Record<string, unknown> = {
-      tenant_id: tenantId,
-      phone: cleanPhone,
-      is_deleted: { $ne: true },
-    };
-    if (agentId) {
-      query.agent_id = agentId;
+    if (!agentId?.trim()) {
+      throw new BadRequestException('agent_id is required for customer lookup');
     }
-    const doc = await CustomerModel.findOne(query).exec();
+    const cleanPhone = phone.trim();
+    const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+    const doc = await CustomerModel.findOne({
+      tenant_id: tenantId,
+      agent_id: agentId.trim(),
+      is_deleted: { $ne: true },
+      $or: [{ phone: cleanPhone }, { phone: `+91${last10}` }, { phone: last10 }],
+    }).exec();
+
     if (!doc) return null;
     return CustomerMapper.toDomain(doc);
   }
@@ -69,19 +72,59 @@ export class MongoCustomerRepository implements ICustomerRepository {
     email: string,
     agentId?: string,
   ): Promise<CustomerEntity | null> {
+    if (!agentId?.trim()) {
+      throw new BadRequestException('agent_id is required for customer lookup');
+    }
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) return null;
-    const query: Record<string, unknown> = {
+
+    const doc = await CustomerModel.findOne({
       tenant_id: tenantId,
+      agent_id: agentId.trim(),
       email: cleanEmail,
       is_deleted: { $ne: true },
-    };
-    if (agentId) {
-      query.agent_id = agentId;
-    }
-    const doc = await CustomerModel.findOne(query).exec();
+    }).exec();
+
     if (!doc) return null;
     return CustomerMapper.toDomain(doc);
+  }
+
+  async markVerifiedByPhone(tenantId: string, phone: string, agentId?: string): Promise<number> {
+    const cleanPhone = phone.trim();
+    const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+    const filter: Record<string, unknown> = {
+      tenant_id: tenantId,
+      is_deleted: { $ne: true },
+      $or: [{ phone: cleanPhone }, { phone: `+91${last10}` }, { phone: last10 }],
+    };
+    if (agentId?.trim()) {
+      filter.agent_id = agentId.trim();
+    }
+
+    const result = await CustomerModel.updateMany(filter, {
+      $set: {
+        is_guest: false,
+        updated_at: new Date(),
+      },
+    }).exec();
+
+    if (result.matchedCount === 0) {
+      const newCustomer = new CustomerEntity({
+        id: generateSemanticId('cus', cleanPhone),
+        tenantId,
+        agentId: agentId?.trim() || '',
+        name: 'Guest',
+        phone: cleanPhone,
+        email: '',
+        notes: '',
+        isGuest: false,
+        totalBookings: 0,
+      });
+      await this.create(newCustomer);
+      return 1;
+    }
+
+    return result.modifiedCount;
   }
 
   async update(customer: CustomerEntity): Promise<CustomerEntity | null> {

@@ -62,7 +62,8 @@ export class DashboardUserController {
   async resetPassword(
     data: DashboardUserResetPasswordRequest,
   ): Promise<DashboardUserResetPasswordResponse> {
-    if (!data.token || !data.new_password) throw new Error(RESPONSE_MESSAGES.ERRORS.TOKEN_AND_NEW_PASSWORD_REQUIRED);
+    if (!data.token || !data.new_password)
+      throw new Error(RESPONSE_MESSAGES.ERRORS.TOKEN_AND_NEW_PASSWORD_REQUIRED);
     return await this._dashboardUserService.resetPassword(data.token, data.new_password);
   }
 
@@ -86,4 +87,3 @@ export class DashboardUserController {
     return await this._tenantService.listWorkspaceUsers(data);
   }
 }
-

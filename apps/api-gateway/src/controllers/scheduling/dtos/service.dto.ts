@@ -51,7 +51,6 @@ export const CreateServiceDtoSchema = z.object({
   }),
   verification: ServiceVerificationDtoSchema.optional(),
   resource_requirements: z.array(ResourceRequirementDtoSchema).optional().default([]),
-  recall_interval_days: z.number().int().min(0).optional().default(0),
 });
 
 export class CreateServiceDto extends createZodDto(CreateServiceDtoSchema) {}
@@ -68,7 +67,6 @@ export const UpdateServiceDtoSchema = z.object({
   deposit: DepositDtoSchema.optional(),
   verification: ServiceVerificationDtoSchema.optional(),
   resource_requirements: z.array(ResourceRequirementDtoSchema).optional(),
-  recall_interval_days: z.number().int().min(0).optional(),
 });
 
 export class UpdateServiceDto extends createZodDto(UpdateServiceDtoSchema) {}

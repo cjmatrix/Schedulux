@@ -3,6 +3,7 @@ import type { BookingEntity } from '../../domain/entities/booking.entity.js';
 import type { ResourceEntity } from '../../domain/entities/resource.entity.js';
 import type { ServiceEntity } from '../../domain/entities/service.entity.js';
 import type { IOutboxDoc } from '../../infrastructure/database/schemas/outbox.schema.js';
+import type { ITenantScheduleDoc } from '../../infrastructure/database/schemas/tenant-schedule.schema.js';
 
 export interface ISchedulingEventsProducer {
   createServiceCreatedOutboxEvent(
@@ -39,6 +40,22 @@ export interface ISchedulingEventsProducer {
     entity: BookingEntity,
     session?: ClientSession,
   ): Promise<IOutboxDoc>;
+  createBookingCancelledOutboxEvent(
+    entity: BookingEntity,
+    reason?: string,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc>;
+  createBookingRescheduledOutboxEvent(
+    entity: BookingEntity,
+    previousStartTime: Date,
+    previousEndTime: Date,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc>;
+
+  createScheduleUpdatedOutboxEvent(
+    doc: ITenantScheduleDoc,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc>;
 
   publishOutboxEvent(outboxDoc: IOutboxDoc): Promise<void>;
 
@@ -51,5 +68,10 @@ export interface ISchedulingEventsProducer {
   emitResourceDeleted(tenantId: string, agentId: string, resourceId: string): Promise<void>;
 
   emitBookingCreated(entity: BookingEntity): Promise<void>;
+  emitBookingCancelled(entity: BookingEntity, reason?: string): Promise<void>;
+  emitBookingRescheduled(
+    entity: BookingEntity,
+    previousStartTime: Date,
+    previousEndTime: Date,
+  ): Promise<void>;
 }
-

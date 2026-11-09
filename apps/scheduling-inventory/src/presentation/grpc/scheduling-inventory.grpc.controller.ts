@@ -1,10 +1,10 @@
 import { Controller, Inject, UseFilters } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
-import { GrpcExceptionFilter } from './grpc-exception.filter.js';
 import {
   BatchSyncInventoryRequest,
   BatchSyncInventoryResponse,
   BookingResponse,
+  CancelBookingRequest,
   CreateBookingRequest,
   CreateResourceRequest,
   CreateServiceRequest,
@@ -16,24 +16,45 @@ import {
   GetAvailabilityResponse,
   GetResourceRequest,
   GetServiceRequest,
+  GetTenantScheduleRequest,
+  ListBookingsRequest,
+  ListBookingsResponse,
+  ListCustomersRequest,
+  ListCustomersResponse,
   ListResourcesRequest,
   ListResourcesResponse,
   ListServicesRequest,
   ListServicesResponse,
+  RescheduleBookingRequest,
   ResourceResponse,
   ServiceResponse,
+  TenantScheduleResponse,
   UpdateResourceRequest,
   UpdateServiceRequest,
+  UpdateTenantScheduleRequest,
+  VerifyCustomerRequest,
+  VerifyCustomerResponse,
 } from '@repo/proto/scheduling';
-import {
-  GRPC_METHODS,
-  GRPC_SERVICES,
-  RESPONSE_MESSAGES,
-} from '../../constants/index.js';
 import {
   BATCH_SYNC_INVENTORY_USE_CASE,
   IBatchSyncInventoryUseCase,
 } from '../../application/interfaces/batch-sync-use-case.interface.js';
+import {
+  CANCEL_BOOKING_USE_CASE,
+  CREATE_BOOKING_USE_CASE,
+  GET_AVAILABILITY_USE_CASE,
+  ICancelBookingUseCase,
+  ICreateBookingUseCase,
+  IGetAvailabilityUseCase,
+  IListBookingsUseCase,
+  IListCustomersUseCase,
+  IRescheduleBookingUseCase,
+  IVerifyCustomerUseCase,
+  LIST_BOOKINGS_USE_CASE,
+  LIST_CUSTOMERS_USE_CASE,
+  RESCHEDULE_BOOKING_USE_CASE,
+  VERIFY_CUSTOMER_USE_CASE,
+} from '../../application/interfaces/booking-use-cases.interface.js';
 import {
   CREATE_RESOURCE_USE_CASE,
   DELETE_RESOURCE_USE_CASE,
@@ -47,6 +68,12 @@ import {
   UPDATE_RESOURCE_USE_CASE,
 } from '../../application/interfaces/resource-use-cases.interface.js';
 import {
+  GET_TENANT_SCHEDULE_USE_CASE,
+  IGetTenantScheduleUseCase,
+  IUpdateTenantScheduleUseCase,
+  UPDATE_TENANT_SCHEDULE_USE_CASE,
+} from '../../application/interfaces/schedule-use-cases.interface.js';
+import {
   CREATE_SERVICE_USE_CASE,
   DELETE_SERVICE_USE_CASE,
   GET_SERVICE_USE_CASE,
@@ -58,15 +85,12 @@ import {
   LIST_SERVICES_USE_CASE,
   UPDATE_SERVICE_USE_CASE,
 } from '../../application/interfaces/service-use-cases.interface.js';
-import {
-  CREATE_BOOKING_USE_CASE,
-  GET_AVAILABILITY_USE_CASE,
-  ICreateBookingUseCase,
-  IGetAvailabilityUseCase,
-} from '../../application/interfaces/booking-use-cases.interface.js';
+import { GRPC_METHODS, GRPC_SERVICES, RESPONSE_MESSAGES } from '../../constants/index.js';
 import { BookingMapper } from '../../infrastructure/database/mappers/booking.mapper.js';
 import { ResourceMapper } from '../../infrastructure/database/mappers/resource.mapper.js';
 import { ServiceMapper } from '../../infrastructure/database/mappers/service.mapper.js';
+import { TenantScheduleMapper } from '../../infrastructure/database/mappers/tenant-schedule.mapper.js';
+import { GrpcExceptionFilter } from './grpc-exception.filter.js';
 
 @Controller()
 @UseFilters(new GrpcExceptionFilter())
@@ -96,14 +120,25 @@ export class SchedulingInventoryGrpcController {
     private readonly _batchSyncInventoryUseCase: IBatchSyncInventoryUseCase,
     @Inject(CREATE_BOOKING_USE_CASE)
     private readonly _createBookingUseCase: ICreateBookingUseCase,
+    @Inject(CANCEL_BOOKING_USE_CASE)
+    private readonly _cancelBookingUseCase: ICancelBookingUseCase,
+    @Inject(RESCHEDULE_BOOKING_USE_CASE)
+    private readonly _rescheduleBookingUseCase: IRescheduleBookingUseCase,
     @Inject(GET_AVAILABILITY_USE_CASE)
     private readonly _getAvailabilityUseCase: IGetAvailabilityUseCase,
+    @Inject(LIST_BOOKINGS_USE_CASE)
+    private readonly _listBookingsUseCase: IListBookingsUseCase,
+    @Inject(VERIFY_CUSTOMER_USE_CASE)
+    private readonly _verifyCustomerUseCase: IVerifyCustomerUseCase,
+    @Inject(LIST_CUSTOMERS_USE_CASE)
+    private readonly _listCustomersUseCase: IListCustomersUseCase,
+    @Inject(GET_TENANT_SCHEDULE_USE_CASE)
+    private readonly _getTenantScheduleUseCase: IGetTenantScheduleUseCase,
+    @Inject(UPDATE_TENANT_SCHEDULE_USE_CASE)
+    private readonly _updateTenantScheduleUseCase: IUpdateTenantScheduleUseCase,
   ) {}
 
-  @GrpcMethod(
-    GRPC_SERVICES.SCHEDULING_INVENTORY,
-    GRPC_METHODS.SCHEDULING_INVENTORY.CREATE_SERVICE,
-  )
+  @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.CREATE_SERVICE)
   async createService(request: CreateServiceRequest): Promise<ServiceResponse> {
     const service = await this._createServiceUseCase.execute(request);
     return {
@@ -112,10 +147,7 @@ export class SchedulingInventoryGrpcController {
     };
   }
 
-  @GrpcMethod(
-    GRPC_SERVICES.SCHEDULING_INVENTORY,
-    GRPC_METHODS.SCHEDULING_INVENTORY.GET_SERVICE,
-  )
+  @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.GET_SERVICE)
   async getService(request: GetServiceRequest): Promise<ServiceResponse> {
     const service = await this._getServiceUseCase.execute(request);
     return {
@@ -124,10 +156,7 @@ export class SchedulingInventoryGrpcController {
     };
   }
 
-  @GrpcMethod(
-    GRPC_SERVICES.SCHEDULING_INVENTORY,
-    GRPC_METHODS.SCHEDULING_INVENTORY.LIST_SERVICES,
-  )
+  @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.LIST_SERVICES)
   async listServices(request: ListServicesRequest): Promise<ListServicesResponse> {
     const result = await this._listServicesUseCase.execute(request);
     return {
@@ -146,10 +175,7 @@ export class SchedulingInventoryGrpcController {
     };
   }
 
-  @GrpcMethod(
-    GRPC_SERVICES.SCHEDULING_INVENTORY,
-    GRPC_METHODS.SCHEDULING_INVENTORY.UPDATE_SERVICE,
-  )
+  @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.UPDATE_SERVICE)
   async updateService(request: UpdateServiceRequest): Promise<ServiceResponse> {
     const service = await this._updateServiceUseCase.execute(request);
     return {
@@ -158,10 +184,7 @@ export class SchedulingInventoryGrpcController {
     };
   }
 
-  @GrpcMethod(
-    GRPC_SERVICES.SCHEDULING_INVENTORY,
-    GRPC_METHODS.SCHEDULING_INVENTORY.DELETE_SERVICE,
-  )
+  @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.DELETE_SERVICE)
   async deleteService(request: DeleteServiceRequest): Promise<DeleteServiceResponse> {
     const success = await this._deleteServiceUseCase.execute(request);
     return {
@@ -170,10 +193,7 @@ export class SchedulingInventoryGrpcController {
     };
   }
 
-  @GrpcMethod(
-    GRPC_SERVICES.SCHEDULING_INVENTORY,
-    GRPC_METHODS.SCHEDULING_INVENTORY.CREATE_RESOURCE,
-  )
+  @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.CREATE_RESOURCE)
   async createResource(request: CreateResourceRequest): Promise<ResourceResponse> {
     const resource = await this._createResourceUseCase.execute(request);
     return {
@@ -182,10 +202,7 @@ export class SchedulingInventoryGrpcController {
     };
   }
 
-  @GrpcMethod(
-    GRPC_SERVICES.SCHEDULING_INVENTORY,
-    GRPC_METHODS.SCHEDULING_INVENTORY.GET_RESOURCE,
-  )
+  @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.GET_RESOURCE)
   async getResource(request: GetResourceRequest): Promise<ResourceResponse> {
     const resource = await this._getResourceUseCase.execute(request);
     return {
@@ -194,10 +211,7 @@ export class SchedulingInventoryGrpcController {
     };
   }
 
-  @GrpcMethod(
-    GRPC_SERVICES.SCHEDULING_INVENTORY,
-    GRPC_METHODS.SCHEDULING_INVENTORY.LIST_RESOURCES,
-  )
+  @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.LIST_RESOURCES)
   async listResources(request: ListResourcesRequest): Promise<ListResourcesResponse> {
     const result = await this._listResourcesUseCase.execute(request);
     return {
@@ -216,10 +230,7 @@ export class SchedulingInventoryGrpcController {
     };
   }
 
-  @GrpcMethod(
-    GRPC_SERVICES.SCHEDULING_INVENTORY,
-    GRPC_METHODS.SCHEDULING_INVENTORY.UPDATE_RESOURCE,
-  )
+  @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.UPDATE_RESOURCE)
   async updateResource(request: UpdateResourceRequest): Promise<ResourceResponse> {
     const resource = await this._updateResourceUseCase.execute(request);
     return {
@@ -228,10 +239,7 @@ export class SchedulingInventoryGrpcController {
     };
   }
 
-  @GrpcMethod(
-    GRPC_SERVICES.SCHEDULING_INVENTORY,
-    GRPC_METHODS.SCHEDULING_INVENTORY.DELETE_RESOURCE,
-  )
+  @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.DELETE_RESOURCE)
   async deleteResource(request: DeleteResourceRequest): Promise<DeleteResourceResponse> {
     const success = await this._deleteResourceUseCase.execute(request);
     return {
@@ -250,15 +258,33 @@ export class SchedulingInventoryGrpcController {
     return this._batchSyncInventoryUseCase.execute(request);
   }
 
-  @GrpcMethod(
-    GRPC_SERVICES.SCHEDULING_INVENTORY,
-    GRPC_METHODS.SCHEDULING_INVENTORY.CREATE_BOOKING,
-  )
+  @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.CREATE_BOOKING)
   async createBooking(request: CreateBookingRequest): Promise<BookingResponse> {
     const booking = await this._createBookingUseCase.execute(request);
     return {
       booking: BookingMapper.toProto(booking),
       message: RESPONSE_MESSAGES.BOOKING.CREATED,
+    };
+  }
+
+  @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.CANCEL_BOOKING)
+  async cancelBooking(request: CancelBookingRequest): Promise<BookingResponse> {
+    const booking = await this._cancelBookingUseCase.execute(request);
+    return {
+      booking: BookingMapper.toProto(booking),
+      message: RESPONSE_MESSAGES.BOOKING.CANCELLED,
+    };
+  }
+
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.RESCHEDULE_BOOKING,
+  )
+  async rescheduleBooking(request: RescheduleBookingRequest): Promise<BookingResponse> {
+    const booking = await this._rescheduleBookingUseCase.execute(request);
+    return {
+      booking: BookingMapper.toProto(booking),
+      message: RESPONSE_MESSAGES.BOOKING.RESCHEDULED,
     };
   }
 
@@ -268,5 +294,60 @@ export class SchedulingInventoryGrpcController {
   )
   async getAvailability(request: GetAvailabilityRequest): Promise<GetAvailabilityResponse> {
     return this._getAvailabilityUseCase.execute(request);
+  }
+
+  @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.LIST_BOOKINGS)
+  async listBookings(request: ListBookingsRequest): Promise<ListBookingsResponse> {
+    const result = await this._listBookingsUseCase.execute(request);
+    return {
+      bookings: result.bookings.map((b) => BookingMapper.toProto(b)),
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+    };
+  }
+
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.VERIFY_CUSTOMER,
+  )
+  async verifyCustomer(request: VerifyCustomerRequest): Promise<VerifyCustomerResponse> {
+    return this._verifyCustomerUseCase.execute(request);
+  }
+
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.LIST_CUSTOMERS,
+  )
+  async listCustomers(request: ListCustomersRequest): Promise<ListCustomersResponse> {
+    return this._listCustomersUseCase.execute(request);
+  }
+
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.GET_TENANT_SCHEDULE,
+  )
+  async getTenantSchedule(request: GetTenantScheduleRequest): Promise<TenantScheduleResponse> {
+    const schedule = await this._getTenantScheduleUseCase.execute(request);
+    return {
+      success: true,
+      message: RESPONSE_MESSAGES.SCHEDULE.RETRIEVED,
+      schedule: TenantScheduleMapper.toProto(schedule),
+    };
+  }
+
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.UPDATE_TENANT_SCHEDULE,
+  )
+  async updateTenantSchedule(
+    request: UpdateTenantScheduleRequest,
+  ): Promise<TenantScheduleResponse> {
+    const schedule = await this._updateTenantScheduleUseCase.execute(request);
+    return {
+      success: true,
+      message: RESPONSE_MESSAGES.SCHEDULE.UPDATED,
+      schedule: TenantScheduleMapper.toProto(schedule),
+    };
   }
 }

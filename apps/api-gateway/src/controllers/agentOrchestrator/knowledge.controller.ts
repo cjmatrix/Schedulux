@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -26,13 +27,22 @@ import { RolesGuard } from '../../guards/roles.guard.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
 import { ISchemaCacheService } from '../../interfaces/ISchemaEventSubscriber.js';
 import {
+  ConfirmDocumentUploadDto,
   CrawlSiteDto,
   GetCrawlStatusDto,
+  GetDocumentUploadUrlDto,
+  InitCustomerChatDto,
+  ListDocumentsQueryDto,
   ResumeOnboardingDto,
   SaveInitialAgentDraftDto,
   SendSandboxMessageDto,
   StartOnboardingDto,
 } from './dtos/knowledge.dto.js';
+import {
+  createSignedSession,
+  signSessionId,
+  verifySessionToken,
+} from '../../utils/session-token.util.js';
 
 @Controller(API_ROUTES.KNOWLEDGE.BASE)
 @UseGuards(TenantAuthGuard, RolesGuard)
@@ -158,19 +168,195 @@ export class KnowledgeController implements OnModuleInit {
     };
   }
 
-  @Post(API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX)
+  @Post(API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_INIT)
   @HttpCode(HttpStatus.OK)
   @UsePipes(ZodValidationPipe)
-  async sandboxChat(
-    @Req() req: AuthenticatedTenantRequest,
-    @Body() body: SendSandboxMessageDto,
-  ) {
+  async sandboxInit(@Req() req: AuthenticatedTenantRequest, @Body() body: InitCustomerChatDto) {
     const tenantId = body.tenant_id || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
     if (!tenantId) {
       throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
     }
     const agentId = body.agent_id || 'default';
-    const sessionId = body.session_id || `sandbox_${tenantId}_${agentId}`;
+
+    let resolvedSessionId: string | undefined;
+    let resolvedToken: string | undefined;
+    let isFirstTime = true;
+    let messages: any[] = [];
+
+    if (body.token) {
+      const verified = verifySessionToken(body.token);
+      if (verified.valid && verified.sessionId) {
+        resolvedSessionId = verified.sessionId;
+        resolvedToken = body.token;
+      }
+    } else if (body.session_id) {
+      resolvedSessionId = body.session_id;
+      resolvedToken = signSessionId(body.session_id);
+    }
+
+    if (resolvedSessionId && resolvedToken) {
+      try {
+        const response = await lastValueFrom(
+          this._knowledgeService.getCustomerMessages({
+            tenant_id: tenantId,
+            agent_id: agentId,
+            session_id: resolvedSessionId,
+            limit: 20,
+          }),
+        );
+        messages = response.messages || [];
+        isFirstTime = messages.length === 0;
+
+        return {
+          message: RESPONSE_MESSAGES.CHAT.SESSION_INITIALIZED,
+          data: {
+            is_first_time: isFirstTime,
+            session_id: resolvedSessionId,
+            token: resolvedToken,
+            messages,
+            next_cursor: response.next_cursor || null,
+            has_more: Boolean(response.has_more),
+          },
+        };
+      } catch {
+        isFirstTime = true;
+        messages = [];
+      }
+    } else {
+      const session = createSignedSession(`sandbox_${tenantId}_${agentId}`);
+      resolvedSessionId = session.sessionId;
+      resolvedToken = session.token;
+      isFirstTime = true;
+      messages = [];
+    }
+
+    return {
+      message: RESPONSE_MESSAGES.CHAT.SESSION_INITIALIZED,
+      data: {
+        is_first_time: isFirstTime,
+        session_id: resolvedSessionId,
+        token: resolvedToken,
+        messages,
+        next_cursor: null,
+        has_more: false,
+      },
+    };
+  }
+
+  @Get(API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_CONFIG)
+  async getSandboxWidgetConfig(
+    @Req() req: AuthenticatedTenantRequest,
+    @Query('tenant_id') tenantIdParam?: string,
+    @Query('agent_id') agentIdParam?: string,
+  ) {
+    const tenantId = tenantIdParam || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+    }
+    const agentId = agentIdParam || 'default';
+
+    const response = await lastValueFrom(
+      this._knowledgeService.getWidgetConfig({
+        tenant_id: tenantId,
+        agent_id: agentId,
+        source: 'draft',
+      }),
+    );
+
+    let widgetConfig = {};
+    if (response.widget_config_json) {
+      try {
+        widgetConfig = JSON.parse(response.widget_config_json);
+      } catch {
+        widgetConfig = {};
+      }
+    }
+
+    return {
+      message: 'Sandbox widget configuration retrieved',
+      data: {
+        tenant_id: response.tenant_id || tenantId,
+        agent_id: response.agent_id || agentId,
+        widget_config: widgetConfig,
+      },
+    };
+  }
+
+  @Get(API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_MESSAGES)
+  async getSandboxMessages(
+    @Req() req: AuthenticatedTenantRequest,
+    @Query('agent_id') agentIdParam?: string,
+    @Query('session_id') sessionIdParam?: string,
+    @Query('token') token?: string,
+    @Query('before') before?: string,
+    @Query('limit') limitStr?: string,
+  ) {
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+    }
+    const agentId = agentIdParam || 'default';
+    let resolvedSessionId = sessionIdParam;
+
+    if (token) {
+      const verified = verifySessionToken(token);
+      if (!verified.valid || !verified.sessionId) {
+        throw new UnauthorizedException(RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
+      }
+      resolvedSessionId = verified.sessionId;
+    }
+
+    if (!resolvedSessionId) {
+      throw new BadRequestException(RESPONSE_MESSAGES.CHAT.REQUIRED_FIELDS);
+    }
+
+    const limit = limitStr ? parseInt(limitStr, 10) : 20;
+    const response = await lastValueFrom(
+      this._knowledgeService.getCustomerMessages({
+        tenant_id: tenantId,
+        agent_id: agentId,
+        session_id: resolvedSessionId,
+        limit,
+        before,
+      }),
+    );
+
+    return {
+      message: RESPONSE_MESSAGES.CHAT.MESSAGES_RETRIEVED,
+      data: {
+        messages: response.messages || [],
+        next_cursor: response.next_cursor || null,
+        has_more: Boolean(response.has_more),
+      },
+    };
+  }
+
+  @Post(API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX)
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(ZodValidationPipe)
+  async sandboxChat(@Req() req: AuthenticatedTenantRequest, @Body() body: SendSandboxMessageDto) {
+    const tenantId = body.tenant_id || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+    }
+    const agentId = body.agent_id || 'default';
+
+    let sessionId = body.session_id;
+    let token = body.token;
+
+    if (token) {
+      const verified = verifySessionToken(token);
+      if (!verified.valid || !verified.sessionId) {
+        throw new UnauthorizedException(RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
+      }
+      sessionId = verified.sessionId;
+    } else if (sessionId) {
+      token = signSessionId(sessionId);
+    } else {
+      const session = createSignedSession(`sandbox_${tenantId}_${agentId}`);
+      sessionId = session.sessionId;
+      token = session.token;
+    }
 
     const response = await lastValueFrom(
       this._knowledgeService.customerChat({
@@ -181,6 +367,7 @@ export class KnowledgeController implements OnModuleInit {
         customer_id: body.customer_id || '',
         customer_phone: body.customer_phone || '',
         customer_name: body.customer_name || 'Sandbox Tester',
+        mode: 'sandbox',
       }),
     );
 
@@ -188,8 +375,15 @@ export class KnowledgeController implements OnModuleInit {
       message: RESPONSE_MESSAGES.KNOWLEDGE.SANDBOX_CHAT_PROCESSED,
       data: {
         reply: response.response,
+        response: response.response,
         session_id: response.session_id,
-        history: response.history || [],
+        token,
+        user_message_id: response.user_message_id,
+        agent_message_id: response.agent_message_id,
+        created_at: response.created_at,
+        booking_id: response.booking_id || undefined,
+        booking_reference: response.booking_reference || undefined,
+        status: response.status || undefined,
       },
     };
   }
@@ -310,5 +504,101 @@ export class KnowledgeController implements OnModuleInit {
       },
     };
   }
-}
 
+  @Post(API_ROUTES.KNOWLEDGE.DOCUMENTS_UPLOAD_URL)
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(ZodValidationPipe)
+  async getDocumentUploadUrl(
+    @Req() req: AuthenticatedTenantRequest,
+    @Body() body: GetDocumentUploadUrlDto,
+  ) {
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+    }
+    const response = await lastValueFrom(
+      this._knowledgeService.getDocumentUploadUrl({
+        tenant_id: tenantId,
+        agent_id: body.agent_id,
+        file_name: body.file_name,
+        file_size_bytes: body.file_size_bytes || 0,
+      }),
+    );
+    return {
+      message: 'Presigned upload URL generated successfully',
+      data: {
+        upload_url: response.upload_url,
+        document_id: response.document_id,
+        s3_key: response.s3_key,
+        expires_in: response.expires_in,
+      },
+    };
+  }
+
+  @Post(API_ROUTES.KNOWLEDGE.DOCUMENTS_CONFIRM)
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(ZodValidationPipe)
+  async confirmDocumentUpload(
+    @Req() req: AuthenticatedTenantRequest,
+    @Body() body: ConfirmDocumentUploadDto,
+  ) {
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+    }
+    const response = await lastValueFrom(
+      this._knowledgeService.confirmDocumentUpload({
+        tenant_id: tenantId,
+        document_id: body.document_id,
+      }),
+    );
+    return {
+      message: response.message,
+      data: { success: response.success },
+    };
+  }
+
+  @Get(API_ROUTES.KNOWLEDGE.DOCUMENTS)
+  @UsePipes(ZodValidationPipe)
+  async listDocuments(
+    @Req() req: AuthenticatedTenantRequest,
+    @Query() query: ListDocumentsQueryDto,
+  ) {
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+    }
+    const response = await lastValueFrom(
+      this._knowledgeService.listDocuments({
+        tenant_id: tenantId,
+        agent_id: query.agent_id || '',
+      }),
+    );
+    return {
+      message: 'Documents retrieved successfully',
+      data: response.documents || [],
+    };
+  }
+
+  @Delete(API_ROUTES.KNOWLEDGE.DOCUMENT_BY_ID)
+  @HttpCode(HttpStatus.OK)
+  async deleteDocument(
+    @Req() req: AuthenticatedTenantRequest,
+    @Param('documentId') documentId: string,
+  ) {
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+    }
+    const response = await lastValueFrom(
+      this._knowledgeService.deleteDocument({
+        tenant_id: tenantId,
+        document_id: documentId,
+      }),
+    );
+    return {
+      message: response.message,
+      data: { success: response.success },
+    };
+  }
+}

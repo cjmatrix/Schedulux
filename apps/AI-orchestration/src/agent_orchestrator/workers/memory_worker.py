@@ -6,6 +6,8 @@ import os
 
 import aio_pika
 
+from agent_orchestrator.adapters.qdrant_stores import QdrantMemoryStore
+from agent_orchestrator.adapters.voyage_embedder import VoyageDenseEmbedder
 from agent_orchestrator.config import AGENT_MEMORY_QUEUE_NAME
 from agent_orchestrator.queues.memory_queue import RabbitMQMemoryQueue
 from agent_orchestrator.repositories.draft_repository import MongoDraftRepository
@@ -33,7 +35,13 @@ async def handle_memory_message(message: aio_pika.abc.AbstractIncomingMessage):
             msg_repo = MongoMessageRepository()
             draft_repo = MongoDraftRepository()
             queue = RabbitMQMemoryQueue()
-            memory_service = MemoryService(msg_repo, draft_repo, queue)
+            memory_service = MemoryService(
+                message_repo=msg_repo,
+                draft_repo=draft_repo,
+                memory_queue=queue,
+                dense_embedder=VoyageDenseEmbedder(),
+                memory_store=QdrantMemoryStore(),
+            )
 
             result = await memory_service.consolidate_memory(tenant_id, agent_id, cutoff_seq)
             print(f"[MemoryWorker] Completed job {job_id}: {result.get('status')}", flush=True)

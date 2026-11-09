@@ -10,10 +10,8 @@ export const RESPONSE_MESSAGES = {
     TOKEN_ROTATED_SUCCESS: 'Token rotated successfully',
     TOKEN_REFRESHED_SUCCESS: 'Token refreshed successfully',
     LOGGED_OUT_SUCCESS: 'Logged out successfully',
-    PASSWORD_RESET_SENT:
-      'If that email exists, a password reset link has been sent.',
-    PASSWORD_RESET_SUCCESS:
-      'Password has been successfully reset. You can now log in.',
+    PASSWORD_RESET_SENT: 'If that email exists, a password reset link has been sent.',
+    PASSWORD_RESET_SUCCESS: 'Password has been successfully reset. You can now log in.',
     USER_INVITED_SUCCESS: 'Dashboard user invited successfully',
     TENANT_STATUS_UPDATED: (status: string) =>
       `Tenant ${status === 'active' ? 'reactivated' : 'suspended'} successfully`,

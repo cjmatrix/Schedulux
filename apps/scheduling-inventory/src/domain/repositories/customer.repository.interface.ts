@@ -12,6 +12,7 @@ export interface ICustomerRepository {
   findById(tenantId: string, customerId: string, agentId?: string): Promise<CustomerEntity | null>;
   findByPhone(tenantId: string, phone: string, agentId?: string): Promise<CustomerEntity | null>;
   findByEmail(tenantId: string, email: string, agentId?: string): Promise<CustomerEntity | null>;
+  markVerifiedByPhone(tenantId: string, phone: string, agentId?: string): Promise<number>;
   update(customer: CustomerEntity): Promise<CustomerEntity | null>;
   findAll(
     tenantId: string,

@@ -44,10 +44,20 @@ export const SaveInitialAgentDraftSchema = z.object({
 
 export class SaveInitialAgentDraftDto extends createZodDto(SaveInitialAgentDraftSchema) {}
 
+export const InitCustomerChatSchema = z.object({
+  tenant_id: z.string().min(1, 'Tenant ID is required'),
+  agent_id: z.string().min(1, 'Agent ID is required'),
+  token: z.string().optional(),
+  session_id: z.string().optional(),
+});
+
+export class InitCustomerChatDto extends createZodDto(InitCustomerChatSchema) {}
+
 export const CustomerChatSchema = z.object({
   tenant_id: z.string().min(1, 'Tenant ID is required'),
   agent_id: z.string().min(1, 'Agent ID is required'),
-  session_id: z.string().min(1, 'Session ID is required'),
+  session_id: z.string().optional(),
+  token: z.string().optional(),
   message: z.string().min(1, 'Message cannot be empty'),
   customer_id: z.string().optional(),
   customer_phone: z.string().optional(),
@@ -60,6 +70,7 @@ export const SendSandboxMessageSchema = z.object({
   tenant_id: z.string().optional(),
   agent_id: z.string().optional(),
   session_id: z.string().optional(),
+  token: z.string().optional(),
   message: z.string().min(1, 'Message cannot be empty'),
   customer_id: z.string().optional(),
   customer_phone: z.string().optional(),
@@ -68,3 +79,31 @@ export const SendSandboxMessageSchema = z.object({
 
 export class SendSandboxMessageDto extends createZodDto(SendSandboxMessageSchema) {}
 
+export const GetDocumentUploadUrlSchema = z.object({
+  agent_id: z.string().min(1, 'Agent ID is required'),
+  file_name: z
+    .string()
+    .min(1, 'File name is required')
+    .max(255, 'File name exceeds 255 characters')
+    .regex(/\.pdf$/i, 'Only PDF documents (.pdf) are supported'),
+  file_size_bytes: z
+    .number()
+    .nonnegative()
+    .max(25 * 1024 * 1024, 'File size exceeds maximum allowed limit of 25MB')
+    .optional()
+    .default(0),
+});
+
+export class GetDocumentUploadUrlDto extends createZodDto(GetDocumentUploadUrlSchema) {}
+
+export const ConfirmDocumentUploadSchema = z.object({
+  document_id: z.string().min(1, 'Document ID is required'),
+});
+
+export class ConfirmDocumentUploadDto extends createZodDto(ConfirmDocumentUploadSchema) {}
+
+export const ListDocumentsQuerySchema = z.object({
+  agent_id: z.string().optional(),
+});
+
+export class ListDocumentsQueryDto extends createZodDto(ListDocumentsQuerySchema) {}

@@ -109,6 +109,11 @@ export class CustomerEntity {
     this._updatedAt = new Date();
   }
 
+  markVerified(): void {
+    this._isGuest = false;
+    this._updatedAt = new Date();
+  }
+
   updateDetails(details: { name?: string; email?: string; notes?: string }): void {
     if (details.name !== undefined && details.name.trim() !== '') {
       this._name = details.name.trim();

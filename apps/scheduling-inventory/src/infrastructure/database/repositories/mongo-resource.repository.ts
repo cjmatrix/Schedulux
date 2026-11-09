@@ -8,7 +8,7 @@ import {
 import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
 import { UNIT_OF_WORK } from '../../../domain/tokens.js';
 import { ResourceMapper } from '../mappers/resource.mapper.js';
-import { ResourceModel } from '../schemas/resource.schema.js';
+import { type IResourceDoc, ResourceModel } from '../schemas/resource.schema.js';
 
 @Injectable()
 export class MongoResourceRepository implements IResourceRepository {
@@ -80,7 +80,7 @@ export class MongoResourceRepository implements IResourceRepository {
     const skip = (page - 1) * limit;
 
     const [docs, total, statsResult] = await Promise.all([
-      ResourceModel.find(query).sort({ created_at: -1 }).skip(skip).limit(limit).exec(),
+      ResourceModel.find(query).sort({ created_at: -1 }).skip(skip).limit(limit).lean().exec(),
       ResourceModel.countDocuments(query).exec(),
       ResourceModel.aggregate([
         { $match: baseMatch },
@@ -111,7 +111,7 @@ export class MongoResourceRepository implements IResourceRepository {
     };
 
     return {
-      resources: docs.map((doc) => ResourceMapper.toDomain(doc)),
+      resources: docs.map((doc) => ResourceMapper.toDomain(doc as unknown as IResourceDoc)),
       total,
       summary,
     };
@@ -164,8 +164,8 @@ export class MongoResourceRepository implements IResourceRepository {
     if (agentId) {
       query.agent_id = agentId;
     }
-    const docs = await ResourceModel.find(query).exec();
-    return docs.map((doc) => ResourceMapper.toDomain(doc));
+    const docs = await ResourceModel.find(query).lean().exec();
+    return docs.map((doc) => ResourceMapper.toDomain(doc as unknown as IResourceDoc));
   }
 
   async findActiveBookableByIds(
@@ -184,8 +184,7 @@ export class MongoResourceRepository implements IResourceRepository {
     if (agentId) {
       query.agent_id = agentId;
     }
-    const docs = await ResourceModel.find(query).exec();
-    return docs.map((doc) => ResourceMapper.toDomain(doc));
+    const docs = await ResourceModel.find(query).lean().exec();
+    return docs.map((doc) => ResourceMapper.toDomain(doc as unknown as IResourceDoc));
   }
 }
-

@@ -29,13 +29,23 @@ import { Roles } from '../../decorators/roles.decorator.js';
 import { RolesGuard } from '../../guards/roles.guard.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
 import { GetAvailabilityQueryDto } from './dtos/availability.dto.js';
-import { CreateBookingDto } from './dtos/booking.dto.js';
+import {
+  CancelBookingDto,
+  CreateBookingDto,
+  ListBookingsQueryDto,
+  RescheduleBookingDto,
+} from './dtos/booking.dto.js';
 import {
   CreateResourceDto,
   ListResourcesQueryDto,
   UpdateResourceDto,
 } from './dtos/resource.dto.js';
+import {
+  GetTenantScheduleQueryDto,
+  UpdateTenantScheduleDto,
+} from './dtos/schedule.dto.js';
 import { CreateServiceDto, ListServicesQueryDto, UpdateServiceDto } from './dtos/service.dto.js';
+import { ListCustomersQueryDto } from './dtos/customer.dto.js';
 
 @Controller(API_ROUTES.SCHEDULING.BASE)
 @UseGuards(TenantAuthGuard, RolesGuard)
@@ -80,7 +90,6 @@ export class SchedulingController implements OnModuleInit {
           ? { require_otp: body.verification.require_otp ?? undefined }
           : undefined,
         resource_requirements: body.resource_requirements ?? [],
-        recall_interval_days: body.recall_interval_days,
       }),
     );
 
@@ -157,7 +166,6 @@ export class SchedulingController implements OnModuleInit {
           ? { require_otp: body.verification.require_otp ?? undefined }
           : undefined,
         resource_requirements: body.resource_requirements ?? [],
-        recall_interval_days: body.recall_interval_days,
       }),
     );
 
@@ -302,6 +310,39 @@ export class SchedulingController implements OnModuleInit {
     };
   }
 
+  @Get(API_ROUTES.SCHEDULING.BOOKINGS)
+  @UsePipes(ZodValidationPipe)
+  async listBookings(
+    @Req() req: AuthenticatedTenantRequest,
+    @Query() query: ListBookingsQueryDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const response = await lastValueFrom(
+      this._schedulingService.listBookings({
+        tenant_id: tenantId,
+        page: query.page,
+        limit: query.limit,
+        agent_id: query.agent_id,
+        service_id: query.service_id,
+        resource_id: query.resource_id,
+        status: query.status,
+        start_date: query.start_date,
+        end_date: query.end_date,
+        search: query.search || undefined,
+      }),
+    );
+
+    return {
+      message: 'Bookings retrieved successfully',
+      data: response.bookings,
+      pagination: {
+        total: response.total,
+        page: response.page,
+        limit: response.limit,
+      },
+    };
+  }
+
   @Post(API_ROUTES.SCHEDULING.BOOKINGS)
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(ZodValidationPipe)
@@ -324,6 +365,62 @@ export class SchedulingController implements OnModuleInit {
         source: body.source,
         deposit_status: body.deposit_status,
         created_by: body.created_by || userId,
+      }),
+    );
+
+    return {
+      message: response.message,
+      data: response.booking,
+    };
+  }
+
+  @Post(API_ROUTES.SCHEDULING.BOOKING_CANCEL)
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(ZodValidationPipe)
+  async cancelBooking(
+    @Req() req: AuthenticatedTenantRequest,
+    @Param('id') id: string,
+    @Body() body: CancelBookingDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const userId = req.dashboardUser?.user_id || req.tenant?.tenant_id || '';
+    const response = await lastValueFrom(
+      this._schedulingService.cancelBooking({
+        tenant_id: tenantId,
+        booking_id: id,
+        agent_id: body.agent_id,
+        reason: body.reason,
+        cancelled_by: userId,
+      }),
+    );
+
+    return {
+      message: response.message,
+      data: response.booking,
+    };
+  }
+
+  @Post(API_ROUTES.SCHEDULING.BOOKING_RESCHEDULE)
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(ZodValidationPipe)
+  async rescheduleBooking(
+    @Req() req: AuthenticatedTenantRequest,
+    @Param('id') id: string,
+    @Body() body: RescheduleBookingDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const userId = req.dashboardUser?.user_id || req.tenant?.tenant_id || '';
+    const response = await lastValueFrom(
+      this._schedulingService.rescheduleBooking({
+        tenant_id: tenantId,
+        booking_id: id,
+        agent_id: body.agent_id,
+        new_start_time: body.new_start_time,
+        new_end_time: body.new_end_time,
+        resource_id: body.resource_id,
+        resource_ids: body.resource_ids ?? (body.resource_id ? [body.resource_id] : []),
+        notes: body.notes,
+        rescheduled_by: userId,
       }),
     );
 
@@ -356,6 +453,81 @@ export class SchedulingController implements OnModuleInit {
     return {
       message: RESPONSE_MESSAGES.SCHEDULING.AVAILABILITY_FETCHED,
       data: response,
+    };
+  }
+
+  @Get(API_ROUTES.SCHEDULING.SCHEDULE)
+  @UsePipes(ZodValidationPipe)
+  async getTenantSchedule(
+    @Req() req: AuthenticatedTenantRequest,
+    @Query() query: GetTenantScheduleQueryDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const response = await lastValueFrom(
+      this._schedulingService.getTenantSchedule({
+        tenant_id: tenantId,
+        agent_id: query.agent_id || '',
+      }),
+    );
+
+    return {
+      message: response.message,
+      data: response.schedule,
+    };
+  }
+
+  @Put(API_ROUTES.SCHEDULING.SCHEDULE)
+  @UsePipes(ZodValidationPipe)
+  async updateTenantSchedule(
+    @Req() req: AuthenticatedTenantRequest,
+    @Body() body: UpdateTenantScheduleDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const response = await lastValueFrom(
+      this._schedulingService.updateTenantSchedule({
+        tenant_id: tenantId,
+        agent_id: body.agent_id,
+        timezone: body.timezone,
+        currency: body.currency,
+        operating_hours: body.operating_hours,
+        blackout_dates: body.blackout_dates || [],
+        scheduling_engine: body.scheduling_engine,
+        verification_policy: body.verification_policy,
+      }),
+    );
+
+    return {
+      message: response.message,
+      data: response.schedule,
+    };
+  }
+
+  @Get(API_ROUTES.SCHEDULING.CUSTOMERS)
+  @UsePipes(ZodValidationPipe)
+  async listCustomers(
+    @Req() req: AuthenticatedTenantRequest,
+    @Query() query: ListCustomersQueryDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const response = await lastValueFrom(
+      this._schedulingService.listCustomers({
+        tenant_id: tenantId,
+        agent_id: query.agent_id || '',
+        page: query.page,
+        limit: query.limit,
+        search: query.search || '',
+      }),
+    );
+
+    return {
+      message: RESPONSE_MESSAGES.SCHEDULING.CUSTOMERS_RETRIEVED,
+      data: response.customers || [],
+      pagination: {
+        total: response.total,
+        page: response.page,
+        limit: response.limit,
+        total_pages: response.total_pages,
+      },
     };
   }
 }

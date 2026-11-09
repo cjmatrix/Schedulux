@@ -9,6 +9,7 @@ interface CanvasHeaderProps {
   pendingChangesCount: number;
   isSavingChanges: boolean;
   onSaveChanges: () => void;
+  isLive?: boolean;
 }
 
 export const CanvasHeader: React.FC<CanvasHeaderProps> = ({
@@ -18,6 +19,7 @@ export const CanvasHeader: React.FC<CanvasHeaderProps> = ({
   pendingChangesCount,
   isSavingChanges,
   onSaveChanges,
+  isLive = false,
 }) => {
   return (
     <div className="px-8 py-3.5 border-b border-slate-200/90 bg-white flex items-center justify-between sticky top-0 z-20 shadow-2xs">
@@ -33,17 +35,31 @@ export const CanvasHeader: React.FC<CanvasHeaderProps> = ({
         >
           • Logic &amp; Rules
         </button>
-        <button
-          type="button"
-          onClick={() => setRightViewMode('sandbox')}
-          className={`px-3.5 py-1.5 rounded-full transition cursor-pointer ${
-            rightViewMode === 'sandbox'
-              ? 'bg-slate-900 text-white shadow-2xs font-bold'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
+        <div
+          className="inline-flex"
+          title={
+            !isLive ? 'After publishing your agent, you can test it in the sandbox' : undefined
+          }
         >
-          Test Sandbox
-        </button>
+          <button
+            type="button"
+            disabled={!isLive}
+            onClick={() => {
+              if (isLive) {
+                setRightViewMode('sandbox');
+              }
+            }}
+            className={`px-3.5 py-1.5 rounded-full transition ${
+              !isLive
+                ? 'text-slate-400 opacity-50 cursor-not-allowed select-none'
+                : rightViewMode === 'sandbox'
+                  ? 'bg-slate-900 text-white shadow-2xs font-bold cursor-pointer'
+                  : 'text-slate-600 hover:text-slate-900 cursor-pointer'
+            }`}
+          >
+            Test Sandbox
+          </button>
+        </div>
         <button
           type="button"
           onClick={() => setRightViewMode('json')}

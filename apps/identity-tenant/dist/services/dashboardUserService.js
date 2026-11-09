@@ -35,7 +35,8 @@ let DashboardUserService = class DashboardUserService {
         this._configService = _configService;
         this._emailProducer = _emailProducer;
         this._jwtSecret = this._configService.get('JWT_SECRET') || 'dev-secret-change-in-prod';
-        this._jwtRefreshSecret = this._configService.get('JWT_REFRESH_SECRET') || this._jwtSecret;
+        this._jwtRefreshSecret =
+            this._configService.get('JWT_REFRESH_SECRET') || this._jwtSecret;
         this._accessTokenExpiry = (this._configService.get('ACCESS_TOKEN_EXPIRY') ||
             '15m');
         this._refreshTokenExpiry = (this._configService.get('REFRESH_TOKEN_EXPIRY') ||

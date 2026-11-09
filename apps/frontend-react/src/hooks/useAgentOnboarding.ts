@@ -33,19 +33,13 @@ export function useAgentOnboarding({
   const [inputValue, setInputValue] = useState('');
   const [draftSchema, setDraftSchema] = useState<AgentDraftSchema>({});
   const [baselineSchema, setBaselineSchema] = useState<AgentDraftSchema | null>(null);
+  const [liveSchema, setLiveSchema] = useState<AgentDraftSchema | null>(null);
   const [status, setStatus] = useState<OnboardingWizardStatus>('idle');
   const [isLive, setIsLive] = useState(false);
   const [isSavingChanges, setIsSavingChanges] = useState(false);
 
   const [firstItemIndex, setFirstItemIndex] = useState(START_INDEX);
   const pagesCountRef = useRef(1);
-
-  const [sandboxMessages, setSandboxMessages] = useState<
-    Array<{ role: 'user' | 'agent'; text: string }>
-  >([]);
-  const [sandboxInput, setSandboxInput] = useState('');
-  const [isSandboxTyping, setIsSandboxTyping] = useState(false);
-  const [sandboxSessionId, setSandboxSessionId] = useState<string>(() => `sandbox_${Date.now()}`);
 
   const hasStartedRef = useRef(false);
   const currentAgentIdRef = useRef<string | null>(null);
@@ -114,8 +108,8 @@ export function useAgentOnboarding({
       setFirstItemIndex(START_INDEX);
       setDraftSchema({});
       setBaselineSchema(null);
+      setLiveSchema(null);
       setIsLive(false);
-      setSandboxMessages([]);
     }
 
     if (hasStartedRef.current) return;
@@ -130,31 +124,33 @@ export function useAgentOnboarding({
         });
 
         const resData = res.data;
-        if (resData?.draft_schema) {
-          setDraftSchema(resData.draft_schema);
+        if (resData) {
+          if (resData.draft_schema) {
+            setDraftSchema(resData.draft_schema);
+          }
+
+          const rawLive = resData.live_schema;
+          const liveObj =
+            rawLive && typeof rawLive === 'object' && Object.keys(rawLive).length > 0
+              ? rawLive
+              : null;
+          setLiveSchema(liveObj);
 
           const hasLive = Boolean(
-            resData.live_schema &&
-              typeof resData.live_schema === 'object' &&
-              Object.keys(resData.live_schema).length > 0 &&
-              (resData.live_schema.business_profile || resData.live_schema.schema_version),
+            liveObj &&
+              (liveObj.business_profile ||
+                liveObj.schema_version ||
+                liveObj.services ||
+                Object.keys(liveObj).length > 0),
           );
 
           if (hasLive) {
-            setBaselineSchema(resData.live_schema ?? null);
+            setBaselineSchema(liveObj);
             setIsLive(true);
           } else {
-            setBaselineSchema(resData.draft_schema);
+            setBaselineSchema(resData.draft_schema ?? null);
+            setIsLive(false);
           }
-        }
-
-        const isCompleted =
-          resData.status === 'complete' ||
-          resData.draft_schema?.status === 'complete' ||
-          resData.draft_schema?.status === 'created';
-
-        if (isCompleted) {
-          setIsLive(true);
         }
 
         if (resData.question) {
@@ -260,20 +256,31 @@ export function useAgentOnboarding({
           setDraftSchema(resData.draft_schema);
         }
 
-        const isCompleted =
-          resData.status === 'complete' ||
-          resData.draft_schema?.status === 'complete' ||
-          resData.draft_schema?.status === 'created';
-
-        if (isCompleted) {
-          setIsLive(true);
-          if (resData.draft_schema) {
-            setBaselineSchema(resData.draft_schema);
+        const rawLive = resData?.live_schema;
+        if (rawLive !== undefined) {
+          const liveObj =
+            rawLive && typeof rawLive === 'object' && Object.keys(rawLive).length > 0
+              ? rawLive
+              : null;
+          setLiveSchema(liveObj);
+          const hasLive = Boolean(
+            liveObj &&
+              (liveObj.business_profile ||
+                liveObj.schema_version ||
+                liveObj.services ||
+                Object.keys(liveObj).length > 0),
+          );
+          setIsLive(hasLive);
+          if (hasLive) {
+            setBaselineSchema(liveObj);
           }
         }
 
+        const isCompleted =
+          resData?.status === 'complete' || resData?.draft_schema?.status === 'complete';
+
         const agentReplyText =
-          resData.question ||
+          resData?.question ||
           (isCompleted
             ? 'Your agent configuration is complete and saved to the database. You are ready to go live!'
             : '');
@@ -379,19 +386,10 @@ export function useAgentOnboarding({
       }
 
       const isCompleted =
-        resData.status === 'complete' ||
-        resData.draft_schema?.status === 'complete' ||
-        resData.draft_schema?.status === 'created';
-
-      if (isCompleted) {
-        setIsLive(true);
-        if (resData.draft_schema) {
-          setBaselineSchema(resData.draft_schema);
-        }
-      }
+        resData?.status === 'complete' || resData?.draft_schema?.status === 'complete';
 
       const agentReplyText =
-        resData.question ||
+        resData?.question ||
         (isCompleted
           ? 'Your agent configuration is complete and saved to the database. You are ready to go live!'
           : '');
@@ -426,16 +424,25 @@ export function useAgentOnboarding({
       });
 
       const sessionData = sessionRes.data;
-      if (sessionData?.draft_schema) {
-        setDraftSchema(sessionData.draft_schema);
+      if (sessionData) {
+        if (sessionData.draft_schema) {
+          setDraftSchema(sessionData.draft_schema);
+        }
+        const rawLive = sessionData.live_schema;
+        const liveObj =
+          rawLive && typeof rawLive === 'object' && Object.keys(rawLive).length > 0
+            ? rawLive
+            : null;
+        setLiveSchema(liveObj);
         const hasLive = Boolean(
-          sessionData.live_schema &&
-            typeof sessionData.live_schema === 'object' &&
-            Object.keys(sessionData.live_schema).length > 0 &&
-            (sessionData.live_schema.business_profile || sessionData.live_schema.schema_version),
+          liveObj &&
+            (liveObj.business_profile ||
+              liveObj.schema_version ||
+              liveObj.services ||
+              Object.keys(liveObj).length > 0),
         );
-        setBaselineSchema(hasLive ? (sessionData.live_schema ?? null) : sessionData.draft_schema);
-        setIsLive(true);
+        setBaselineSchema(hasLive ? liveObj : (sessionData.draft_schema ?? null));
+        setIsLive(hasLive);
       }
     } catch (err) {
       console.error('Failed to publish agent configuration:', err);
@@ -462,58 +469,6 @@ export function useAgentOnboarding({
     }
   }, [tenantId, agentId, isSavingChanges, queryKey, queryClient]);
 
-  const sendSandboxMessage = useCallback(
-    async (e?: React.FormEvent, clinicName = 'AI Scheduling Agent') => {
-      if (e) e.preventDefault();
-      const userText = sandboxInput.trim();
-      if (!userText || isSandboxTyping) return;
-
-      setSandboxInput('');
-      setSandboxMessages((prev) => [...prev, { role: 'user', text: userText }]);
-      setIsSandboxTyping(true);
-
-      try {
-        const res = await onboardingApi.sendSandboxMessage({
-          tenant_id: tenantId,
-          agent_id: agentId,
-          session_id: sandboxSessionId,
-          message: userText,
-        });
-
-        const reply =
-          res.data?.reply ||
-          `I would be happy to help you with that at ${clinicName}!`;
-
-        setSandboxMessages((prev) => [...prev, { role: 'agent', text: reply }]);
-      } catch (err) {
-        console.error('Failed to send sandbox message:', err);
-        setSandboxMessages((prev) => [
-          ...prev,
-          {
-            role: 'agent',
-            text: `I apologize, I encountered an issue connecting to the AI agent runtime. Please verify the agent draft or try again.`,
-          },
-        ]);
-      } finally {
-        setIsSandboxTyping(false);
-      }
-    },
-    [sandboxInput, isSandboxTyping, tenantId, agentId, sandboxSessionId],
-  );
-
-  const resetSandbox = useCallback((greeting?: string) => {
-    setSandboxSessionId(`sandbox_${Date.now()}`);
-    setSandboxMessages([
-      {
-        role: 'agent',
-        text:
-          greeting ||
-          `Hello! I'm your AI booking coordinator. How can I assist you with scheduling or consultations today?`,
-      },
-    ]);
-    setSandboxInput('');
-  }, []);
-
   return {
     messages,
     isLoadingMessages,
@@ -528,6 +483,7 @@ export function useAgentOnboarding({
 
     draftSchema,
     baselineSchema,
+    liveSchema,
     setDraftSchema,
     setBaselineSchema,
     diffPatches,
@@ -537,14 +493,8 @@ export function useAgentOnboarding({
     isSavingChanges,
     saveChanges,
 
-    sandboxMessages,
-    setSandboxMessages,
-    sandboxInput,
-    setSandboxInput,
-    isSandboxTyping,
-    sendSandboxMessage,
-    resetSandbox,
-    sandboxSessionId,
+    tenantId,
+    agentId,
 
     refetchMessages: () => queryClient.invalidateQueries({ queryKey }),
   };

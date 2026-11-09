@@ -4,11 +4,13 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+var AllExceptionsFilter_1;
 import * as grpc from '@grpc/grpc-js';
-import { Catch } from '@nestjs/common';
+import { Catch, Logger } from '@nestjs/common';
 import { throwError } from 'rxjs';
 import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
-let AllExceptionsFilter = class AllExceptionsFilter {
+let AllExceptionsFilter = AllExceptionsFilter_1 = class AllExceptionsFilter {
+    _logger = new Logger(AllExceptionsFilter_1.name);
     catch(exception, _host) {
         let code = grpc.status.INTERNAL;
         let message = RESPONSE_MESSAGES.ERRORS.INTERNAL_SERVER_ERROR;
@@ -77,12 +79,12 @@ let AllExceptionsFilter = class AllExceptionsFilter {
                 message = RESPONSE_MESSAGES.ERRORS.CRAWL_JOB_NOT_FOUND_MSG;
                 break;
             default:
-                console.error('Unhandled Microservice Error:', exception);
+                this._logger.error('Unhandled Microservice Error:', exception);
         }
         return throwError(() => ({ code, message }));
     }
 };
-AllExceptionsFilter = __decorate([
+AllExceptionsFilter = AllExceptionsFilter_1 = __decorate([
     Catch()
 ], AllExceptionsFilter);
 export { AllExceptionsFilter };

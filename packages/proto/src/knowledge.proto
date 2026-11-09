@@ -12,6 +12,12 @@ service KnowledgeService {
   rpc GetAgentMessages (GetAgentMessagesRequest) returns (GetAgentMessagesResponse);
   rpc CustomerChat (CustomerChatRequest) returns (CustomerChatResponse);
   rpc GetCustomerMessages (GetCustomerMessagesRequest) returns (GetCustomerMessagesResponse);
+  rpc GetWidgetConfig (GetWidgetConfigRequest) returns (GetWidgetConfigResponse);
+
+  rpc GetDocumentUploadUrl (GetDocumentUploadUrlRequest) returns (GetDocumentUploadUrlResponse);
+  rpc ConfirmDocumentUpload (ConfirmDocumentUploadRequest) returns (ConfirmDocumentUploadResponse);
+  rpc ListDocuments (ListDocumentsRequest) returns (ListDocumentsResponse);
+  rpc DeleteDocument (DeleteDocumentRequest) returns (DeleteDocumentResponse);
 }
 
 message CrawlSiteRequest {
@@ -136,15 +142,18 @@ message CustomerChatRequest {
   optional string customer_id = 5;
   optional string customer_phone = 6;
   optional string customer_name = 7;
+  optional string mode = 8;
 }
 
 message CustomerChatResponse {
   string session_id = 1;
   string response = 2;
-  repeated CustomerChatMessageInfo history = 3;
-  optional string booking_id = 4;
-  optional string booking_reference = 5;
-  optional string status = 6;
+  optional string booking_id = 3;
+  optional string booking_reference = 4;
+  optional string status = 5;
+  string user_message_id = 6;
+  string agent_message_id = 7;
+  string created_at = 8;
 }
 
 message GetCustomerMessagesRequest {
@@ -152,9 +161,80 @@ message GetCustomerMessagesRequest {
   string agent_id = 2;
   string session_id = 3;
   optional int32 limit = 4;
+  optional string before = 5;
 }
 
 message GetCustomerMessagesResponse {
   repeated CustomerChatMessageInfo messages = 1;
+  optional string next_cursor = 2;
+  bool has_more = 3;
+}
+
+message GetWidgetConfigRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+  string source = 3; // "draft" or "live"
+}
+
+message GetWidgetConfigResponse {
+  string tenant_id = 1;
+  string agent_id = 2;
+  string widget_config_json = 3;
+}
+
+message GetDocumentUploadUrlRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+  string file_name = 3;
+  int64 file_size_bytes = 4;
+}
+
+message GetDocumentUploadUrlResponse {
+  string upload_url = 1;
+  string document_id = 2;
+  string s3_key = 3;
+  int32 expires_in = 4;
+}
+
+message ConfirmDocumentUploadRequest {
+  string tenant_id = 1;
+  string document_id = 2;
+}
+
+message ConfirmDocumentUploadResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DocumentInfo {
+  string id = 1;
+  string tenant_id = 2;
+  string agent_id = 3;
+  string file_name = 4;
+  int64 file_size_bytes = 5;
+  string s3_key = 6;
+  string s3_bucket = 7;
+  string status = 8;
+  string created_at = 9;
+  string updated_at = 10;
+}
+
+message ListDocumentsRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+}
+
+message ListDocumentsResponse {
+  repeated DocumentInfo documents = 1;
+}
+
+message DeleteDocumentRequest {
+  string tenant_id = 1;
+  string document_id = 2;
+}
+
+message DeleteDocumentResponse {
+  bool success = 1;
+  string message = 2;
 }
 

@@ -14,6 +14,7 @@ from agent_orchestrator.services.protocols import (
     AgentManagementServiceProtocol,
     ChatServiceProtocol,
     CrawlerServiceProtocol,
+    DocumentServiceProtocol,
     OnboardingServiceProtocol,
 )
 
@@ -25,11 +26,13 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
         chat_service: ChatServiceProtocol,
         agent_service: AgentManagementServiceProtocol,
         crawler_service: CrawlerServiceProtocol,
+        document_service: DocumentServiceProtocol,
     ):
         self.onboarding_service = onboarding_service
         self.chat_handler = ChatRPCHandler(chat_service)
         self.agent_service = agent_service
         self.crawler_service = crawler_service
+        self.document_service = document_service
 
     async def CrawlSite(
         self, request: knowledge_pb2.CrawlSiteRequest, context: grpc.aio.ServicerContext
@@ -198,6 +201,7 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
         try:
             from agent_orchestrator.workflows.customer_agent import process_customer_chat
 
+            mode = getattr(request, "mode", None) or None
             result = await process_customer_chat(
                 tenant_id=request.tenant_id,
                 agent_id=request.agent_id,
@@ -206,23 +210,14 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                 customer_id=request.customer_id if request.customer_id else None,
                 customer_phone=request.customer_phone if request.customer_phone else None,
                 customer_name=request.customer_name if request.customer_name else None,
+                mode=mode,
             )
-            history_proto = [
-                knowledge_pb2.CustomerChatMessageInfo(
-                    id=h["id"],
-                    session_id=h["session_id"],
-                    tenant_id=h["tenant_id"],
-                    agent_id=h["agent_id"],
-                    role=h["role"],
-                    content=h["content"],
-                    created_at=h["created_at"],
-                )
-                for h in result.get("history", [])
-            ]
             return knowledge_pb2.CustomerChatResponse(
                 session_id=result["session_id"],
                 response=result["response"],
-                history=history_proto,
+                user_message_id=result.get("user_message_id") or "",
+                agent_message_id=result.get("agent_message_id") or "",
+                created_at=result.get("created_at") or "",
             )
         except Exception as e:
             print(f"[gRPC Error] CustomerChat failed: {e}")
@@ -237,13 +232,27 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
         self, request: knowledge_pb2.GetCustomerMessagesRequest, context: grpc.aio.ServicerContext
     ) -> knowledge_pb2.GetCustomerMessagesResponse:
         try:
+            from datetime import datetime
+
             from agent_orchestrator.repositories.customer_message_repository import (
                 CustomerMessageRepository,
             )
 
             repo = CustomerMessageRepository()
-            limit = request.limit if request.limit > 0 else 10
-            msgs = await repo.get_recent_messages(request.session_id, limit=limit)
+            limit = min(max(1, request.limit), 100) if request.limit > 0 else 20
+            before_dt: datetime | None = None
+            if request.before:
+                try:
+                    iso_clean = request.before.replace("Z", "+00:00")
+                    before_dt = datetime.fromisoformat(iso_clean)
+                except Exception:
+                    pass
+
+            msgs, has_more, next_cursor = await repo.get_messages(
+                session_id=request.session_id,
+                before=before_dt,
+                limit=limit,
+            )
             return knowledge_pb2.GetCustomerMessagesResponse(
                 messages=[
                     knowledge_pb2.CustomerChatMessageInfo(
@@ -256,10 +265,163 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                         created_at=m.created_at.isoformat(),
                     )
                     for m in msgs
-                ]
+                ],
+                next_cursor=next_cursor,
+                has_more=has_more,
             )
         except Exception as e:
             print(f"[gRPC Error] GetCustomerMessages failed: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"GET_CUSTOMER_MESSAGES_ERROR: {str(e)}")
             return knowledge_pb2.GetCustomerMessagesResponse()
+
+    async def GetWidgetConfig(
+        self, request: knowledge_pb2.GetWidgetConfigRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.GetWidgetConfigResponse:
+        print(
+            f"[gRPC] GetWidgetConfig for tenant: {request.tenant_id}, agent: {request.agent_id}, source: {request.source}"
+        )
+        try:
+            import json
+
+            from agent_orchestrator.models import (
+                AgentDraft,
+                AgentRuntimeConfig,
+                WidgetConfigEmbed,
+            )
+
+            widget_config = None
+            if request.source == "draft":
+                agent_draft = await AgentDraft.find_one(
+                    {"tenant_id": request.tenant_id, "agent_id": request.agent_id}
+                )
+                if (
+                    agent_draft
+                    and agent_draft.current_draft
+                    and agent_draft.current_draft.widget_config
+                ):
+                    widget_config = agent_draft.current_draft.widget_config.model_dump()
+            else:
+                runtime_cfg = await AgentRuntimeConfig.find_one(
+                    {
+                        "tenant_id": request.tenant_id,
+                        "agent_id": request.agent_id,
+                        "status": "live",
+                    }
+                )
+                if runtime_cfg and runtime_cfg.widget_config:
+                    widget_config = runtime_cfg.widget_config.model_dump()
+
+            if not widget_config:
+                widget_config = WidgetConfigEmbed().model_dump()
+
+            return knowledge_pb2.GetWidgetConfigResponse(
+                tenant_id=request.tenant_id,
+                agent_id=request.agent_id,
+                widget_config_json=json.dumps(widget_config),
+            )
+        except Exception as e:
+            import json
+
+            print(f"[gRPC Error] GetWidgetConfig failed: {e}")
+            from agent_orchestrator.models import WidgetConfigEmbed
+
+            return knowledge_pb2.GetWidgetConfigResponse(
+                tenant_id=request.tenant_id,
+                agent_id=request.agent_id,
+                widget_config_json=json.dumps(WidgetConfigEmbed().model_dump()),
+            )
+
+    async def GetDocumentUploadUrl(
+        self, request: knowledge_pb2.GetDocumentUploadUrlRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.GetDocumentUploadUrlResponse:
+        print(
+            f"[gRPC] GetDocumentUploadUrl tenant: {request.tenant_id}, agent: {request.agent_id}, file: {request.file_name}"
+        )
+        try:
+            upload_url, doc_id, s3_key, expires_in = await self.document_service.get_upload_url(
+                tenant_id=request.tenant_id,
+                agent_id=request.agent_id,
+                file_name=request.file_name,
+                file_size_bytes=request.file_size_bytes,
+            )
+            return knowledge_pb2.GetDocumentUploadUrlResponse(
+                upload_url=upload_url,
+                document_id=doc_id,
+                s3_key=s3_key,
+                expires_in=expires_in,
+            )
+        except Exception as e:
+            print(f"[gRPC Error] GetDocumentUploadUrl failed: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"GET_UPLOAD_URL_ERROR: {str(e)}")
+            return knowledge_pb2.GetDocumentUploadUrlResponse()
+
+    async def ConfirmDocumentUpload(
+        self, request: knowledge_pb2.ConfirmDocumentUploadRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.ConfirmDocumentUploadResponse:
+        print(f"[gRPC] ConfirmDocumentUpload doc: {request.document_id}")
+        try:
+            success = await self.document_service.confirm_upload(
+                tenant_id=request.tenant_id,
+                document_id=request.document_id,
+            )
+            return knowledge_pb2.ConfirmDocumentUploadResponse(
+                success=success,
+                message="Document upload confirmed" if success else "Document not found",
+            )
+        except Exception as e:
+            print(f"[gRPC Error] ConfirmDocumentUpload failed: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"CONFIRM_UPLOAD_ERROR: {str(e)}")
+            return knowledge_pb2.ConfirmDocumentUploadResponse(success=False, message=str(e))
+
+    async def ListDocuments(
+        self, request: knowledge_pb2.ListDocumentsRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.ListDocumentsResponse:
+        print(f"[gRPC] ListDocuments tenant: {request.tenant_id}, agent: {request.agent_id}")
+        try:
+            docs = await self.document_service.list_documents(
+                tenant_id=request.tenant_id,
+                agent_id=request.agent_id,
+            )
+            doc_infos = [
+                knowledge_pb2.DocumentInfo(
+                    id=d.doc_id,
+                    tenant_id=d.tenant_id,
+                    agent_id=d.agent_id,
+                    file_name=d.file_name,
+                    file_size_bytes=d.file_size_bytes,
+                    s3_key=d.s3_key,
+                    s3_bucket=d.s3_bucket,
+                    status=d.status,
+                    created_at=d.created_at.isoformat(),
+                    updated_at=d.updated_at.isoformat(),
+                )
+                for d in docs
+            ]
+            return knowledge_pb2.ListDocumentsResponse(documents=doc_infos)
+        except Exception as e:
+            print(f"[gRPC Error] ListDocuments failed: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"LIST_DOCUMENTS_ERROR: {str(e)}")
+            return knowledge_pb2.ListDocumentsResponse()
+
+    async def DeleteDocument(
+        self, request: knowledge_pb2.DeleteDocumentRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.DeleteDocumentResponse:
+        print(f"[gRPC] DeleteDocument doc: {request.document_id}")
+        try:
+            success = await self.document_service.delete_document(
+                tenant_id=request.tenant_id,
+                document_id=request.document_id,
+            )
+            return knowledge_pb2.DeleteDocumentResponse(
+                success=success,
+                message="Document deleted" if success else "Document not found",
+            )
+        except Exception as e:
+            print(f"[gRPC Error] DeleteDocument failed: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"DELETE_DOCUMENT_ERROR: {str(e)}")
+            return knowledge_pb2.DeleteDocumentResponse(success=False, message=str(e))

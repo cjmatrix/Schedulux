@@ -7,4 +7,6 @@ export const TENANT_SCHEDULE_REPOSITORY = 'ITenantScheduleRepository';
 export const UNIT_OF_WORK = 'IUnitOfWork';
 export const SCHEDULING_EVENTS_PRODUCER = 'ISchedulingEventsProducer';
 export const MESSAGING_SERVICE = 'MESSAGING_SERVICE';
-
+export const BOOKING_ALLOCATION_SERVICE = 'BookingAllocationService';
+export const CACHE_REPOSITORY = 'ICacheRepository';
+export const REDIS_CLIENT = 'REDIS_CLIENT';

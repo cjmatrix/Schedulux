@@ -4,10 +4,12 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { Transport } from '@nestjs/microservices';
 import mongoose from 'mongoose';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module.js';
 const require = createRequire(import.meta.url);
 async function bootstrap() {
     const app = await NestFactory.createMicroservice(AppModule, {
+        bufferLogs: true,
         transport: Transport.GRPC,
         options: {
             url: '0.0.0.0:50051',
@@ -26,20 +28,23 @@ async function bootstrap() {
             },
         },
     });
+    const logger = app.get(Logger);
+    app.useLogger(logger);
     const configService = app.get(ConfigService);
-    console.log('Connecting MongoDB...');
+    logger.log('Connecting MongoDB...', 'Bootstrap');
     const mongoUri = configService.get('MONGO_URI');
     if (mongoUri) {
         await mongoose.connect(mongoUri);
-        console.log('MongoDB connected globally.');
+        logger.log('MongoDB connected globally.', 'Bootstrap');
     }
     else {
         throw new Error('MONGO_URI is missing');
     }
     await app.listen();
-    console.log(` gRPC Microservice listening on port 50051`);
+    logger.log('gRPC Microservice listening on port 50051', 'Bootstrap');
 }
 bootstrap().catch((err) => {
-    console.error(' Service startup failed:', err);
+    const message = err instanceof Error ? err.stack || err.message : String(err);
+    process.stderr.write(`Service startup failed: ${message}\n`);
     process.exit(1);
 });

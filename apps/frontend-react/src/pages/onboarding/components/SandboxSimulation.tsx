@@ -1,150 +1,159 @@
-import { Bot, RotateCcw, Sparkles } from 'lucide-react';
-import React, { useEffect, useRef } from 'react';
+import { initScheduluxWidget, type ScheduluxWidgetInstance, type WidgetConfig } from '@repo/widget';
+import { Bot, Monitor, Palette, RotateCcw, Smartphone } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
 
-interface SandboxSimulationProps {
-  clinicName: string;
-  sandboxMessages: Array<{ role: 'user' | 'agent'; text: string }>;
-  setSandboxMessages: React.Dispatch<
-    React.SetStateAction<Array<{ role: 'user' | 'agent'; text: string }>>
-  >;
-  sandboxInput: string;
-  setSandboxInput: (val: string) => void;
-  isSandboxTyping: boolean;
-  onSendSandboxMessage: (e: React.FormEvent) => void;
-  onResetSandbox?: () => void;
+export interface SandboxSimulationProps {
+  clinicName?: string;
+  tenantId?: string;
+  agentId?: string;
+  widgetConfig?: Partial<WidgetConfig>;
 }
 
-const QUICK_PROMPTS = [
-  'What services do you provide?',
-  'Check available appointment times',
-  'What are your operating hours?',
-];
-
 export const SandboxSimulation: React.FC<SandboxSimulationProps> = ({
-  clinicName,
-  sandboxMessages,
-  setSandboxMessages,
-  sandboxInput,
-  setSandboxInput,
-  isSandboxTyping,
-  onSendSandboxMessage,
-  onResetSandbox,
+  clinicName = 'AI Scheduling Agent',
+  tenantId = 'sandbox_tenant',
+  agentId = 'sandbox_agent',
+  widgetConfig,
 }) => {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const mountRef = useRef<HTMLDivElement>(null);
+  const widgetInstanceRef = useRef<ScheduluxWidgetInstance | null>(null);
+  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
+
+  const configRef = useRef(widgetConfig);
+  configRef.current = widgetConfig;
+
+  const primaryColor = widgetConfig?.theme?.primary_color || '#4F46E5';
+  const themeMode = widgetConfig?.theme?.theme_mode || 'light';
+  const launcherStyle = widgetConfig?.launcher_style || 'bubble';
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [sandboxMessages, isSandboxTyping]);
+    if (!mountRef.current) return;
+
+    mountRef.current.innerHTML = '';
+
+    const currentCfg = configRef.current;
+
+    const instance = initScheduluxWidget({
+      tenantId: tenantId || 'sandbox_tenant',
+      agentId: agentId || 'sandbox_agent',
+      apiBase: import.meta.env.VITE_API_URL || 'http://localhost:5000',
+      container: mountRef.current,
+      inline: true,
+      mode: 'sandbox',
+      config: currentCfg,
+    });
+
+    widgetInstanceRef.current = instance;
+
+    return () => {
+      instance.destroy();
+      widgetInstanceRef.current = null;
+    };
+  }, [tenantId, agentId]);
+
+  useEffect(() => {
+    if (widgetInstanceRef.current && widgetConfig) {
+      widgetInstanceRef.current.updateConfig(widgetConfig);
+    }
+  }, [widgetConfig]);
 
   const handleReset = () => {
-    if (onResetSandbox) {
-      onResetSandbox();
-    } else {
-      setSandboxMessages([
-        {
-          role: 'agent',
-          text: `Hello! Welcome to ${clinicName}. How can I assist you with scheduling or consultations today?`,
-        },
-      ]);
+    if (widgetInstanceRef.current) {
+      widgetInstanceRef.current.resetConversation();
     }
   };
 
-  const handleQuickPromptClick = (prompt: string) => {
-    setSandboxInput(prompt);
-  };
-
   return (
-    <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-2xs flex flex-col h-[650px]">
-      <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+    <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-2xs flex flex-col h-[700px] overflow-hidden">
+      {/* Studio Sandbox Toolbar */}
+      <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
-            <Bot className="w-5 h-5" />
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+            <Bot className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-slate-900">Test Sandbox Simulation</h3>
+              <h3 className="text-xs font-bold text-slate-900">{clinicName} Sandbox</h3>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 Live Agent
               </span>
             </div>
-            <p className="text-xs text-slate-500">
-              Conversational test interacting with services & real-time slot engine
-            </p>
+            <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
+              <span className="flex items-center gap-1">
+                <Palette className="w-3 h-3 text-slate-400" />
+                Theme:
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md font-mono text-[10px] text-slate-700 font-semibold">
+                <span
+                  className="w-2.5 h-2.5 rounded-full shadow-2xs"
+                  style={{ backgroundColor: primaryColor }}
+                />
+                {primaryColor}
+              </span>
+              <span className="capitalize text-slate-400 text-[10px]">• {themeMode} mode</span>
+              <span className="capitalize text-slate-400 text-[10px]">• {launcherStyle}</span>
+            </div>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={handleReset}
-          className="p-2 border border-slate-200 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition cursor-pointer"
-          title="Reset sandbox conversation"
-        >
-          <RotateCcw className="w-4 h-4" />
-        </button>
+
+        <div className="flex items-center gap-1.5">
+          {/* Device Preview Toggle */}
+          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200/80 mr-1">
+            <button
+              type="button"
+              onClick={() => setPreviewDevice('desktop')}
+              className={`p-1.5 rounded-md transition cursor-pointer ${
+                previewDevice === 'desktop'
+                  ? 'bg-white shadow-2xs text-slate-900 font-bold'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Desktop inline view"
+            >
+              <Monitor className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreviewDevice('mobile')}
+              className={`p-1.5 rounded-md transition cursor-pointer ${
+                previewDevice === 'mobile'
+                  ? 'bg-white shadow-2xs text-slate-900 font-bold'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Mobile device view"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleReset}
+            className="p-1.5 border border-slate-200 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition cursor-pointer"
+            title="Reset sandbox conversation"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
-      {/* Sandbox Message Feed */}
-      <div className="flex-1 overflow-y-auto py-4 space-y-3 pr-1">
-        {sandboxMessages.map((m, idx) => (
-          <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+      {/* Widget Mounting Stage */}
+      <div className="flex-1 min-h-0 pt-3 flex items-center justify-center bg-slate-50/50 rounded-2xl overflow-hidden">
+        {previewDevice === 'desktop' ? (
+          <div ref={mountRef} className="w-full h-full min-h-0 flex flex-col overflow-hidden" />
+        ) : (
+          <div className="w-[360px] h-[96%] bg-slate-900 rounded-[36px] p-2.5 shadow-xl flex flex-col border border-slate-700/60">
+            {/* Phone speaker notch */}
+            <div className="w-24 h-3.5 bg-slate-950 rounded-full mx-auto mb-1 flex items-center justify-center">
+              <div className="w-8 h-1 bg-slate-800 rounded-full" />
+            </div>
             <div
-              className={`max-w-[80%] rounded-2xl p-3.5 text-xs leading-relaxed whitespace-pre-wrap ${
-                m.role === 'user'
-                  ? 'bg-neutral-950 text-white rounded-tr-none'
-                  : 'bg-slate-50 border border-slate-200 text-slate-800 rounded-tl-none'
-              }`}
-            >
-              {m.text}
-            </div>
-          </div>
-        ))}
-        {isSandboxTyping && (
-          <div className="flex justify-start">
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 text-xs text-slate-500 font-medium flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-              Agent is checking availability and generating response...
-            </div>
+              ref={mountRef}
+              className="flex-1 min-h-0 w-full rounded-[28px] overflow-hidden flex flex-col bg-white"
+            />
           </div>
         )}
-        <div ref={messagesEndRef} />
       </div>
-
-      {/* Quick Prompt Suggestions */}
-      <div className="pt-2 pb-2 flex flex-wrap gap-1.5 items-center">
-        <span className="text-[11px] text-slate-400 flex items-center gap-1 font-medium mr-1">
-          <Sparkles className="w-3 h-3 text-amber-500" /> Suggestions:
-        </span>
-        {QUICK_PROMPTS.map((prompt) => (
-          <button
-            key={prompt}
-            type="button"
-            onClick={() => handleQuickPromptClick(prompt)}
-            disabled={isSandboxTyping}
-            className="text-[11px] bg-slate-100/80 hover:bg-slate-200/80 text-slate-600 rounded-lg px-2.5 py-1 transition cursor-pointer disabled:opacity-50"
-          >
-            {prompt}
-          </button>
-        ))}
-      </div>
-
-      {/* Sandbox Input Form */}
-      <form onSubmit={onSendSandboxMessage} className="pt-3 border-t border-slate-100 flex gap-2">
-        <input
-          type="text"
-          value={sandboxInput}
-          onChange={(e) => setSandboxInput(e.target.value)}
-          placeholder="Ask a question or request an appointment..."
-          className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
-          disabled={isSandboxTyping}
-        />
-        <button
-          type="submit"
-          disabled={!sandboxInput.trim() || isSandboxTyping}
-          className="px-4 py-2.5 bg-neutral-950 text-white rounded-xl text-xs font-bold hover:bg-black disabled:bg-slate-200 disabled:text-slate-400 transition cursor-pointer"
-        >
-          Send
-        </button>
-      </form>
     </div>
   );
 };

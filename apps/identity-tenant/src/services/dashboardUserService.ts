@@ -34,7 +34,8 @@ export class DashboardUserService implements IDashboardUserService {
   private readonly _refreshTokenTtlSeconds: number;
 
   constructor(
-    @Inject('IDashboardUserRepository') private readonly _dashboardUserRepo: IDashboardUserRepository,
+    @Inject('IDashboardUserRepository')
+    private readonly _dashboardUserRepo: IDashboardUserRepository,
     @Inject('ICacheRepository') private readonly _cacheRepo: ICacheRepository,
     @Inject('IPasswordHasher') private readonly _passwordHasher: IPasswordHasher,
     @Inject('IJwtService') private readonly _jwtService: IJwtService,
@@ -42,7 +43,8 @@ export class DashboardUserService implements IDashboardUserService {
     @Inject('IEmailProducer') private readonly _emailProducer?: IEmailProducer,
   ) {
     this._jwtSecret = this._configService.get<string>('JWT_SECRET') || 'dev-secret-change-in-prod';
-    this._jwtRefreshSecret = this._configService.get<string>('JWT_REFRESH_SECRET') || this._jwtSecret;
+    this._jwtRefreshSecret =
+      this._configService.get<string>('JWT_REFRESH_SECRET') || this._jwtSecret;
     this._accessTokenExpiry = (this._configService.get<string>('ACCESS_TOKEN_EXPIRY') ||
       '15m') as SignOptions['expiresIn'];
     this._refreshTokenExpiry = (this._configService.get<string>('REFRESH_TOKEN_EXPIRY') ||
@@ -241,4 +243,3 @@ export class DashboardUserService implements IDashboardUserService {
     return { message: RESPONSE_MESSAGES.AUTH.PASSWORD_RESET_SUCCESS };
   }
 }
-

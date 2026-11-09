@@ -92,8 +92,7 @@ async def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) ->
                             "eligible_resource_ids": ["res_staff_default"],
                             "selection_mode": "user_selectable"
                         }
-                    ],
-                    "recall_interval_days": 0
+                    ]
                 }
             ],
             "scheduling_engine": {
@@ -106,9 +105,7 @@ async def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) ->
             },
             "guardrails": {
                 "verification_policy": {
-                    "require_otp_for_new_booking": False,
-                    "require_otp_for_reschedule": True,
-                    "require_otp_for_cancel": True
+                    "require_otp_for_new_booking": False
                 }
             },
             "resources": [
@@ -179,7 +176,6 @@ CRITICAL DOMAIN INSTRUCTIONS:
      * "deposit": {{"required": bool, "amount": float, "processor": "upi_direct", "upi_id": str, "qr_code_url": str, "confirmation_method": "utr_reference", "payment_instructions": str}} (Schedulux only supports direct UPI deposits via upi_id or qr_code_url)
      * "verification": {{"require_otp": bool|null}} (Optional per-service OTP verification override: true for high-value/sensitive/exclusive services or date-range stays with deposits; false for low-friction/routine services; null to inherit global verification policy)
      * "resource_requirements": list of required resource specs, e.g. [{{"role": "Provider", "resource_type": "staff", "count": 1, "eligible_resource_ids": ["res_..."], "selection_mode": "user_selectable"|"auto_assign"}}] (use "user_selectable" for human specialists/practitioners or bookable hotel/meeting rooms; "auto_assign" for internal facility chairs, operation bays, equipment, or assets that the system assigns automatically)
-     * "recall_interval_days": days until next recall/follow-up (default 0)
 
 2. RESOURCES ATTRIBUTES & ENUMS:
    - Identify practitioners, staff, rooms, chairs, bays, equipment, or vehicles:
@@ -197,7 +193,7 @@ CRITICAL DOMAIN INSTRUCTIONS:
 3. SCHEDULING ENGINE & GUARDRAILS:
    - Set scheduling_engine.booking_mode and scheduling_engine.default_booking_mode to "time_slot" for slot-based appointments (clinics, salons, etc.) or "date_range" for multi-day bookings (rentals, hotels). Individual services in services[] can override this with their own "booking_mode".
    - Include default_lead_time_hours (default 2), max_advance_booking_days (default 60), cancellation_window_hours (default 24), and hold_duration_minutes (default 10).
-   - Set guardrails.verification_policy with require_otp_for_new_booking (default false), require_otp_for_reschedule (default true), require_otp_for_cancel (default true).
+   - Set guardrails.verification_policy with require_otp_for_new_booking (default false). Cancellations and rescheduling are always strictly protected by OTP.
 
 4. OPERATING HOURS & SERVICE DURATIONS:
    - If operating hours or service durations are not explicitly found in the crawled data, use your parametric knowledge to make accurate industry-standard guesses based on the vertical (e.g., Dental consults are 30 min, Dental offices open Mon-Fri 08:00 to 17:00).

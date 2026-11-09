@@ -23,6 +23,11 @@ function KnowledgeServiceControllerMethods() {
             "getAgentMessages",
             "customerChat",
             "getCustomerMessages",
+            "getWidgetConfig",
+            "getDocumentUploadUrl",
+            "confirmDocumentUpload",
+            "listDocuments",
+            "deleteDocument",
         ];
         for (const method of grpcMethods) {
             const descriptor = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

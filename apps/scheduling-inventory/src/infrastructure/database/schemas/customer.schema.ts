@@ -42,5 +42,4 @@ CustomerMongooseSchema.index({ tenant_id: 1, phone: 1 });
 CustomerMongooseSchema.index({ tenant_id: 1, email: 1 });
 
 export const CustomerModel =
-  mongoose.models.Customer ||
-  mongoose.model<ICustomerDoc>('Customer', CustomerMongooseSchema);
+  mongoose.models.Customer || mongoose.model<ICustomerDoc>('Customer', CustomerMongooseSchema);

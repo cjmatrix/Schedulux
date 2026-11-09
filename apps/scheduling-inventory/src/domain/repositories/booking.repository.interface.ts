@@ -3,6 +3,7 @@ import { BookingEntity } from '../entities/booking.entity.js';
 export interface FindBookingsFilter {
   page: number;
   limit: number;
+  agentId?: string;
   serviceId?: string;
   resourceId?: string;
   customerId?: string;
@@ -10,12 +11,14 @@ export interface FindBookingsFilter {
   startDate?: Date;
   endDate?: Date;
   search?: string;
+  customerPhone?: string;
 }
 
 export interface IBookingRepository {
   create(booking: BookingEntity): Promise<BookingEntity>;
   findById(tenantId: string, bookingId: string): Promise<BookingEntity | null>;
   findByReference(tenantId: string, bookingReference: string): Promise<BookingEntity | null>;
+  findByIdOrReference(tenantId: string, identifier: string): Promise<BookingEntity | null>;
   findOverlappingBookings(
     tenantId: string,
     resourceId: string,

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from agent_orchestrator.models import KnowledgeDocument
+
 
 @dataclass
 class CrawlResultDTO:
@@ -83,3 +85,15 @@ class MemoryServiceProtocol(Protocol):
     async def consolidate_memory(
         self, tenant_id: str, agent_id: str, cutoff_seq: int
     ) -> dict[str, Any]: ...
+
+
+class DocumentServiceProtocol(Protocol):
+    async def get_upload_url(
+        self, tenant_id: str, agent_id: str, file_name: str, file_size_bytes: int = 0
+    ) -> tuple[str, str, str, int]: ...
+
+    async def confirm_upload(self, tenant_id: str, document_id: str) -> bool: ...
+
+    async def list_documents(self, tenant_id: str, agent_id: str) -> list[KnowledgeDocument]: ...
+
+    async def delete_document(self, tenant_id: str, document_id: str) -> bool: ...

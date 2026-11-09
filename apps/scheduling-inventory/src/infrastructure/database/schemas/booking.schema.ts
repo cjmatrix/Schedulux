@@ -74,7 +74,7 @@ export const BookingMongooseSchema = new Schema<IBookingDoc>(
     duration_minutes: { type: Number, required: true, min: 0 },
     source: {
       type: String,
-      enum: ['manual', 'customer_agent', 'web_portal'],
+      enum: ['manual', 'customer_agent', 'web_portal', 'sandbox_simulation'],
       default: 'manual',
       index: true,
     },
@@ -116,11 +116,31 @@ export const BookingMongooseSchema = new Schema<IBookingDoc>(
 );
 
 BookingMongooseSchema.index({ tenant_id: 1, booking_reference: 1 }, { unique: true });
+BookingMongooseSchema.index({
+  tenant_id: 1,
+  is_deleted: 1,
+  status: 1,
+  start_time: 1,
+  effective_end_time: 1,
+});
+BookingMongooseSchema.index({ tenant_id: 1, resource_id: 1, start_time: 1, effective_end_time: 1 });
+BookingMongooseSchema.index({
+  tenant_id: 1,
+  resource_ids: 1,
+  start_time: 1,
+  effective_end_time: 1,
+});
+BookingMongooseSchema.index({
+  tenant_id: 1,
+  assigned_asset_ids: 1,
+  start_time: 1,
+  effective_end_time: 1,
+});
 BookingMongooseSchema.index({ tenant_id: 1, resource_id: 1, start_time: 1, end_time: 1 });
 BookingMongooseSchema.index({ tenant_id: 1, resource_ids: 1, start_time: 1, end_time: 1 });
 BookingMongooseSchema.index({ tenant_id: 1, service_id: 1, start_time: 1 });
 BookingMongooseSchema.index({ tenant_id: 1, customer_id: 1, created_at: -1 });
+BookingMongooseSchema.index({ tenant_id: 1, 'customer_snapshot.phone': 1, start_time: -1 });
 
 export const BookingModel =
-  mongoose.models.Booking ||
-  mongoose.model<IBookingDoc>('Booking', BookingMongooseSchema);
+  mongoose.models.Booking || mongoose.model<IBookingDoc>('Booking', BookingMongooseSchema);

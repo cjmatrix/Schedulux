@@ -1,13 +1,18 @@
 import asyncio
+import os
 
+from agent_orchestrator.adapters import KafkaEventSubscriber, RabbitMQEventSubscriber
 from agent_orchestrator.api.grpc_server import serve
+from agent_orchestrator.models import init_db
+from agent_orchestrator.repositories.document_repository import MongoDocumentRepository
+from agent_orchestrator.workers.document_status_consumer import DocumentStatusConsumer
 from agent_orchestrator.workers.memory_worker import run_memory_worker
-from agent_orchestrator.workers.scheduling_consumer import run_consumer
+from agent_orchestrator.workers.scheduling_consumer import SchedulingConsumer
 
 
 def main():
     print(
-        "[AI Orchestrator Service] Starting gRPC server + Kafka consumer + Memory worker...",
+        "[AI Orchestrator Service] Starting gRPC server + Scheduling consumer (Kafka) + Memory worker + Document status consumer (RabbitMQ)...",
         flush=True,
     )
     try:
@@ -17,13 +22,42 @@ def main():
 
 
 async def _run_all():
-    """Run gRPC server, Kafka consumer, and BullMQ memory worker concurrently."""
+
+    await init_db()
+
+    try:
+        from agent_orchestrator.utils.qdrant_util import get_qdrant_store
+
+        await get_qdrant_store().ensure_collection()
+        print("[AI Orchestrator Service] Qdrant collections initialized.", flush=True)
+    except Exception as qe:
+        print(f"[AI Orchestrator Service Warning] Qdrant initialization warning: {qe}", flush=True)
+
+    kafka_subscriber = KafkaEventSubscriber(
+        brokers=os.environ.get("KAFKA_BROKERS", "localhost:9092"),
+        group_id=os.environ.get("KAFKA_CONSUMER_GROUP", "ai-orchestration-consumer-group"),
+        username=os.environ.get("KAFKA_USERNAME", ""),
+        password=os.environ.get("KAFKA_PASSWORD", ""),
+    )
+    scheduling_consumer = SchedulingConsumer(subscriber=kafka_subscriber)
+
+    rabbitmq_subscriber = RabbitMQEventSubscriber(
+        uri=os.environ.get("RABBITMQ_URI", "amqp://guest:guest@localhost:5672"),
+        prefetch_count=5,
+    )
+    document_repo = MongoDocumentRepository()
+    doc_status_consumer = DocumentStatusConsumer(
+        subscriber=rabbitmq_subscriber,
+        document_repo=document_repo,
+    )
+
     grpc_task = asyncio.create_task(serve(), name="grpc-server")
-    consumer_task = asyncio.create_task(run_consumer(), name="kafka-consumer")
+    consumer_task = asyncio.create_task(scheduling_consumer.start(), name="scheduling-consumer")
     memory_task = asyncio.create_task(run_memory_worker(), name="memory-worker")
+    doc_status_task = asyncio.create_task(doc_status_consumer.start(), name="doc-status-consumer")
 
     done, pending = await asyncio.wait(
-        [grpc_task, consumer_task, memory_task],
+        [grpc_task, consumer_task, memory_task, doc_status_task],
         return_when=asyncio.FIRST_EXCEPTION,
     )
 

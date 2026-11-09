@@ -22,7 +22,18 @@ service SchedulingInventoryService {
 
   // Booking Operations
   rpc CreateBooking (CreateBookingRequest) returns (BookingResponse);
+  rpc CancelBooking (CancelBookingRequest) returns (BookingResponse);
+  rpc RescheduleBooking (RescheduleBookingRequest) returns (BookingResponse);
   rpc GetAvailability (GetAvailabilityRequest) returns (GetAvailabilityResponse);
+  rpc ListBookings (ListBookingsRequest) returns (ListBookingsResponse);
+
+  // Customer Operations
+  rpc VerifyCustomer (VerifyCustomerRequest) returns (VerifyCustomerResponse);
+  rpc ListCustomers (ListCustomersRequest) returns (ListCustomersResponse);
+
+  // Tenant Schedule Settings
+  rpc GetTenantSchedule (GetTenantScheduleRequest) returns (TenantScheduleResponse);
+  rpc UpdateTenantSchedule (UpdateTenantScheduleRequest) returns (TenantScheduleResponse);
 }
 
 message PriceInfo {
@@ -63,7 +74,6 @@ message ServiceInfo {
   int32 buffer_minutes = 7;
   PriceInfo price = 9;
   DepositInfo deposit = 10;
-  int32 recall_interval_days = 13;
   string created_at = 14;
   string updated_at = 15;
   string booking_mode = 16;
@@ -83,7 +93,6 @@ message CreateServiceRequest {
   int32 buffer_minutes = 6;
   PriceInfo price = 8;
   DepositInfo deposit = 9;
-  int32 recall_interval_days = 12;
   optional string booking_mode = 13;
   string agent_id = 14;
   optional string service_id = 15;
@@ -132,7 +141,6 @@ message UpdateServiceRequest {
   optional int32 buffer_minutes = 7;
   PriceInfo price = 9;
   DepositInfo deposit = 10;
-  optional int32 recall_interval_days = 13;
   optional string booking_mode = 14;
   optional string agent_id = 15;
   optional ServiceVerificationInfo verification = 16;
@@ -283,8 +291,6 @@ message SchedulingEngineConfigInfo {
 
 message VerificationPolicyConfigInfo {
   bool require_otp_for_new_booking = 1;
-  bool require_otp_for_reschedule = 2;
-  bool require_otp_for_cancel = 3;
 }
 
 message BatchSyncInventoryRequest {
@@ -362,6 +368,47 @@ message BookingResponse {
   string message = 2;
 }
 
+message CancelBookingRequest {
+  string tenant_id = 1;
+  string booking_id = 2;
+  string agent_id = 3;
+  optional string reason = 4;
+  optional string cancelled_by = 5;
+}
+
+message RescheduleBookingRequest {
+  string tenant_id = 1;
+  string booking_id = 2;
+  string agent_id = 3;
+  string new_start_time = 4;
+  optional string new_end_time = 5;
+  optional string resource_id = 6;
+  repeated string resource_ids = 7;
+  optional string rescheduled_by = 8;
+  optional string notes = 9;
+}
+
+message ListBookingsRequest {
+  string tenant_id = 1;
+  int32 page = 2;
+  int32 limit = 3;
+  optional string agent_id = 4;
+  optional string service_id = 5;
+  optional string resource_id = 6;
+  optional string status = 7;
+  optional string start_date = 8;
+  optional string end_date = 9;
+  optional string search = 10;
+  optional string customer_phone = 11;
+}
+
+message ListBookingsResponse {
+  repeated BookingInfo bookings = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
+}
+
 message GetAvailabilityRequest {
   string tenant_id = 1;
   string agent_id = 2;
@@ -405,6 +452,85 @@ message GetAvailabilityResponse {
   repeated ResourceAvailabilityInfo resources = 5;
   repeated string blocked_dates = 6;
 }
+
+message VerifyCustomerRequest {
+  string tenant_id = 1;
+  string customer_phone = 2;
+  optional string agent_id = 3;
+}
+
+message VerifyCustomerResponse {
+  bool success = 1;
+  string message = 2;
+  int32 updated_count = 3;
+}
+
+message ListCustomersRequest {
+  string tenant_id = 1;
+  optional string agent_id = 2;
+  int32 page = 3;
+  int32 limit = 4;
+  optional string search = 5;
+}
+
+message CustomerDetails {
+  string id = 1;
+  string tenant_id = 2;
+  string agent_id = 3;
+  string name = 4;
+  string phone = 5;
+  string email = 6;
+  string notes = 7;
+  bool is_guest = 8;
+  int32 total_bookings = 9;
+  string created_at = 10;
+  string updated_at = 11;
+}
+
+message ListCustomersResponse {
+  repeated CustomerDetails customers = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
+  int32 total_pages = 5;
+}
+
+message TenantScheduleInfo {
+  string id = 1;
+  string tenant_id = 2;
+  string agent_id = 3;
+  string timezone = 4;
+  string currency = 5;
+  OperatingHoursInfo operating_hours = 6;
+  repeated BlackoutDateInfo blackout_dates = 7;
+  SchedulingEngineConfigInfo scheduling_engine = 8;
+  VerificationPolicyConfigInfo verification_policy = 9;
+  string created_at = 10;
+  string updated_at = 11;
+}
+
+message GetTenantScheduleRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+}
+
+message UpdateTenantScheduleRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+  optional string timezone = 3;
+  optional string currency = 4;
+  optional OperatingHoursInfo operating_hours = 5;
+  repeated BlackoutDateInfo blackout_dates = 6;
+  optional SchedulingEngineConfigInfo scheduling_engine = 7;
+  optional VerificationPolicyConfigInfo verification_policy = 8;
+}
+
+message TenantScheduleResponse {
+  bool success = 1;
+  string message = 2;
+  optional TenantScheduleInfo schedule = 3;
+}
+
 
 
 

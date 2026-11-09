@@ -27,6 +27,7 @@ export default function AgentOnboardingWizard() {
   const navigate = useNavigate();
 
   const {
+    tenantId,
     messages,
     inputValue,
     setInputValue,
@@ -42,13 +43,6 @@ export default function AgentOnboardingWizard() {
     isLive,
     isSavingChanges,
     saveChanges,
-    sandboxMessages,
-    setSandboxMessages,
-    sandboxInput,
-    setSandboxInput,
-    isSandboxTyping,
-    sendSandboxMessage,
-    resetSandbox,
   } = useAgentOnboarding({ agentId });
 
   const [showDiffDrawer, setShowDiffDrawer] = useState(false);
@@ -56,22 +50,16 @@ export default function AgentOnboardingWizard() {
   const [canvasModule, setCanvasModule] = useState<CanvasModule>('all');
   const [copiedJson, setCopiedJson] = useState(false);
 
+  useEffect(() => {
+    if (!isLive && rightViewMode === 'sandbox') {
+      setRightViewMode('rules');
+    }
+  }, [isLive, rightViewMode]);
+
   const businessProfile = draftSchema?.business_profile || {};
   const clinicName = businessProfile.name || 'AI Scheduling Agent';
   const timezone = businessProfile.timezone || '';
   const operatingHours = draftSchema?.operating_hours || {};
-
-
-  useEffect(() => {
-    if (sandboxMessages.length === 0) {
-      setSandboxMessages([
-        {
-          role: 'agent',
-          text: `Hello! Welcome to ${clinicName}. I'm your AI booking coordinator. How can I assist you with scheduling or consultations today?`,
-        },
-      ]);
-    }
-  }, [clinicName, sandboxMessages.length, setSandboxMessages]);
 
   const handleFormSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -83,11 +71,6 @@ export default function AgentOnboardingWizard() {
     setShowDiffDrawer(false);
   };
 
-  const handleSendSandboxMessage = (e: React.FormEvent) => {
-    sendSandboxMessage(e, clinicName);
-  };
-
-  
   const scheduleGroups = getOperatingScheduleGroups(operatingHours);
   const openGroups = scheduleGroups.filter((g) => g.isOpen);
 
@@ -103,12 +86,12 @@ export default function AgentOnboardingWizard() {
     dailyHoursText = `${totalDays} days/week`;
   }
 
-  const rawResources = (
-    Array.isArray(draftSchema?.resources) ? draftSchema.resources : []
-  ).filter((r: any) => !r.is_deleted);
-  const rawServices = (
-    Array.isArray(draftSchema?.services) ? draftSchema.services : []
-  ).filter((s: any) => !s.is_deleted);
+  const rawResources = (Array.isArray(draftSchema?.resources) ? draftSchema.resources : []).filter(
+    (r: any) => !r.is_deleted,
+  );
+  const rawServices = (Array.isArray(draftSchema?.services) ? draftSchema.services : []).filter(
+    (s: any) => !s.is_deleted,
+  );
 
   const servicesList: OnboardingServiceItem[] = useMemo(() => {
     return rawServices.map((svc: Partial<ServiceInfo>, idx: number): OnboardingServiceItem => {
@@ -149,11 +132,7 @@ export default function AgentOnboardingWizard() {
   }, [rawResources, rawServices]);
 
   const guardrails = draftSchema?.guardrails || {};
-  const requireOtp = Boolean(
-    guardrails?.verification_policy?.require_otp_for_reschedule ??
-      guardrails?.verification_policy?.require_otp_for_new_booking ??
-      false,
-  );
+  const requireOtp = Boolean(guardrails?.verification_policy?.require_otp_for_new_booking ?? false);
   const phiScrubbing = Boolean(guardrails?.phi_scrubbing?.enabled);
   const emergencyTriage = Boolean(guardrails?.triage_emergency?.enabled);
 
@@ -201,6 +180,7 @@ export default function AgentOnboardingWizard() {
             pendingChangesCount={diffPatches.length}
             isSavingChanges={isSavingChanges}
             onSaveChanges={handleSaveChanges}
+            isLive={isLive}
           />
 
           {/* Canvas Scroll Area */}
@@ -253,17 +233,9 @@ export default function AgentOnboardingWizard() {
             {rightViewMode === 'sandbox' && (
               <SandboxSimulation
                 clinicName={clinicName}
-                sandboxMessages={sandboxMessages}
-                setSandboxMessages={setSandboxMessages}
-                sandboxInput={sandboxInput}
-                setSandboxInput={setSandboxInput}
-                isSandboxTyping={isSandboxTyping}
-                onSendSandboxMessage={handleSendSandboxMessage}
-                onResetSandbox={() =>
-                  resetSandbox(
-                    `Hello! Welcome to ${clinicName}. I'm your AI booking coordinator. How can I assist you with scheduling or consultations today?`,
-                  )
-                }
+                tenantId={tenantId}
+                agentId={agentId}
+                widgetConfig={draftSchema?.widget_config as any}
               />
             )}
 

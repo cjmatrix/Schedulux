@@ -27,11 +27,14 @@ export const RESPONSE_MESSAGES = {
     SERVICES_RETRIEVED: 'Services retrieved successfully',
     RESOURCES_RETRIEVED: 'Resources retrieved successfully',
     AVAILABILITY_FETCHED: 'Availability fetched successfully',
+    CUSTOMERS_RETRIEVED: 'Customers retrieved successfully',
   },
   CHAT: {
     CHAT_PROCESSED: 'Chat processed successfully',
     MESSAGES_RETRIEVED: 'Messages retrieved successfully',
+    SESSION_INITIALIZED: 'Chat session initialized successfully',
     REQUIRED_FIELDS: 'tenant_id, agent_id, and session_id are required',
+    INVALID_SESSION_TOKEN: 'Invalid or tampered chat session token',
   },
   KNOWLEDGE: {
     CRAWL_STATUS_RETRIEVED: 'Crawl status retrieved successfully',

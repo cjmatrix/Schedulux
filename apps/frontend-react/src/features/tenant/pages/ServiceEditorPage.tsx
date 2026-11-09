@@ -1,7 +1,6 @@
 import {
   AlertCircle,
   ArrowLeft,
-  Bell,
   Building2,
   Calendar,
   CheckCircle2,
@@ -42,7 +41,9 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
 
   const effectiveAgentId = agentId || serviceResponse?.data?.agent_id || '';
 
-  const { data: resourcesResponse } = useResourcesList(effectiveAgentId ? { agent_id: effectiveAgentId } : undefined);
+  const { data: resourcesResponse } = useResourcesList(
+    effectiveAgentId ? { agent_id: effectiveAgentId } : undefined,
+  );
   const allResources = resourcesResponse?.data || [];
 
   const createServiceMutation = useCreateService();
@@ -66,7 +67,6 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [durationMinutes, setDurationMinutes] = useState<number>(60);
   const [bufferMinutes, setBufferMinutes] = useState<number>(20);
-  const [recallIntervalDays, setRecallIntervalDays] = useState<number>(0);
   const [bookingMode, setBookingMode] = useState<'time_slot' | 'date_range'>('time_slot');
 
   const [eligibleResourceIds, setEligibleResourceIds] = useState<string[]>([]);
@@ -103,7 +103,6 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
       setQrCodeUrl(s.deposit?.qr_code_url || '');
       setDurationMinutes(s.duration_minutes || 30);
       setBufferMinutes(s.buffer_minutes ?? 0);
-      setRecallIntervalDays(s.recall_interval_days ?? 0);
       setBookingMode((s.booking_mode as 'time_slot' | 'date_range') || 'time_slot');
       if (s.resource_requirements && s.resource_requirements.length > 0) {
         const staffIds: string[] = [];
@@ -215,7 +214,6 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
             ]
           : []),
       ],
-      recall_interval_days: Number(recallIntervalDays) || 0,
     };
 
     try {
@@ -247,7 +245,9 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
     if (!serviceIdFromParams) return;
     try {
       await deleteServiceMutation.mutateAsync(serviceIdFromParams);
-      navigate(effectiveAgentId ? `/tenant/agents/${effectiveAgentId}/services` : '/tenant/services');
+      navigate(
+        effectiveAgentId ? `/tenant/agents/${effectiveAgentId}/services` : '/tenant/services',
+      );
     } catch (err: unknown) {
       setFeedbackMessage({
         type: 'error',
@@ -675,8 +675,7 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
                   Duration & Rules
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Set clinical execution duration, required sanitization buffer, and automated
-                  recall workflows.
+                  Set execution duration and required buffer time.
                 </p>
               </div>
               <span className="bg-slate-100 text-slate-500 font-bold text-[10px] tracking-wider uppercase px-2.5 py-1 rounded-full border border-slate-200/60">
@@ -684,7 +683,7 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               {/* Service Duration */}
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
@@ -703,34 +702,6 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
                   />
                   <span className="absolute right-3.5 text-xs text-slate-400 font-medium">min</span>
                 </div>
-              </div>
-
-              {/* Recall Interval */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-700">Recall Interval</label>
-                  <span className="text-[11px] text-slate-400 font-medium">Outbound CRM</span>
-                </div>
-                <div className="relative flex items-center">
-                  <Bell className="w-4 h-4 text-slate-400 absolute left-3.5" />
-                  <select
-                    value={recallIntervalDays}
-                    onChange={(e) => setRecallIntervalDays(parseInt(e.target.value) || 0)}
-                    className="w-full pl-10 pr-10 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 transition appearance-none cursor-pointer"
-                  >
-                    <option value={0}>None (Disabled)</option>
-                    <option value={30}>Every 30 Days (Monthly Followup)</option>
-                    <option value={90}>Every 90 Days (Quarterly Check)</option>
-                    <option value={180}>Every 180 Days (6 Months Routine)</option>
-                    <option value={365}>Every 365 Days (Annual Recall)</option>
-                  </select>
-                  <span className="absolute right-3.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    {recallIntervalDays > 0 ? `${recallIntervalDays}d` : 'off'}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                  Trigger the AI to automatically reach out and rebook this service after X days.
-                </p>
               </div>
             </div>
 

@@ -96,7 +96,103 @@ export const knowledgeApi = {
     );
     return response.data;
   },
+
+  getDocumentUploadUrl: async (payload: {
+    agent_id: string;
+    file_name: string;
+    file_size_bytes?: number;
+  }): Promise<
+    ApiResponse<{
+      upload_url: string;
+      document_id: string;
+      s3_key: string;
+      expires_in: number;
+    }>
+  > => {
+    const response = await axiosClient.post<
+      ApiResponse<{
+        upload_url: string;
+        document_id: string;
+        s3_key: string;
+        expires_in: number;
+      }>
+    >('/api/v1/tenant/knowledge/documents/upload-url', payload);
+    return response.data;
+  },
+
+  confirmDocumentUpload: async (payload: {
+    document_id: string;
+  }): Promise<ApiResponse<{ success: boolean }>> => {
+    const response = await axiosClient.post<ApiResponse<{ success: boolean }>>(
+      '/api/v1/tenant/knowledge/documents/confirm',
+      payload,
+    );
+    return response.data;
+  },
+
+  listDocuments: async (agentId?: string): Promise<ApiResponse<KnowledgeDocumentInfo[]>> => {
+    const url = agentId
+      ? `/api/v1/tenant/knowledge/documents?agent_id=${encodeURIComponent(agentId)}`
+      : '/api/v1/tenant/knowledge/documents';
+    const response = await axiosClient.get<ApiResponse<KnowledgeDocumentInfo[]>>(url);
+    return response.data;
+  },
+
+  deleteDocument: async (documentId: string): Promise<ApiResponse<{ success: boolean }>> => {
+    const response = await axiosClient.delete<ApiResponse<{ success: boolean }>>(
+      `/api/v1/tenant/knowledge/documents/${encodeURIComponent(documentId)}`,
+    );
+    return response.data;
+  },
+
+  uploadFileToS3: async (
+    uploadUrl: string,
+    file: File,
+    onProgress?: (percent: number) => void,
+  ): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', uploadUrl, true);
+      xhr.setRequestHeader('Content-Type', file.type || 'application/pdf');
+
+      if (xhr.upload && onProgress) {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            onProgress(percent);
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+        } else {
+          reject(new Error(`S3 upload failed with status ${xhr.status}`));
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error('Network error during S3 upload'));
+      };
+
+      xhr.send(file);
+    });
+  },
 };
+
+export interface KnowledgeDocumentInfo {
+  id: string;
+  tenant_id: string;
+  agent_id: string;
+  file_name: string;
+  file_size_bytes: number;
+  s3_key: string;
+  s3_bucket: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export type * from './onboardingApi.js';
 export { onboardingApi } from './onboardingApi.js';

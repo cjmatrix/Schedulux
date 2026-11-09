@@ -13,8 +13,6 @@ import React from 'react';
 
 export interface VerificationPolicyData {
   require_otp_for_new_booking?: boolean;
-  require_otp_for_reschedule?: boolean;
-  require_otp_for_cancel?: boolean;
 }
 
 export interface PhiScrubbingData {
@@ -62,9 +60,9 @@ export const SecurityGuardrailsCard: React.FC<SecurityGuardrailsCardProps> = ({
   const triage = guardrails?.triage_emergency;
   const handoff = guardrails?.human_handoff;
 
-  const isNewBookingOtp = Boolean(vp?.require_otp_for_new_booking ?? false);
-  const isRescheduleOtp = Boolean(vp?.require_otp_for_reschedule ?? legacyRequireOtp ?? false);
-  const isCancelOtp = Boolean(vp?.require_otp_for_cancel ?? false);
+  const isNewBookingOtp = Boolean(vp?.require_otp_for_new_booking ?? legacyRequireOtp ?? false);
+  const isRescheduleOtp = true;
+  const isCancelOtp = true;
 
   const isPhiEnabled = Boolean(phi?.enabled ?? legacyPhiScrubbing ?? false);
   const isHipaaCompliant = Boolean(phi?.hipaa_compliant ?? false);

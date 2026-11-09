@@ -108,4 +108,3 @@ export class EmailProducer implements IEmailProducer, OnModuleInit, OnModuleDest
     await this._publish('send-forgot-password', data);
   }
 }
-

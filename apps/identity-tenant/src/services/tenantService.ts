@@ -31,7 +31,8 @@ export class TenantService implements ITenantService {
 
   constructor(
     @Inject('ITenantRepository') private readonly _tenantRepo: ITenantRepository,
-    @Inject('IDashboardUserRepository') private readonly _dashboardUserRepo: IDashboardUserRepository,
+    @Inject('IDashboardUserRepository')
+    private readonly _dashboardUserRepo: IDashboardUserRepository,
     @Inject('ICacheRepository') private readonly _cacheRepo: ICacheRepository,
     @Inject('IPasswordHasher') private readonly _passwordHasher: IPasswordHasher,
     @Inject('IJwtService') private readonly _jwtService: IJwtService,
@@ -39,7 +40,8 @@ export class TenantService implements ITenantService {
     @Inject('IEmailProducer') private readonly _emailProducer?: IEmailProducer,
   ) {
     this._jwtSecret = this._configService.get<string>('JWT_SECRET') || 'dev-secret-change-in-prod';
-    this._jwtRefreshSecret = this._configService.get<string>('JWT_REFRESH_SECRET') || this._jwtSecret;
+    this._jwtRefreshSecret =
+      this._configService.get<string>('JWT_REFRESH_SECRET') || this._jwtSecret;
     this._googleClient = new OAuth2Client(this._configService.get<string>('GOOGLE_CLIENT_ID'));
     this._accessTokenExpiry = (this._configService.get<string>('ACCESS_TOKEN_EXPIRY') ||
       '15m') as SignOptions['expiresIn'];
@@ -467,4 +469,3 @@ export class TenantService implements ITenantService {
     };
   }
 }
-

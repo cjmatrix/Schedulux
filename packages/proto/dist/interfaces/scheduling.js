@@ -26,7 +26,14 @@ function SchedulingInventoryServiceControllerMethods() {
             "deleteResource",
             "batchSyncInventory",
             "createBooking",
+            "cancelBooking",
+            "rescheduleBooking",
             "getAvailability",
+            "listBookings",
+            "verifyCustomer",
+            "listCustomers",
+            "getTenantSchedule",
+            "updateTenantSchedule",
         ];
         for (const method of grpcMethods) {
             const descriptor = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

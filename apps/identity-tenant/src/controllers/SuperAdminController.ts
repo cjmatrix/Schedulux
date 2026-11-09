@@ -84,4 +84,3 @@ export class SuperAdminAuthController {
     return this._superAdminService.suspendTenant(data.tenant_id);
   }
 }
-

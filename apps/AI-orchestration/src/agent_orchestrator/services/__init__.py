@@ -11,6 +11,7 @@ from agent_orchestrator.services.crawler_service import (
     CrawlerService,
     CrawlResultDTO,
 )
+from agent_orchestrator.services.document_service import DocumentService
 from agent_orchestrator.services.memory_service import MemoryService
 from agent_orchestrator.services.onboarding_service import (
     OnboardingResult,
@@ -40,4 +41,5 @@ __all__ = [
     "CrawlerServiceProtocol",
     "MemoryService",
     "MemoryServiceProtocol",
+    "DocumentService",
 ]

@@ -22,6 +22,7 @@ const roles_decorator_js_1 = require("../../decorators/roles.decorator.js");
 const roles_guard_js_1 = require("../../guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
 const knowledge_dto_js_1 = require("./dtos/knowledge.dto.js");
+const session_token_util_js_1 = require("../../utils/session-token.util.js");
 let KnowledgeController = class KnowledgeController {
     _client;
     _schemaCacheService;
@@ -117,13 +118,159 @@ let KnowledgeController = class KnowledgeController {
             },
         };
     }
+    async sandboxInit(req, body) {
+        const tenantId = body.tenant_id || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+        }
+        const agentId = body.agent_id || 'default';
+        let resolvedSessionId;
+        let resolvedToken;
+        let isFirstTime = true;
+        let messages = [];
+        if (body.token) {
+            const verified = (0, session_token_util_js_1.verifySessionToken)(body.token);
+            if (verified.valid && verified.sessionId) {
+                resolvedSessionId = verified.sessionId;
+                resolvedToken = body.token;
+            }
+        }
+        else if (body.session_id) {
+            resolvedSessionId = body.session_id;
+            resolvedToken = (0, session_token_util_js_1.signSessionId)(body.session_id);
+        }
+        if (resolvedSessionId && resolvedToken) {
+            try {
+                const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getCustomerMessages({
+                    tenant_id: tenantId,
+                    agent_id: agentId,
+                    session_id: resolvedSessionId,
+                    limit: 20,
+                }));
+                messages = response.messages || [];
+                isFirstTime = messages.length === 0;
+                return {
+                    message: messages_constant_js_1.RESPONSE_MESSAGES.CHAT.SESSION_INITIALIZED,
+                    data: {
+                        is_first_time: isFirstTime,
+                        session_id: resolvedSessionId,
+                        token: resolvedToken,
+                        messages,
+                        next_cursor: response.next_cursor || null,
+                        has_more: Boolean(response.has_more),
+                    },
+                };
+            }
+            catch {
+                isFirstTime = true;
+                messages = [];
+            }
+        }
+        else {
+            const session = (0, session_token_util_js_1.createSignedSession)(`sandbox_${tenantId}_${agentId}`);
+            resolvedSessionId = session.sessionId;
+            resolvedToken = session.token;
+            isFirstTime = true;
+            messages = [];
+        }
+        return {
+            message: messages_constant_js_1.RESPONSE_MESSAGES.CHAT.SESSION_INITIALIZED,
+            data: {
+                is_first_time: isFirstTime,
+                session_id: resolvedSessionId,
+                token: resolvedToken,
+                messages,
+                next_cursor: null,
+                has_more: false,
+            },
+        };
+    }
+    async getSandboxWidgetConfig(req, tenantIdParam, agentIdParam) {
+        const tenantId = tenantIdParam || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+        }
+        const agentId = agentIdParam || 'default';
+        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getWidgetConfig({
+            tenant_id: tenantId,
+            agent_id: agentId,
+            source: 'draft',
+        }));
+        let widgetConfig = {};
+        if (response.widget_config_json) {
+            try {
+                widgetConfig = JSON.parse(response.widget_config_json);
+            }
+            catch {
+                widgetConfig = {};
+            }
+        }
+        return {
+            message: 'Sandbox widget configuration retrieved',
+            data: {
+                tenant_id: response.tenant_id || tenantId,
+                agent_id: response.agent_id || agentId,
+                widget_config: widgetConfig,
+            },
+        };
+    }
+    async getSandboxMessages(req, agentIdParam, sessionIdParam, token, before, limitStr) {
+        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+        }
+        const agentId = agentIdParam || 'default';
+        let resolvedSessionId = sessionIdParam;
+        if (token) {
+            const verified = (0, session_token_util_js_1.verifySessionToken)(token);
+            if (!verified.valid || !verified.sessionId) {
+                throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
+            }
+            resolvedSessionId = verified.sessionId;
+        }
+        if (!resolvedSessionId) {
+            throw new common_1.BadRequestException(messages_constant_js_1.RESPONSE_MESSAGES.CHAT.REQUIRED_FIELDS);
+        }
+        const limit = limitStr ? parseInt(limitStr, 10) : 20;
+        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getCustomerMessages({
+            tenant_id: tenantId,
+            agent_id: agentId,
+            session_id: resolvedSessionId,
+            limit,
+            before,
+        }));
+        return {
+            message: messages_constant_js_1.RESPONSE_MESSAGES.CHAT.MESSAGES_RETRIEVED,
+            data: {
+                messages: response.messages || [],
+                next_cursor: response.next_cursor || null,
+                has_more: Boolean(response.has_more),
+            },
+        };
+    }
     async sandboxChat(req, body) {
         const tenantId = body.tenant_id || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
         if (!tenantId) {
             throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
         }
         const agentId = body.agent_id || 'default';
-        const sessionId = body.session_id || `sandbox_${tenantId}_${agentId}`;
+        let sessionId = body.session_id;
+        let token = body.token;
+        if (token) {
+            const verified = (0, session_token_util_js_1.verifySessionToken)(token);
+            if (!verified.valid || !verified.sessionId) {
+                throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
+            }
+            sessionId = verified.sessionId;
+        }
+        else if (sessionId) {
+            token = (0, session_token_util_js_1.signSessionId)(sessionId);
+        }
+        else {
+            const session = (0, session_token_util_js_1.createSignedSession)(`sandbox_${tenantId}_${agentId}`);
+            sessionId = session.sessionId;
+            token = session.token;
+        }
         const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.customerChat({
             tenant_id: tenantId,
             agent_id: agentId,
@@ -132,13 +279,21 @@ let KnowledgeController = class KnowledgeController {
             customer_id: body.customer_id || '',
             customer_phone: body.customer_phone || '',
             customer_name: body.customer_name || 'Sandbox Tester',
+            mode: 'sandbox',
         }));
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.SANDBOX_CHAT_PROCESSED,
             data: {
                 reply: response.response,
+                response: response.response,
                 session_id: response.session_id,
-                history: response.history || [],
+                token,
+                user_message_id: response.user_message_id,
+                agent_message_id: response.agent_message_id,
+                created_at: response.created_at,
+                booking_id: response.booking_id || undefined,
+                booking_reference: response.booking_reference || undefined,
+                status: response.status || undefined,
             },
         };
     }
@@ -219,6 +374,69 @@ let KnowledgeController = class KnowledgeController {
             },
         };
     }
+    async getDocumentUploadUrl(req, body) {
+        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+        }
+        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getDocumentUploadUrl({
+            tenant_id: tenantId,
+            agent_id: body.agent_id,
+            file_name: body.file_name,
+            file_size_bytes: body.file_size_bytes || 0,
+        }));
+        return {
+            message: 'Presigned upload URL generated successfully',
+            data: {
+                upload_url: response.upload_url,
+                document_id: response.document_id,
+                s3_key: response.s3_key,
+                expires_in: response.expires_in,
+            },
+        };
+    }
+    async confirmDocumentUpload(req, body) {
+        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+        }
+        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.confirmDocumentUpload({
+            tenant_id: tenantId,
+            document_id: body.document_id,
+        }));
+        return {
+            message: response.message,
+            data: { success: response.success },
+        };
+    }
+    async listDocuments(req, query) {
+        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+        }
+        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.listDocuments({
+            tenant_id: tenantId,
+            agent_id: query.agent_id || '',
+        }));
+        return {
+            message: 'Documents retrieved successfully',
+            data: response.documents || [],
+        };
+    }
+    async deleteDocument(req, documentId) {
+        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+        }
+        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.deleteDocument({
+            tenant_id: tenantId,
+            document_id: documentId,
+        }));
+        return {
+            message: response.message,
+            data: { success: response.success },
+        };
+    }
 };
 exports.KnowledgeController = KnowledgeController;
 __decorate([
@@ -264,6 +482,37 @@ __decorate([
     __metadata("design:paramtypes", [knowledge_dto_js_1.ResumeOnboardingDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "resumeOnboarding", null);
+__decorate([
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_INIT),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.InitCustomerChatDto]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "sandboxInit", null);
+__decorate([
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_CONFIG),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)('tenant_id')),
+    __param(2, (0, common_1.Query)('agent_id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "getSandboxWidgetConfig", null);
+__decorate([
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_MESSAGES),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)('agent_id')),
+    __param(2, (0, common_1.Query)('session_id')),
+    __param(3, (0, common_1.Query)('token')),
+    __param(4, (0, common_1.Query)('before')),
+    __param(5, (0, common_1.Query)('limit')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String, String, String, String]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "getSandboxMessages", null);
 __decorate([
     (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
@@ -311,6 +560,44 @@ __decorate([
     __metadata("design:paramtypes", [Object, String, String, String]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "getOnboardingMessages", null);
+__decorate([
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.DOCUMENTS_UPLOAD_URL),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.GetDocumentUploadUrlDto]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "getDocumentUploadUrl", null);
+__decorate([
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.DOCUMENTS_CONFIRM),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.ConfirmDocumentUploadDto]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "confirmDocumentUpload", null);
+__decorate([
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.DOCUMENTS),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.ListDocumentsQueryDto]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "listDocuments", null);
+__decorate([
+    (0, common_1.Delete)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.DOCUMENT_BY_ID),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('documentId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "deleteDocument", null);
 exports.KnowledgeController = KnowledgeController = __decorate([
     (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.BASE),
     (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),

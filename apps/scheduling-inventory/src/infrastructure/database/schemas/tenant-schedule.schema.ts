@@ -31,8 +31,6 @@ export interface ISchedulingEngineConfigDoc {
 
 export interface IVerificationPolicyConfigDoc {
   require_otp_for_new_booking: boolean;
-  require_otp_for_reschedule: boolean;
-  require_otp_for_cancel: boolean;
 }
 
 export interface ITenantScheduleDoc extends Document<string> {
@@ -99,8 +97,6 @@ export const TenantScheduleMongooseSchema = new Schema<ITenantScheduleDoc>(
     },
     verification_policy: {
       require_otp_for_new_booking: { type: Boolean, default: false },
-      require_otp_for_reschedule: { type: Boolean, default: true },
-      require_otp_for_cancel: { type: Boolean, default: true },
     },
   },
   {

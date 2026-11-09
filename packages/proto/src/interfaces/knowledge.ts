@@ -134,15 +134,18 @@ export interface CustomerChatRequest {
   customer_id?: string | undefined;
   customer_phone?: string | undefined;
   customer_name?: string | undefined;
+  mode?: string | undefined;
 }
 
 export interface CustomerChatResponse {
   session_id: string;
   response: string;
-  history: CustomerChatMessageInfo[];
   booking_id?: string | undefined;
   booking_reference?: string | undefined;
   status?: string | undefined;
+  user_message_id: string;
+  agent_message_id: string;
+  created_at: string;
 }
 
 export interface GetCustomerMessagesRequest {
@@ -150,10 +153,82 @@ export interface GetCustomerMessagesRequest {
   agent_id: string;
   session_id: string;
   limit?: number | undefined;
+  before?: string | undefined;
 }
 
 export interface GetCustomerMessagesResponse {
   messages: CustomerChatMessageInfo[];
+  next_cursor?: string | undefined;
+  has_more: boolean;
+}
+
+export interface GetWidgetConfigRequest {
+  tenant_id: string;
+  agent_id: string;
+  /** "draft" or "live" */
+  source: string;
+}
+
+export interface GetWidgetConfigResponse {
+  tenant_id: string;
+  agent_id: string;
+  widget_config_json: string;
+}
+
+export interface GetDocumentUploadUrlRequest {
+  tenant_id: string;
+  agent_id: string;
+  file_name: string;
+  file_size_bytes: number;
+}
+
+export interface GetDocumentUploadUrlResponse {
+  upload_url: string;
+  document_id: string;
+  s3_key: string;
+  expires_in: number;
+}
+
+export interface ConfirmDocumentUploadRequest {
+  tenant_id: string;
+  document_id: string;
+}
+
+export interface ConfirmDocumentUploadResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface DocumentInfo {
+  id: string;
+  tenant_id: string;
+  agent_id: string;
+  file_name: string;
+  file_size_bytes: number;
+  s3_key: string;
+  s3_bucket: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListDocumentsRequest {
+  tenant_id: string;
+  agent_id: string;
+}
+
+export interface ListDocumentsResponse {
+  documents: DocumentInfo[];
+}
+
+export interface DeleteDocumentRequest {
+  tenant_id: string;
+  document_id: string;
+}
+
+export interface DeleteDocumentResponse {
+  success: boolean;
+  message: string;
 }
 
 export const KNOWLEDGE_PACKAGE_NAME = "knowledge";
@@ -176,6 +251,16 @@ export interface KnowledgeServiceClient {
   customerChat(request: CustomerChatRequest): Observable<CustomerChatResponse>;
 
   getCustomerMessages(request: GetCustomerMessagesRequest): Observable<GetCustomerMessagesResponse>;
+
+  getWidgetConfig(request: GetWidgetConfigRequest): Observable<GetWidgetConfigResponse>;
+
+  getDocumentUploadUrl(request: GetDocumentUploadUrlRequest): Observable<GetDocumentUploadUrlResponse>;
+
+  confirmDocumentUpload(request: ConfirmDocumentUploadRequest): Observable<ConfirmDocumentUploadResponse>;
+
+  listDocuments(request: ListDocumentsRequest): Observable<ListDocumentsResponse>;
+
+  deleteDocument(request: DeleteDocumentRequest): Observable<DeleteDocumentResponse>;
 }
 
 export interface KnowledgeServiceController {
@@ -212,6 +297,26 @@ export interface KnowledgeServiceController {
   getCustomerMessages(
     request: GetCustomerMessagesRequest,
   ): Promise<GetCustomerMessagesResponse> | Observable<GetCustomerMessagesResponse> | GetCustomerMessagesResponse;
+
+  getWidgetConfig(
+    request: GetWidgetConfigRequest,
+  ): Promise<GetWidgetConfigResponse> | Observable<GetWidgetConfigResponse> | GetWidgetConfigResponse;
+
+  getDocumentUploadUrl(
+    request: GetDocumentUploadUrlRequest,
+  ): Promise<GetDocumentUploadUrlResponse> | Observable<GetDocumentUploadUrlResponse> | GetDocumentUploadUrlResponse;
+
+  confirmDocumentUpload(
+    request: ConfirmDocumentUploadRequest,
+  ): Promise<ConfirmDocumentUploadResponse> | Observable<ConfirmDocumentUploadResponse> | ConfirmDocumentUploadResponse;
+
+  listDocuments(
+    request: ListDocumentsRequest,
+  ): Promise<ListDocumentsResponse> | Observable<ListDocumentsResponse> | ListDocumentsResponse;
+
+  deleteDocument(
+    request: DeleteDocumentRequest,
+  ): Promise<DeleteDocumentResponse> | Observable<DeleteDocumentResponse> | DeleteDocumentResponse;
 }
 
 export function KnowledgeServiceControllerMethods() {
@@ -226,6 +331,11 @@ export function KnowledgeServiceControllerMethods() {
       "getAgentMessages",
       "customerChat",
       "getCustomerMessages",
+      "getWidgetConfig",
+      "getDocumentUploadUrl",
+      "confirmDocumentUpload",
+      "listDocuments",
+      "deleteDocument",
     ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

@@ -10,27 +10,30 @@ import {
   Post,
   Query,
   UnauthorizedException,
+  UseGuards,
   UsePipes,
 } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { KnowledgeServiceClient } from '@repo/proto/knowledge';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { lastValueFrom } from 'rxjs';
-import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
-import { API_ROUTES } from '../../constants/routes.constant.js';
-import {
-  createSignedSession,
-  signSessionId,
-  verifySessionToken,
-} from '../../utils/session-token.util.js';
+import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
+import { API_ROUTES } from '../constants/routes.constant.js';
 import {
   CustomerChatDto,
   InitCustomerChatDto,
   PublicChatConfigQueryDto,
   PublicChatMessagesQueryDto,
-} from './dtos/knowledge.dto.js';
+} from '../dtos/customer-chat.dto.js';
+import { CorsOriginGuard } from '../guards/cors-origin.guard.js';
+import {
+  createSignedSession,
+  signSessionId,
+  verifySessionToken,
+} from '../utils/session-token.util.js';
 
 @Controller(API_ROUTES.PUBLIC_CHAT.BASE)
+@UseGuards(CorsOriginGuard)
 export class CustomerChatController implements OnModuleInit {
   private _knowledgeService!: KnowledgeServiceClient;
 
@@ -186,7 +189,7 @@ export class CustomerChatController implements OnModuleInit {
     }
 
     return {
-      message: 'Widget configuration retrieved',
+      message: RESPONSE_MESSAGES.CHAT.CONFIG_RETRIEVED,
       data: {
         tenant_id: response.tenant_id || query.tenant_id,
         agent_id: response.agent_id || query.agent_id,
@@ -232,3 +235,4 @@ export class CustomerChatController implements OnModuleInit {
     };
   }
 }
+

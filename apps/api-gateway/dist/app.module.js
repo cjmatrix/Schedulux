@@ -10,7 +10,6 @@ exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const microservices_1 = require("@nestjs/microservices");
-const customer_chat_controller_js_1 = require("./controllers/agentOrchestrator/customer-chat.controller.js");
 const knowledge_controller_js_1 = require("./controllers/agentOrchestrator/knowledge.controller.js");
 const billing_controller_js_1 = require("./controllers/billing/billing.controller.js");
 const dashboard_user_auth_controller_js_1 = require("./controllers/dashboarduser/dashboard-user-auth.controller.js");
@@ -126,7 +125,6 @@ exports.AppModule = AppModule = __decorate([
             superadmin_tenant_controller_js_1.SuperAdminTenantController,
             dashboard_user_auth_controller_js_1.DashboardUserAuthController,
             knowledge_controller_js_1.KnowledgeController,
-            customer_chat_controller_js_1.CustomerChatController,
             scheduling_controller_js_1.SchedulingController,
         ],
         providers: [

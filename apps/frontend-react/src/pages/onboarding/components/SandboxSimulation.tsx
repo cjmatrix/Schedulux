@@ -7,6 +7,7 @@ export interface SandboxSimulationProps {
   tenantId?: string;
   agentId?: string;
   widgetConfig?: Partial<WidgetConfig>;
+  isLive?: boolean;
 }
 
 export const SandboxSimulation: React.FC<SandboxSimulationProps> = ({
@@ -14,6 +15,7 @@ export const SandboxSimulation: React.FC<SandboxSimulationProps> = ({
   tenantId = 'sandbox_tenant',
   agentId = 'sandbox_agent',
   widgetConfig,
+  isLive = false,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const widgetInstanceRef = useRef<ScheduluxWidgetInstance | null>(null);
@@ -30,6 +32,10 @@ export const SandboxSimulation: React.FC<SandboxSimulationProps> = ({
     if (!mountRef.current) return;
 
     mountRef.current.innerHTML = '';
+    const container = document.createElement('div');
+    container.style.width = '100%';
+    container.style.height = '100%';
+    mountRef.current.appendChild(container);
 
     const currentCfg = configRef.current;
 
@@ -37,10 +43,19 @@ export const SandboxSimulation: React.FC<SandboxSimulationProps> = ({
       tenantId: tenantId || 'sandbox_tenant',
       agentId: agentId || 'sandbox_agent',
       apiBase: import.meta.env.VITE_API_URL || 'http://localhost:5000',
-      container: mountRef.current,
+      container,
       inline: true,
       mode: 'sandbox',
       config: currentCfg,
+      onSendMessage: !isLive
+        ? async (_text: string) => {
+            await new Promise((resolve) => setTimeout(resolve, 350));
+            return {
+              response:
+                "👋 I'm in Draft Preview mode! Your theme and branding look great. Click 'Publish Agent' in the top right to start live testing appointments with me.",
+            };
+          }
+        : undefined,
     });
 
     widgetInstanceRef.current = instance;
@@ -48,8 +63,12 @@ export const SandboxSimulation: React.FC<SandboxSimulationProps> = ({
     return () => {
       instance.destroy();
       widgetInstanceRef.current = null;
+      container.remove();
+      if (mountRef.current) {
+        mountRef.current.innerHTML = '';
+      }
     };
-  }, [tenantId, agentId]);
+  }, [tenantId, agentId, isLive]);
 
   useEffect(() => {
     if (widgetInstanceRef.current && widgetConfig) {
@@ -68,16 +87,27 @@ export const SandboxSimulation: React.FC<SandboxSimulationProps> = ({
       {/* Studio Sandbox Toolbar */}
       <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+          <div
+            className={`w-9 h-9 rounded-xl ${
+              isLive ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+            } flex items-center justify-center font-bold`}
+          >
             <Bot className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-xs font-bold text-slate-900">{clinicName} Sandbox</h3>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Live Agent
-              </span>
+              {isLive ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Live Agent
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/60">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  Draft Preview
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
               <span className="flex items-center gap-1">

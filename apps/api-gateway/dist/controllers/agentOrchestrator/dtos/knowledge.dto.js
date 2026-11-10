@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PublicChatMessagesQueryDto = exports.PublicChatMessagesQuerySchema = exports.PublicChatConfigQueryDto = exports.PublicChatConfigQuerySchema = exports.ListDocumentsQueryDto = exports.ListDocumentsQuerySchema = exports.ConfirmDocumentUploadDto = exports.ConfirmDocumentUploadSchema = exports.GetDocumentUploadUrlDto = exports.GetDocumentUploadUrlSchema = exports.GetOnboardingMessagesQueryDto = exports.GetOnboardingMessagesQuerySchema = exports.GetAgentMessagesQueryDto = exports.GetAgentMessagesQuerySchema = exports.GetSandboxMessagesQueryDto = exports.GetSandboxMessagesQuerySchema = exports.GetSandboxWidgetConfigQueryDto = exports.GetSandboxWidgetConfigQuerySchema = exports.SendSandboxMessageDto = exports.SendSandboxMessageSchema = exports.CustomerChatDto = exports.CustomerChatSchema = exports.InitSandboxChatDto = exports.InitSandboxChatSchema = exports.InitCustomerChatDto = exports.InitCustomerChatSchema = exports.SaveInitialAgentDraftDto = exports.SaveInitialAgentDraftSchema = exports.ResumeOnboardingDto = exports.ResumeOnboardingSchema = exports.StartOnboardingDto = exports.StartOnboardingSchema = exports.GetSchemaQueryDto = exports.GetSchemaQuerySchema = exports.GetCrawlStatusDto = exports.GetCrawlStatusSchema = exports.CrawlSiteDto = exports.CrawlSiteSchema = void 0;
+exports.UpdateWidgetConfigDto = exports.UpdateWidgetConfigSchema = exports.PublicChatMessagesQueryDto = exports.PublicChatMessagesQuerySchema = exports.PublicChatConfigQueryDto = exports.PublicChatConfigQuerySchema = exports.ListDocumentsQueryDto = exports.ListDocumentsQuerySchema = exports.ConfirmDocumentUploadDto = exports.ConfirmDocumentUploadSchema = exports.GetDocumentUploadUrlDto = exports.GetDocumentUploadUrlSchema = exports.GetOnboardingMessagesQueryDto = exports.GetOnboardingMessagesQuerySchema = exports.GetAgentMessagesQueryDto = exports.GetAgentMessagesQuerySchema = exports.GetSandboxMessagesQueryDto = exports.GetSandboxMessagesQuerySchema = exports.GetSandboxWidgetConfigQueryDto = exports.GetSandboxWidgetConfigQuerySchema = exports.SendSandboxMessageDto = exports.SendSandboxMessageSchema = exports.CustomerChatDto = exports.CustomerChatSchema = exports.InitSandboxChatDto = exports.InitSandboxChatSchema = exports.InitCustomerChatDto = exports.InitCustomerChatSchema = exports.SaveInitialAgentDraftDto = exports.SaveInitialAgentDraftSchema = exports.ResumeOnboardingDto = exports.ResumeOnboardingSchema = exports.StartOnboardingDto = exports.StartOnboardingSchema = exports.GetSchemaQueryDto = exports.GetSchemaQuerySchema = exports.GetCrawlStatusDto = exports.GetCrawlStatusSchema = exports.CrawlSiteDto = exports.CrawlSiteSchema = void 0;
 const nestjs_zod_1 = require("nestjs-zod");
 const zod_1 = require("zod");
 exports.CrawlSiteSchema = zod_1.z.object({
@@ -173,3 +173,10 @@ exports.PublicChatMessagesQuerySchema = zod_1.z.object({
 class PublicChatMessagesQueryDto extends (0, nestjs_zod_1.createZodDto)(exports.PublicChatMessagesQuerySchema) {
 }
 exports.PublicChatMessagesQueryDto = PublicChatMessagesQueryDto;
+exports.UpdateWidgetConfigSchema = zod_1.z.object({
+    whitelisted_domains: zod_1.z.array(zod_1.z.string().trim()).default([]),
+    widget_config_json: zod_1.z.string().optional(),
+});
+class UpdateWidgetConfigDto extends (0, nestjs_zod_1.createZodDto)(exports.UpdateWidgetConfigSchema) {
+}
+exports.UpdateWidgetConfigDto = UpdateWidgetConfigDto;

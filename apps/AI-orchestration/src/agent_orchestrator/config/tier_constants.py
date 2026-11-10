@@ -73,4 +73,3 @@ def get_tier_config(tier: str | None = None) -> dict[str, Any]:
         return STATIC_TIER_CONFIGS[DEFAULT_TIER]
     normalized = tier.strip().lower()
     return STATIC_TIER_CONFIGS.get(normalized, STATIC_TIER_CONFIGS[DEFAULT_TIER])
-

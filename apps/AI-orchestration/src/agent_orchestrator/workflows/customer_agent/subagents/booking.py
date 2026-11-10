@@ -1,19 +1,23 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
-from langgraph.prebuilt import create_react_agent
 from pydantic import SecretStr
 
 from agent_orchestrator.clients.redis_client import get_session_auth
+from agent_orchestrator.workflows.customer_agent.fast_path import (
+    format_deterministic_fast_path,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,17 +84,19 @@ def _get_gemini_model(temperature: float = 0.0, max_tokens: int = 4096) -> Any |
     )
 
 
-def _extract_response_text(result: dict[str, Any]) -> str:
-    final = result["messages"][-1]
-    if isinstance(final.content, str):
-        return final.content
-    if isinstance(final.content, list):
+def _extract_content(msg: Any) -> str:
+    if isinstance(msg, str):
+        return msg
+    content = getattr(msg, "content", "")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
         texts = [
             item["text"] if isinstance(item, dict) and item.get("text") else str(item)
-            for item in final.content
+            for item in content
         ]
         return "\n".join(texts)
-    return str(final.content)
+    return str(content)
 
 
 def _get_chat_model(temperature: float = 0.0) -> Any:
@@ -158,10 +164,16 @@ Operating Hours & Schedule:
 {resources_catalog}
 
 [CRITICAL ANTI-HALLUCINATION & ANTI-PREMATURE BOOKING RULES — ZERO TOLERANCE]
-1. ZERO ASSUMPTIONS:
+1. ZERO ASSUMPTIONS & MANDATORY DAY/DATE DOUBLE-CONFIRMATION:
    - NEVER assume, guess, or auto-select a service. The customer MUST explicitly choose or name the service.
    - NEVER invent, guess, or assume an appointment date or time. Slots MUST be returned by `check_availability` and explicitly confirmed by the customer.
    - NEVER invent or hallucinate booking reference codes (e.g. `BK-...`). Only provide real references returned in tool outputs.
+   - MANDATORY DAY & DATE DOUBLE-CONFIRMATION:
+     Whenever offering time slots, asking about a date, or confirming a booking, ALWAYS state BOTH the day of the week AND the full date (e.g., "Monday, November 16, 2026 at 10:00 AM").
+     NEVER state just the time (e.g. "10:00 AM") or just the date without the day of week.
+     If the customer used relative terms like "next Monday", "tomorrow", or "this weekend", resolve the exact date using [Pre-Calculated Local Calendar Reference] and explicitly reflect both the day and date back to the customer:
+     (e.g., "I checked availability for Monday, November 16th — here are the available slots:...").
+     This double-confirmation guarantees the customer and agent are 100% aligned on the calendar day.
 2. STRICT BOOKING PREREQUISITES:
    - You are STRICTLY FORBIDDEN from invoking `book_appointment` unless ALL FOUR prerequisites are explicitly established:
      (1) Confirmed `service_id` chosen by the customer.
@@ -212,9 +224,10 @@ Phase 1 — Service Selection:
 
 Phase 2 — Date & Time Availability:
 - Once the service is determined, ask for their preferred day or time of day (morning, afternoon, evening).
+- When resolving relative days ("next Monday", "tomorrow", "this Friday"), look up the exact date from [Pre-Calculated Local Calendar Reference].
 - Call `check_availability(service_id=..., start_date=..., tenant_id=..., agent_id=...)` using tenant_id and agent_id from [Active Request Context].
 - If no specific staff member was requested for this service, DO NOT pass `resource_id`. Let the system check all available slots.
-- Present the available slots in business timezone ({biz_timezone}).
+- Present available slots with explicit Day of the Week and Date in business timezone ({biz_timezone}) (e.g. "For Monday, Nov 16: 10:00 AM, 02:00 PM").
 - Wait for the customer to confirm which specific time slot they prefer.
 
 Phase 3 — Customer Identification & Assignment:
@@ -233,7 +246,7 @@ Phase 4 — Execution & Security Verification:
   Once the customer provides the 6-digit code, immediately re-invoke `book_appointment` with `otp_code="<6-digit code>"`! This verifies the code and confirms the booking in a single atomic call.
 - If `book_appointment` returns `status: "failed"`:
   Politely explain the issue. If the OTP code was invalid, ask them to re-check the code. If the session was already verified and a system error occurred, re-execute `book_appointment` without re-verifying.
-- Once confirmed: share the booking reference code and present the appointment date and time in the customer's local business timezone using `start_time_local`.
+- Once confirmed: share the booking reference code and present the appointment date and time in the customer's local business timezone using `start_time_local` with full double-confirmation of Day of the Week, Date, and Time (e.g. "Your booking is confirmed for Monday, Nov 16, 2026 at 10:00 AM IST").
 
 [Scheduling Engine Rules]
 1. Minimum Lead Time: Slots can only be booked at least {lead_time_hours} hours from current time. Never offer slots earlier than this lead time.
@@ -289,9 +302,36 @@ def _build_booking_request_context(
     agent_id: str,
     session_id: str = "",
     session_auth: dict[str, Any] | None = None,
+    biz_timezone: str = "UTC",
 ) -> str:
+    try:
+        tz = ZoneInfo(biz_timezone)
+    except Exception:
+        tz = UTC
 
-    now_iso = datetime.now(UTC).strftime("%A, %Y-%m-%d %H:%M:%S UTC")
+    now_utc = datetime.now(UTC)
+    now_local = now_utc.astimezone(tz)
+    local_time_str = now_local.strftime("%A, %Y-%m-%d %I:%M %p") + f" ({biz_timezone})"
+    utc_time_str = now_utc.strftime("%A, %Y-%m-%d %H:%M:%S UTC")
+
+    calendar_lines: list[str] = []
+    for day_offset in range(14):
+        target_date = now_local + timedelta(days=day_offset)
+        iso_date = target_date.strftime("%Y-%m-%d")
+        day_name = target_date.strftime("%A")
+        if day_offset == 0:
+            label = f"Today ({day_name})"
+        elif day_offset == 1:
+            label = f"Tomorrow ({day_name})"
+        elif day_offset < 7:
+            label = f"This Coming {day_name}"
+        elif day_offset == 7:
+            label = f"Next {day_name} (in 7 days)"
+        else:
+            label = f"Next Week {day_name}"
+        calendar_lines.append(f"  - {label}: {iso_date}")
+
+    calendar_block = "\n".join(calendar_lines)
 
     session_auth_block = ""
     if session_auth and session_auth.get("is_verified"):
@@ -310,11 +350,109 @@ Instructions for Authenticated Customer:
 """
 
     return f"""[Active Request Context]
-Current UTC Time: {now_iso}
+Current Business Local Time: {local_time_str}
+Current UTC Time: {utc_time_str}
+Business Timezone: {biz_timezone}
 Tenant ID: {tenant_id}
 Agent ID: {agent_id}
 Session ID: {session_id}
+
+[Pre-Calculated Local Calendar Reference (Zero-Hallucination Anchor — ALWAYS use these exact dates)]
+{calendar_block}
 {session_auth_block}""".rstrip()
+
+
+async def _execute_booking_turn(
+    model: Any,
+    booking_tools: list[BaseTool],
+    system_prompt: str,
+    langchain_msgs: list[BaseMessage],
+    biz_context: dict[str, Any],
+    tenant_id: str,
+    agent_id: str,
+    session_id: str,
+) -> str:
+    model_with_tools = model.bind_tools(booking_tools)
+    tool_map = {t.name: t for t in booking_tools}
+
+    conversation = [SystemMessage(content=system_prompt), *langchain_msgs]
+    ai_msg = await model_with_tools.ainvoke(conversation)
+
+    if not getattr(ai_msg, "tool_calls", None):
+        return _extract_content(ai_msg)
+
+    tool_call = ai_msg.tool_calls[0]
+    tool_name = tool_call["name"]
+    tool_args = tool_call.get("args") or {}
+    tool = tool_map.get(tool_name)
+
+    if not tool:
+        logger.error(
+            "[BookingAgent] Tool '%s' requested by model but not found in tools", tool_name
+        )
+        return "I'm sorry, I encountered an internal configuration issue. Please try again."
+
+    logger.info("[BookingAgent] Executing tool '%s' with args: %s", tool_name, tool_args)
+    raw_output = await tool.ainvoke(tool_args)
+    raw_output_str = str(raw_output)
+
+    _VERIFICATION_TOOLS = {
+        "book_appointment",
+        "cancel_appointment",
+        "reschedule_appointment",
+        "get_customer_bookings",
+    }
+    if tool_name in _VERIFICATION_TOOLS:
+        try:
+            parsed_out = json.loads(raw_output_str)
+            if parsed_out.get("status") == "requires_verification":
+                phone_to_verify = (
+                    parsed_out.get("phone")
+                    or tool_args.get("customer_phone")
+                    or tool_args.get("phone")
+                )
+                if phone_to_verify:
+                    otp_tool = tool_map.get("send_booking_otp")
+                    if otp_tool:
+                        logger.info(
+                            "[BookingAgent:FastPath] %s requires verification -> auto-dispatching OTP for %s",
+                            tool_name,
+                            phone_to_verify,
+                        )
+                        await otp_tool.ainvoke(
+                            {
+                                "tenant_id": tenant_id,
+                                "agent_id": agent_id,
+                                "phone": phone_to_verify,
+                                "session_id": session_id,
+                            }
+                        )
+                        raw_output_str = json.dumps(
+                            {
+                                "status": "sent",
+                                "phone": phone_to_verify,
+                            }
+                        )
+                        tool_name = "send_booking_otp"
+        except Exception as ex:
+            logger.warning("[BookingAgent] Auto-dispatch OTP check exception: %s", ex)
+
+    fast_path_text = format_deterministic_fast_path(tool_name, raw_output_str, biz_context)
+    if fast_path_text:
+        logger.info(
+            "[BookingAgent:FastPath] Intercepted '%s' with deterministic template (<5ms bypass)",
+            tool_name,
+        )
+        return fast_path_text
+
+    tool_msg = ToolMessage(
+        content=raw_output_str,
+        tool_call_id=tool_call.get("id", "call_1"),
+        name=tool_name,
+    )
+    follow_up_msgs = [SystemMessage(content=system_prompt), *langchain_msgs, ai_msg, tool_msg]
+    second_ai_msg = await model_with_tools.ainvoke(follow_up_msgs)
+    return _extract_content(second_ai_msg)
 
 
 async def run_booking_agent(
@@ -346,27 +484,31 @@ async def run_booking_agent(
             logger.warning("[BookingAgent] Error retrieving session auth: %s", e)
 
     system_prompt = _build_booking_system_prompt(biz_context)
+    biz_timezone = biz_context.get("timezone") or "UTC"
 
     dynamic_context = _build_booking_request_context(
         tenant_id=tenant_id,
         agent_id=agent_id,
         session_id=session_id,
         session_auth=session_auth,
+        biz_timezone=biz_timezone,
     )
     current_human_msg = HumanMessage(content=f"{message}\n\n{dynamic_context}")
     langchain_msgs: list[BaseMessage] = [*prior_history, current_human_msg]
 
     model = _get_chat_model(temperature=0.0)
 
-    agent = create_react_agent(
-        model=model,
-        tools=booking_tools,
-        prompt=SystemMessage(content=system_prompt),
-    )
-
     try:
-        result = await agent.ainvoke({"messages": langchain_msgs})
-        return _extract_response_text(result)
+        return await _execute_booking_turn(
+            model=model,
+            booking_tools=booking_tools,
+            system_prompt=system_prompt,
+            langchain_msgs=langchain_msgs,
+            biz_context=biz_context,
+            tenant_id=tenant_id,
+            agent_id=agent_id,
+            session_id=session_id,
+        )
     except Exception as e:
         logger.warning(
             "[BookingAgent] Primary model (%s) failed: %s. Attempting fallback to Gemini...",
@@ -380,14 +522,16 @@ async def run_booking_agent(
                     "[BookingAgent] Retrying with Gemini fallback (%s)...",
                     getattr(gemini_model, "model", "gemini"),
                 )
-                fallback_agent = create_react_agent(
+                return await _execute_booking_turn(
                     model=gemini_model,
-                    tools=booking_tools,
-                    prompt=SystemMessage(content=system_prompt),
+                    booking_tools=booking_tools,
+                    system_prompt=system_prompt,
+                    langchain_msgs=langchain_msgs,
+                    biz_context=biz_context,
+                    tenant_id=tenant_id,
+                    agent_id=agent_id,
+                    session_id=session_id,
                 )
-                result = await fallback_agent.ainvoke({"messages": langchain_msgs})
-                logger.info("[BookingAgent] Successfully recovered using Gemini fallback!")
-                return _extract_response_text(result)
             except Exception as fb_err:
                 logger.error(
                     "[BookingAgent] Gemini fallback also failed: %s", fb_err, exc_info=True

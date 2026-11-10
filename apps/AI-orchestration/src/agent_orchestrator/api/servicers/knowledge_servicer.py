@@ -91,7 +91,10 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
         try:
             metadata_dict = dict(context.invocation_metadata()) if context else {}
             tier = metadata_dict.get("x-tenant-tier")
-            print(f"[gRPC] StartOnboardingSession for tenant: {request.tenant_id}, agent: {agent_id}, tier: {tier}",flush=True)
+            print(
+                f"[gRPC] StartOnboardingSession for tenant: {request.tenant_id}, agent: {agent_id}, tier: {tier}",
+                flush=True,
+            )
             res = await self.onboarding_service.start_session(
                 tenant_id=request.tenant_id,
                 agent_id=agent_id,
@@ -327,6 +330,17 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                 )
                 if runtime_cfg and runtime_cfg.widget_config:
                     widget_config = runtime_cfg.widget_config.model_dump()
+                else:
+                    # Fallback to draft if live runtime not yet finalized
+                    agent_draft = await AgentDraft.find_one(
+                        {"tenant_id": request.tenant_id, "agent_id": request.agent_id}
+                    )
+                    if (
+                        agent_draft
+                        and agent_draft.current_draft
+                        and agent_draft.current_draft.widget_config
+                    ):
+                        widget_config = agent_draft.current_draft.widget_config.model_dump()
 
             if not widget_config:
                 widget_config = WidgetConfigEmbed().model_dump()
@@ -346,6 +360,99 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                 tenant_id=request.tenant_id,
                 agent_id=request.agent_id,
                 widget_config_json=json.dumps(WidgetConfigEmbed().model_dump()),
+            )
+
+    async def UpdateWidgetConfig(
+        self, request: knowledge_pb2.UpdateWidgetConfigRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.UpdateWidgetConfigResponse:
+        print(
+            f"[gRPC] UpdateWidgetConfig for tenant: {request.tenant_id}, agent: {request.agent_id}"
+        )
+        try:
+            import json
+
+            from agent_orchestrator.clients.redis_client import delete_cached_biz_context
+            from agent_orchestrator.models import AgentDraft, AgentRuntimeConfig, WidgetConfigEmbed
+
+            domains = list(request.whitelisted_domains) if request.whitelisted_domains else []
+            extra_config = {}
+            if request.widget_config_json:
+                try:
+                    extra_config = json.loads(request.widget_config_json)
+                except Exception:
+                    extra_config = {}
+
+            updated_config_dict = None
+
+            runtime_cfg = await AgentRuntimeConfig.find_one(
+                {
+                    "tenant_id": request.tenant_id,
+                    "agent_id": request.agent_id,
+                    "status": "live",
+                }
+            )
+            if runtime_cfg:
+                current = (
+                    runtime_cfg.widget_config.model_dump()
+                    if runtime_cfg.widget_config
+                    else WidgetConfigEmbed().model_dump()
+                )
+                current["whitelisted_domains"] = domains
+                if extra_config:
+                    for k, v in extra_config.items():
+                        if k != "whitelisted_domains":
+                            current[k] = v
+                runtime_cfg.widget_config = WidgetConfigEmbed(**current)
+                await runtime_cfg.save()
+                updated_config_dict = current
+
+            agent_draft = await AgentDraft.find_one(
+                {"tenant_id": request.tenant_id, "agent_id": request.agent_id}
+            )
+            if agent_draft and agent_draft.current_draft:
+                draft_widget = (
+                    agent_draft.current_draft.widget_config.model_dump()
+                    if agent_draft.current_draft.widget_config
+                    else WidgetConfigEmbed().model_dump()
+                )
+                draft_widget["whitelisted_domains"] = domains
+                if extra_config:
+                    for k, v in extra_config.items():
+                        if k != "whitelisted_domains":
+                            draft_widget[k] = v
+                agent_draft.current_draft.widget_config = WidgetConfigEmbed(**draft_widget)
+                await agent_draft.save()
+                if not updated_config_dict:
+                    updated_config_dict = draft_widget
+
+            if not updated_config_dict:
+                updated_config_dict = WidgetConfigEmbed(whitelisted_domains=domains).model_dump()
+
+            # 3. Invalidate Redis context caches and distributed whitelist cache
+            try:
+                from agent_orchestrator.clients.redis_client import (
+                    delete_cached_biz_context,
+                    delete_cached_whitelist,
+                )
+
+                await delete_cached_biz_context(request.tenant_id, request.agent_id)
+                await delete_cached_whitelist(request.tenant_id, request.agent_id)
+            except Exception as cache_err:
+                print(
+                    f"[gRPC Warning] Failed to delete cached biz context or whitelist: {cache_err}"
+                )
+
+            return knowledge_pb2.UpdateWidgetConfigResponse(
+                message="Widget configuration updated successfully",
+                success=True,
+                widget_config_json=json.dumps(updated_config_dict),
+            )
+        except Exception as e:
+            print(f"[gRPC Error] UpdateWidgetConfig failed: {e}")
+            return knowledge_pb2.UpdateWidgetConfigResponse(
+                message=f"Update failed: {str(e)}",
+                success=False,
+                widget_config_json="",
             )
 
     async def GetDocumentUploadUrl(

@@ -3,7 +3,10 @@ import type { WidgetChatMessage, WidgetConfig } from './types';
 interface SessionRecord {
   sessionId: string;
   token?: string;
+  timestamp?: number;
 }
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 function getStorageKey(tenantId: string, agentId: string): string {
   return `schedulux_sess_${tenantId}_${agentId}`;
@@ -11,9 +14,14 @@ function getStorageKey(tenantId: string, agentId: string): string {
 
 export function loadStoredSession(tenantId: string, agentId: string): SessionRecord | null {
   try {
-    const raw = sessionStorage.getItem(getStorageKey(tenantId, agentId));
+    const raw = localStorage.getItem(getStorageKey(tenantId, agentId));
     if (!raw) return null;
-    return JSON.parse(raw) as SessionRecord;
+    const session = JSON.parse(raw) as SessionRecord;
+    if (session.timestamp && Date.now() - session.timestamp > SEVEN_DAYS_MS) {
+      clearStoredSession(tenantId, agentId);
+      return null;
+    }
+    return session;
   } catch {
     return null;
   }
@@ -21,13 +29,17 @@ export function loadStoredSession(tenantId: string, agentId: string): SessionRec
 
 export function saveStoredSession(tenantId: string, agentId: string, session: SessionRecord): void {
   try {
-    sessionStorage.setItem(getStorageKey(tenantId, agentId), JSON.stringify(session));
+    const record: SessionRecord = {
+      ...session,
+      timestamp: session.timestamp || Date.now(),
+    };
+    localStorage.setItem(getStorageKey(tenantId, agentId), JSON.stringify(record));
   } catch {}
 }
 
 export function clearStoredSession(tenantId: string, agentId: string): void {
   try {
-    sessionStorage.removeItem(getStorageKey(tenantId, agentId));
+    localStorage.removeItem(getStorageKey(tenantId, agentId));
   } catch {}
 }
 

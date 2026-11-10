@@ -101,14 +101,29 @@ async def set_cached_biz_context(
         )
 
 
+def get_whitelist_redis_key(tenant_id: str, agent_id: str) -> str:
+    return f"agent:{tenant_id}:{agent_id}:whitelist"
+
+
+async def delete_cached_whitelist(tenant_id: str, agent_id: str) -> None:
+    """Invalidate distributed whitelist cache for customer API gateway."""
+    try:
+        client = get_redis_client()
+        key = get_whitelist_redis_key(tenant_id, agent_id)
+        await client.delete(key)
+    except Exception as e:
+        print(f"[Redis] Error deleting whitelist ({tenant_id}/{agent_id}): {e}", flush=True)
+
+
 async def delete_cached_biz_context(tenant_id: str, agent_id: str) -> None:
-    """Invalidate business context cache on service/resource updates or config compile."""
+    """Invalidate business context and whitelist caches on service/resource updates or config compile."""
     try:
         client = get_redis_client()
         live_key = get_biz_context_redis_key(tenant_id, agent_id, "live")
         sandbox_key = get_biz_context_redis_key(tenant_id, agent_id, "sandbox")
         legacy_key = f"biz_context:{tenant_id}:{agent_id}"
-        await client.delete(live_key, sandbox_key, legacy_key)
+        whitelist_key = get_whitelist_redis_key(tenant_id, agent_id)
+        await client.delete(live_key, sandbox_key, legacy_key, whitelist_key)
     except Exception as e:
         print(
             f"[Redis] Error deleting cached biz context ({tenant_id}/{agent_id}): {e}", flush=True

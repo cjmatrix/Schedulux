@@ -12,4 +12,3 @@ class InvalidDraftException(Exception):
 
 class TierQuotaExceededException(Exception):
     pass
-

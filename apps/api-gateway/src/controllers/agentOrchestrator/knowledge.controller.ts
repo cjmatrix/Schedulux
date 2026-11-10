@@ -10,6 +10,7 @@ import {
   OnModuleInit,
   Param,
   Post,
+  Put,
   Query,
   Req,
   UnauthorizedException,
@@ -43,6 +44,7 @@ import {
   SaveInitialAgentDraftDto,
   SendSandboxMessageDto,
   StartOnboardingDto,
+  UpdateWidgetConfigDto,
 } from './dtos/knowledge.dto.js';
 import {
   createSignedSession,
@@ -617,6 +619,77 @@ export class KnowledgeController implements OnModuleInit {
     return {
       message: response.message,
       data: { success: response.success },
+    };
+  }
+
+  @Get(API_ROUTES.KNOWLEDGE.WIDGET_CONFIG)
+  @HttpCode(HttpStatus.OK)
+  async getWidgetConfig(
+    @Req() req: AuthenticatedTenantRequest,
+    @Param('agentId') agentId: string,
+    @Query('source') source?: string,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const response = await lastValueFrom(
+      this._knowledgeService.getWidgetConfig({
+        tenant_id: tenantId,
+        agent_id: agentId,
+        source: source || 'live',
+      }),
+    );
+
+    let widgetConfig = {};
+    if (response.widget_config_json) {
+      try {
+        widgetConfig = JSON.parse(response.widget_config_json);
+      } catch {
+        widgetConfig = {};
+      }
+    }
+
+    return {
+      message: 'Widget configuration retrieved',
+      data: {
+        tenant_id: response.tenant_id || tenantId,
+        agent_id: response.agent_id || agentId,
+        widget_config: widgetConfig,
+      },
+    };
+  }
+
+  @Put(API_ROUTES.KNOWLEDGE.WIDGET_CONFIG)
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(ZodValidationPipe)
+  async updateWidgetConfig(
+    @Req() req: AuthenticatedTenantRequest,
+    @Param('agentId') agentId: string,
+    @Body() body: UpdateWidgetConfigDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const response = await lastValueFrom(
+      this._knowledgeService.updateWidgetConfig({
+        tenant_id: tenantId,
+        agent_id: agentId,
+        whitelisted_domains: body.whitelisted_domains,
+        widget_config_json: body.widget_config_json,
+      }),
+    );
+
+    let widgetConfig = {};
+    if (response.widget_config_json) {
+      try {
+        widgetConfig = JSON.parse(response.widget_config_json);
+      } catch {
+        widgetConfig = {};
+      }
+    }
+
+    return {
+      message: response.message,
+      data: {
+        success: response.success,
+        widget_config: widgetConfig,
+      },
     };
   }
 }

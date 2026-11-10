@@ -1,7 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { CustomerChatController } from './controllers/agentOrchestrator/customer-chat.controller.js';
 import { KnowledgeController } from './controllers/agentOrchestrator/knowledge.controller.js';
 import { BillingController } from './controllers/billing/billing.controller.js';
 import { DashboardUserAuthController } from './controllers/dashboarduser/dashboard-user-auth.controller.js';
@@ -111,7 +110,6 @@ import { SchemaGateway } from './websockets/schema.gateway.js';
     SuperAdminTenantController,
     DashboardUserAuthController,
     KnowledgeController,
-    CustomerChatController,
     SchedulingController,
   ],
   providers: [

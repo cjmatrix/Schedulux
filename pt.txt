@@ -3,7 +3,8 @@ implcit caching
 
 // should send tier in meta data
 //semantic caching
-
+//after send sms unwated node
+//last month booking
 
 Please build and configure my complete booking agent with the following specifications:
 

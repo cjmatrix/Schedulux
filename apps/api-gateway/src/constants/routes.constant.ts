@@ -85,5 +85,6 @@ export const API_ROUTES = {
     DOCUMENTS_CONFIRM: 'documents/confirm',
     DOCUMENTS: 'documents',
     DOCUMENT_BY_ID: 'documents/:documentId',
+    WIDGET_CONFIG: 'agents/:agentId/widget/config',
   },
 } as const;

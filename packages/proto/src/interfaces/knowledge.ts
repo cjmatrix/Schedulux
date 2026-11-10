@@ -176,6 +176,19 @@ export interface GetWidgetConfigResponse {
   widget_config_json: string;
 }
 
+export interface UpdateWidgetConfigRequest {
+  tenant_id: string;
+  agent_id: string;
+  whitelisted_domains: string[];
+  widget_config_json?: string | undefined;
+}
+
+export interface UpdateWidgetConfigResponse {
+  message: string;
+  success: boolean;
+  widget_config_json: string;
+}
+
 export interface GetDocumentUploadUrlRequest {
   tenant_id: string;
   agent_id: string;
@@ -261,6 +274,8 @@ export interface KnowledgeServiceClient {
 
   getWidgetConfig(request: GetWidgetConfigRequest, metadata?: Metadata): Observable<GetWidgetConfigResponse>;
 
+  updateWidgetConfig(request: UpdateWidgetConfigRequest, metadata?: Metadata): Observable<UpdateWidgetConfigResponse>;
+
   getDocumentUploadUrl(
     request: GetDocumentUploadUrlRequest,
     metadata?: Metadata,
@@ -327,6 +342,11 @@ export interface KnowledgeServiceController {
     metadata?: Metadata,
   ): Promise<GetWidgetConfigResponse> | Observable<GetWidgetConfigResponse> | GetWidgetConfigResponse;
 
+  updateWidgetConfig(
+    request: UpdateWidgetConfigRequest,
+    metadata?: Metadata,
+  ): Promise<UpdateWidgetConfigResponse> | Observable<UpdateWidgetConfigResponse> | UpdateWidgetConfigResponse;
+
   getDocumentUploadUrl(
     request: GetDocumentUploadUrlRequest,
     metadata?: Metadata,
@@ -361,6 +381,7 @@ export function KnowledgeServiceControllerMethods() {
       "customerChat",
       "getCustomerMessages",
       "getWidgetConfig",
+      "updateWidgetConfig",
       "getDocumentUploadUrl",
       "confirmDocumentUpload",
       "listDocuments",

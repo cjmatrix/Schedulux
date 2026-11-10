@@ -24,6 +24,7 @@ import LoginPage from './features/tenant/pages/LoginPage.tsx';
 
 
 import BillingPage from './features/tenant/pages/BillingPage.tsx';
+import EmbedWidgetPage from './features/tenant/pages/EmbedWidgetPage.tsx';
 import TenantLayout from './features/tenant/pages/layout/TenantLayout.tsx';
 import RegisterPage from './features/tenant/pages/RegisterPage.tsx';
 import ResetPasswordPage from './features/tenant/pages/ResetPasswordPage.tsx';
@@ -220,6 +221,14 @@ const router = createBrowserRouter([
           {
             path: 'settings',
             element: <ScheduleSettingsPage />,
+          },
+          {
+            path: 'agents/:agentId/widget',
+            element: <EmbedWidgetPage />,
+          },
+          {
+            path: 'widget',
+            element: <EmbedWidgetPage />,
           },
 
           {

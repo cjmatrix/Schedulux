@@ -170,3 +170,10 @@ export const PublicChatMessagesQuerySchema = z.object({
 });
 
 export class PublicChatMessagesQueryDto extends createZodDto(PublicChatMessagesQuerySchema) {}
+
+export const UpdateWidgetConfigSchema = z.object({
+  whitelisted_domains: z.array(z.string().trim()).default([]),
+  widget_config_json: z.string().optional(),
+});
+
+export class UpdateWidgetConfigDto extends createZodDto(UpdateWidgetConfigSchema) {}

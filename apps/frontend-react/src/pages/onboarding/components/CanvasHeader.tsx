@@ -35,31 +35,22 @@ export const CanvasHeader: React.FC<CanvasHeaderProps> = ({
         >
           • Logic &amp; Rules
         </button>
-        <div
-          className="inline-flex"
+        <button
+          type="button"
+          onClick={() => setRightViewMode('sandbox')}
           title={
-            !isLive ? 'After publishing your agent, you can test it in the sandbox' : undefined
+            isLive
+              ? 'Test your live agent in the sandbox'
+              : 'Preview widget theme and branding in draft mode'
           }
+          className={`px-3.5 py-1.5 rounded-full transition cursor-pointer ${
+            rightViewMode === 'sandbox'
+              ? 'bg-slate-900 text-white shadow-2xs font-bold'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
         >
-          <button
-            type="button"
-            disabled={!isLive}
-            onClick={() => {
-              if (isLive) {
-                setRightViewMode('sandbox');
-              }
-            }}
-            className={`px-3.5 py-1.5 rounded-full transition ${
-              !isLive
-                ? 'text-slate-400 opacity-50 cursor-not-allowed select-none'
-                : rightViewMode === 'sandbox'
-                  ? 'bg-slate-900 text-white shadow-2xs font-bold cursor-pointer'
-                  : 'text-slate-600 hover:text-slate-900 cursor-pointer'
-            }`}
-          >
-            Test Sandbox
-          </button>
-        </div>
+          Test Sandbox
+        </button>
         <button
           type="button"
           onClick={() => setRightViewMode('json')}

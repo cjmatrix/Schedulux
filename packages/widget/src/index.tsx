@@ -13,9 +13,7 @@ export * from './types';
 
 const activeInstances = new Map<string, ScheduluxWidgetInstance>();
 
-/**
- * Initializes a Schedulux booking chat widget encapsulated completely inside Shadow DOM.
- */
+
 export function initScheduluxWidget(options: WidgetInitOptions): ScheduluxWidgetInstance {
   const instanceKey = `${options.tenantId}_${options.agentId}`;
   if (activeInstances.has(instanceKey)) {
@@ -23,7 +21,7 @@ export function initScheduluxWidget(options: WidgetInitOptions): ScheduluxWidget
     if (existing) return existing;
   }
 
-  // 1. Resolve host container
+  
   const isCustomContainer = Boolean(options.container);
   const host = options.container || document.createElement('div');
   if (!isCustomContainer) {
@@ -31,21 +29,22 @@ export function initScheduluxWidget(options: WidgetInitOptions): ScheduluxWidget
     document.body.appendChild(host);
   }
 
-  // 2. Attach open Shadow DOM
-  const shadowRoot = host.attachShadow({ mode: 'open' });
+ 
+  const shadowRoot = host.shadowRoot || host.attachShadow({ mode: 'open' });
+  shadowRoot.innerHTML = '';
 
-  // 3. Inject encapsulated styles
+
   const styleEl = document.createElement('style');
   let currentConfig: Partial<WidgetConfig> = { ...options.config };
   styleEl.textContent = getWidgetStyles(currentConfig, options.inline);
   shadowRoot.appendChild(styleEl);
 
-  // 4. Create Preact mount point
+ 
   const mountPoint = document.createElement('div');
   mountPoint.className = 'schedulux-mount-root';
   shadowRoot.appendChild(mountPoint);
 
-  // 5. Setup QueryClient and mount Preact widget
+  
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -127,7 +126,7 @@ export function initScheduluxWidget(options: WidgetInitOptions): ScheduluxWidget
 
   activeInstances.set(instanceKey, instance);
 
-  // Asynchronously fetch remote config to apply published theme from database
+  
   fetchWidgetConfig(
     options.apiBase || '',
     options.tenantId,
@@ -163,7 +162,7 @@ export function destroyScheduluxWidget(tenantId: string, agentId: string): void 
   }
 }
 
-// Browser Global Window Attachment
+
 interface ScheduluxGlobalApi {
   init: typeof initScheduluxWidget;
   destroy: typeof destroyScheduluxWidget;
@@ -183,7 +182,7 @@ if (typeof window !== 'undefined') {
     instances: activeInstances,
   };
 
-  // Auto-initialize when embedded via `<script ... data-tenant-id="..." data-agent-id="...">`
+
   const currentScript =
     document.currentScript || document.querySelector('script[data-tenant-id][data-agent-id]');
 

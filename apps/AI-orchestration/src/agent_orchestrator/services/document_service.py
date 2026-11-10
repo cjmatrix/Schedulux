@@ -63,7 +63,7 @@ class DocumentService(DocumentServiceProtocol):
             key=s3_key,
             content_type="application/pdf",
             expires_in=expires_in,
-            max_allowed_bytes=max_allowed_bytes
+            max_allowed_bytes=max_allowed_bytes,
         )
 
         await self.document_repo.create_document(

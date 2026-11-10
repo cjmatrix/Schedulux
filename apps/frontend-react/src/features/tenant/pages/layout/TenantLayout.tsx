@@ -136,6 +136,10 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
         navigate(currentAgentId ? `/tenant/agents/${currentAgentId}/settings` : `/tenant/settings`);
         return;
       }
+      if (itemPath === '/tenant/widget') {
+        navigate(currentAgentId ? `/tenant/agents/${currentAgentId}/widget` : `/tenant/widget`);
+        return;
+      }
     }
     navigate(itemPath);
   };
@@ -156,6 +160,8 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
       navigate(`/tenant/agents/${newAgentId}/knowledge`);
     } else if (location.pathname.includes('/settings')) {
       navigate(`/tenant/agents/${newAgentId}/settings`);
+    } else if (location.pathname.includes('/widget')) {
+      navigate(`/tenant/agents/${newAgentId}/widget`);
     } else {
       navigate(`/tenant/agents/${newAgentId}/dashboard`);
     }

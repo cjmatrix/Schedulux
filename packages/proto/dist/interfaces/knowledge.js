@@ -23,6 +23,7 @@ function KnowledgeServiceControllerMethods() {
             "customerChat",
             "getCustomerMessages",
             "getWidgetConfig",
+            "updateWidgetConfig",
             "getDocumentUploadUrl",
             "confirmDocumentUpload",
             "listDocuments",

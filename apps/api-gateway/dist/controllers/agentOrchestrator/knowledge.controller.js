@@ -421,6 +421,56 @@ let KnowledgeController = class KnowledgeController {
             data: { success: response.success },
         };
     }
+    async getWidgetConfig(req, agentId, source) {
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getWidgetConfig({
+            tenant_id: tenantId,
+            agent_id: agentId,
+            source: source || 'live',
+        }));
+        let widgetConfig = {};
+        if (response.widget_config_json) {
+            try {
+                widgetConfig = JSON.parse(response.widget_config_json);
+            }
+            catch {
+                widgetConfig = {};
+            }
+        }
+        return {
+            message: 'Widget configuration retrieved',
+            data: {
+                tenant_id: response.tenant_id || tenantId,
+                agent_id: response.agent_id || agentId,
+                widget_config: widgetConfig,
+            },
+        };
+    }
+    async updateWidgetConfig(req, agentId, body) {
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.updateWidgetConfig({
+            tenant_id: tenantId,
+            agent_id: agentId,
+            whitelisted_domains: body.whitelisted_domains,
+            widget_config_json: body.widget_config_json,
+        }));
+        let widgetConfig = {};
+        if (response.widget_config_json) {
+            try {
+                widgetConfig = JSON.parse(response.widget_config_json);
+            }
+            catch {
+                widgetConfig = {};
+            }
+        }
+        return {
+            message: response.message,
+            data: {
+                success: response.success,
+                widget_config: widgetConfig,
+            },
+        };
+    }
 };
 exports.KnowledgeController = KnowledgeController;
 __decorate([
@@ -583,6 +633,27 @@ __decorate([
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "deleteDocument", null);
+__decorate([
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.WIDGET_CONFIG),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('agentId')),
+    __param(2, (0, common_1.Query)('source')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "getWidgetConfig", null);
+__decorate([
+    (0, common_1.Put)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.WIDGET_CONFIG),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('agentId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, knowledge_dto_js_1.UpdateWidgetConfigDto]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "updateWidgetConfig", null);
 exports.KnowledgeController = KnowledgeController = __decorate([
     (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.BASE),
     (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),

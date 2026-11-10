@@ -143,6 +143,17 @@ export interface GetWidgetConfigResponse {
     agent_id: string;
     widget_config_json: string;
 }
+export interface UpdateWidgetConfigRequest {
+    tenant_id: string;
+    agent_id: string;
+    whitelisted_domains: string[];
+    widget_config_json?: string | undefined;
+}
+export interface UpdateWidgetConfigResponse {
+    message: string;
+    success: boolean;
+    widget_config_json: string;
+}
 export interface GetDocumentUploadUrlRequest {
     tenant_id: string;
     agent_id: string;
@@ -202,6 +213,7 @@ export interface KnowledgeServiceClient {
     customerChat(request: CustomerChatRequest, metadata?: Metadata): Observable<CustomerChatResponse>;
     getCustomerMessages(request: GetCustomerMessagesRequest, metadata?: Metadata): Observable<GetCustomerMessagesResponse>;
     getWidgetConfig(request: GetWidgetConfigRequest, metadata?: Metadata): Observable<GetWidgetConfigResponse>;
+    updateWidgetConfig(request: UpdateWidgetConfigRequest, metadata?: Metadata): Observable<UpdateWidgetConfigResponse>;
     getDocumentUploadUrl(request: GetDocumentUploadUrlRequest, metadata?: Metadata): Observable<GetDocumentUploadUrlResponse>;
     confirmDocumentUpload(request: ConfirmDocumentUploadRequest, metadata?: Metadata): Observable<ConfirmDocumentUploadResponse>;
     listDocuments(request: ListDocumentsRequest, metadata?: Metadata): Observable<ListDocumentsResponse>;
@@ -218,6 +230,7 @@ export interface KnowledgeServiceController {
     customerChat(request: CustomerChatRequest, metadata?: Metadata): Promise<CustomerChatResponse> | Observable<CustomerChatResponse> | CustomerChatResponse;
     getCustomerMessages(request: GetCustomerMessagesRequest, metadata?: Metadata): Promise<GetCustomerMessagesResponse> | Observable<GetCustomerMessagesResponse> | GetCustomerMessagesResponse;
     getWidgetConfig(request: GetWidgetConfigRequest, metadata?: Metadata): Promise<GetWidgetConfigResponse> | Observable<GetWidgetConfigResponse> | GetWidgetConfigResponse;
+    updateWidgetConfig(request: UpdateWidgetConfigRequest, metadata?: Metadata): Promise<UpdateWidgetConfigResponse> | Observable<UpdateWidgetConfigResponse> | UpdateWidgetConfigResponse;
     getDocumentUploadUrl(request: GetDocumentUploadUrlRequest, metadata?: Metadata): Promise<GetDocumentUploadUrlResponse> | Observable<GetDocumentUploadUrlResponse> | GetDocumentUploadUrlResponse;
     confirmDocumentUpload(request: ConfirmDocumentUploadRequest, metadata?: Metadata): Promise<ConfirmDocumentUploadResponse> | Observable<ConfirmDocumentUploadResponse> | ConfirmDocumentUploadResponse;
     listDocuments(request: ListDocumentsRequest, metadata?: Metadata): Promise<ListDocumentsResponse> | Observable<ListDocumentsResponse> | ListDocumentsResponse;

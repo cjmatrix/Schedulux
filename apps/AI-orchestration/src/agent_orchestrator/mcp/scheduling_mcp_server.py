@@ -548,11 +548,7 @@ async def book_appointment(
     if runtime.business_profile and runtime.business_profile.timezone:
         tz_str = runtime.business_profile.timezone
 
-    requires_otp = (
-        service_otp_override
-        if service_otp_override is not None
-        else global_otp
-    )
+    requires_otp = service_otp_override if service_otp_override is not None else global_otp
 
     if requires_otp:
         is_verified = await _check_session_verified(session_id, customer_phone)

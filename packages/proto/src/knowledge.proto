@@ -13,6 +13,7 @@ service KnowledgeService {
   rpc CustomerChat (CustomerChatRequest) returns (CustomerChatResponse);
   rpc GetCustomerMessages (GetCustomerMessagesRequest) returns (GetCustomerMessagesResponse);
   rpc GetWidgetConfig (GetWidgetConfigRequest) returns (GetWidgetConfigResponse);
+  rpc UpdateWidgetConfig (UpdateWidgetConfigRequest) returns (UpdateWidgetConfigResponse);
 
   rpc GetDocumentUploadUrl (GetDocumentUploadUrlRequest) returns (GetDocumentUploadUrlResponse);
   rpc ConfirmDocumentUpload (ConfirmDocumentUploadRequest) returns (ConfirmDocumentUploadResponse);
@@ -179,6 +180,19 @@ message GetWidgetConfigRequest {
 message GetWidgetConfigResponse {
   string tenant_id = 1;
   string agent_id = 2;
+  string widget_config_json = 3;
+}
+
+message UpdateWidgetConfigRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+  repeated string whitelisted_domains = 3;
+  optional string widget_config_json = 4;
+}
+
+message UpdateWidgetConfigResponse {
+  string message = 1;
+  bool success = 2;
   string widget_config_json = 3;
 }
 

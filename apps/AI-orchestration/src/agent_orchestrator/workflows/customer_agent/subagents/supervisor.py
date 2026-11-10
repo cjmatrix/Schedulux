@@ -117,6 +117,13 @@ async def classify_intent(
         logger.info("[Supervisor] Handoff topic detected → handoff")
         return ["handoff"]
 
+    stripped = message.strip()
+    if stripped.isdigit() and 4 <= len(stripped) <= 8:
+        logger.info(
+            "[Supervisor] Numeric verification code detected → fast-path booking intent (<1ms)"
+        )
+        return ["booking"]
+
     model = _get_chat_model(temperature=0.0)
 
     prior: list[BaseMessage] = list(conversation_history)

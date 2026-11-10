@@ -348,7 +348,10 @@ async def process_customer_chat(
     }
 
     try:
-        final_state = await customer_orchestration_graph.ainvoke(initial_state)
+        final_state = await customer_orchestration_graph.ainvoke(
+            initial_state,
+            config={"recursion_limit": 8},
+        )
         response_text = final_state.get("response") or (
             "I'm sorry, I encountered a temporary issue while processing your request. "
             "Please try again in a moment."

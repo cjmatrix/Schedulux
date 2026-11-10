@@ -212,7 +212,10 @@ async def run_faq_agent(
     )
 
     try:
-        result = await agent.ainvoke({"messages": langchain_msgs})
+        result = await agent.ainvoke(
+            {"messages": langchain_msgs},
+            config={"recursion_limit": 6},
+        )
         return _extract_response_text(result)
     except Exception as e:
         logger.warning(
@@ -232,7 +235,10 @@ async def run_faq_agent(
                     tools=faq_tools,
                     prompt=SystemMessage(content=system_prompt),
                 )
-                result = await fallback_agent.ainvoke({"messages": langchain_msgs})
+                result = await fallback_agent.ainvoke(
+                    {"messages": langchain_msgs},
+                    config={"recursion_limit": 6},
+                )
                 logger.info("[FaqAgent] Successfully recovered using Gemini fallback!")
                 return _extract_response_text(result)
             except Exception as fb_err:

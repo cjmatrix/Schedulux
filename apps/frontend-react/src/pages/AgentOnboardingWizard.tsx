@@ -1,5 +1,5 @@
 import type { ResourceInfo, ServiceInfo } from '@repo/proto/scheduling';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useAgentOnboarding } from '../hooks/useAgentOnboarding.js';
 import {
@@ -49,12 +49,6 @@ export default function AgentOnboardingWizard() {
   const [rightViewMode, setRightViewMode] = useState<RightViewMode>('rules');
   const [canvasModule, setCanvasModule] = useState<CanvasModule>('all');
   const [copiedJson, setCopiedJson] = useState(false);
-
-  useEffect(() => {
-    if (!isLive && rightViewMode === 'sandbox') {
-      setRightViewMode('rules');
-    }
-  }, [isLive, rightViewMode]);
 
   const businessProfile = draftSchema?.business_profile || {};
   const clinicName = businessProfile.name || 'AI Scheduling Agent';
@@ -236,6 +230,7 @@ export default function AgentOnboardingWizard() {
                 tenantId={tenantId}
                 agentId={agentId}
                 widgetConfig={draftSchema?.widget_config as any}
+                isLive={isLive}
               />
             )}
 

@@ -6,6 +6,7 @@
       "dependsOn": [
         "RabbitMQ",
         "API Gateway",
+        "Customer API Gateway",
         "Identity & Tenant",
         "Scheduling & Inventory",
         "Frontend React",
@@ -37,6 +38,19 @@
       "label": "API Gateway",
       "type": "shell",
       "command": "pnpm dev:gateway",
+      "isBackground": true,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Customer API Gateway",
+      "type": "shell",
+      "command": "pnpm dev:customer-gateway",
       "isBackground": true,
       "presentation": {
         "echo": true,

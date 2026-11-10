@@ -283,9 +283,25 @@ export class BookingEntity {
     this._updatedAt = new Date();
   }
 
-  complete(): void {
-    this._status = 'completed';
+  updateStatus(newStatus: BookingStatus, reason?: string, updatedBy?: string): void {
+    if (this._status === 'cancelled' && newStatus !== 'cancelled') {
+      throw new Error('Cannot change status of a cancelled booking');
+    }
+    if (this._status === newStatus) {
+      return;
+    }
+    this._status = newStatus;
+    if (reason?.trim()) {
+      const prefix = updatedBy ? `[Updated by ${updatedBy}] ` : '';
+      this._notes = this._notes
+        ? `${this._notes} | ${prefix}${reason.trim()}`
+        : `${prefix}${reason.trim()}`;
+    }
     this._updatedAt = new Date();
+  }
+
+  complete(reason?: string, completedBy?: string): void {
+    this.updateStatus('completed', reason, completedBy);
   }
 
   softDelete(): void {

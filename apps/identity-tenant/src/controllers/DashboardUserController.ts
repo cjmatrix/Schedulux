@@ -1,6 +1,8 @@
 import { Controller, Inject, UseFilters } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import {
+  AcceptInvitationRequest,
+  AcceptInvitationResponse,
   DashboardUserForgotPasswordRequest,
   DashboardUserForgotPasswordResponse,
   DashboardUserLoginRequest,
@@ -11,6 +13,8 @@ import {
   DashboardUserRefreshTokenResponse,
   DashboardUserResetPasswordRequest,
   DashboardUserResetPasswordResponse,
+  GetInvitationDetailsRequest,
+  GetInvitationDetailsResponse,
   InviteUserRequest,
   InviteUserResponse,
   ListWorkspaceUsersRequest,
@@ -67,17 +71,36 @@ export class DashboardUserController {
     return await this._dashboardUserService.resetPassword(data.token, data.new_password);
   }
 
+  @GrpcMethod(GRPC_SERVICES.DASHBOARD_AUTH, GRPC_METHODS.DASHBOARD_AUTH.ACCEPT_INVITATION)
+  async acceptInvitation(data: AcceptInvitationRequest): Promise<AcceptInvitationResponse> {
+    if (!data.token || !data.password) {
+      throw new Error(RESPONSE_MESSAGES.ERRORS.TOKEN_AND_NEW_PASSWORD_REQUIRED);
+    }
+    return await this._dashboardUserService.acceptInvitation(data);
+  }
+
+  @GrpcMethod(GRPC_SERVICES.DASHBOARD_AUTH, GRPC_METHODS.DASHBOARD_AUTH.GET_INVITATION_DETAILS)
+  async getInvitationDetails(
+    data: GetInvitationDetailsRequest,
+  ): Promise<GetInvitationDetailsResponse> {
+    if (!data.token) {
+      throw new Error(RESPONSE_MESSAGES.ERRORS.MISSING_REQUIRED_FIELDS);
+    }
+    return await this._dashboardUserService.getInvitationDetails(data.token);
+  }
+
   @GrpcMethod(GRPC_SERVICES.DASHBOARD_USER, GRPC_METHODS.DASHBOARD_USER.INVITE_USER)
   async inviteUser(data: InviteUserRequest): Promise<InviteUserResponse> {
-    const { tenant_id, email, name, system_role } = data;
-    if (!tenant_id || !email || !name) {
+    const { tenant_id, email, name, system_role, agent_id } = data;
+    if (!tenant_id || !email || !name || !agent_id) {
       throw new Error(RESPONSE_MESSAGES.ERRORS.MISSING_REQUIRED_FIELDS);
     }
     return await this._tenantService.inviteUser({
       tenant_id,
       email,
       name,
-      system_role: system_role as 'root' | 'manager',
+      system_role: 'manager',
+      agent_id,
     });
   }
 

@@ -5,6 +5,7 @@ import {
   Inject,
   OnModuleInit,
   Post,
+  Query,
   Req,
   Res,
   UnauthorizedException,
@@ -25,10 +26,12 @@ import {
   getRefreshTokenCookieOptions,
 } from '../../utils/cookie.util.js';
 import {
+  AcceptInvitationDto,
   DashboardUserForgotPasswordDto,
   DashboardUserLoginDto,
   DashboardUserRefreshTokenDto,
   DashboardUserResetPasswordDto,
+  GetInvitationDetailsDto,
 } from './dtos/dashboard-user.dto.js';
 
 @Controller(API_ROUTES.DASHBOARD_USER.AUTH.BASE)
@@ -110,6 +113,35 @@ export class DashboardUserAuthController implements OnModuleInit {
     return {
       message: response.message,
       data: null,
+    };
+  }
+
+  @Post(API_ROUTES.DASHBOARD_USER.AUTH.ACCEPT_INVITE)
+  @UsePipes(ZodValidationPipe)
+  async acceptInvitation(@Body() body: AcceptInvitationDto) {
+    const response = await lastValueFrom(
+      this._dashboardUserAuthClient.acceptInvitation({
+        token: body.token,
+        password: body.password,
+      }),
+    );
+    return {
+      message: response.message,
+      data: response.user,
+    };
+  }
+
+  @Get(API_ROUTES.DASHBOARD_USER.AUTH.INVITATION_INFO)
+  @UsePipes(ZodValidationPipe)
+  async getInvitationDetails(@Query() query: GetInvitationDetailsDto) {
+    const response = await lastValueFrom(
+      this._dashboardUserAuthClient.getInvitationDetails({
+        token: query.token,
+      }),
+    );
+    return {
+      message: 'Invitation details retrieved successfully',
+      data: response,
     };
   }
 

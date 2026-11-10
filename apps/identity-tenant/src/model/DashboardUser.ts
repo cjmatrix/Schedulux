@@ -4,21 +4,23 @@ import { nanoid } from 'nanoid';
 export interface IDashboardUser extends Document<string> {
   _id: string;
   tenant_id: string;
+  agent_id: string;
   email: string;
   password_hash: string;
   name: string;
-  system_role: 'root' | 'manager';
+  system_role: 'manager';
   created_at: Date;
 }
 
 const DashboardUserSchema = new Schema<IDashboardUser>(
   {
     _id: { type: String },
-    tenant_id: { type: String, required: true },
+    tenant_id: { type: String, required: true, index: true },
+    agent_id: { type: String, required: true, index: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password_hash: { type: String, required: true },
     name: { type: String, required: true },
-    system_role: { type: String, enum: ['root', 'manager'], required: true },
+    system_role: { type: String, enum: ['manager'], default: 'manager', required: true },
   },
   {
     timestamps: { createdAt: 'created_at', updatedAt: false },

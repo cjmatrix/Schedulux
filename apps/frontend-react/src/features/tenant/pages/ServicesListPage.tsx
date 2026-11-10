@@ -19,11 +19,19 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Pagination } from '../../../components/Pagination';
 import useDebounceHook from '../../../shared/hooks/useDebounceHook';
+import { useAuthStore } from '../../../store/useAuthStore';
+import { useTenantAgents } from '../hooks/useKnowledgeDocuments';
 import { useDeleteService, useServicesList } from '../hooks/useServices';
 
 export default function ServicesListPage() {
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId?: string }>();
+  const authUser = useAuthStore((state) => state.user);
+  const isManager = authUser?.system_role === 'manager';
+  const { data: agents = [] } = useTenantAgents();
+
+  const effectiveAgentId =
+    agentId || authUser?.agent_id || (agents.length > 0 ? agents[0].agent_id : undefined);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -43,13 +51,16 @@ export default function ServicesListPage() {
     isLoading,
     refetch,
     isRefetching,
-  } = useServicesList({
-    page,
-    limit,
-    category: selectedCategory === 'all' ? undefined : selectedCategory,
-    agent_id: agentId,
-    search: debouncedSearch.trim() || undefined,
-  });
+  } = useServicesList(
+    {
+      page,
+      limit,
+      category: selectedCategory === 'all' ? undefined : selectedCategory,
+      agent_id: effectiveAgentId,
+      search: debouncedSearch.trim() || undefined,
+    },
+    { enabled: true },
+  );
 
   const deleteServiceMutation = useDeleteService();
 
@@ -78,7 +89,13 @@ export default function ServicesListPage() {
     <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6 font-sans text-slate-800">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 tracking-wide">
-        {agentId ? (
+        {isManager ? (
+          <>
+            <span>Operations</span>
+            <span>/</span>
+            <span className="text-slate-800 font-bold">Services & Pricing</span>
+          </>
+        ) : agentId ? (
           <>
             <button
               onClick={() => navigate('/tenant/agents')}
@@ -112,15 +129,17 @@ export default function ServicesListPage() {
           <div className="flex items-center gap-3 mb-1">
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
               <Tag className="w-8 h-8 text-neutral-900" />
-              {agentId ? 'Agent Services & Pricing' : 'Services & Pricing Catalog'}
+              {agentId || (isManager && effectiveAgentId)
+                ? 'Agent Services & Pricing'
+                : 'Services & Pricing Catalog'}
             </h1>
             <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-0.5 rounded-full font-bold">
               {totalCount} Total
             </span>
           </div>
           <p className="text-sm text-slate-500">
-            {agentId
-              ? `Configure execution durations, fees, and rules for AI agent: ${agentId}`
+            {agentId || (isManager && effectiveAgentId)
+              ? `Configure execution durations, fees, and rules for AI agent: ${effectiveAgentId}`
               : 'Configure execution durations, fee schedules, OTP verification, and multi-resource allocation rules.'}
           </p>
         </div>
@@ -135,9 +154,15 @@ export default function ServicesListPage() {
             <RefreshCw className={`w-4 h-4 ${isRefetching ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={() =>
-              navigate(agentId ? `/tenant/agents/${agentId}/services/new` : '/tenant/services/new')
-            }
+            onClick={() => {
+              if (isManager) {
+                navigate('/dashboarduser/tenant/services/new');
+              } else if (agentId) {
+                navigate(`/tenant/agents/${agentId}/services/new`);
+              } else {
+                navigate('/tenant/services/new');
+              }
+            }}
             className="flex items-center gap-2 bg-slate-950 hover:bg-black text-white px-5 py-2.5 rounded-xl font-semibold text-xs shadow-xs transition active:scale-98 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
@@ -331,13 +356,15 @@ export default function ServicesListPage() {
                 {/* Card Actions */}
                 <div className="flex items-center gap-2 pt-2">
                   <button
-                    onClick={() =>
-                      navigate(
-                        agentId
-                          ? `/tenant/agents/${agentId}/services/${service.service_id}`
-                          : `/tenant/services/${service.service_id}`,
-                      )
-                    }
+                    onClick={() => {
+                      if (isManager) {
+                        navigate(`/dashboarduser/tenant/services/${service.service_id}`);
+                      } else if (agentId) {
+                        navigate(`/tenant/agents/${agentId}/services/${service.service_id}`);
+                      } else {
+                        navigate(`/tenant/services/${service.service_id}`);
+                      }
+                    }}
                     className="flex-1 py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-800 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 border border-slate-200 transition cursor-pointer"
                   >
                     <Edit className="w-3.5 h-3.5 text-slate-600" />

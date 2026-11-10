@@ -44,16 +44,29 @@ let DashboardUserController = class DashboardUserController {
             throw new Error(RESPONSE_MESSAGES.ERRORS.TOKEN_AND_NEW_PASSWORD_REQUIRED);
         return await this._dashboardUserService.resetPassword(data.token, data.new_password);
     }
+    async acceptInvitation(data) {
+        if (!data.token || !data.password) {
+            throw new Error(RESPONSE_MESSAGES.ERRORS.TOKEN_AND_NEW_PASSWORD_REQUIRED);
+        }
+        return await this._dashboardUserService.acceptInvitation(data);
+    }
+    async getInvitationDetails(data) {
+        if (!data.token) {
+            throw new Error(RESPONSE_MESSAGES.ERRORS.MISSING_REQUIRED_FIELDS);
+        }
+        return await this._dashboardUserService.getInvitationDetails(data.token);
+    }
     async inviteUser(data) {
-        const { tenant_id, email, name, system_role } = data;
-        if (!tenant_id || !email || !name) {
+        const { tenant_id, email, name, system_role, agent_id } = data;
+        if (!tenant_id || !email || !name || !agent_id) {
             throw new Error(RESPONSE_MESSAGES.ERRORS.MISSING_REQUIRED_FIELDS);
         }
         return await this._tenantService.inviteUser({
             tenant_id,
             email,
             name,
-            system_role: system_role,
+            system_role: 'manager',
+            agent_id,
         });
     }
     async listWorkspaceUsers(data) {
@@ -92,6 +105,18 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], DashboardUserController.prototype, "resetPassword", null);
+__decorate([
+    GrpcMethod(GRPC_SERVICES.DASHBOARD_AUTH, GRPC_METHODS.DASHBOARD_AUTH.ACCEPT_INVITATION),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], DashboardUserController.prototype, "acceptInvitation", null);
+__decorate([
+    GrpcMethod(GRPC_SERVICES.DASHBOARD_AUTH, GRPC_METHODS.DASHBOARD_AUTH.GET_INVITATION_DETAILS),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], DashboardUserController.prototype, "getInvitationDetails", null);
 __decorate([
     GrpcMethod(GRPC_SERVICES.DASHBOARD_USER, GRPC_METHODS.DASHBOARD_USER.INVITE_USER),
     __metadata("design:type", Function),

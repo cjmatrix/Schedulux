@@ -1,7 +1,9 @@
 import amqp, { Channel, ChannelModel, ConsumeMessage } from 'amqplib';
 import {
   BookingCancelledSmsData,
+  BookingCompletedSmsData,
   BookingCreatedSmsData,
+  BookingRescheduledSmsData,
   OtpSmsData,
   RawSmsData,
   smsService,
@@ -88,6 +90,26 @@ export const createSmsWorker = async (): Promise<SmsWorkerController> => {
                 start_time: payload.start_time || payload.startTime,
                 booking_reference: payload.booking_reference || payload.bookingReference || payload.booking_id,
               } as BookingCancelledSmsData);
+              break;
+
+            case 'send-booking-rescheduled':
+              await smsService.sendBookingRescheduledSms({
+                to: payload.phone || payload.to,
+                customer_name: payload.customer_name || payload.customerName,
+                service_name: payload.service_name || payload.serviceName,
+                new_start_time: payload.new_start_time || payload.start_time || payload.startTime,
+                previous_start_time: payload.previous_start_time || payload.previousStartTime,
+                booking_reference: payload.booking_reference || payload.bookingReference || payload.booking_id,
+              } as BookingRescheduledSmsData);
+              break;
+
+            case 'send-booking-completed':
+              await smsService.sendBookingCompletedSms({
+                to: payload.phone || payload.to,
+                customer_name: payload.customer_name || payload.customerName,
+                service_name: payload.service_name || payload.serviceName,
+                booking_reference: payload.booking_reference || payload.bookingReference || payload.booking_id,
+              } as BookingCompletedSmsData);
               break;
 
             case 'send-sms':

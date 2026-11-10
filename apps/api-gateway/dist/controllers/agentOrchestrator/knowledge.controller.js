@@ -571,6 +571,7 @@ __decorate([
 ], KnowledgeController.prototype, "saveInitialDraft", null);
 __decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.AGENTS),
+    (0, roles_decorator_js_1.Roles)('tenant_owner', 'manager'),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -657,7 +658,7 @@ __decorate([
 exports.KnowledgeController = KnowledgeController = __decorate([
     (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.BASE),
     (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),
-    (0, roles_decorator_js_1.Roles)('tenant_owner', 'root'),
+    (0, roles_decorator_js_1.Roles)('tenant_owner'),
     __param(0, (0, common_1.Inject)('KNOWLEDGE_PACKAGE')),
     __param(1, (0, common_1.Inject)('ISchemaCacheService')),
     __metadata("design:paramtypes", [Object, Object])

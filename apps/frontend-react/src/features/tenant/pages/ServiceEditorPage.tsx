@@ -15,7 +15,9 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { useAuthStore } from '../../../store/useAuthStore';
 import type { CreateServicePayload, UpdateServicePayload } from '../api/servicesApi';
+import { useTenantAgents } from '../hooks/useKnowledgeDocuments';
 import {
   useCreateResource,
   useCreateService,
@@ -32,6 +34,9 @@ interface ServiceEditorPageProps {
 export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPageProps) {
   const navigate = useNavigate();
   const { id: serviceIdFromParams, agentId } = useParams<{ id: string; agentId?: string }>();
+  const authUser = useAuthStore((state) => state.user);
+  const isManager = authUser?.system_role === 'manager';
+  const { data: agents = [] } = useTenantAgents();
 
   const isCreateMode = mode === 'create' || !serviceIdFromParams || serviceIdFromParams === 'new';
 
@@ -39,7 +44,21 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
     isCreateMode ? undefined : serviceIdFromParams,
   );
 
-  const effectiveAgentId = agentId || serviceResponse?.data?.agent_id || '';
+  const effectiveAgentId =
+    agentId ||
+    authUser?.agent_id ||
+    serviceResponse?.data?.agent_id ||
+    (agents.length > 0 ? agents[0].agent_id : '');
+
+  const navigateToServices = () => {
+    if (isManager) {
+      navigate('/dashboarduser/tenant/services');
+    } else if (effectiveAgentId) {
+      navigate(`/tenant/agents/${effectiveAgentId}/services`);
+    } else {
+      navigate('/tenant/services');
+    }
+  };
 
   const { data: resourcesResponse } = useResourcesList(
     effectiveAgentId ? { agent_id: effectiveAgentId } : undefined,
@@ -82,7 +101,7 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
   } | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
-  // Populate existing data when editing
+
   useEffect(() => {
     if (!isCreateMode && serviceResponse?.data) {
       const s = serviceResponse.data;
@@ -205,11 +224,13 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
         const res = await createServiceMutation.mutateAsync(payload);
         setFeedbackMessage({ type: 'success', text: 'Service created successfully!' });
         setTimeout(() => {
-          navigate(
-            effectiveAgentId
-              ? `/tenant/agents/${effectiveAgentId}/services/${res.data.service_id}`
-              : `/tenant/services/${res.data.service_id}`,
-          );
+          if (isManager) {
+            navigate(`/dashboarduser/tenant/services/${res.data.service_id}`);
+          } else if (effectiveAgentId) {
+            navigate(`/tenant/agents/${effectiveAgentId}/services/${res.data.service_id}`);
+          } else {
+            navigate(`/tenant/services/${res.data.service_id}`);
+          }
         }, 600);
       } else {
         await updateServiceMutation.mutateAsync({
@@ -229,9 +250,7 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
     if (!serviceIdFromParams) return;
     try {
       await deleteServiceMutation.mutateAsync(serviceIdFromParams);
-      navigate(
-        effectiveAgentId ? `/tenant/agents/${effectiveAgentId}/services` : '/tenant/services',
-      );
+      navigateToServices();
     } catch (err: unknown) {
       setFeedbackMessage({
         type: 'error',
@@ -326,20 +345,14 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
         <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
           <button
             type="button"
-            onClick={() =>
-              navigate(
-                effectiveAgentId
-                  ? `/tenant/agents/${effectiveAgentId}/services`
-                  : '/tenant/services',
-              )
-            }
+            onClick={navigateToServices}
             className="flex items-center gap-1.5 text-slate-700 hover:text-black font-semibold cursor-pointer transition"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back</span>
           </button>
           <span>/</span>
-          {effectiveAgentId && (
+          {!isManager && effectiveAgentId && (
             <>
               <span
                 onClick={() => navigate(`/tenant/agents/${effectiveAgentId}/dashboard`)}
@@ -351,13 +364,7 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
             </>
           )}
           <span
-            onClick={() =>
-              navigate(
-                effectiveAgentId
-                  ? `/tenant/agents/${effectiveAgentId}/services`
-                  : '/tenant/services',
-              )
-            }
+            onClick={navigateToServices}
             className="hover:text-slate-600 cursor-pointer transition"
           >
             Services & Pricing

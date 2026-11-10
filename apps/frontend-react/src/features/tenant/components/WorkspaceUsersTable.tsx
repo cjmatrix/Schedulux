@@ -6,7 +6,8 @@ export interface WorkspaceUser {
   user_id: string;
   name: string;
   email: string;
-  system_role: 'root' | 'manager';
+  system_role: 'manager' | 'owner';
+  agent_id?: string;
   status: string;
   last_active: string;
 }
@@ -79,7 +80,7 @@ export function WorkspaceUsersTable({
                 </tr>
               ) : (
                 displayUsers.map((user) => {
-                  const isOwner = user.system_role === 'root';
+                  const isOwner = user.system_role === 'owner';
 
                   return (
                     <tr key={user.user_id} className="hover:bg-slate-50/60 transition-colors group">

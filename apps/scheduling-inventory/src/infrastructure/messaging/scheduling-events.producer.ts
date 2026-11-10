@@ -27,6 +27,8 @@ export type SchedulingEventType =
   | 'booking.created'
   | 'booking.cancelled'
   | 'booking.rescheduled'
+  | 'booking.completed'
+  | 'booking.status_updated'
   | 'schedule.updated';
 
 export interface BaseSchedulingEventPayload {
@@ -104,6 +106,7 @@ export interface BookingEventPayload extends BaseSchedulingEventPayload {
     reason?: string;
     previous_start_time?: string;
     previous_end_time?: string;
+    previous_status?: string;
   };
 }
 
@@ -618,6 +621,77 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
       entity,
       previousStartTime,
       previousEndTime,
+    );
+    await this.publishOutboxEvent(outboxDoc);
+  }
+
+  async createBookingStatusUpdatedOutboxEvent(
+    entity: BookingEntity,
+    previousStatus: string,
+    reason?: string,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc> {
+    const version = entity.updatedAt ? entity.updatedAt.getTime() : Date.now();
+    const eventId = `evt_bk_status_${entity.id}_${version}`;
+    const eventType = entity.status === 'completed' ? 'booking.completed' : 'booking.status_updated';
+    const payload: BookingEventPayload = {
+      event_id: eventId,
+      event_type: eventType,
+      tenant_id: entity.tenantId,
+      agent_id: entity.agentId,
+      booking_id: entity.id,
+      version,
+      timestamp: new Date().toISOString(),
+      data: {
+        booking_reference: entity.bookingReference,
+        service_id: entity.serviceId,
+        resource_id: entity.resourceId,
+        resource_ids: entity.resourceIds,
+        assigned_asset_ids: entity.assignedAssetIds,
+        customer_id: entity.customerId,
+        customer_name: entity.customerSnapshot.name,
+        customer_phone: entity.customerSnapshot.phone,
+        booking_mode: entity.bookingMode,
+        start_time: entity.startTime.toISOString(),
+        end_time: entity.endTime.toISOString(),
+        effective_end_time: entity.effectiveEndTime.toISOString(),
+        buffer_minutes: entity.bufferMinutes,
+        duration_minutes: entity.durationMinutes,
+        source: entity.source,
+        status: entity.status,
+        price: {
+          amount: entity.price.amount,
+          currency: entity.price.currency,
+        },
+        created_at: entity.createdAt.toISOString(),
+        reason: reason?.trim() || '',
+        previous_status: previousStatus,
+      },
+    };
+
+    return this._outboxRepository.saveEvent(
+      {
+        eventId,
+        aggregateType: 'booking',
+        aggregateId: entity.id,
+        eventType,
+        topic: KAFKA_SERVICE_TOPIC_BOOKINGS,
+        partitionKey: entity.tenantId,
+        payload,
+      },
+      session,
+    );
+  }
+
+  async emitBookingStatusUpdated(
+    entity: BookingEntity,
+    previousStatus: string,
+    reason?: string,
+  ): Promise<void> {
+    const outboxDoc = await this.createBookingStatusUpdatedOutboxEvent(
+      entity,
+      previousStatus,
+      reason,
     );
     await this.publishOutboxEvent(outboxDoc);
   }

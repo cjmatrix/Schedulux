@@ -29,3 +29,17 @@ export const DashboardUserResetPasswordSchema = z.object({
 });
 
 export class DashboardUserResetPasswordDto extends createZodDto(DashboardUserResetPasswordSchema) {}
+
+export const AcceptInvitationSchema = z.object({
+  token: z.string().min(1, 'Token is required'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+});
+
+export class AcceptInvitationDto extends createZodDto(AcceptInvitationSchema) {}
+
+export const GetInvitationDetailsSchema = z.object({
+  token: z.string().min(1, 'Token is required'),
+});
+
+export class GetInvitationDetailsDto extends createZodDto(GetInvitationDetailsSchema) {}
+

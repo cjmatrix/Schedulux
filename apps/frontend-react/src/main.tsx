@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import './index.css';
 import App from './App.tsx';
+import AcceptInvitePage from './features/dashboard-user/AcceptInvitePage.tsx';
 import { DashboardUserProtectedRoute } from './features/dashboard-user/components/DashboardUserProtectedRoute.tsx';
 import DashboardUserLoginPage from './features/dashboard-user/DashboardUserLoginPage.tsx';
 import AdminLayout from './features/superadmin/components/AdminLayout.tsx';
@@ -276,6 +277,10 @@ const router = createBrowserRouter([
     element: <Navigate to="/tenant/users" replace />,
   },
   {
+    path: '/dashboarduser/accept-invite',
+    element: <AcceptInvitePage />,
+  },
+  {
     path: '/dashboarduser',
     element: <DashboardUserProtectedRoute />,
     children: [
@@ -294,6 +299,34 @@ const router = createBrowserRouter([
           {
             path: 'customers',
             element: <CustomersPage />,
+          },
+          {
+            path: 'services',
+            element: <ServicesListPage />,
+          },
+          {
+            path: 'services/new',
+            element: <ServiceEditorPage mode="create" />,
+          },
+          {
+            path: 'services/:id',
+            element: <ServiceEditorPage mode="edit" />,
+          },
+          {
+            path: 'resources',
+            element: <ResourcesListPage />,
+          },
+          {
+            path: 'resources/new',
+            element: <ResourceEditorPage mode="create" />,
+          },
+          {
+            path: 'resources/:id',
+            element: <ResourceEditorPage mode="edit" />,
+          },
+          {
+            path: 'inventory',
+            element: <Navigate to="/dashboarduser/tenant/resources" replace />,
           },
         ],
       },

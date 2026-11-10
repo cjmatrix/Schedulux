@@ -132,6 +132,59 @@ export const startBookingEventsConsumer =
                   data.booking_reference || bookingId
                 }) to RabbitMQ '${SMS_QUEUE_NAME}'`,
               );
+            } else if (eventType === 'booking.rescheduled') {
+              const smsJobPayload = {
+                name: 'send-booking-rescheduled',
+                data: {
+                  phone: customerPhone,
+                  customer_name: data.customer_name || 'Customer',
+                  service_name: data.service_name || data.service_id || 'Appointment',
+                  new_start_time: data.start_time,
+                  previous_start_time: data.previous_start_time,
+                  booking_reference: data.booking_reference || bookingId,
+                  tenant_id: event.tenant_id,
+                  agent_id: event.agent_id,
+                },
+              };
+
+              rabbitChannel?.sendToQueue(
+                SMS_QUEUE_NAME,
+                Buffer.from(JSON.stringify(smsJobPayload)),
+                { persistent: true },
+              );
+
+              console.log(
+                `[BookingEventsConsumer] Forwarded 'booking.rescheduled' for ${customerPhone} (Ref: ${
+                  data.booking_reference || bookingId
+                }, New Time: ${data.start_time}) to RabbitMQ '${SMS_QUEUE_NAME}'`,
+              );
+            } else if (
+              eventType === 'booking.completed' ||
+              (eventType === 'booking.status_updated' && data.status === 'completed')
+            ) {
+              const smsJobPayload = {
+                name: 'send-booking-completed',
+                data: {
+                  phone: customerPhone,
+                  customer_name: data.customer_name || 'Customer',
+                  service_name: data.service_name || data.service_id || 'Appointment',
+                  booking_reference: data.booking_reference || bookingId,
+                  tenant_id: event.tenant_id,
+                  agent_id: event.agent_id,
+                },
+              };
+
+              rabbitChannel?.sendToQueue(
+                SMS_QUEUE_NAME,
+                Buffer.from(JSON.stringify(smsJobPayload)),
+                { persistent: true },
+              );
+
+              console.log(
+                `[BookingEventsConsumer] Forwarded 'booking.completed' for ${customerPhone} (Ref: ${
+                  data.booking_reference || bookingId
+                }) to RabbitMQ '${SMS_QUEUE_NAME}'`,
+              );
             }
           } catch (err: any) {
             console.error(

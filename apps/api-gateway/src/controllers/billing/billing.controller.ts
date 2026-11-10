@@ -22,6 +22,8 @@ import { lastValueFrom } from 'rxjs';
 import { API_ROUTES } from '../../constants/routes.constant.js';
 import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
 import { getTierConfig, STATIC_TIER_CONFIGS } from '../../constants/tiers.constant.js';
+import { Roles } from '../../decorators/roles.decorator.js';
+import { RolesGuard } from '../../guards/roles.guard.js';
 import { PaddleWebhookGuard } from '../../guards/paddle-webhook.guard.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
 import { RedisService } from '../../services/redis.service.js';
@@ -75,7 +77,8 @@ export class BillingController implements OnModuleInit {
   }
 
   @Get(API_ROUTES.TENANT.BILLING.SUBSCRIPTION)
-  @UseGuards(TenantAuthGuard)
+  @UseGuards(TenantAuthGuard, RolesGuard)
+  @Roles('tenant_owner')
   async getSubscription(@Req() req: AuthenticatedTenantRequest) {
     const tenantId = this._getTenantId(req);
 
@@ -139,7 +142,8 @@ export class BillingController implements OnModuleInit {
   }
 
   @Post(API_ROUTES.TENANT.BILLING.CHECKOUT)
-  @UseGuards(TenantAuthGuard)
+  @UseGuards(TenantAuthGuard, RolesGuard)
+  @Roles('tenant_owner')
   @UsePipes(ZodValidationPipe)
   @HttpCode(HttpStatus.OK)
   async createCheckout(

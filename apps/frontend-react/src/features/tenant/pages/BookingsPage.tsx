@@ -13,28 +13,40 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import useDebounceHook from '../../../shared/hooks/useDebounceHook';
+import { useAuthStore } from '../../../store/useAuthStore';
 import { BookingDetailsModal } from '../components/BookingDetailsModal';
 import { BookingsCalendarView } from '../components/BookingsCalendarView';
 import { BookingsTableView } from '../components/BookingsTableView';
 import { CancelBookingModal } from '../components/CancelBookingModal';
 import { CreateBookingModal } from '../components/CreateBookingModal';
 import { RescheduleBookingModal } from '../components/RescheduleBookingModal';
-import { useBookingsList } from '../hooks/useBookings';
+import { useBookingsList, useCompleteBooking } from '../hooks/useBookings';
 import { useTenantAgents } from '../hooks/useKnowledgeDocuments';
 import { useResourcesList, useServicesList } from '../hooks/useServices';
 
 export default function BookingsPage() {
+  const authUser = useAuthStore((state) => state.user);
+  const isManager = authUser?.system_role === 'manager';
   const { agentId: routeAgentId } = useParams<{ agentId?: string }>();
   const { data: agents = [] } = useTenantAgents();
-  const [selectedAgentId, setSelectedAgentId] = useState<string>(routeAgentId || 'all');
+  const [selectedAgentId, setSelectedAgentId] = useState<string>(
+    routeAgentId || authUser?.agent_id || 'all',
+  );
 
   useEffect(() => {
     if (routeAgentId) {
       setSelectedAgentId(routeAgentId);
+    } else if (authUser?.agent_id) {
+      setSelectedAgentId(authUser.agent_id);
+    } else if (agents.length > 0 && selectedAgentId === 'all' && isManager) {
+      setSelectedAgentId(agents[0].agent_id);
     }
-  }, [routeAgentId]);
+  }, [routeAgentId, authUser?.agent_id, agents, isManager, selectedAgentId]);
 
-  const activeAgentId = selectedAgentId === 'all' ? undefined : selectedAgentId;
+  const activeAgentId =
+    selectedAgentId === 'all' ? (isManager ? authUser?.agent_id : undefined) : selectedAgentId;
+  const currentEffectiveAgentId =
+    activeAgentId || authUser?.agent_id || (agents.length > 0 ? agents[0].agent_id : undefined);
 
   const [page, setPage] = useState<number>(1);
   const [limit, setLimit] = useState<number>(20);
@@ -78,15 +90,21 @@ export default function BookingsPage() {
     refetch: refetchBookings,
   } = useBookingsList(queryParams);
 
-  const { data: servicesResponse } = useServicesList({
-    agent_id: activeAgentId,
-    limit: 100,
-  });
+  const { data: servicesResponse } = useServicesList(
+    {
+      agent_id: currentEffectiveAgentId,
+      limit: 100,
+    },
+    { enabled: true },
+  );
 
-  const { data: resourcesResponse } = useResourcesList({
-    agent_id: activeAgentId,
-    limit: 100,
-  });
+  const { data: resourcesResponse } = useResourcesList(
+    {
+      agent_id: currentEffectiveAgentId,
+      limit: 100,
+    },
+    { enabled: true },
+  );
 
   const bookings = useMemo(() => bookingsResponse?.data || [], [bookingsResponse]);
   const pagination = useMemo(
@@ -147,6 +165,28 @@ export default function BookingsPage() {
     setBookingToReschedule(null);
     setBookingForDetails(null);
     refetchBookings();
+  };
+
+  const completeMutation = useCompleteBooking();
+
+  const handleBookingCompleted = (booking: BookingInfo) => {
+    const ref = booking.booking_reference || booking.booking_id.slice(-6).toUpperCase();
+    completeMutation.mutate(
+      {
+        bookingId: booking.booking_id,
+        agentId: booking.agent_id || currentEffectiveAgentId || '',
+      },
+      {
+        onSuccess: () => {
+          showToast(`Appointment ${ref} marked as completed!`);
+          setBookingForDetails(null);
+          refetchBookings();
+        },
+        onError: (err: unknown) => {
+          showToast(err instanceof Error ? err.message : 'Failed to complete booking.');
+        },
+      },
+    );
   };
 
   return (
@@ -332,7 +372,7 @@ export default function BookingsPage() {
         </div>
 
         <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
-          {agents.length > 0 && (
+          {!isManager && agents.length > 0 && (
             <div className="relative">
               <select
                 value={selectedAgentId}
@@ -384,6 +424,7 @@ export default function BookingsPage() {
           onSelectBooking={(b) => setBookingForDetails(b)}
           onReschedule={(b) => setBookingToReschedule(b)}
           onCancel={(b) => setBookingToCancel(b)}
+          onComplete={handleBookingCompleted}
           services={services}
           resources={resources}
         />
@@ -411,6 +452,7 @@ export default function BookingsPage() {
         resources={resources}
         onReschedule={(b) => setBookingToReschedule(b)}
         onCancel={(b) => setBookingToCancel(b)}
+        onComplete={handleBookingCompleted}
       />
 
       {/* Reschedule Booking Modal */}
@@ -418,7 +460,7 @@ export default function BookingsPage() {
         isOpen={!!bookingToReschedule}
         onClose={() => setBookingToReschedule(null)}
         booking={bookingToReschedule}
-        agentId={activeAgentId || bookingToReschedule?.agent_id || ''}
+        agentId={bookingToReschedule?.agent_id || currentEffectiveAgentId || ''}
         onSuccess={handleBookingRescheduled}
       />
 
@@ -427,7 +469,7 @@ export default function BookingsPage() {
         isOpen={!!bookingToCancel}
         onClose={() => setBookingToCancel(null)}
         booking={bookingToCancel}
-        agentId={activeAgentId || bookingToCancel?.agent_id || ''}
+        agentId={bookingToCancel?.agent_id || currentEffectiveAgentId || ''}
         onSuccess={handleBookingCancelled}
       />
 
@@ -436,7 +478,7 @@ export default function BookingsPage() {
         isOpen={isNewBookingModalOpen}
         onClose={() => setIsNewBookingModalOpen(false)}
         onBookingCreated={handleBookingCreated}
-        agentId={activeAgentId}
+        agentId={currentEffectiveAgentId}
       />
     </div>
   );

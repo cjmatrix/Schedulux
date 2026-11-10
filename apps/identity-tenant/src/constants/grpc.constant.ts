@@ -38,6 +38,8 @@ export const GRPC_METHODS = {
     REFRESH_TOKEN: 'RefreshToken',
     FORGOT_PASSWORD: 'ForgotPassword',
     RESET_PASSWORD: 'ResetPassword',
+    ACCEPT_INVITATION: 'AcceptInvitation',
+    GET_INVITATION_DETAILS: 'GetInvitationDetails',
   },
   DASHBOARD_USER: {
     INVITE_USER: 'InviteUser',

@@ -28,8 +28,7 @@ let DashboardUserRepository = class DashboardUserRepository extends BaseReposito
             query.$or = [{ name: regex }, { email: regex }];
         }
         if (role && role !== 'all') {
-            const mappedRole = role === 'owner' ? 'root' : role;
-            query.system_role = mappedRole;
+            query.system_role = role;
         }
         const skip = (page - 1) * limit;
         const [users, total_count] = await Promise.all([

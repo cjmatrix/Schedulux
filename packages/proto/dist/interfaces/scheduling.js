@@ -27,6 +27,7 @@ function SchedulingInventoryServiceControllerMethods() {
             "createBooking",
             "cancelBooking",
             "rescheduleBooking",
+            "updateBookingStatus",
             "getAvailability",
             "listBookings",
             "verifyCustomer",

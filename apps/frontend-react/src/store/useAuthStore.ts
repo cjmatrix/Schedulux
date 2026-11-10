@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 
-// Unified user interface combining both tenant and dashboard user fields
+
 export interface UserData {
   tenant_id: string;
+  agent_id?: string;
   business_name?: string;
   contact_email?: string;
   email?: string;
@@ -10,7 +11,7 @@ export interface UserData {
   tier?: string;
   status?: string;
   user_id?: string;
-  system_role?: 'owner' | 'root' | 'manager';
+  system_role?: 'owner' | 'manager';
   created_at?: string;
 }
 

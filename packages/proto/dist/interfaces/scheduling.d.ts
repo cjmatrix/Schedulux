@@ -300,6 +300,14 @@ export interface RescheduleBookingRequest {
     rescheduled_by?: string | undefined;
     notes?: string | undefined;
 }
+export interface UpdateBookingStatusRequest {
+    tenant_id: string;
+    booking_id: string;
+    agent_id: string;
+    status: string;
+    reason?: string | undefined;
+    updated_by?: string | undefined;
+}
 export interface ListBookingsRequest {
     tenant_id: string;
     page: number;
@@ -447,6 +455,7 @@ export interface SchedulingInventoryServiceClient {
     createBooking(request: CreateBookingRequest, metadata?: Metadata): Observable<BookingResponse>;
     cancelBooking(request: CancelBookingRequest, metadata?: Metadata): Observable<BookingResponse>;
     rescheduleBooking(request: RescheduleBookingRequest, metadata?: Metadata): Observable<BookingResponse>;
+    updateBookingStatus(request: UpdateBookingStatusRequest, metadata?: Metadata): Observable<BookingResponse>;
     getAvailability(request: GetAvailabilityRequest, metadata?: Metadata): Observable<GetAvailabilityResponse>;
     listBookings(request: ListBookingsRequest, metadata?: Metadata): Observable<ListBookingsResponse>;
     /** Customer Operations */
@@ -475,6 +484,7 @@ export interface SchedulingInventoryServiceController {
     createBooking(request: CreateBookingRequest, metadata?: Metadata): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
     cancelBooking(request: CancelBookingRequest, metadata?: Metadata): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
     rescheduleBooking(request: RescheduleBookingRequest, metadata?: Metadata): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
+    updateBookingStatus(request: UpdateBookingStatusRequest, metadata?: Metadata): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
     getAvailability(request: GetAvailabilityRequest, metadata?: Metadata): Promise<GetAvailabilityResponse> | Observable<GetAvailabilityResponse> | GetAvailabilityResponse;
     listBookings(request: ListBookingsRequest, metadata?: Metadata): Promise<ListBookingsResponse> | Observable<ListBookingsResponse> | ListBookingsResponse;
     /** Customer Operations */

@@ -15,6 +15,8 @@ export const RESPONSE_MESSAGES = {
     CREATED: 'Booking created successfully',
     CANCELLED: 'Booking cancelled successfully',
     RESCHEDULED: 'Booking rescheduled successfully',
+    STATUS_UPDATED: 'Booking status updated successfully',
+    COMPLETED: 'Booking marked as completed successfully',
   },
   INVENTORY: {
     BATCH_SYNC_SUCCESS: 'Batch sync completed successfully',

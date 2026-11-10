@@ -65,11 +65,9 @@ export default function TenantAgentsPage() {
     currentTenant?.business_name ||
     'Tenant Owner';
   const currentUserRole =
-    authUser?.system_role === 'root'
-      ? 'Root Admin'
-      : authUser?.system_role === 'manager'
-        ? 'Manager'
-        : 'Tenant Owner';
+    authUser?.system_role === 'manager'
+      ? 'Operations Manager'
+      : 'Tenant Owner';
   const userInitials = currentUserFullName.substring(0, 2).toUpperCase();
 
   const handleCopyId = (id: string, e: React.MouseEvent) => {

@@ -55,7 +55,7 @@ import { createTenantGrpcMetadata } from '../../utils/grpc-metadata.util.js';
 
 @Controller(API_ROUTES.KNOWLEDGE.BASE)
 @UseGuards(TenantAuthGuard, RolesGuard)
-@Roles('tenant_owner', 'root')
+@Roles('tenant_owner')
 export class KnowledgeController implements OnModuleInit {
   private _knowledgeService!: KnowledgeServiceClient;
 
@@ -453,6 +453,7 @@ export class KnowledgeController implements OnModuleInit {
   }
 
   @Get(API_ROUTES.KNOWLEDGE.AGENTS)
+  @Roles('tenant_owner', 'manager')
   async listAgents(@Req() req: AuthenticatedTenantRequest) {
     const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(

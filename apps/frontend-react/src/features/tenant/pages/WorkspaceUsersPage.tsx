@@ -33,7 +33,7 @@ export default function WorkspaceUsersPage() {
         user_id: u.user_id,
         name: u.name,
         email: u.email,
-        system_role: u.system_role as 'root' | 'manager',
+        system_role: (u.system_role || 'manager') as 'manager',
         status: 'active' as const,
         last_active: u.created_at ? new Date(u.created_at).toLocaleDateString() : 'Recently',
       }));

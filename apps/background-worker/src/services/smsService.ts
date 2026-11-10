@@ -21,6 +21,22 @@ export interface BookingCancelledSmsData {
   booking_reference?: string;
 }
 
+export interface BookingRescheduledSmsData {
+  to: string;
+  customer_name?: string;
+  service_name?: string;
+  new_start_time: string;
+  previous_start_time?: string;
+  booking_reference?: string;
+}
+
+export interface BookingCompletedSmsData {
+  to: string;
+  customer_name?: string;
+  service_name?: string;
+  booking_reference?: string;
+}
+
 export interface RawSmsData {
   to: string;
   body: string;
@@ -134,7 +150,12 @@ export class SmsService {
 
     const result = (await res.json()) as { sid?: string };
     const sid = result.sid || `SM_${Date.now()}`;
-    console.log(` [SmsService] SMS dispatched successfully to ${cleanedTo} (SID: ${sid})`);
+    console.log('\n─────────────────────────────────────────────────────────────────');
+    console.log('📱 [SmsService TWILIO LIVE DISPATCH]');
+    console.log(`   To:      ${cleanedTo}`);
+    console.log(`   SID:     ${sid}`);
+    console.log(`   Message: ${body}`);
+    console.log('─────────────────────────────────────────────────────────────────\n');
     return { success: true, sid, simulated: false };
   }
 
@@ -156,6 +177,22 @@ export class SmsService {
     const service = data.service_name || 'Appointment';
     const refText = data.booking_reference ? ` (Ref: ${data.booking_reference})` : '';
     const body = `${greeting}, your appointment for ${service} scheduled for ${data.start_time} has been cancelled.${refText}`;
+    return this.sendRawSms(data.to, body);
+  }
+
+  async sendBookingRescheduledSms(data: BookingRescheduledSmsData): Promise<SmsSendResult> {
+    const greeting = data.customer_name ? `Hi ${data.customer_name}` : 'Hi';
+    const service = data.service_name || 'Appointment';
+    const refText = data.booking_reference ? ` (Ref: ${data.booking_reference})` : '';
+    const body = `${greeting}, your appointment for ${service} has been rescheduled to ${data.new_start_time}.${refText} See you then!`;
+    return this.sendRawSms(data.to, body);
+  }
+
+  async sendBookingCompletedSms(data: BookingCompletedSmsData): Promise<SmsSendResult> {
+    const greeting = data.customer_name ? `Hi ${data.customer_name}` : 'Hi';
+    const service = data.service_name || 'Appointment';
+    const refText = data.booking_reference ? ` (Ref: ${data.booking_reference})` : '';
+    const body = `${greeting}, thank you for visiting us for your ${service} appointment!${refText} Your appointment is now marked as completed.`;
     return this.sendRawSms(data.to, body);
   }
 }

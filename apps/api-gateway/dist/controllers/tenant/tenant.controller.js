@@ -19,6 +19,8 @@ const rxjs_1 = require("rxjs");
 const cookies_constant_js_1 = require("../../constants/cookies.constant.js");
 const messages_constant_js_1 = require("../../constants/messages.constant.js");
 const routes_constant_js_1 = require("../../constants/routes.constant.js");
+const roles_decorator_js_1 = require("../../decorators/roles.decorator.js");
+const roles_guard_js_1 = require("../../guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
 const cookie_util_js_1 = require("../../utils/cookie.util.js");
 const tenant_dto_js_1 = require("./dtos/tenant.dto.js");
@@ -135,7 +137,8 @@ let TenantController = class TenantController {
             tenant_id: tenantId,
             email: body.email,
             name: body.name,
-            system_role: body.system_role,
+            system_role: 'manager',
+            agent_id: body.agent_id,
         }));
         return {
             message: response.message,
@@ -144,6 +147,7 @@ let TenantController = class TenantController {
                 email: response.email,
                 name: response.name,
                 system_role: response.system_role,
+                agent_id: response.agent_id,
             },
         };
     }
@@ -244,7 +248,8 @@ __decorate([
 ], TenantController.prototype, "resetPassword", null);
 __decorate([
     (0, common_1.Post)(routes_constant_js_1.API_ROUTES.TENANT.AUTH.INVITE_USER),
-    (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard),
+    (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),
+    (0, roles_decorator_js_1.Roles)('tenant_owner'),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Req)()),
@@ -255,7 +260,8 @@ __decorate([
 ], TenantController.prototype, "inviteUser", null);
 __decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.TENANT.AUTH.WORKSPACE_USERS),
-    (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard),
+    (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),
+    (0, roles_decorator_js_1.Roles)('tenant_owner'),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Query)()),

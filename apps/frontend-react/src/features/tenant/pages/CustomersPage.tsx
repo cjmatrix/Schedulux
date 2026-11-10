@@ -18,11 +18,19 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { TablePaginationFooter } from '../../../components/TablePaginationFooter';
 import useDebounceHook from '../../../shared/hooks/useDebounceHook';
+import { useAuthStore } from '../../../store/useAuthStore';
 import { useCustomersList } from '../hooks/useCustomers';
+import { useTenantAgents } from '../hooks/useKnowledgeDocuments';
 
 export default function CustomersPage() {
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId?: string }>();
+  const authUser = useAuthStore((state) => state.user);
+  const isManager = authUser?.system_role === 'manager';
+  const { data: agents = [] } = useTenantAgents();
+
+  const effectiveAgentId =
+    agentId || authUser?.agent_id || (agents.length > 0 ? agents[0].agent_id : undefined);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'verified' | 'guest'>('all');
@@ -42,12 +50,15 @@ export default function CustomersPage() {
     isLoading,
     refetch,
     isRefetching,
-  } = useCustomersList({
-    page,
-    limit,
-    agent_id: agentId,
-    search: debouncedSearch.trim() || undefined,
-  });
+  } = useCustomersList(
+    {
+      page,
+      limit,
+      agent_id: effectiveAgentId,
+      search: debouncedSearch.trim() || undefined,
+    },
+    { enabled: true },
+  );
 
   const rawCustomers = customersResponse?.data || [];
   const total = customersResponse?.pagination?.total ?? 0;
@@ -93,7 +104,13 @@ export default function CustomersPage() {
   return (
     <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6 font-sans text-slate-800">
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 tracking-wide">
-        {agentId ? (
+        {isManager ? (
+          <>
+            <span>Operations</span>
+            <span>/</span>
+            <span className="text-slate-900 font-bold">Customers</span>
+          </>
+        ) : agentId ? (
           <>
             <button
               onClick={() => navigate('/tenant/agents')}

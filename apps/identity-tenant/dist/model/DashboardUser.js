@@ -2,11 +2,12 @@ import { model, Schema } from 'mongoose';
 import { nanoid } from 'nanoid';
 const DashboardUserSchema = new Schema({
     _id: { type: String },
-    tenant_id: { type: String, required: true },
+    tenant_id: { type: String, required: true, index: true },
+    agent_id: { type: String, required: true, index: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password_hash: { type: String, required: true },
     name: { type: String, required: true },
-    system_role: { type: String, enum: ['root', 'manager'], required: true },
+    system_role: { type: String, enum: ['manager'], default: 'manager', required: true },
 }, {
     timestamps: { createdAt: 'created_at', updatedAt: false },
     versionKey: false,

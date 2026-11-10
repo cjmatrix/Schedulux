@@ -346,6 +346,15 @@ export interface RescheduleBookingRequest {
   notes?: string | undefined;
 }
 
+export interface UpdateBookingStatusRequest {
+  tenant_id: string;
+  booking_id: string;
+  agent_id: string;
+  status: string;
+  reason?: string | undefined;
+  updated_by?: string | undefined;
+}
+
 export interface ListBookingsRequest {
   tenant_id: string;
   page: number;
@@ -528,6 +537,8 @@ export interface SchedulingInventoryServiceClient {
 
   rescheduleBooking(request: RescheduleBookingRequest, metadata?: Metadata): Observable<BookingResponse>;
 
+  updateBookingStatus(request: UpdateBookingStatusRequest, metadata?: Metadata): Observable<BookingResponse>;
+
   getAvailability(request: GetAvailabilityRequest, metadata?: Metadata): Observable<GetAvailabilityResponse>;
 
   listBookings(request: ListBookingsRequest, metadata?: Metadata): Observable<ListBookingsResponse>;
@@ -624,6 +635,11 @@ export interface SchedulingInventoryServiceController {
     metadata?: Metadata,
   ): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
 
+  updateBookingStatus(
+    request: UpdateBookingStatusRequest,
+    metadata?: Metadata,
+  ): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
+
   getAvailability(
     request: GetAvailabilityRequest,
     metadata?: Metadata,
@@ -676,6 +692,7 @@ export function SchedulingInventoryServiceControllerMethods() {
       "createBooking",
       "cancelBooking",
       "rescheduleBooking",
+      "updateBookingStatus",
       "getAvailability",
       "listBookings",
       "verifyCustomer",

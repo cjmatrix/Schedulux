@@ -56,9 +56,15 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
   const urlAgentId =
     routeAgentId || location.pathname.match(/\/tenant\/agents\/([^/]+)/)?.[1] || null;
 
+  const userRole = authUser?.system_role;
   const { data: agents = [] } = useTenantAgents();
-  const currentAgent = agents.find((a) => a.agent_id === urlAgentId);
-  const currentAgentId = urlAgentId || (agents[0]?.agent_id ?? null);
+
+  const currentAgentId =
+    (userRole === 'manager' && authUser?.agent_id)
+      ? authUser.agent_id
+      : urlAgentId || (agents[0]?.agent_id ?? null);
+
+  const currentAgent = agents.find((a) => a.agent_id === currentAgentId);
 
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
@@ -67,25 +73,19 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
     });
   };
 
-  const userRole = authUser?.system_role;
-
   const NAV_ITEMS = ALL_NAV_ITEMS.filter((item) => {
     if (!userRole || userRole === 'owner') {
       return true;
     }
 
-    if (userRole === 'root') {
-      return item.path !== '/tenant/billing';
-    }
-
     if (userRole === 'manager') {
-      const hiddenForManager = [
-        '/tenant/users',
-        '/tenant/billing',
-        '/tenant/widget',
-        '/tenant/knowledge',
+      const allowedForManager = [
+        '/tenant/bookings',
+        '/tenant/services',
+        '/tenant/inventory',
+        '/tenant/customers',
       ];
-      return !hiddenForManager.includes(item.path);
+      return allowedForManager.includes(item.path);
     }
 
     return true;
@@ -103,14 +103,33 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
     currentTenant?.contact_email?.split('@')[0] ||
     'Workspace Member';
   const currentUserRole =
-    authUser?.system_role === 'root'
-      ? 'Root Admin'
-      : authUser?.system_role === 'manager'
-        ? 'Manager'
-        : 'Tenant Owner';
+    authUser?.system_role === 'manager'
+      ? 'Operations Manager'
+      : 'Tenant Owner';
   const userInitials = currentUserFullName.substring(0, 2).toUpperCase();
 
   const handleNavItemClick = (itemPath: string) => {
+    if (!isTenant) {
+      if (itemPath === '/tenant/bookings') {
+        navigate('/dashboarduser/tenant/bookings');
+        return;
+      }
+      if (itemPath === '/tenant/services') {
+        navigate('/dashboarduser/tenant/services');
+        return;
+      }
+      if (itemPath === '/tenant/customers') {
+        navigate('/dashboarduser/tenant/customers');
+        return;
+      }
+      if (itemPath === '/tenant/inventory') {
+        navigate('/dashboarduser/tenant/resources');
+        return;
+      }
+      navigate('/dashboarduser/tenant/bookings');
+      return;
+    }
+
     if (currentAgentId) {
       if (itemPath === '/tenant/bookings') {
         navigate(`/tenant/agents/${currentAgentId}/bookings`);
@@ -183,7 +202,14 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
               </div>
             </div>
 
-            {agents.length > 1 ? (
+            {userRole === 'manager' ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-200/60">
+                <Bot className="w-4 h-4 text-slate-900 shrink-0" />
+                <span className="truncate">
+                  {currentAgent?.name || (currentAgentId ? `Agent: ${currentAgentId.slice(-6)}` : 'Assigned Agent')}
+                </span>
+              </div>
+            ) : agents.length > 1 ? (
               <div className="relative">
                 <select
                   value={currentAgentId || ''}
@@ -217,7 +243,7 @@ export default function TenantLayout({ isTenant = true }: TenantLayoutProps) {
           </div>
 
           <nav className="p-3 flex flex-col gap-0.5">
-            {currentAgentId && (
+            {currentAgentId && userRole !== 'manager' && (
               <button
                 onClick={() => navigate(`/tenant/agents/${currentAgentId}/dashboard`)}
                 className={`w-full flex items-center justify-between px-3 py-2 mb-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${

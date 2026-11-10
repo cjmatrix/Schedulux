@@ -20,6 +20,7 @@ export const GRPC_METHODS = {
     CREATE_BOOKING: 'CreateBooking',
     CANCEL_BOOKING: 'CancelBooking',
     RESCHEDULE_BOOKING: 'RescheduleBooking',
+    UPDATE_BOOKING_STATUS: 'UpdateBookingStatus',
     GET_AVAILABILITY: 'GetAvailability',
     LIST_BOOKINGS: 'ListBookings',
     VERIFY_CUSTOMER: 'VerifyCustomer',

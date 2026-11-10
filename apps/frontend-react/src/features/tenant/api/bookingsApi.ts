@@ -119,4 +119,33 @@ export const bookingsApi = {
     );
     return data;
   },
+
+  updateBookingStatus: async (
+    bookingId: string,
+    payload: {
+      agent_id: string;
+      status: 'confirmed' | 'cancelled' | 'completed' | 'no_show';
+      reason?: string;
+    },
+  ): Promise<ApiResponse<BookingInfo>> => {
+    const { data } = await axiosClient.patch<ApiResponse<BookingInfo>>(
+      `/api/v1/tenant/scheduling/bookings/${bookingId}/status`,
+      payload,
+    );
+    return data;
+  },
+
+  completeBooking: async (
+    bookingId: string,
+    payload: {
+      agent_id: string;
+      reason?: string;
+    },
+  ): Promise<ApiResponse<BookingInfo>> => {
+    const { data } = await axiosClient.post<ApiResponse<BookingInfo>>(
+      `/api/v1/tenant/scheduling/bookings/${bookingId}/complete`,
+      payload,
+    );
+    return data;
+  },
 };

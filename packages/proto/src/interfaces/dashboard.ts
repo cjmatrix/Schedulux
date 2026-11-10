@@ -58,11 +58,34 @@ export interface DashboardUserResetPasswordResponse {
   message: string;
 }
 
+export interface AcceptInvitationRequest {
+  token: string;
+  password: string;
+}
+
+export interface AcceptInvitationResponse {
+  message: string;
+  user: WorkspaceUserInfo | undefined;
+}
+
+export interface GetInvitationDetailsRequest {
+  token: string;
+}
+
+export interface GetInvitationDetailsResponse {
+  email: string;
+  name: string;
+  business_name: string;
+  agent_id: string;
+  system_role: string;
+}
+
 export interface InviteUserRequest {
   tenant_id: string;
   email: string;
   name: string;
   system_role: string;
+  agent_id: string;
 }
 
 export interface InviteUserResponse {
@@ -71,6 +94,7 @@ export interface InviteUserResponse {
   email: string;
   name: string;
   system_role: string;
+  agent_id: string;
 }
 
 export interface WorkspaceUserInfo {
@@ -80,6 +104,7 @@ export interface WorkspaceUserInfo {
   name: string;
   system_role: string;
   created_at: string;
+  agent_id: string;
 }
 
 export interface ListWorkspaceUsersRequest {
@@ -116,6 +141,13 @@ export interface DashboardAuthServiceClient {
     request: DashboardUserResetPasswordRequest,
     metadata?: Metadata,
   ): Observable<DashboardUserResetPasswordResponse>;
+
+  acceptInvitation(request: AcceptInvitationRequest, metadata?: Metadata): Observable<AcceptInvitationResponse>;
+
+  getInvitationDetails(
+    request: GetInvitationDetailsRequest,
+    metadata?: Metadata,
+  ): Observable<GetInvitationDetailsResponse>;
 }
 
 export interface DashboardAuthServiceController {
@@ -152,11 +184,29 @@ export interface DashboardAuthServiceController {
     | Promise<DashboardUserResetPasswordResponse>
     | Observable<DashboardUserResetPasswordResponse>
     | DashboardUserResetPasswordResponse;
+
+  acceptInvitation(
+    request: AcceptInvitationRequest,
+    metadata?: Metadata,
+  ): Promise<AcceptInvitationResponse> | Observable<AcceptInvitationResponse> | AcceptInvitationResponse;
+
+  getInvitationDetails(
+    request: GetInvitationDetailsRequest,
+    metadata?: Metadata,
+  ): Promise<GetInvitationDetailsResponse> | Observable<GetInvitationDetailsResponse> | GetInvitationDetailsResponse;
 }
 
 export function DashboardAuthServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ["login", "getProfile", "refreshToken", "forgotPassword", "resetPassword"];
+    const grpcMethods: string[] = [
+      "login",
+      "getProfile",
+      "refreshToken",
+      "forgotPassword",
+      "resetPassword",
+      "acceptInvitation",
+      "getInvitationDetails",
+    ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
       GrpcMethod("DashboardAuthService", method)(constructor.prototype[method], method, descriptor);

@@ -38,11 +38,30 @@ export interface DashboardUserResetPasswordRequest {
 export interface DashboardUserResetPasswordResponse {
     message: string;
 }
+export interface AcceptInvitationRequest {
+    token: string;
+    password: string;
+}
+export interface AcceptInvitationResponse {
+    message: string;
+    user: WorkspaceUserInfo | undefined;
+}
+export interface GetInvitationDetailsRequest {
+    token: string;
+}
+export interface GetInvitationDetailsResponse {
+    email: string;
+    name: string;
+    business_name: string;
+    agent_id: string;
+    system_role: string;
+}
 export interface InviteUserRequest {
     tenant_id: string;
     email: string;
     name: string;
     system_role: string;
+    agent_id: string;
 }
 export interface InviteUserResponse {
     message: string;
@@ -50,6 +69,7 @@ export interface InviteUserResponse {
     email: string;
     name: string;
     system_role: string;
+    agent_id: string;
 }
 export interface WorkspaceUserInfo {
     user_id: string;
@@ -58,6 +78,7 @@ export interface WorkspaceUserInfo {
     name: string;
     system_role: string;
     created_at: string;
+    agent_id: string;
 }
 export interface ListWorkspaceUsersRequest {
     tenant_id: string;
@@ -77,6 +98,8 @@ export interface DashboardAuthServiceClient {
     refreshToken(request: DashboardUserRefreshTokenRequest, metadata?: Metadata): Observable<DashboardUserRefreshTokenResponse>;
     forgotPassword(request: DashboardUserForgotPasswordRequest, metadata?: Metadata): Observable<DashboardUserForgotPasswordResponse>;
     resetPassword(request: DashboardUserResetPasswordRequest, metadata?: Metadata): Observable<DashboardUserResetPasswordResponse>;
+    acceptInvitation(request: AcceptInvitationRequest, metadata?: Metadata): Observable<AcceptInvitationResponse>;
+    getInvitationDetails(request: GetInvitationDetailsRequest, metadata?: Metadata): Observable<GetInvitationDetailsResponse>;
 }
 export interface DashboardAuthServiceController {
     login(request: DashboardUserLoginRequest, metadata?: Metadata): Promise<DashboardUserLoginResponse> | Observable<DashboardUserLoginResponse> | DashboardUserLoginResponse;
@@ -84,6 +107,8 @@ export interface DashboardAuthServiceController {
     refreshToken(request: DashboardUserRefreshTokenRequest, metadata?: Metadata): Promise<DashboardUserRefreshTokenResponse> | Observable<DashboardUserRefreshTokenResponse> | DashboardUserRefreshTokenResponse;
     forgotPassword(request: DashboardUserForgotPasswordRequest, metadata?: Metadata): Promise<DashboardUserForgotPasswordResponse> | Observable<DashboardUserForgotPasswordResponse> | DashboardUserForgotPasswordResponse;
     resetPassword(request: DashboardUserResetPasswordRequest, metadata?: Metadata): Promise<DashboardUserResetPasswordResponse> | Observable<DashboardUserResetPasswordResponse> | DashboardUserResetPasswordResponse;
+    acceptInvitation(request: AcceptInvitationRequest, metadata?: Metadata): Promise<AcceptInvitationResponse> | Observable<AcceptInvitationResponse> | AcceptInvitationResponse;
+    getInvitationDetails(request: GetInvitationDetailsRequest, metadata?: Metadata): Promise<GetInvitationDetailsResponse> | Observable<GetInvitationDetailsResponse> | GetInvitationDetailsResponse;
 }
 export declare function DashboardAuthServiceControllerMethods(): (constructor: Function) => void;
 export declare const DASHBOARD_AUTH_SERVICE_NAME = "DashboardAuthService";

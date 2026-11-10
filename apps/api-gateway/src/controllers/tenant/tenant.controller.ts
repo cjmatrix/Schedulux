@@ -23,6 +23,8 @@ import { lastValueFrom } from 'rxjs';
 import { COOKIE_NAMES } from '../../constants/cookies.constant.js';
 import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
 import { API_ROUTES } from '../../constants/routes.constant.js';
+import { Roles } from '../../decorators/roles.decorator.js';
+import { RolesGuard } from '../../guards/roles.guard.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
 import {
   getAccessTokenCookieOptions,
@@ -204,7 +206,8 @@ export class TenantController implements OnModuleInit {
   }
 
   @Post(API_ROUTES.TENANT.AUTH.INVITE_USER)
-  @UseGuards(TenantAuthGuard)
+  @UseGuards(TenantAuthGuard, RolesGuard)
+  @Roles('tenant_owner')
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(ZodValidationPipe)
   async inviteUser(
@@ -217,7 +220,8 @@ export class TenantController implements OnModuleInit {
         tenant_id: tenantId,
         email: body.email,
         name: body.name,
-        system_role: body.system_role,
+        system_role: 'manager',
+        agent_id: body.agent_id,
       }),
     );
     return {
@@ -227,12 +231,14 @@ export class TenantController implements OnModuleInit {
         email: response.email,
         name: response.name,
         system_role: response.system_role,
+        agent_id: response.agent_id,
       },
     };
   }
 
   @Get(API_ROUTES.TENANT.AUTH.WORKSPACE_USERS)
-  @UseGuards(TenantAuthGuard)
+  @UseGuards(TenantAuthGuard, RolesGuard)
+  @Roles('tenant_owner')
   @UsePipes(ZodValidationPipe)
   async listWorkspaceUsers(
     @Req() req: AuthenticatedTenantRequest,

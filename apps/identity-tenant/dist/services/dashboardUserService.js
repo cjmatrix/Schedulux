@@ -60,6 +60,7 @@ let DashboardUserService = class DashboardUserService {
         const accessToken = this._jwtService.sign({
             user_id: user._id.toString(),
             tenant_id: user.tenant_id,
+            agent_id: user.agent_id,
             email: user.email,
             system_role: user.system_role,
             role: user.system_role,
@@ -77,6 +78,7 @@ let DashboardUserService = class DashboardUserService {
             user: {
                 user_id: user._id.toString(),
                 tenant_id: user.tenant_id,
+                agent_id: user.agent_id,
                 email: user.email,
                 name: user.name,
                 system_role: user.system_role,
@@ -98,6 +100,7 @@ let DashboardUserService = class DashboardUserService {
             user: {
                 user_id: user._id.toString(),
                 tenant_id: user.tenant_id,
+                agent_id: user.agent_id,
                 email: user.email,
                 name: user.name,
                 system_role: user.system_role,
@@ -182,6 +185,65 @@ let DashboardUserService = class DashboardUserService {
         await this._dashboardUserRepo.update(userId, { password_hash });
         await this._cacheRepo.delete(`dashboard_password_reset:${token}`);
         return { message: RESPONSE_MESSAGES.AUTH.PASSWORD_RESET_SUCCESS };
+    }
+    async acceptInvitation(data) {
+        if (!data.token || !data.password) {
+            throw new Error(RESPONSE_MESSAGES.ERRORS.TOKEN_AND_NEW_PASSWORD_REQUIRED);
+        }
+        const rawData = await this._cacheRepo.get(`dashboard_invitation:${data.token}`);
+        if (!rawData) {
+            throw new Error(RESPONSE_MESSAGES.ERRORS.INVALID_OR_EXPIRED_TOKEN);
+        }
+        let invite;
+        try {
+            invite = JSON.parse(rawData);
+        }
+        catch {
+            throw new Error(RESPONSE_MESSAGES.ERRORS.INVALID_OR_EXPIRED_TOKEN);
+        }
+        const existing = await this._dashboardUserRepo.findByEmail(invite.email.toLowerCase().trim());
+        if (existing) {
+            throw new Error(RESPONSE_MESSAGES.ERRORS.USER_ALREADY_EXISTS);
+        }
+        const password_hash = await this._passwordHasher.hash(data.password, 10);
+        const user = await this._dashboardUserRepo.create({
+            tenant_id: invite.tenant_id,
+            agent_id: invite.agent_id,
+            email: invite.email.toLowerCase().trim(),
+            name: invite.name.trim(),
+            password_hash,
+            system_role: 'manager',
+        });
+        await this._cacheRepo.delete(`dashboard_invitation:${data.token}`);
+        return {
+            message: 'Account created successfully! You can now log in.',
+            user: {
+                user_id: user._id.toString(),
+                tenant_id: user.tenant_id,
+                agent_id: user.agent_id,
+                email: user.email,
+                name: user.name,
+                system_role: user.system_role,
+                created_at: user.created_at ? user.created_at.toISOString() : new Date().toISOString(),
+            },
+        };
+    }
+    async getInvitationDetails(token) {
+        if (!token) {
+            throw new Error(RESPONSE_MESSAGES.ERRORS.MISSING_REQUIRED_FIELDS);
+        }
+        const rawData = await this._cacheRepo.get(`dashboard_invitation:${token}`);
+        if (!rawData) {
+            throw new Error(RESPONSE_MESSAGES.ERRORS.INVALID_OR_EXPIRED_TOKEN);
+        }
+        const invite = JSON.parse(rawData);
+        return {
+            email: invite.email,
+            name: invite.name,
+            business_name: invite.business_name || '',
+            agent_id: invite.agent_id || '',
+            system_role: invite.system_role || 'manager',
+        };
     }
 };
 DashboardUserService = __decorate([

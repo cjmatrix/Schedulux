@@ -52,9 +52,7 @@ let TenantAuthGuard = class TenantAuthGuard {
             if (decoded.role === 'tenant_owner') {
                 request.tenant = decoded;
             }
-            else if (decoded.role === 'root' ||
-                decoded.role === 'manager' ||
-                decoded.role === 'dashboard_user') {
+            else if (decoded.role === 'manager') {
                 request.dashboardUser = decoded;
             }
             else {

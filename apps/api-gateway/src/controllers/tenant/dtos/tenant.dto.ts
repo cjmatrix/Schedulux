@@ -56,9 +56,10 @@ export class LogoutDto extends createZodDto(LogoutSchema) {}
 
 export const InviteUserSchema = z.object({
   tenant_id: z.string().optional(),
+  agent_id: z.string().min(1, 'Agent ID is required'),
   email: z.string().trim().email('Please provide a valid email address'),
   name: z.string().trim().min(2, 'Name must be at least 2 characters'),
-  system_role: z.string().min(1, 'System role is required'),
+  system_role: z.string().default('manager'),
 });
 
 export class InviteUserDto extends createZodDto(InviteUserSchema) {}

@@ -8,6 +8,7 @@ import {
   Inject,
   OnModuleInit,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -32,9 +33,11 @@ import { createTenantGrpcMetadata } from '../../utils/grpc-metadata.util.js';
 import { GetAvailabilityQueryDto } from './dtos/availability.dto.js';
 import {
   CancelBookingDto,
+  CompleteBookingDto,
   CreateBookingDto,
   ListBookingsQueryDto,
   RescheduleBookingDto,
+  UpdateBookingStatusDto,
 } from './dtos/booking.dto.js';
 import {
   CreateResourceDto,
@@ -50,7 +53,7 @@ import { ListCustomersQueryDto } from './dtos/customer.dto.js';
 
 @Controller(API_ROUTES.SCHEDULING.BASE)
 @UseGuards(TenantAuthGuard, RolesGuard)
-@Roles('tenant_owner', 'root', 'manager', 'dashboard_user')
+@Roles('tenant_owner', 'manager')
 export class SchedulingController implements OnModuleInit {
   private _schedulingService!: SchedulingInventoryServiceClient;
 
@@ -74,6 +77,13 @@ export class SchedulingController implements OnModuleInit {
     return req.tenant?.tier || req.dashboardUser?.tier || 'starter';
   }
 
+  private _getEffectiveAgentId(req: AuthenticatedTenantRequest, requestedAgentId?: string): string {
+    if (req.dashboardUser?.agent_id) {
+      return req.dashboardUser.agent_id;
+    }
+    return requestedAgentId || '';
+  }
+
   @Post(API_ROUTES.SCHEDULING.SERVICES)
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(ZodValidationPipe)
@@ -86,7 +96,7 @@ export class SchedulingController implements OnModuleInit {
       this._schedulingService.createService(
         {
           tenant_id: tenantId,
-          agent_id: body.agent_id,
+          agent_id: this._getEffectiveAgentId(req, body.agent_id),
           name: body.name,
           category: body.category,
           description: body.description,
@@ -119,7 +129,7 @@ export class SchedulingController implements OnModuleInit {
         page: query.page,
         limit: query.limit,
         category: query.category || '',
-        agent_id: query.agent_id,
+        agent_id: this._getEffectiveAgentId(req, query.agent_id),
         search: query.search || undefined,
       }),
     );
@@ -212,7 +222,7 @@ export class SchedulingController implements OnModuleInit {
       this._schedulingService.createResource(
         {
           tenant_id: tenantId,
-          agent_id: body.agent_id,
+          agent_id: this._getEffectiveAgentId(req, body.agent_id),
           resource_type: body.resource_type,
           name: body.name,
           title: body.title,
@@ -247,7 +257,7 @@ export class SchedulingController implements OnModuleInit {
         resource_type: query.resource_type || '',
         dispatch_status: query.dispatch_status || '',
         category: query.category || undefined,
-        agent_id: query.agent_id,
+        agent_id: this._getEffectiveAgentId(req, query.agent_id),
         search: query.search || undefined,
       }),
     );
@@ -337,7 +347,7 @@ export class SchedulingController implements OnModuleInit {
         tenant_id: tenantId,
         page: query.page,
         limit: query.limit,
-        agent_id: query.agent_id,
+        agent_id: this._getEffectiveAgentId(req, query.agent_id),
         service_id: query.service_id,
         resource_id: query.resource_id,
         status: query.status,
@@ -367,7 +377,7 @@ export class SchedulingController implements OnModuleInit {
     const response = await lastValueFrom(
       this._schedulingService.createBooking({
         tenant_id: tenantId,
-        agent_id: body.agent_id,
+        agent_id: this._getEffectiveAgentId(req, body.agent_id),
         service_id: body.service_id,
         resource_id: body.resource_id,
         resource_ids: body.resource_ids ?? (body.resource_id ? [body.resource_id] : []),
@@ -402,7 +412,7 @@ export class SchedulingController implements OnModuleInit {
       this._schedulingService.cancelBooking({
         tenant_id: tenantId,
         booking_id: id,
-        agent_id: body.agent_id,
+        agent_id: this._getEffectiveAgentId(req, body.agent_id),
         reason: body.reason,
         cancelled_by: userId,
       }),
@@ -428,13 +438,67 @@ export class SchedulingController implements OnModuleInit {
       this._schedulingService.rescheduleBooking({
         tenant_id: tenantId,
         booking_id: id,
-        agent_id: body.agent_id,
+        agent_id: this._getEffectiveAgentId(req, body.agent_id),
         new_start_time: body.new_start_time,
         new_end_time: body.new_end_time,
         resource_id: body.resource_id,
         resource_ids: body.resource_ids ?? (body.resource_id ? [body.resource_id] : []),
         notes: body.notes,
         rescheduled_by: userId,
+      }),
+    );
+
+    return {
+      message: response.message,
+      data: response.booking,
+    };
+  }
+
+  @Patch(API_ROUTES.SCHEDULING.BOOKING_STATUS)
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(ZodValidationPipe)
+  async updateBookingStatus(
+    @Req() req: AuthenticatedTenantRequest,
+    @Param('id') id: string,
+    @Body() body: UpdateBookingStatusDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const userId = req.dashboardUser?.user_id || req.tenant?.tenant_id || '';
+    const response = await lastValueFrom(
+      this._schedulingService.updateBookingStatus({
+        tenant_id: tenantId,
+        booking_id: id,
+        agent_id: this._getEffectiveAgentId(req, body.agent_id),
+        status: body.status,
+        reason: body.reason,
+        updated_by: userId,
+      }),
+    );
+
+    return {
+      message: response.message,
+      data: response.booking,
+    };
+  }
+
+  @Post(API_ROUTES.SCHEDULING.BOOKING_COMPLETE)
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(ZodValidationPipe)
+  async completeBooking(
+    @Req() req: AuthenticatedTenantRequest,
+    @Param('id') id: string,
+    @Body() body: CompleteBookingDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const userId = req.dashboardUser?.user_id || req.tenant?.tenant_id || '';
+    const response = await lastValueFrom(
+      this._schedulingService.updateBookingStatus({
+        tenant_id: tenantId,
+        booking_id: id,
+        agent_id: this._getEffectiveAgentId(req, body.agent_id),
+        status: 'completed',
+        reason: body.reason,
+        updated_by: userId,
       }),
     );
 
@@ -457,7 +521,7 @@ export class SchedulingController implements OnModuleInit {
         service_id: query.service_id,
         start_date: query.start_date,
         end_date: query.end_date,
-        agent_id: query.agent_id,
+        agent_id: this._getEffectiveAgentId(req, query.agent_id),
         resource_id: query.resource_id,
         resource_ids: query.resource_ids || [],
         timezone: query.timezone,
@@ -480,7 +544,7 @@ export class SchedulingController implements OnModuleInit {
     const response = await lastValueFrom(
       this._schedulingService.getTenantSchedule({
         tenant_id: tenantId,
-        agent_id: query.agent_id || '',
+        agent_id: this._getEffectiveAgentId(req, query.agent_id),
       }),
     );
 
@@ -500,7 +564,7 @@ export class SchedulingController implements OnModuleInit {
     const response = await lastValueFrom(
       this._schedulingService.updateTenantSchedule({
         tenant_id: tenantId,
-        agent_id: body.agent_id,
+        agent_id: this._getEffectiveAgentId(req, body.agent_id),
         timezone: body.timezone,
         currency: body.currency,
         operating_hours: body.operating_hours,
@@ -526,7 +590,7 @@ export class SchedulingController implements OnModuleInit {
     const response = await lastValueFrom(
       this._schedulingService.listCustomers({
         tenant_id: tenantId,
-        agent_id: query.agent_id || '',
+        agent_id: this._getEffectiveAgentId(req, query.agent_id),
         page: query.page,
         limit: query.limit,
         search: query.search || '',

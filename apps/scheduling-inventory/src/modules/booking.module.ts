@@ -6,6 +6,7 @@ import {
   LIST_BOOKINGS_USE_CASE,
   LIST_CUSTOMERS_USE_CASE,
   RESCHEDULE_BOOKING_USE_CASE,
+  UPDATE_BOOKING_STATUS_USE_CASE,
   VERIFY_CUSTOMER_USE_CASE,
 } from '../application/interfaces/booking-use-cases.interface.js';
 import { BookingAllocationService } from '../application/services/booking-allocation.service.js';
@@ -14,6 +15,7 @@ import { CreateBookingUseCase } from '../application/use-cases/booking/create-bo
 import { GetAvailabilityUseCase } from '../application/use-cases/booking/get-availability.use-case.js';
 import { ListBookingsUseCase } from '../application/use-cases/booking/list-bookings.use-case.js';
 import { RescheduleBookingUseCase } from '../application/use-cases/booking/reschedule-booking.use-case.js';
+import { UpdateBookingStatusUseCase } from '../application/use-cases/booking/update-booking-status.use-case.js';
 import { ListCustomersUseCase } from '../application/use-cases/customer/list-customers.use-case.js';
 import { VerifyCustomerUseCase } from '../application/use-cases/customer/verify-customer.use-case.js';
 import {
@@ -56,6 +58,10 @@ import { ServiceModule } from './service.module.js';
       useClass: RescheduleBookingUseCase,
     },
     {
+      provide: UPDATE_BOOKING_STATUS_USE_CASE,
+      useClass: UpdateBookingStatusUseCase,
+    },
+    {
       provide: GET_AVAILABILITY_USE_CASE,
       useClass: GetAvailabilityUseCase,
     },
@@ -80,6 +86,7 @@ import { ServiceModule } from './service.module.js';
     CREATE_BOOKING_USE_CASE,
     CANCEL_BOOKING_USE_CASE,
     RESCHEDULE_BOOKING_USE_CASE,
+    UPDATE_BOOKING_STATUS_USE_CASE,
     GET_AVAILABILITY_USE_CASE,
     LIST_BOOKINGS_USE_CASE,
     VERIFY_CUSTOMER_USE_CASE,

@@ -2,6 +2,7 @@ import type { BookingInfo, ResourceInfo, ServiceInfo } from '@repo/proto/schedul
 import {
   Bot,
   CalendarX,
+  CheckCircle2,
   Clock,
   Globe,
   Mail,
@@ -21,6 +22,7 @@ interface BookingDetailsModalProps {
   resources: ResourceInfo[];
   onReschedule: (booking: BookingInfo) => void;
   onCancel: (booking: BookingInfo) => void;
+  onComplete?: (booking: BookingInfo) => void;
 }
 
 export function BookingDetailsModal({
@@ -31,6 +33,7 @@ export function BookingDetailsModal({
   resources,
   onReschedule,
   onCancel,
+  onComplete,
 }: BookingDetailsModalProps) {
   if (!isOpen || !booking) return null;
 
@@ -68,7 +71,7 @@ export function BookingDetailsModal({
     switch (source) {
       case 'customer_agent':
         return {
-          label: 'AI Voice Agent',
+          label: 'AI Agent',
           icon: <PhoneCall className="w-3.5 h-3.5 text-indigo-600" />,
         };
       case 'sandbox_simulation':
@@ -224,6 +227,19 @@ export function BookingDetailsModal({
         <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-2.5">
           {canModify ? (
             <div className="flex items-center gap-2">
+              {onComplete && booking.status !== 'completed' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onComplete(booking);
+                  }}
+                  className="px-4 py-2 rounded-full border border-emerald-200 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Mark Completed</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {

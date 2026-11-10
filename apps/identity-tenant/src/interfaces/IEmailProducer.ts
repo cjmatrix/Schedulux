@@ -12,7 +12,9 @@ export interface UserInvitationEmailPayload {
   name: string;
   tenant_id: string;
   business_name?: string;
-  password: string;
+  password?: string;
+  invitation_token: string;
+  invitation_url?: string;
   system_role: string;
 }
 

@@ -423,39 +423,54 @@ export class TenantService implements ITenantService {
       throw new Error(RESPONSE_MESSAGES.ERRORS.TENANT_NOT_FOUND);
     }
 
+    if (!data.agent_id?.trim()) {
+      throw new Error(RESPONSE_MESSAGES.ERRORS.MISSING_REQUIRED_FIELDS);
+    }
+
     const existingUser = await this._dashboardUserRepo.findByEmail(data.email.toLowerCase().trim());
     if (existingUser) {
       throw new Error(RESPONSE_MESSAGES.ERRORS.USER_ALREADY_EXISTS);
     }
 
-    const rawPassword = nanoid(8);
-    const password_hash = await this._passwordHasher.hash(rawPassword, 10);
-
-    const user = await this._dashboardUserRepo.create({
+    const invitationToken = nanoid(32);
+    const invitePayload = {
       tenant_id: data.tenant_id,
+      agent_id: data.agent_id.trim(),
       email: data.email.toLowerCase().trim(),
-      password_hash,
       name: data.name.trim(),
-      system_role: data.system_role === 'root' ? 'root' : 'manager',
-    });
+      business_name: tenant.business_name,
+      system_role: 'manager',
+    };
+
+    
+    await this._cacheRepo.set(
+      `dashboard_invitation:${invitationToken}`,
+      JSON.stringify(invitePayload),
+      { EX: 604800 },
+    );
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const invitationUrl = `${frontendUrl}/dashboarduser/accept-invite?token=${invitationToken}`;
 
     if (this._emailProducer) {
       await this._emailProducer.sendUserInvitationEmail({
-        to: user.email,
-        name: user.name,
+        to: invitePayload.email,
+        name: invitePayload.name,
         tenant_id: data.tenant_id,
         business_name: tenant.business_name,
-        password: rawPassword,
-        system_role: user.system_role,
+        invitation_token: invitationToken,
+        invitation_url: invitationUrl,
+        system_role: 'manager',
       });
     }
 
     return {
       message: RESPONSE_MESSAGES.AUTH.USER_INVITED_SUCCESS,
-      user_id: user._id.toString(),
-      email: user.email,
-      name: user.name,
-      system_role: user.system_role,
+      user_id: '',
+      email: invitePayload.email,
+      name: invitePayload.name,
+      system_role: 'manager',
+      agent_id: invitePayload.agent_id,
     };
   }
 
@@ -478,6 +493,7 @@ export class TenantService implements ITenantService {
         name: u.name,
         system_role: u.system_role,
         created_at: u.created_at ? u.created_at.toISOString() : new Date().toISOString(),
+        agent_id: (u as unknown as { agent_id?: string }).agent_id || '',
       })),
       total_count,
     };

@@ -30,6 +30,7 @@ import {
   ResourceResponse,
   ServiceResponse,
   TenantScheduleResponse,
+  UpdateBookingStatusRequest,
   UpdateResourceRequest,
   UpdateServiceRequest,
   UpdateTenantScheduleRequest,
@@ -50,10 +51,12 @@ import {
   IListBookingsUseCase,
   IListCustomersUseCase,
   IRescheduleBookingUseCase,
+  IUpdateBookingStatusUseCase,
   IVerifyCustomerUseCase,
   LIST_BOOKINGS_USE_CASE,
   LIST_CUSTOMERS_USE_CASE,
   RESCHEDULE_BOOKING_USE_CASE,
+  UPDATE_BOOKING_STATUS_USE_CASE,
   VERIFY_CUSTOMER_USE_CASE,
 } from '../../application/interfaces/booking-use-cases.interface.js';
 import {
@@ -125,6 +128,8 @@ export class SchedulingInventoryGrpcController {
     private readonly _cancelBookingUseCase: ICancelBookingUseCase,
     @Inject(RESCHEDULE_BOOKING_USE_CASE)
     private readonly _rescheduleBookingUseCase: IRescheduleBookingUseCase,
+    @Inject(UPDATE_BOOKING_STATUS_USE_CASE)
+    private readonly _updateBookingStatusUseCase: IUpdateBookingStatusUseCase,
     @Inject(GET_AVAILABILITY_USE_CASE)
     private readonly _getAvailabilityUseCase: IGetAvailabilityUseCase,
     @Inject(LIST_BOOKINGS_USE_CASE)
@@ -295,6 +300,22 @@ export class SchedulingInventoryGrpcController {
     return {
       booking: BookingMapper.toProto(booking),
       message: RESPONSE_MESSAGES.BOOKING.RESCHEDULED,
+    };
+  }
+
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.UPDATE_BOOKING_STATUS,
+  )
+  async updateBookingStatus(request: UpdateBookingStatusRequest): Promise<BookingResponse> {
+    const booking = await this._updateBookingStatusUseCase.execute(request);
+    const msg =
+      booking.status === 'completed'
+        ? RESPONSE_MESSAGES.BOOKING.COMPLETED
+        : RESPONSE_MESSAGES.BOOKING.STATUS_UPDATED;
+    return {
+      booking: BookingMapper.toProto(booking),
+      message: msg,
     };
   }
 

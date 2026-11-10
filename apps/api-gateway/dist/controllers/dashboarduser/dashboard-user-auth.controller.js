@@ -70,6 +70,25 @@ let DashboardUserAuthController = class DashboardUserAuthController {
             data: null,
         };
     }
+    async acceptInvitation(body) {
+        const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserAuthClient.acceptInvitation({
+            token: body.token,
+            password: body.password,
+        }));
+        return {
+            message: response.message,
+            data: response.user,
+        };
+    }
+    async getInvitationDetails(query) {
+        const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserAuthClient.getInvitationDetails({
+            token: query.token,
+        }));
+        return {
+            message: 'Invitation details retrieved successfully',
+            data: response,
+        };
+    }
     async getProfile(req) {
         const userId = req.dashboardUser?.user_id;
         if (!userId) {
@@ -118,6 +137,22 @@ __decorate([
     __metadata("design:paramtypes", [dashboard_user_dto_js_1.DashboardUserResetPasswordDto]),
     __metadata("design:returntype", Promise)
 ], DashboardUserAuthController.prototype, "resetPassword", null);
+__decorate([
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.DASHBOARD_USER.AUTH.ACCEPT_INVITE),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [dashboard_user_dto_js_1.AcceptInvitationDto]),
+    __metadata("design:returntype", Promise)
+], DashboardUserAuthController.prototype, "acceptInvitation", null);
+__decorate([
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.DASHBOARD_USER.AUTH.INVITATION_INFO),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [dashboard_user_dto_js_1.GetInvitationDetailsDto]),
+    __metadata("design:returntype", Promise)
+], DashboardUserAuthController.prototype, "getInvitationDetails", null);
 __decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.DASHBOARD_USER.AUTH.ME),
     (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard),

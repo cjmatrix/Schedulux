@@ -113,7 +113,11 @@ export class EmailService {
         }
     }
     async sendUserInvitationEmail(data) {
-        const loginUrl = process.env.FRONTEND_URL || 'http://localhost:5173/login';
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const inviteLink = data.invitation_url ||
+            (data.invitation_token
+                ? `${frontendUrl}/dashboarduser/accept-invite?token=${encodeURIComponent(data.invitation_token)}`
+                : `${frontendUrl}/login`);
         const fromAddress = process.env.FROM_EMAIL || '"Schedulux AI" <no-reply@schedulux.ai>';
         const htmlContent = `
       <!DOCTYPE html>
@@ -139,29 +143,28 @@ export class EmailService {
                   Hello <strong style="color: #f8fafc;">${data.name}</strong>,
                 </p>
                 <p style="font-size: 15px; line-height: 1.6; color: #94a3b8; margin: 0 0 24px 0;">
-                  You have been invited to join the Schedulux dashboard with role <strong style="color: #818cf8; text-transform: uppercase;">${data.system_role}</strong>. Here are your generated login credentials:
+                  You have been invited to join the Schedulux dashboard for <strong style="color: #f8fafc;">${data.business_name || 'your workspace'}</strong> as a <strong style="color: #818cf8; text-transform: uppercase;">Manager</strong>.
                 </p>
 
-                <!-- Credentials Box -->
+                <!-- Invitation Info Box -->
                 <div style="background-color: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 20px; margin-bottom: 28px;">
                   <p style="margin: 0 0 8px 0; font-size: 14px; color: #94a3b8;"><strong>Email:</strong> <span style="color: #ffffff;">${data.to}</span></p>
-                  <p style="margin: 0 0 8px 0; font-size: 14px; color: #94a3b8;"><strong>Temporary Password:</strong> <code style="background: #1e293b; padding: 3px 8px; border-radius: 4px; color: #818cf8; font-family: monospace; font-size: 15px; font-weight: 600;">${data.password}</code></p>
-                  <p style="margin: 0; font-size: 14px; color: #94a3b8;"><strong>Role:</strong> <span style="color: #ffffff;">${data.system_role}</span></p>
+                  <p style="margin: 0; font-size: 14px; color: #94a3b8;"><strong>Role:</strong> <span style="color: #ffffff;">Operations Manager</span></p>
                 </div>
 
-                <!-- Login Button -->
+                <!-- Accept Invitation Button -->
                 <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto 24px auto; width: 100%; text-align: center;">
                   <tr>
                     <td align="center">
-                      <a href="${loginUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #4f46e5; color: #ffffff !important; padding: 14px 36px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);">
-                        Log in to Schedulux Dashboard
+                      <a href="${inviteLink}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #4f46e5; color: #ffffff !important; padding: 14px 36px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);">
+                        Accept Invitation & Set Password
                       </a>
                     </td>
                   </tr>
                 </table>
 
                 <div style="margin-top: 32px; padding-top: 18px; border-top: 1px solid #1e293b; font-size: 12px; color: #64748b; line-height: 1.5;">
-                  <p style="margin: 0;">Please change your password after logging in for security.</p>
+                  <p style="margin: 0;">This invitation link will expire in 7 days. If you did not expect this invitation, you can safely ignore this email.</p>
                 </div>
               </td>
             </tr>
@@ -173,8 +176,8 @@ export class EmailService {
             await this.transporter.sendMail({
                 from: fromAddress,
                 to: data.to,
-                subject: `Invitation to Schedulux Dashboard (${data.system_role})`,
-                text: `Hello ${data.name},\n\nYou have been invited to the Schedulux dashboard.\n\nEmail: ${data.to}\nPassword: ${data.password}\nRole: ${data.system_role}\n\nLog in here: ${loginUrl}`,
+                subject: `Invitation to Schedulux Dashboard (Manager)`,
+                text: `Hello ${data.name},\n\nYou have been invited to the Schedulux dashboard.\n\nEmail: ${data.to}\nRole: Manager\n\nAccept your invitation and set up your password here:\n${inviteLink}`,
                 html: htmlContent,
             });
             console.log(`✉️  [EmailService] Invitation email successfully sent to ${data.to}`);
@@ -183,9 +186,9 @@ export class EmailService {
             console.log('\n================== [DEV INVITATION EMAIL PREVIEW] ==================');
             console.log(`To: ${data.to}`);
             console.log(`Name: ${data.name}`);
-            console.log(`Role: ${data.system_role}`);
-            console.log(`Password: ${data.password}`);
-            console.log(`Tenant ID: ${data.tenant_id}`);
+            console.log(`Business: ${data.business_name || 'N/A'}`);
+            console.log(`Role: Manager`);
+            console.log(`🔗 Accept Invite Link: ${inviteLink}`);
             console.log('===================================================================\n');
         }
     }

@@ -36,6 +36,21 @@ export const RescheduleBookingDtoSchema = z.object({
 
 export class RescheduleBookingDto extends createZodDto(RescheduleBookingDtoSchema) {}
 
+export const UpdateBookingStatusDtoSchema = z.object({
+  agent_id: z.string().min(1, 'agent_id is required'),
+  status: z.enum(['confirmed', 'cancelled', 'completed', 'no_show']),
+  reason: z.string().optional(),
+});
+
+export class UpdateBookingStatusDto extends createZodDto(UpdateBookingStatusDtoSchema) {}
+
+export const CompleteBookingDtoSchema = z.object({
+  agent_id: z.string().min(1, 'agent_id is required'),
+  reason: z.string().optional(),
+});
+
+export class CompleteBookingDto extends createZodDto(CompleteBookingDtoSchema) {}
+
 export const ListBookingsQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(20),

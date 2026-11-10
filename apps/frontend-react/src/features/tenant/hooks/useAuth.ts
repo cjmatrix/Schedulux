@@ -97,6 +97,17 @@ export function useDashboardProfile(enabled: boolean = true) {
   });
 }
 
+export function useAcceptInvitation() {
+  const queryClient = useQueryClient();
+
+  return useMutation<ApiResponse<DashboardUserInfo>, Error, { token: string; password: string }>({
+    mutationFn: (payload) => dashboardUserAuthApi.acceptInvitation(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['currentDashboardUser'] });
+    },
+  });
+}
+
 export function useVerifyEmail() {
   const queryClient = useQueryClient();
 

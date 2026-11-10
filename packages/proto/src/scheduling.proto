@@ -24,6 +24,7 @@ service SchedulingInventoryService {
   rpc CreateBooking (CreateBookingRequest) returns (BookingResponse);
   rpc CancelBooking (CancelBookingRequest) returns (BookingResponse);
   rpc RescheduleBooking (RescheduleBookingRequest) returns (BookingResponse);
+  rpc UpdateBookingStatus (UpdateBookingStatusRequest) returns (BookingResponse);
   rpc GetAvailability (GetAvailabilityRequest) returns (GetAvailabilityResponse);
   rpc ListBookings (ListBookingsRequest) returns (ListBookingsResponse);
 
@@ -369,6 +370,15 @@ message RescheduleBookingRequest {
   repeated string resource_ids = 7;
   optional string rescheduled_by = 8;
   optional string notes = 9;
+}
+
+message UpdateBookingStatusRequest {
+  string tenant_id = 1;
+  string booking_id = 2;
+  string agent_id = 3;
+  string status = 4;
+  optional string reason = 5;
+  optional string updated_by = 6;
 }
 
 message ListBookingsRequest {

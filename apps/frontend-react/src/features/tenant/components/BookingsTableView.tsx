@@ -27,6 +27,7 @@ interface BookingsTableViewProps {
   onSelectBooking: (booking: BookingInfo) => void;
   onReschedule: (booking: BookingInfo) => void;
   onCancel: (booking: BookingInfo) => void;
+  onComplete?: (booking: BookingInfo) => void;
   services: ServiceInfo[];
   resources: ResourceInfo[];
 }
@@ -40,6 +41,7 @@ export function BookingsTableView({
   onSelectBooking,
   onReschedule,
   onCancel,
+  onComplete,
   services,
   resources,
 }: BookingsTableViewProps) {
@@ -81,7 +83,7 @@ export function BookingsTableView({
     switch (source) {
       case 'customer_agent':
         return {
-          label: 'AI Voice Agent',
+          label: 'AI Agent',
           icon: <PhoneCall className="w-3 h-3 text-indigo-600" />,
         };
       case 'sandbox_simulation':
@@ -244,6 +246,16 @@ export function BookingsTableView({
                       >
                         {canModify && (
                           <>
+                            {onComplete && booking.status !== 'completed' && (
+                              <button
+                                type="button"
+                                title="Mark as Completed"
+                                onClick={() => onComplete(booking)}
+                                className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                             <button
                               type="button"
                               title="Reschedule Booking"

@@ -23,6 +23,7 @@ export interface AuthenticatedTenantRequest extends Request {
   dashboardUser?: {
     user_id: string;
     tenant_id: string;
+    agent_id?: string;
     email: string;
     role: string;
     system_role: string;
@@ -33,6 +34,7 @@ export interface AuthenticatedTenantRequest extends Request {
 
 interface DecodedToken {
   tenant_id?: string;
+  agent_id?: string;
   user_id?: string;
   email?: string;
   role?: string;
@@ -78,11 +80,7 @@ export class TenantAuthGuard implements CanActivate {
 
       if (decoded.role === 'tenant_owner') {
         request.tenant = decoded as AuthenticatedTenantRequest['tenant'];
-      } else if (
-        decoded.role === 'root' ||
-        decoded.role === 'manager' ||
-        decoded.role === 'dashboard_user'
-      ) {
+      } else if (decoded.role === 'manager') {
         request.dashboardUser = decoded as AuthenticatedTenantRequest['dashboardUser'];
       } else {
         throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.UNRECOGNIZED_ROLE);

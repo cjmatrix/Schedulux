@@ -11,7 +11,6 @@ export interface FindServicesFilter {
 export interface ServiceSummary {
   totalCount: number;
   avgPrice: number;
-  depositCount: number;
   categories: string[];
 }
 

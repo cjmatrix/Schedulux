@@ -1,7 +1,11 @@
 import { Controller, Inject, UseFilters } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import { SuperAdminProto } from '@repo/proto';
-import { ListTenantsRequest, ListTenantsResponse, SuspendTenantRequest } from '@repo/proto/tenant';
+import {
+  ListTenantsRequest,
+  ListTenantsResponse,
+  SuspendTenantRequest,
+} from '@repo/proto/tenant';
 import { GRPC_METHODS, GRPC_SERVICES } from '../constants/grpc.constant.js';
 import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
 import type { ISuperAdminService } from '../interfaces/ISuperAdminService.js';

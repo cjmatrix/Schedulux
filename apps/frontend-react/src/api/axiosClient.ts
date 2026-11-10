@@ -1,4 +1,11 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import { toast } from 'sonner';
+
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    skipGlobalToast?: boolean;
+  }
+}
 
 export interface ApiResponse<T> {
   message: string;
@@ -93,6 +100,16 @@ axiosClient.interceptors.response.use(
       error.response?.data?.message ||
       error.message ||
       'An unexpected error occurred';
+
+    // Global Toast Notification for all API errors (except 401 token refresh or if skipGlobalToast is set)
+    const customConfig = originalRequest as { skipGlobalToast?: boolean } | undefined;
+    if (!customConfig?.skipGlobalToast && error.response?.status !== 401) {
+      toast.error(message, {
+        id: message,
+        duration: 5000,
+      });
+    }
+
     return Promise.reject(new Error(message));
   },
 );

@@ -11,6 +11,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { RedisModule } from './config/redis.js';
 import { DashboardUserController } from './controllers/DashboardUserController.js';
 import { SuperAdminAuthController } from './controllers/SuperAdminController.js';
+import { TenantBillingController } from './controllers/TenantBillingController.js';
 import { TenantAuthController } from './controllers/TenantController.js';
 import { EmailProducer } from './producers/emailProducer.js';
 import { CacheRepository } from './repository/CacheRepository.js';
@@ -18,6 +19,7 @@ import { DashboardUserRepository } from './repository/DashboardUserRepository.js
 import { SuperAdminRepository } from './repository/SuperAdminRepository.js';
 import { TenantRepository } from './repository/TenantRepository.js';
 import { BcryptPasswordHasher } from './services/bcryptPasswordHasher.js';
+import { BillingService } from './services/billingService.js';
 import { DashboardUserService } from './services/dashboardUserService.js';
 import { JwtTokenService } from './services/jwtTokenService.js';
 import { SuperAdminService } from './services/superAdminService.js';
@@ -49,7 +51,12 @@ AppModule = __decorate([
             }),
             RedisModule,
         ],
-        controllers: [TenantAuthController, SuperAdminAuthController, DashboardUserController],
+        controllers: [
+            TenantAuthController,
+            TenantBillingController,
+            SuperAdminAuthController,
+            DashboardUserController,
+        ],
         providers: [
             { provide: 'ITenantRepository', useClass: TenantRepository },
             { provide: 'IDashboardUserRepository', useClass: DashboardUserRepository },
@@ -59,6 +66,7 @@ AppModule = __decorate([
             { provide: 'IPasswordHasher', useClass: BcryptPasswordHasher },
             { provide: 'IJwtService', useClass: JwtTokenService },
             { provide: 'ITenantService', useClass: TenantService },
+            { provide: 'IBillingService', useClass: BillingService },
             { provide: 'ISuperAdminService', useClass: SuperAdminService },
             { provide: 'IDashboardUserService', useClass: DashboardUserService },
         ],

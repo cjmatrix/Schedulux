@@ -12,11 +12,13 @@ const config_1 = require("@nestjs/config");
 const microservices_1 = require("@nestjs/microservices");
 const customer_chat_controller_js_1 = require("./controllers/agentOrchestrator/customer-chat.controller.js");
 const knowledge_controller_js_1 = require("./controllers/agentOrchestrator/knowledge.controller.js");
+const billing_controller_js_1 = require("./controllers/billing/billing.controller.js");
 const dashboard_user_auth_controller_js_1 = require("./controllers/dashboarduser/dashboard-user-auth.controller.js");
 const scheduling_controller_js_1 = require("./controllers/scheduling/scheduling.controller.js");
 const superadmin_controller_js_1 = require("./controllers/superadmin/superadmin.controller.js");
 const superadmin_tenant_controller_js_1 = require("./controllers/superadmin/superadmin-tenant.controller.js");
 const tenant_controller_js_1 = require("./controllers/tenant/tenant.controller.js");
+const paddle_webhook_guard_js_1 = require("./guards/paddle-webhook.guard.js");
 const roles_guard_js_1 = require("./guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("./guards/tenant-auth.guard.js");
 const rate_limiter_middleware_js_1 = require("./middleware/rate-limiter.middleware.js");
@@ -119,6 +121,7 @@ exports.AppModule = AppModule = __decorate([
         ],
         controllers: [
             tenant_controller_js_1.TenantController,
+            billing_controller_js_1.BillingController,
             superadmin_controller_js_1.SuperAdminController,
             superadmin_tenant_controller_js_1.SuperAdminTenantController,
             dashboard_user_auth_controller_js_1.DashboardUserAuthController,
@@ -139,6 +142,7 @@ exports.AppModule = AppModule = __decorate([
             schema_gateway_js_1.SchemaGateway,
             roles_guard_js_1.RolesGuard,
             tenant_auth_guard_js_1.TenantAuthGuard,
+            paddle_webhook_guard_js_1.PaddleWebhookGuard,
             rate_limiter_middleware_js_1.RateLimiterMiddleware,
         ],
     })

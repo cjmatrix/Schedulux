@@ -1,3 +1,4 @@
+import type { Metadata } from "@grpc/grpc-js";
 import { Observable } from "rxjs";
 export declare const protobufPackage = "tenant";
 export interface TenantGoogleLoginRequest {
@@ -30,6 +31,9 @@ export interface TenantInfo {
     contact_email: string;
     tier: string;
     status: string;
+    paddle_customer_id?: string | undefined;
+    paddle_subscription_id?: string | undefined;
+    subscription_status?: string | undefined;
 }
 export interface ListTenantsRequest {
     page: number;
@@ -89,38 +93,86 @@ export interface ResetPasswordRequest {
 export interface ResetPasswordResponse {
     message: string;
 }
+export interface UpdateTenantSubscriptionRequest {
+    tenant_id: string;
+    tier: string;
+    subscription_status?: string | undefined;
+}
+export interface UpdateTenantSubscriptionResponse {
+    success: boolean;
+    message: string;
+    tenant: TenantInfo | undefined;
+}
+export interface GetTenantBillingInfoRequest {
+    tenant_id: string;
+}
+export interface GetTenantBillingInfoResponse {
+    tenant_id: string;
+    tier: string;
+    paddle_customer_id: string;
+    paddle_subscription_id: string;
+    subscription_status: string;
+}
+export interface PaddleWebhookRequest {
+    event_id: string;
+    event_type: string;
+    occurred_at: string;
+    data_json: string;
+}
+export interface PaddleWebhookResponse {
+    success: boolean;
+    message: string;
+    event_type: string;
+}
+export interface CreatePaddleCheckoutRequest {
+    tenant_id: string;
+    plan: string;
+}
+export interface CreatePaddleCheckoutResponse {
+    success: boolean;
+    transaction_id: string;
+    message: string;
+}
 export declare const TENANT_PACKAGE_NAME = "tenant";
 export interface TenantAuthServiceClient {
-    register(request: RegisterRequest): Observable<RegisterResponse>;
-    login(request: LoginRequest): Observable<LoginResponse>;
-    googleLogin(request: TenantGoogleLoginRequest): Observable<LoginResponse>;
-    verifyEmail(request: VerifyEmailRequest): Observable<VerifyEmailResponse>;
-    logout(request: LogoutRequest): Observable<LogoutResponse>;
-    refreshToken(request: RefreshTokenRequest): Observable<RefreshTokenResponse>;
-    getProfile(request: TenantGetProfileRequest): Observable<TenantGetProfileResponse>;
-    forgotPassword(request: ForgotPasswordRequest): Observable<ForgotPasswordResponse>;
-    resetPassword(request: ResetPasswordRequest): Observable<ResetPasswordResponse>;
+    register(request: RegisterRequest, metadata?: Metadata): Observable<RegisterResponse>;
+    login(request: LoginRequest, metadata?: Metadata): Observable<LoginResponse>;
+    googleLogin(request: TenantGoogleLoginRequest, metadata?: Metadata): Observable<LoginResponse>;
+    verifyEmail(request: VerifyEmailRequest, metadata?: Metadata): Observable<VerifyEmailResponse>;
+    logout(request: LogoutRequest, metadata?: Metadata): Observable<LogoutResponse>;
+    refreshToken(request: RefreshTokenRequest, metadata?: Metadata): Observable<RefreshTokenResponse>;
+    getProfile(request: TenantGetProfileRequest, metadata?: Metadata): Observable<TenantGetProfileResponse>;
+    forgotPassword(request: ForgotPasswordRequest, metadata?: Metadata): Observable<ForgotPasswordResponse>;
+    resetPassword(request: ResetPasswordRequest, metadata?: Metadata): Observable<ResetPasswordResponse>;
 }
 export interface TenantAuthServiceController {
-    register(request: RegisterRequest): Promise<RegisterResponse> | Observable<RegisterResponse> | RegisterResponse;
-    login(request: LoginRequest): Promise<LoginResponse> | Observable<LoginResponse> | LoginResponse;
-    googleLogin(request: TenantGoogleLoginRequest): Promise<LoginResponse> | Observable<LoginResponse> | LoginResponse;
-    verifyEmail(request: VerifyEmailRequest): Promise<VerifyEmailResponse> | Observable<VerifyEmailResponse> | VerifyEmailResponse;
-    logout(request: LogoutRequest): Promise<LogoutResponse> | Observable<LogoutResponse> | LogoutResponse;
-    refreshToken(request: RefreshTokenRequest): Promise<RefreshTokenResponse> | Observable<RefreshTokenResponse> | RefreshTokenResponse;
-    getProfile(request: TenantGetProfileRequest): Promise<TenantGetProfileResponse> | Observable<TenantGetProfileResponse> | TenantGetProfileResponse;
-    forgotPassword(request: ForgotPasswordRequest): Promise<ForgotPasswordResponse> | Observable<ForgotPasswordResponse> | ForgotPasswordResponse;
-    resetPassword(request: ResetPasswordRequest): Promise<ResetPasswordResponse> | Observable<ResetPasswordResponse> | ResetPasswordResponse;
+    register(request: RegisterRequest, metadata?: Metadata): Promise<RegisterResponse> | Observable<RegisterResponse> | RegisterResponse;
+    login(request: LoginRequest, metadata?: Metadata): Promise<LoginResponse> | Observable<LoginResponse> | LoginResponse;
+    googleLogin(request: TenantGoogleLoginRequest, metadata?: Metadata): Promise<LoginResponse> | Observable<LoginResponse> | LoginResponse;
+    verifyEmail(request: VerifyEmailRequest, metadata?: Metadata): Promise<VerifyEmailResponse> | Observable<VerifyEmailResponse> | VerifyEmailResponse;
+    logout(request: LogoutRequest, metadata?: Metadata): Promise<LogoutResponse> | Observable<LogoutResponse> | LogoutResponse;
+    refreshToken(request: RefreshTokenRequest, metadata?: Metadata): Promise<RefreshTokenResponse> | Observable<RefreshTokenResponse> | RefreshTokenResponse;
+    getProfile(request: TenantGetProfileRequest, metadata?: Metadata): Promise<TenantGetProfileResponse> | Observable<TenantGetProfileResponse> | TenantGetProfileResponse;
+    forgotPassword(request: ForgotPasswordRequest, metadata?: Metadata): Promise<ForgotPasswordResponse> | Observable<ForgotPasswordResponse> | ForgotPasswordResponse;
+    resetPassword(request: ResetPasswordRequest, metadata?: Metadata): Promise<ResetPasswordResponse> | Observable<ResetPasswordResponse> | ResetPasswordResponse;
 }
 export declare function TenantAuthServiceControllerMethods(): (constructor: Function) => void;
 export declare const TENANT_AUTH_SERVICE_NAME = "TenantAuthService";
 export interface TenantServiceClient {
-    listTenants(request: ListTenantsRequest): Observable<ListTenantsResponse>;
-    suspendTenant(request: SuspendTenantRequest): Observable<SuspendTenantResponse>;
+    listTenants(request: ListTenantsRequest, metadata?: Metadata): Observable<ListTenantsResponse>;
+    suspendTenant(request: SuspendTenantRequest, metadata?: Metadata): Observable<SuspendTenantResponse>;
+    updateTenantSubscription(request: UpdateTenantSubscriptionRequest, metadata?: Metadata): Observable<UpdateTenantSubscriptionResponse>;
+    getTenantBillingInfo(request: GetTenantBillingInfoRequest, metadata?: Metadata): Observable<GetTenantBillingInfoResponse>;
+    processPaddleWebhook(request: PaddleWebhookRequest, metadata?: Metadata): Observable<PaddleWebhookResponse>;
+    createPaddleCheckout(request: CreatePaddleCheckoutRequest, metadata?: Metadata): Observable<CreatePaddleCheckoutResponse>;
 }
 export interface TenantServiceController {
-    listTenants(request: ListTenantsRequest): Promise<ListTenantsResponse> | Observable<ListTenantsResponse> | ListTenantsResponse;
-    suspendTenant(request: SuspendTenantRequest): Promise<SuspendTenantResponse> | Observable<SuspendTenantResponse> | SuspendTenantResponse;
+    listTenants(request: ListTenantsRequest, metadata?: Metadata): Promise<ListTenantsResponse> | Observable<ListTenantsResponse> | ListTenantsResponse;
+    suspendTenant(request: SuspendTenantRequest, metadata?: Metadata): Promise<SuspendTenantResponse> | Observable<SuspendTenantResponse> | SuspendTenantResponse;
+    updateTenantSubscription(request: UpdateTenantSubscriptionRequest, metadata?: Metadata): Promise<UpdateTenantSubscriptionResponse> | Observable<UpdateTenantSubscriptionResponse> | UpdateTenantSubscriptionResponse;
+    getTenantBillingInfo(request: GetTenantBillingInfoRequest, metadata?: Metadata): Promise<GetTenantBillingInfoResponse> | Observable<GetTenantBillingInfoResponse> | GetTenantBillingInfoResponse;
+    processPaddleWebhook(request: PaddleWebhookRequest, metadata?: Metadata): Promise<PaddleWebhookResponse> | Observable<PaddleWebhookResponse> | PaddleWebhookResponse;
+    createPaddleCheckout(request: CreatePaddleCheckoutRequest, metadata?: Metadata): Promise<CreatePaddleCheckoutResponse> | Observable<CreatePaddleCheckoutResponse> | CreatePaddleCheckoutResponse;
 }
 export declare function TenantServiceControllerMethods(): (constructor: Function) => void;
 export declare const TENANT_SERVICE_NAME = "TenantService";

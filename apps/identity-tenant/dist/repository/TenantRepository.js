@@ -20,6 +20,12 @@ let TenantRepository = class TenantRepository extends BaseRepository {
     async findByEmail(email) {
         return this.findOne({ contact_email: email });
     }
+    async findByPaddleSubscriptionId(subscriptionId) {
+        return this.findOne({ paddle_subscription_id: subscriptionId });
+    }
+    async findByPaddleCustomerId(customerId) {
+        return this.findOne({ paddle_customer_id: customerId });
+    }
     async updateStatus(tenantId, status) {
         const tenant = await this.findByTenantId(tenantId);
         if (!tenant)

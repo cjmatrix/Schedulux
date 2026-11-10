@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
-import type { DepositInfo, PriceInfo, ServiceVerificationInfo } from '@repo/proto/scheduling';
+import type { PriceInfo, ServiceVerificationInfo } from '@repo/proto/scheduling';
 import type { ClientSession } from 'mongoose';
 import { firstValueFrom } from 'rxjs';
 import type { ISchedulingEventsProducer } from '../../application/interfaces/scheduling-events-producer.interface.js';
@@ -50,7 +50,6 @@ export interface ServiceEventPayload extends BaseSchedulingEventPayload {
     buffer_minutes: number;
     booking_mode: string;
     price: PriceInfo;
-    deposit: DepositInfo;
     verification?: ServiceVerificationInfo;
     resource_requirements?: Array<{
       role: string;
@@ -100,7 +99,6 @@ export interface BookingEventPayload extends BaseSchedulingEventPayload {
     duration_minutes: number;
     source: string;
     status: string;
-    deposit_status: string;
     price: { amount: number; currency: string };
     created_at: string;
     reason?: string;
@@ -398,15 +396,6 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         amount: entity.price.amount,
         currency: entity.price.currency,
       },
-      deposit: {
-        required: entity.deposit.required,
-        amount: entity.deposit.amount,
-        processor: entity.deposit.processor,
-        upi_id: entity.deposit.upiId,
-        qr_code_url: entity.deposit.qrCodeUrl,
-        confirmation_method: entity.deposit.confirmationMethod,
-        payment_instructions: entity.deposit.paymentInstructions,
-      },
       verification: entity.verification
         ? { require_otp: entity.verification.require_otp ?? undefined }
         : undefined,
@@ -476,7 +465,6 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         duration_minutes: entity.durationMinutes,
         source: entity.source,
         status: entity.status,
-        deposit_status: entity.depositStatus,
         price: {
           amount: entity.price.amount,
           currency: entity.price.currency,
@@ -536,7 +524,6 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         duration_minutes: entity.durationMinutes,
         source: entity.source,
         status: entity.status,
-        deposit_status: entity.depositStatus,
         price: {
           amount: entity.price.amount,
           currency: entity.price.currency,
@@ -598,7 +585,6 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         duration_minutes: entity.durationMinutes,
         source: entity.source,
         status: entity.status,
-        deposit_status: entity.depositStatus,
         price: {
           amount: entity.price.amount,
           currency: entity.price.currency,

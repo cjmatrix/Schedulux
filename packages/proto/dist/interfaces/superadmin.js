@@ -7,7 +7,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SUPER_ADMIN_AUTH_SERVICE_NAME = exports.SUPERADMIN_PACKAGE_NAME = exports.protobufPackage = void 0;
 exports.SuperAdminAuthServiceControllerMethods = SuperAdminAuthServiceControllerMethods;
-/* eslint-disable */
 const microservices_1 = require("@nestjs/microservices");
 exports.protobufPackage = "superadmin";
 exports.SUPERADMIN_PACKAGE_NAME = "superadmin";

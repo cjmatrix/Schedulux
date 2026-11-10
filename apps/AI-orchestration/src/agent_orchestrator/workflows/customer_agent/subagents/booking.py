@@ -243,7 +243,7 @@ Phase 4 — Execution & Security Verification:
 [Two-Layer Verification Rules (Strict Security)]
 1. Cancellation & Reschedule: ALWAYS requires phone verification via OTP to protect appointments against unauthorized cancellation or tampering.
 2. Viewing Booking History: ALWAYS requires phone verification via OTP before disclosing past or pending appointments.
-3. New Bookings: {"Requires OTP verification before confirmation." if require_otp_new else "Direct booking permitted unless the specific service requires deposit/verification."}
+3. New Bookings: {"Requires OTP verification before confirmation." if require_otp_new else "Direct booking permitted unless the specific service requires verification."}
 4. OTP Protocol:
    - When verification is required (or when a tool returns `requires_verification`):
      Call `send_booking_otp(phone=customer_phone, session_id=session_id, tenant_id=..., agent_id=...)`.

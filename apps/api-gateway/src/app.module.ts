@@ -3,11 +3,13 @@ import { ConfigModule } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { CustomerChatController } from './controllers/agentOrchestrator/customer-chat.controller.js';
 import { KnowledgeController } from './controllers/agentOrchestrator/knowledge.controller.js';
+import { BillingController } from './controllers/billing/billing.controller.js';
 import { DashboardUserAuthController } from './controllers/dashboarduser/dashboard-user-auth.controller.js';
 import { SchedulingController } from './controllers/scheduling/scheduling.controller.js';
 import { SuperAdminController } from './controllers/superadmin/superadmin.controller.js';
 import { SuperAdminTenantController } from './controllers/superadmin/superadmin-tenant.controller.js';
 import { TenantController } from './controllers/tenant/tenant.controller.js';
+import { PaddleWebhookGuard } from './guards/paddle-webhook.guard.js';
 import { RolesGuard } from './guards/roles.guard.js';
 import { TenantAuthGuard } from './guards/tenant-auth.guard.js';
 import { RateLimiterMiddleware } from './middleware/rate-limiter.middleware.js';
@@ -104,6 +106,7 @@ import { SchemaGateway } from './websockets/schema.gateway.js';
   ],
   controllers: [
     TenantController,
+    BillingController,
     SuperAdminController,
     SuperAdminTenantController,
     DashboardUserAuthController,
@@ -124,6 +127,7 @@ import { SchemaGateway } from './websockets/schema.gateway.js';
     SchemaGateway,
     RolesGuard,
     TenantAuthGuard,
+    PaddleWebhookGuard,
     RateLimiterMiddleware,
   ],
 })

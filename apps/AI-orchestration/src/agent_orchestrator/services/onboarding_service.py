@@ -43,7 +43,11 @@ class OnboardingService(OnboardingServiceProtocol):
         return canonicalize_agent_schema(runtime_cfg.model_dump(), status="live")
 
     async def start_session(
-        self, tenant_id: str, agent_id: str, initial_draft_json: str | None = None
+        self,
+        tenant_id: str,
+        agent_id: str,
+        initial_draft_json: str | None = None,
+        tier: str | None = None,
     ) -> OnboardingResult:
         if not agent_id:
             raise AgentNotFoundException("agent_id is required to start onboarding session")
@@ -116,7 +120,9 @@ class OnboardingService(OnboardingServiceProtocol):
                 live_schema_json=live_schema_json,
             )
 
-        payload = await self.orchestrator.start_session(tenant_id, initial_draft, agent_id)
+        payload = await self.orchestrator.start_session(
+            tenant_id, initial_draft, agent_id, tier=tier
+        )
 
         question = payload.get("question") or ""
         if question:
@@ -140,7 +146,7 @@ class OnboardingService(OnboardingServiceProtocol):
         )
 
     async def resume_session(
-        self, tenant_id: str, agent_id: str, user_answer: str
+        self, tenant_id: str, agent_id: str, user_answer: str, tier: str | None = None
     ) -> OnboardingResult:
         clean_user_msg = (user_answer or "").strip()
         if clean_user_msg and agent_id:
@@ -153,7 +159,9 @@ class OnboardingService(OnboardingServiceProtocol):
                     f"[OnboardingService] Warning: Failed to persist user answer: {me}", flush=True
                 )
 
-        payload = await self.orchestrator.resume_session(tenant_id, user_answer, agent_id)
+        payload = await self.orchestrator.resume_session(
+            tenant_id, user_answer, agent_id, tier=tier
+        )
         current_draft = await self.orchestrator.get_current_draft(tenant_id, agent_id)
         canonical_draft = canonicalize_agent_schema(current_draft or {}, status="draft")
         draft_json = json.dumps(canonical_draft)

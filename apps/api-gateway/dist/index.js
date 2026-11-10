@@ -9,7 +9,7 @@ const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const app_module_js_1 = require("./app.module.js");
 const global_error_js_1 = require("./utils/global-error.js");
 async function bootstrap() {
-    const app = await core_1.NestFactory.create(app_module_js_1.AppModule);
+    const app = await core_1.NestFactory.create(app_module_js_1.AppModule, { rawBody: true });
     app.enableCors({
         origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5000'],
         credentials: true,

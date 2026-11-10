@@ -10,10 +10,11 @@ import {
   Loader2,
   Settings2,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { knowledgeApi } from '../api/knowledgeApi.js';
+import { useSaveInitialAgentDraft } from '../features/tenant/hooks/useKnowledgeDocuments.js';
 import { useAgentSchemaGeneration } from '../hooks/useAgentSchemaGeneration.js';
 import { getOperatingScheduleGroups } from './onboarding/utils';
 
@@ -67,8 +68,9 @@ export default function SchedulingOnboarding() {
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [showJsonRaw, setShowJsonRaw] = useState(false);
   const navigate = useNavigate();
-  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [saveDraftError, setSaveDraftError] = useState<string | null>(null);
+  const saveDraftMutation = useSaveInitialAgentDraft();
+  const isSavingDraft = saveDraftMutation.isPending;
 
   const { startCrawl, isLoading, stage, progressMessage, schema, error, reset } =
     useAgentSchemaGeneration();
@@ -83,14 +85,13 @@ export default function SchedulingOnboarding() {
 
   const handleConfigureAndSaveDraft = async (source: string) => {
     try {
-      setIsSavingDraft(true);
       setSaveDraftError(null);
-      const res = await knowledgeApi.saveInitialAgentDraft({
+      const res = await saveDraftMutation.mutateAsync({
         name: schema?.business_profile?.name || 'AI Scheduling Agent',
         creation_source: source,
       });
 
-      const newAgentId = res?.data?.agent_id;
+      const newAgentId = res?.agent_id;
       if (newAgentId) {
         navigate(`/tenant/agent-setup/${newAgentId}`);
       } else {
@@ -98,9 +99,8 @@ export default function SchedulingOnboarding() {
       }
     } catch (err: unknown) {
       console.error('Failed to save initial agent draft:', err);
-      setSaveDraftError(err instanceof Error ? err.message : 'Failed to save agent draft');
-    } finally {
-      setIsSavingDraft(false);
+      const message = err instanceof Error ? err.message : 'Failed to save agent draft';
+      setSaveDraftError(message);
     }
   };
 
@@ -539,12 +539,36 @@ export default function SchedulingOnboarding() {
 
         {/* Actions */}
         <div className="mt-12 flex flex-col items-center gap-5">
+          {saveDraftError && (
+            <div className="w-full max-w-md rounded-2xl border border-rose-200 bg-rose-50/90 p-3.5 text-xs text-rose-800 flex items-start gap-2.5 shadow-xs">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div className="flex-1 font-medium">{saveDraftError}</div>
+              <button
+                type="button"
+                onClick={() => setSaveDraftError(null)}
+                className="text-rose-400 hover:text-rose-700 p-0.5 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           <button
             onClick={handleContinue}
-            className="flex w-full max-w-sm items-center justify-center gap-2 rounded-full bg-neutral-950 px-8 py-4 text-sm font-bold text-white transition hover:bg-neutral-800 shadow-md hover:shadow-lg cursor-pointer group"
+            disabled={isSavingDraft}
+            className="flex w-full max-w-sm items-center justify-center gap-2 rounded-full bg-neutral-950 px-8 py-4 text-sm font-bold text-white transition hover:bg-neutral-800 shadow-md hover:shadow-lg cursor-pointer group disabled:opacity-60"
           >
-            {schema ? 'Continue with Inferred Schema' : 'Continue with Template'}
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            {isSavingDraft ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Creating Agent...</span>
+              </>
+            ) : (
+              <>
+                {schema ? 'Continue with Inferred Schema' : 'Continue with Template'}
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </>
+            )}
           </button>
 
           <button

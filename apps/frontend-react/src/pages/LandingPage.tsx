@@ -95,8 +95,8 @@ const VERTICALS: Record<string, VerticalData> = {
       diagnosticDesc: 'Hair texture analysis, color processing buffers, and VIP history.',
       centerTitle: 'Chair & Master Booking',
       centerDesc: 'Balance coloring wait-times with precision parallel haircuts.',
-      syncTitle: 'Deposit & Re-book',
-      syncDesc: 'Card pre-auth, allergy waivers, and 6-week auto maintenance reminders.',
+      syncTitle: 'OTP & Re-book',
+      syncDesc: 'OTP verification, allergy waivers, and 6-week auto maintenance reminders.',
       rightNode: 'Private Rooms',
     },
     sampleCall: {
@@ -104,7 +104,7 @@ const VERTICALS: Record<string, VerticalData> = {
       agent:
         'Elena has a balayage opening at 2:00 PM next Saturday. We factor in 90 minutes for processing plus a 45-minute finish blowout. I can lock in chair 4 for you now!',
       status: 'Color Buffer Applied (135 min)',
-      action: 'Deposit Link Dispatched via SMS',
+      action: 'OTP Code Dispatched via SMS',
     },
   },
 };
@@ -551,7 +551,7 @@ export default function LandingPage() {
               <h3 className="text-base font-bold text-neutral-950 mb-2">Triage Guardrails</h3>
               <p className="text-sm text-neutral-500 leading-relaxed">
                 Configure boundaries. Flag acute symptoms for instant human operator transfer,
-                enforce required deposits, and mandate custom customer intake disclosures.
+                enforce two-layer phone verification, and mandate custom customer intake disclosures.
               </p>
             </div>
 

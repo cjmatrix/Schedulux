@@ -17,7 +17,9 @@ export interface ListResourcesOutput {
   summary?: ResourceSummary;
 }
 
-export interface ICreateResourceUseCase extends IUseCase<CreateResourceRequest, ResourceEntity> {}
+export interface ICreateResourceUseCase {
+  execute(input: CreateResourceRequest, tier?: string): Promise<ResourceEntity>;
+}
 export interface IGetResourceUseCase extends IUseCase<GetResourceRequest, ResourceEntity> {}
 export interface IListResourcesUseCase
   extends IUseCase<ListResourcesRequest, ListResourcesOutput> {}

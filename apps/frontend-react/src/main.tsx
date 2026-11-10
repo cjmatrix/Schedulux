@@ -10,7 +10,7 @@ import AdminLayout from './features/superadmin/components/AdminLayout.tsx';
 import { SuperAdminProtectedRoute } from './features/superadmin/components/SuperAdminProtectedRoute.tsx';
 import GlobalSettingsPage from './features/superadmin/pages/GlobalSettingsPage.tsx';
 import SuperAdminDashboard from './features/superadmin/pages/SuperAdminDashboard.tsx';
-// Superadmin Feature Imports
+
 import SuperAdminLoginPage from './features/superadmin/pages/SuperAdminLoginPage.tsx';
 import SystemHealthPage from './features/superadmin/pages/SystemHealthPage.tsx';
 import TenantListPage from './features/superadmin/pages/TenantListPage.tsx';
@@ -22,7 +22,8 @@ import ForgotPasswordPage from './features/tenant/pages/ForgotPasswordPage.tsx';
 import KnowledgeBasePage from './features/tenant/pages/KnowledgeBasePage.tsx';
 import LoginPage from './features/tenant/pages/LoginPage.tsx';
 
-// Tenant Dashboard Feature Imports
+
+import BillingPage from './features/tenant/pages/BillingPage.tsx';
 import TenantLayout from './features/tenant/pages/layout/TenantLayout.tsx';
 import RegisterPage from './features/tenant/pages/RegisterPage.tsx';
 import ResetPasswordPage from './features/tenant/pages/ResetPasswordPage.tsx';
@@ -37,6 +38,7 @@ import WorkspaceUsersPage from './features/tenant/pages/WorkspaceUsersPage.tsx';
 import AgentOnboardingWizard from './pages/AgentOnboardingWizard.tsx';
 import LandingPage from './pages/LandingPage.tsx';
 import SchedulingOnboarding from './pages/SchedulingOnboarding.tsx';
+import { Toaster } from 'sonner';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -150,6 +152,10 @@ const router = createBrowserRouter([
       {
         element: <TenantLayout isTenant={true} />,
         children: [
+          {
+            path: 'billing',
+            element: <BillingPage />,
+          },
           {
             path: 'users',
             element: <WorkspaceUsersPage />,
@@ -295,6 +301,7 @@ if (rootElement) {
       <GoogleOAuthProvider clientId={googleClientId}>
         <QueryClientProvider client={queryClient}>
           <RouterProvider router={router} />
+          <Toaster position="top-right" richColors closeButton visibleToasts={5} />
         </QueryClientProvider>
       </GoogleOAuthProvider>
     </>,

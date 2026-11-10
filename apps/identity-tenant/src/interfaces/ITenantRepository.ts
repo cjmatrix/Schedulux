@@ -1,6 +1,6 @@
 import { ListTenantsRequest, ListTenantsResponse } from '@repo/proto/tenant';
 import { UpdateQuery } from 'mongoose';
-import { ITenant } from '../model/Tenent.js';
+import { ITenant, TenantTier } from '../model/Tenent.js';
 
 interface InputData {
   _id?: string;
@@ -9,7 +9,7 @@ interface InputData {
   password_hash?: string;
   auth_provider?: 'local' | 'google';
   google_id?: string;
-  tier: string;
+  tier: TenantTier;
   status: string;
 }
 
@@ -21,6 +21,8 @@ export interface ITenantRepository {
   update(id: string, data: UpdateQuery<ITenant>): Promise<ITenant | null>;
   updateStatus(tenantId: string, status: string): Promise<ITenant | null>;
   listTenants(data: ListTenantsRequest): Promise<ListTenantsResponse>;
+  findByPaddleSubscriptionId(subscriptionId: string): Promise<ITenant | null>;
+  findByPaddleCustomerId(customerId: string): Promise<ITenant | null>;
 }
 
 export type { ListTenantsRequest, ListTenantsResponse };

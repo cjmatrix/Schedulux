@@ -32,15 +32,16 @@ class DocumentService(DocumentServiceProtocol):
         agent_id: str,
         file_name: str,
         file_size_bytes: int = 0,
+        tier: str | None = None,
     ) -> tuple[str, str, str, int]:
         """
         Generates presigned upload URL and creates pending KnowledgeDocument entity.
         Returns: (upload_url, document_id, s3_key, expires_in)
         """
-    
-        redis_client = get_redis_client()
-        tenant_tier = await redis_client.get(f"tenant:{tenant_id}:tier")
-        tier_cfg = get_tier_config(tenant_tier)
+        if not tier:
+            redis_client = get_redis_client()
+            tier = await redis_client.get(f"tenant:{tenant_id}:tier")
+        tier_cfg = get_tier_config(tier)
         max_docs = tier_cfg["max_kb_docs"]
 
         if max_docs != -1:

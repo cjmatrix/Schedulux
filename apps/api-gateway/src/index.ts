@@ -5,7 +5,7 @@ import { AppModule } from './app.module.js';
 import { GlobalExceptionFilter } from './utils/global-error.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.enableCors({
     origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5000'],

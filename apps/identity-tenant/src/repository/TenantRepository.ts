@@ -22,6 +22,14 @@ export class TenantRepository extends BaseRepository<ITenant> implements ITenant
     return this.findOne({ contact_email: email });
   }
 
+  async findByPaddleSubscriptionId(subscriptionId: string): Promise<ITenant | null> {
+    return this.findOne({ paddle_subscription_id: subscriptionId });
+  }
+
+  async findByPaddleCustomerId(customerId: string): Promise<ITenant | null> {
+    return this.findOne({ paddle_customer_id: customerId });
+  }
+
   async updateStatus(tenantId: string, status: string): Promise<ITenant | null> {
     const tenant = await this.findByTenantId(tenantId);
     if (!tenant) return null;

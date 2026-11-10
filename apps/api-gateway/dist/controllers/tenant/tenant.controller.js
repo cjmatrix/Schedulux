@@ -38,8 +38,15 @@ let TenantController = class TenantController {
         this._dashboardUserServiceClient =
             this._dashboardClient.getService('DashboardUserService');
     }
+    _getTenantId(req) {
+        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_CONTEXT_MISSING);
+        }
+        return tenantId;
+    }
     async getProfile(req) {
-        const tenantId = req.tenant?.tenant_id || '';
+        const tenantId = this._getTenantId(req);
         const response = await (0, rxjs_1.lastValueFrom)(this._tenantAuthService.getProfile({ tenant_id: tenantId }));
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.AUTH.PROFILE_RETRIEVED,
@@ -122,8 +129,14 @@ let TenantController = class TenantController {
             data: null,
         };
     }
-    async inviteUser(body) {
-        const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserServiceClient.inviteUser(body));
+    async inviteUser(req, body) {
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserServiceClient.inviteUser({
+            tenant_id: tenantId,
+            email: body.email,
+            name: body.name,
+            system_role: body.system_role,
+        }));
         return {
             message: response.message,
             data: {
@@ -134,9 +147,10 @@ let TenantController = class TenantController {
             },
         };
     }
-    async listWorkspaceUsers(query) {
+    async listWorkspaceUsers(req, query) {
+        const tenantId = this._getTenantId(req);
         const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserServiceClient.listWorkspaceUsers({
-            tenant_id: query.tenant_id,
+            tenant_id: tenantId,
             page: query.page,
             limit: query.limit,
             search: query.search,
@@ -230,19 +244,23 @@ __decorate([
 ], TenantController.prototype, "resetPassword", null);
 __decorate([
     (0, common_1.Post)(routes_constant_js_1.API_ROUTES.TENANT.AUTH.INVITE_USER),
+    (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
-    __param(0, (0, common_1.Body)()),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [tenant_dto_js_1.InviteUserDto]),
+    __metadata("design:paramtypes", [Object, tenant_dto_js_1.InviteUserDto]),
     __metadata("design:returntype", Promise)
 ], TenantController.prototype, "inviteUser", null);
 __decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.TENANT.AUTH.WORKSPACE_USERS),
+    (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
-    __param(0, (0, common_1.Query)()),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [tenant_dto_js_1.ListWorkspaceUsersDto]),
+    __metadata("design:paramtypes", [Object, tenant_dto_js_1.ListWorkspaceUsersDto]),
     __metadata("design:returntype", Promise)
 ], TenantController.prototype, "listWorkspaceUsers", null);
 exports.TenantController = TenantController = __decorate([

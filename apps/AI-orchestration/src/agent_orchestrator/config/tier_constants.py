@@ -5,10 +5,10 @@ from typing import Any
 STATIC_TIER_CONFIGS: dict[str, dict[str, Any]] = {
     "free": {
         "tier": "free",
-        "name": "Free Starter",
-        "max_agents": 1,
-        "max_services": 5,
-        "max_resources": 3,
+        "name": "Starter",
+        "max_agents": 5,
+        "max_services": 2,
+        "max_resources": 2,
         "max_kb_docs": 3,
         "max_kb_doc_size_mb": 5,
         "weekly_token_limit": 100_000,
@@ -18,9 +18,9 @@ STATIC_TIER_CONFIGS: dict[str, dict[str, Any]] = {
     "starter": {
         "tier": "starter",
         "name": "Starter",
-        "max_agents": 1,
-        "max_services": 5,
-        "max_resources": 3,
+        "max_agents": 5,
+        "max_services": 2,
+        "max_resources": 2,
         "max_kb_docs": 3,
         "max_kb_doc_size_mb": 5,
         "weekly_token_limit": 100_000,
@@ -65,7 +65,7 @@ STATIC_TIER_CONFIGS: dict[str, dict[str, Any]] = {
     },
 }
 
-DEFAULT_TIER = "free"
+DEFAULT_TIER = "starter"
 
 
 def get_tier_config(tier: str | None = None) -> dict[str, Any]:

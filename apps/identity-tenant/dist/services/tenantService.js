@@ -135,9 +135,14 @@ let TenantService = class TenantService {
             tenant_id: tenant._id,
             token_id: tokenId,
         }, this._jwtRefreshSecret, { expiresIn: this._refreshTokenExpiry });
-        await this._cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, {
-            EX: this._refreshTokenTtlSeconds,
-        });
+        await Promise.all([
+            this._cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, {
+                EX: this._refreshTokenTtlSeconds,
+            }),
+            this._cacheRepo.set(`tenant:${tenant._id}:tier`, tenant.tier || 'starter', {
+                EX: 86400 * 30,
+            }),
+        ]);
         return {
             accessToken,
             refreshToken,
@@ -209,9 +214,14 @@ let TenantService = class TenantService {
             tenant_id: tenant._id,
             token_id: tokenId,
         }, this._jwtRefreshSecret, { expiresIn: this._refreshTokenExpiry });
-        await this._cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, {
-            EX: this._refreshTokenTtlSeconds,
-        });
+        await Promise.all([
+            this._cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, {
+                EX: this._refreshTokenTtlSeconds,
+            }),
+            this._cacheRepo.set(`tenant:${tenant._id}:tier`, tenant.tier || 'starter', {
+                EX: 86400 * 30,
+            }),
+        ]);
         return {
             accessToken,
             refreshToken,

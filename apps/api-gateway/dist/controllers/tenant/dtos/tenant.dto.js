@@ -48,7 +48,7 @@ class LogoutDto extends (0, nestjs_zod_1.createZodDto)(exports.LogoutSchema) {
 }
 exports.LogoutDto = LogoutDto;
 exports.InviteUserSchema = zod_1.z.object({
-    tenant_id: zod_1.z.string().min(1, 'Tenant ID is required'),
+    tenant_id: zod_1.z.string().optional(),
     email: zod_1.z.string().trim().email('Please provide a valid email address'),
     name: zod_1.z.string().trim().min(2, 'Name must be at least 2 characters'),
     system_role: zod_1.z.string().min(1, 'System role is required'),
@@ -57,9 +57,9 @@ class InviteUserDto extends (0, nestjs_zod_1.createZodDto)(exports.InviteUserSch
 }
 exports.InviteUserDto = InviteUserDto;
 exports.ListWorkspaceUsersSchema = zod_1.z.object({
-    tenant_id: zod_1.z.string().min(1, 'Tenant ID is required'),
-    page: zod_1.z.coerce.number().optional(),
-    limit: zod_1.z.coerce.number().optional(),
+    tenant_id: zod_1.z.string().optional(),
+    page: zod_1.z.coerce.number().int().min(1).default(1),
+    limit: zod_1.z.coerce.number().int().min(1).max(100).default(10),
     search: zod_1.z.string().optional(),
     role: zod_1.z.string().optional(),
 });

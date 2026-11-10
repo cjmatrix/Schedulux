@@ -61,10 +61,6 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
   const [priceCurrency, setPriceCurrency] = useState('USD');
   const [requireOtp, setRequireOtp] = useState<boolean>(false);
   const [description, setDescription] = useState('');
-  const [requireDeposit, setRequireDeposit] = useState(false);
-  const [depositAmount, setDepositAmount] = useState<number>(50);
-  const [upiId, setUpiId] = useState('');
-  const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [durationMinutes, setDurationMinutes] = useState<number>(60);
   const [bufferMinutes, setBufferMinutes] = useState<number>(20);
   const [bookingMode, setBookingMode] = useState<'time_slot' | 'date_range'>('time_slot');
@@ -97,10 +93,6 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
       setPriceCurrency(s.price?.currency || 'USD');
       setRequireOtp(s.verification?.require_otp ?? false);
       setDescription(s.description || '');
-      setRequireDeposit(s.deposit?.required ?? false);
-      setDepositAmount(s.deposit?.amount ?? 0);
-      setUpiId(s.deposit?.upi_id || '');
-      setQrCodeUrl(s.deposit?.qr_code_url || '');
       setDurationMinutes(s.duration_minutes || 30);
       setBufferMinutes(s.buffer_minutes ?? 0);
       setBookingMode((s.booking_mode as 'time_slot' | 'date_range') || 'time_slot');
@@ -180,14 +172,6 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
         type: priceType,
         amount: priceType === 'free' ? 0 : Number(priceAmount) || 0,
         currency: priceCurrency,
-      },
-      deposit: {
-        required: requireDeposit,
-        amount: requireDeposit ? Number(depositAmount) || 0 : 0,
-        processor: 'upi_direct',
-        upi_id: upiId.trim(),
-        qr_code_url: qrCodeUrl.trim(),
-        confirmation_method: 'utr_reference',
       },
       verification: {
         require_otp: requireOtp,
@@ -564,79 +548,6 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
                 onChange={(e) => setDescription(e.target.value)}
                 className="w-full px-4 py-3 bg-slate-50/70 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition leading-relaxed"
               />
-            </div>
-
-            {/* Deposit Box */}
-            <div className="bg-slate-50/70 border border-slate-200/90 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <label className="flex items-center gap-3 cursor-pointer select-none">
-                <div
-                  onClick={() => setRequireDeposit(!requireDeposit)}
-                  className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-200 ease-in-out cursor-pointer ${
-                    requireDeposit ? 'bg-slate-950' : 'bg-slate-300'
-                  }`}
-                >
-                  <div
-                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
-                      requireDeposit ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </div>
-                <span className="text-xs font-semibold text-slate-800">
-                  Require Deposit to Book
-                </span>
-              </label>
-
-              {requireDeposit && (
-                <div className="flex flex-col gap-3 pt-2 border-t border-slate-100">
-                  <div className="flex flex-wrap items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-slate-500">Hold Amount:</span>
-                      <div className="relative w-28">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
-                          $
-                        </span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={depositAmount}
-                          onChange={(e) => setDepositAmount(parseFloat(e.target.value) || 0)}
-                          className="w-full pl-7 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 transition"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-                      <span className="text-xs font-semibold text-slate-500">UPI ID:</span>
-                      <input
-                        type="text"
-                        placeholder="e.g. clinic@okhdfcbank"
-                        value={upiId}
-                        onChange={(e) => setUpiId(e.target.value)}
-                        className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 transition"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-500">
-                      QR Code URL (optional):
-                    </span>
-                    <input
-                      type="url"
-                      placeholder="https://cdn.example.com/upi_qr.png"
-                      value={qrCodeUrl}
-                      onChange={(e) => setQrCodeUrl(e.target.value)}
-                      className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 transition"
-                    />
-                  </div>
-
-                  <p className="text-[11px] text-slate-400">
-                    Direct UPI Payments: Patients pay via UPI ID or QR code and provide a UTR
-                    reference number. Money goes directly to the tenant with zero platform fee.
-                  </p>
-                </div>
-              )}
             </div>
 
             {/* Verification Box */}

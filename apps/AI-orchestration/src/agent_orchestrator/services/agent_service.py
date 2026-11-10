@@ -34,12 +34,17 @@ class AgentManagementService(AgentManagementServiceProtocol):
         self.cache_repo = cache_repo
 
     async def save_initial_draft(
-        self, tenant_id: str, creation_source: str, draft_json: str | None, name: str | None
+        self,
+        tenant_id: str,
+        creation_source: str,
+        draft_json: str | None,
+        name: str | None,
+        tier: str | None = None,
     ) -> tuple[str, str]:
-       
-        redis_client = get_redis_client()
-        tenant_tier = await redis_client.get(f"tenant:{tenant_id}:tier")
-        tier_cfg = get_tier_config(tenant_tier)
+        if not tier:
+            redis_client = get_redis_client()
+            tier = await redis_client.get(f"tenant:{tenant_id}:tier")
+        tier_cfg = get_tier_config(tier)
         max_agents = tier_cfg["max_agents"]
 
         if max_agents != -1:
@@ -73,47 +78,38 @@ class AgentManagementService(AgentManagementServiceProtocol):
                 name=name,
             )
 
+        from agent_orchestrator.models import AgentDraftConfig, canonicalize_agent_schema
+
         draft_dict["tenant_id"] = tenant_id
         draft_dict["agent_id"] = agent_id
+        draft_dict["creation_source"] = source
+        canonical_draft = canonicalize_agent_schema(draft_dict, status="draft")
+        validated_config = AgentDraftConfig.model_validate(canonical_draft)
 
         max_services = tier_cfg.get("max_services", -1)
         max_resources = tier_cfg.get("max_resources", -1)
 
-        if max_resources != -1 and isinstance(draft_dict.get("resources"), list):
-            active_resources = [
-                r for r in draft_dict["resources"] if isinstance(r, dict) and not r.get("is_deleted")
-            ]
+        if max_resources != -1:
+            active_resources = [r for r in validated_config.resources if not r.is_deleted]
             if len(active_resources) > max_resources:
-                draft_dict["resources"] = active_resources[:max_resources]
+                validated_config.resources = active_resources[:max_resources]
 
-        if max_services != -1 and isinstance(draft_dict.get("services"), list):
-            active_services = [
-                s for s in draft_dict["services"] if isinstance(s, dict) and not s.get("is_deleted")
-            ]
+        if max_services != -1:
+            active_services = [s for s in validated_config.services if not s.is_deleted]
             if len(active_services) > max_services:
-                draft_dict["services"] = active_services[:max_services]
+                validated_config.services = active_services[:max_services]
 
-        if isinstance(draft_dict.get("resources"), list):
-            valid_rids = {
-                r.get("resource_id")
-                for r in draft_dict["resources"]
-                if isinstance(r, dict) and r.get("resource_id")
-            }
-            if isinstance(draft_dict.get("services"), list):
-                for svc in draft_dict["services"]:
-                    if isinstance(svc, dict) and "resource_requirements" in svc:
-                        for req in svc.get("resource_requirements", []):
-                            if isinstance(req, dict) and "eligible_resource_ids" in req:
-                                req["eligible_resource_ids"] = [
-                                    rid for rid in req["eligible_resource_ids"] if rid in valid_rids
-                                ]
+        valid_rids = {r.resource_id for r in validated_config.resources if r.resource_id}
+        for svc in validated_config.services:
+            for req in svc.resource_requirements:
+                req.eligible_resource_ids = [
+                    rid for rid in req.eligible_resource_ids if rid in valid_rids
+                ]
 
-        from agent_orchestrator.models import canonicalize_agent_schema
+        draft_dict = validated_config.model_dump(mode="json")
 
-        draft_dict = canonicalize_agent_schema(draft_dict, status="draft")
-
-        bp = draft_dict.get("business_profile")
-        bp_name = bp.get("name") if isinstance(bp, dict) else None
+        bp = validated_config.business_profile
+        bp_name = bp.name if bp else None
         final_name = name or bp_name or "Primary Assistant"
 
         await self.draft_repo.upsert_agent_draft(

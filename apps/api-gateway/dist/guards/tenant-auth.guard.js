@@ -21,12 +21,15 @@ const config_1 = require("@nestjs/config");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const cookies_constant_js_1 = require("../constants/cookies.constant.js");
 const messages_constant_js_1 = require("../constants/messages.constant.js");
+const redis_service_js_1 = require("../services/redis.service.js");
 let TenantAuthGuard = class TenantAuthGuard {
     _configService;
-    constructor(_configService) {
+    _redisService;
+    constructor(_configService, _redisService) {
         this._configService = _configService;
+        this._redisService = _redisService;
     }
-    canActivate(context) {
+    async canActivate(context) {
         const request = context.switchToHttp().getRequest();
         const tenantToken = request.cookies?.[cookies_constant_js_1.COOKIE_NAMES.TENANT_ACCESS_TOKEN];
         const dashboardToken = request.cookies?.[cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN];
@@ -40,6 +43,12 @@ let TenantAuthGuard = class TenantAuthGuard {
             if (!decoded || !decoded.tenant_id) {
                 throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.INVALID_TOKEN_STRUCTURE);
             }
+            let tier = await this._redisService.getTenantTier(decoded.tenant_id);
+            if (!tier) {
+                tier = decoded.tier || 'starter';
+                await this._redisService.setTenantTier(decoded.tenant_id, tier).catch(() => { });
+            }
+            decoded.tier = tier;
             if (decoded.role === 'tenant_owner') {
                 request.tenant = decoded;
             }
@@ -65,5 +74,7 @@ exports.TenantAuthGuard = TenantAuthGuard;
 exports.TenantAuthGuard = TenantAuthGuard = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, common_1.Inject)(config_1.ConfigService)),
-    __metadata("design:paramtypes", [config_1.ConfigService])
+    __param(1, (0, common_1.Inject)(redis_service_js_1.RedisService)),
+    __metadata("design:paramtypes", [config_1.ConfigService,
+        redis_service_js_1.RedisService])
 ], TenantAuthGuard);

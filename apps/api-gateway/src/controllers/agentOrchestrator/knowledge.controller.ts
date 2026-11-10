@@ -27,13 +27,17 @@ import { Roles } from '../../decorators/roles.decorator.js';
 import { RolesGuard } from '../../guards/roles.guard.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
 import { ISchemaCacheService } from '../../interfaces/ISchemaEventSubscriber.js';
-import { RedisService } from '../../services/redis.service.js';
 import {
   ConfirmDocumentUploadDto,
   CrawlSiteDto,
+  GetAgentMessagesQueryDto,
   GetCrawlStatusDto,
   GetDocumentUploadUrlDto,
-  InitCustomerChatDto,
+  GetOnboardingMessagesQueryDto,
+  GetSandboxMessagesQueryDto,
+  GetSandboxWidgetConfigQueryDto,
+  GetSchemaQueryDto,
+  InitSandboxChatDto,
   ListDocumentsQueryDto,
   ResumeOnboardingDto,
   SaveInitialAgentDraftDto,
@@ -45,6 +49,7 @@ import {
   signSessionId,
   verifySessionToken,
 } from '../../utils/session-token.util.js';
+import { createTenantGrpcMetadata } from '../../utils/grpc-metadata.util.js';
 
 @Controller(API_ROUTES.KNOWLEDGE.BASE)
 @UseGuards(TenantAuthGuard, RolesGuard)
@@ -55,20 +60,32 @@ export class KnowledgeController implements OnModuleInit {
   constructor(
     @Inject('KNOWLEDGE_PACKAGE') private readonly _client: ClientGrpc,
     @Inject('ISchemaCacheService') private readonly _schemaCacheService: ISchemaCacheService,
-    private readonly _redisService: RedisService,
   ) {}
 
   onModuleInit() {
     this._knowledgeService = this._client.getService<KnowledgeServiceClient>('KnowledgeService');
   }
 
+  private _getTenantId(req: AuthenticatedTenantRequest): string {
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+    }
+    return tenantId;
+  }
+
+  private _getTenantTier(req: AuthenticatedTenantRequest): string {
+    return req.tenant?.tier || req.dashboardUser?.tier || 'starter';
+  }
+
   @Post(API_ROUTES.KNOWLEDGE.CRAWL)
   @HttpCode(HttpStatus.ACCEPTED)
   @UsePipes(ZodValidationPipe)
-  async crawlSite(@Body() body: CrawlSiteDto) {
+  async crawlSite(@Req() req: AuthenticatedTenantRequest, @Body() body: CrawlSiteDto) {
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
       this._knowledgeService.crawlSite({
-        tenant_id: body.tenant_id,
+        tenant_id: tenantId,
         url: body.url,
       }),
     );
@@ -83,10 +100,14 @@ export class KnowledgeController implements OnModuleInit {
 
   @Get(API_ROUTES.KNOWLEDGE.CRAWL_STATUS)
   @UsePipes(ZodValidationPipe)
-  async getCrawlStatus(@Query() query: GetCrawlStatusDto) {
+  async getCrawlStatus(
+    @Req() req: AuthenticatedTenantRequest,
+    @Query() query: GetCrawlStatusDto,
+  ) {
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
       this._knowledgeService.getCrawlStatus({
-        tenant_id: query.tenant_id,
+        tenant_id: tenantId,
         job_id: query.job_id,
       }),
     );
@@ -97,14 +118,13 @@ export class KnowledgeController implements OnModuleInit {
   }
 
   @Get(API_ROUTES.KNOWLEDGE.SCHEMA)
-  async getSchema(@Query('tenant_id') tenantId: string, @Query('job_id') jobId?: string) {
-    if (!tenantId) {
-      return {
-        message: RESPONSE_MESSAGES.KNOWLEDGE.TENANT_ID_REQUIRED,
-        data: null,
-      };
-    }
-    const schema = await this._schemaCacheService.getDraftSchema(tenantId, jobId);
+  @UsePipes(ZodValidationPipe)
+  async getSchema(
+    @Req() req: AuthenticatedTenantRequest,
+    @Query() query: GetSchemaQueryDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const schema = await this._schemaCacheService.getDraftSchema(tenantId, query.job_id);
     if (!schema) {
       return {
         message: RESPONSE_MESSAGES.KNOWLEDGE.SCHEMA_PENDING,
@@ -126,13 +146,23 @@ export class KnowledgeController implements OnModuleInit {
   @Post(API_ROUTES.KNOWLEDGE.ONBOARDING_START)
   @HttpCode(HttpStatus.OK)
   @UsePipes(ZodValidationPipe)
-  async startOnboarding(@Body() body: StartOnboardingDto) {
+  async startOnboarding(
+    @Req() req: AuthenticatedTenantRequest,
+    @Body() body: StartOnboardingDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const tier = this._getTenantTier(req);
+    const metadata = createTenantGrpcMetadata(tenantId, tier);
+
     const response = await lastValueFrom(
-      this._knowledgeService.startOnboardingSession({
-        tenant_id: body.tenant_id,
-        initial_draft_json: body.initial_draft_json || '{}',
-        agent_id: body.agent_id || '',
-      }),
+      this._knowledgeService.startOnboardingSession(
+        {
+          tenant_id: tenantId,
+          initial_draft_json: body.initial_draft_json || '{}',
+          agent_id: body.agent_id || '',
+        },
+        metadata,
+      ),
     );
     return {
       message: RESPONSE_MESSAGES.KNOWLEDGE.SESSION_STARTED,
@@ -150,13 +180,23 @@ export class KnowledgeController implements OnModuleInit {
   @Post(API_ROUTES.KNOWLEDGE.ONBOARDING_MESSAGE)
   @HttpCode(HttpStatus.OK)
   @UsePipes(ZodValidationPipe)
-  async resumeOnboarding(@Body() body: ResumeOnboardingDto) {
+  async resumeOnboarding(
+    @Req() req: AuthenticatedTenantRequest,
+    @Body() body: ResumeOnboardingDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const tier = this._getTenantTier(req);
+    const metadata = createTenantGrpcMetadata(tenantId, tier);
+
     const response = await lastValueFrom(
-      this._knowledgeService.resumeOnboardingSession({
-        tenant_id: body.tenant_id,
-        user_answer: body.user_answer,
-        agent_id: body.agent_id || '',
-      }),
+      this._knowledgeService.resumeOnboardingSession(
+        {
+          tenant_id: tenantId,
+          user_answer: body.user_answer,
+          agent_id: body.agent_id || '',
+        },
+        metadata,
+      ),
     );
     return {
       message: RESPONSE_MESSAGES.KNOWLEDGE.MESSAGE_PROCESSED,
@@ -174,11 +214,8 @@ export class KnowledgeController implements OnModuleInit {
   @Post(API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_INIT)
   @HttpCode(HttpStatus.OK)
   @UsePipes(ZodValidationPipe)
-  async sandboxInit(@Req() req: AuthenticatedTenantRequest, @Body() body: InitCustomerChatDto) {
-    const tenantId = body.tenant_id || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-    if (!tenantId) {
-      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-    }
+  async sandboxInit(@Req() req: AuthenticatedTenantRequest, @Body() body: InitSandboxChatDto) {
+    const tenantId = this._getTenantId(req);
     const agentId = body.agent_id || 'default';
 
     let resolvedSessionId: string | undefined;
@@ -247,16 +284,13 @@ export class KnowledgeController implements OnModuleInit {
   }
 
   @Get(API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_CONFIG)
+  @UsePipes(ZodValidationPipe)
   async getSandboxWidgetConfig(
     @Req() req: AuthenticatedTenantRequest,
-    @Query('tenant_id') tenantIdParam?: string,
-    @Query('agent_id') agentIdParam?: string,
+    @Query() query: GetSandboxWidgetConfigQueryDto,
   ) {
-    const tenantId = tenantIdParam || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-    if (!tenantId) {
-      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-    }
-    const agentId = agentIdParam || 'default';
+    const tenantId = this._getTenantId(req);
+    const agentId = query.agent_id || 'default';
 
     const response = await lastValueFrom(
       this._knowledgeService.getWidgetConfig({
@@ -286,23 +320,17 @@ export class KnowledgeController implements OnModuleInit {
   }
 
   @Get(API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_MESSAGES)
+  @UsePipes(ZodValidationPipe)
   async getSandboxMessages(
     @Req() req: AuthenticatedTenantRequest,
-    @Query('agent_id') agentIdParam?: string,
-    @Query('session_id') sessionIdParam?: string,
-    @Query('token') token?: string,
-    @Query('before') before?: string,
-    @Query('limit') limitStr?: string,
+    @Query() query: GetSandboxMessagesQueryDto,
   ) {
-    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-    if (!tenantId) {
-      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-    }
-    const agentId = agentIdParam || 'default';
-    let resolvedSessionId = sessionIdParam;
+    const tenantId = this._getTenantId(req);
+    const agentId = query.agent_id || 'default';
+    let resolvedSessionId = query.session_id;
 
-    if (token) {
-      const verified = verifySessionToken(token);
+    if (query.token) {
+      const verified = verifySessionToken(query.token);
       if (!verified.valid || !verified.sessionId) {
         throw new UnauthorizedException(RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
       }
@@ -313,14 +341,13 @@ export class KnowledgeController implements OnModuleInit {
       throw new BadRequestException(RESPONSE_MESSAGES.CHAT.REQUIRED_FIELDS);
     }
 
-    const limit = limitStr ? parseInt(limitStr, 10) : 20;
     const response = await lastValueFrom(
       this._knowledgeService.getCustomerMessages({
         tenant_id: tenantId,
         agent_id: agentId,
         session_id: resolvedSessionId,
-        limit,
-        before,
+        limit: query.limit,
+        before: query.before,
       }),
     );
 
@@ -337,11 +364,11 @@ export class KnowledgeController implements OnModuleInit {
   @Post(API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX)
   @HttpCode(HttpStatus.OK)
   @UsePipes(ZodValidationPipe)
-  async sandboxChat(@Req() req: AuthenticatedTenantRequest, @Body() body: SendSandboxMessageDto) {
-    const tenantId = body.tenant_id || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-    if (!tenantId) {
-      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-    }
+  async sandboxChat(
+    @Req() req: AuthenticatedTenantRequest,
+    @Body() body: SendSandboxMessageDto,
+  ) {
+    const tenantId = this._getTenantId(req);
     const agentId = body.agent_id || 'default';
 
     let sessionId = body.session_id;
@@ -398,18 +425,20 @@ export class KnowledgeController implements OnModuleInit {
     @Req() req: AuthenticatedTenantRequest,
     @Body() body: SaveInitialAgentDraftDto,
   ) {
-    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id || body.tenant_id;
-    if (!tenantId) {
-      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-    }
+    const tenantId = this._getTenantId(req);
+    const tier = this._getTenantTier(req);
+    const metadata = createTenantGrpcMetadata(tenantId, tier);
 
     const response = await lastValueFrom(
-      this._knowledgeService.saveInitialAgentDraft({
-        tenant_id: tenantId,
-        draft_json: body.draft_json || '',
-        creation_source: body.creation_source || 'web_crawl',
-        name: body.name || '',
-      }),
+      this._knowledgeService.saveInitialAgentDraft(
+        {
+          tenant_id: tenantId,
+          draft_json: body.draft_json || '',
+          creation_source: body.creation_source || 'web_crawl',
+          name: body.name || '',
+        },
+        metadata,
+      ),
     );
 
     return {
@@ -423,11 +452,7 @@ export class KnowledgeController implements OnModuleInit {
 
   @Get(API_ROUTES.KNOWLEDGE.AGENTS)
   async listAgents(@Req() req: AuthenticatedTenantRequest) {
-    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-    if (!tenantId) {
-      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-    }
-
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
       this._knowledgeService.listTenantAgents({
         tenant_id: tenantId,
@@ -441,24 +466,19 @@ export class KnowledgeController implements OnModuleInit {
   }
 
   @Get(API_ROUTES.KNOWLEDGE.AGENT_MESSAGES)
+  @UsePipes(ZodValidationPipe)
   async getAgentMessages(
     @Req() req: AuthenticatedTenantRequest,
     @Param('agentId') agentId: string,
-    @Query('limit') limitStr?: string,
-    @Query('before') before?: string,
+    @Query() query: GetAgentMessagesQueryDto,
   ) {
-    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-    if (!tenantId) {
-      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-    }
-
-    const limit = limitStr ? parseInt(limitStr, 10) : 20;
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
       this._knowledgeService.getAgentMessages({
         tenant_id: tenantId,
         agent_id: agentId,
-        limit,
-        before,
+        limit: query.limit,
+        before: query.before,
       }),
     );
 
@@ -473,28 +493,18 @@ export class KnowledgeController implements OnModuleInit {
   }
 
   @Get(API_ROUTES.KNOWLEDGE.ONBOARDING_MESSAGES)
+  @UsePipes(ZodValidationPipe)
   async getOnboardingMessages(
     @Req() req: AuthenticatedTenantRequest,
-    @Query('agent_id') agentIdQuery?: string,
-    @Query('limit') limitStr?: string,
-    @Query('before') before?: string,
+    @Query() query: GetOnboardingMessagesQueryDto,
   ) {
-    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-    if (!tenantId) {
-      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-    }
-
-    if (!agentIdQuery) {
-      throw new BadRequestException(RESPONSE_MESSAGES.AUTH.AGENT_ID_REQUIRED);
-    }
-
-    const limit = limitStr ? parseInt(limitStr, 10) : 50;
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
       this._knowledgeService.getAgentMessages({
         tenant_id: tenantId,
-        agent_id: agentIdQuery,
-        limit,
-        before,
+        agent_id: query.agent_id,
+        limit: query.limit,
+        before: query.before,
       }),
     );
 
@@ -515,19 +525,10 @@ export class KnowledgeController implements OnModuleInit {
     @Req() req: AuthenticatedTenantRequest,
     @Body() body: GetDocumentUploadUrlDto,
   ) {
-    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-    if (!tenantId) {
-      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-    }
-
-    const tenantTier =
-      req.tenant?.tier ||
-      req.dashboardUser?.tier ||
-      (await this._redisService.getTenantTier(tenantId)) ||
-      'free';
+    const tenantId = this._getTenantId(req);
+    const tenantTier = this._getTenantTier(req);
     const tierConfig = getTierConfig(tenantTier);
 
-  
     if (body.file_size_bytes && body.file_size_bytes > 0) {
       const maxAllowedBytes = tierConfig.max_kb_doc_size_mb * 1024 * 1024;
       if (body.file_size_bytes > maxAllowedBytes) {
@@ -537,13 +538,18 @@ export class KnowledgeController implements OnModuleInit {
       }
     }
 
+    const metadata = createTenantGrpcMetadata(tenantId, tenantTier);
+
     const response = await lastValueFrom(
-      this._knowledgeService.getDocumentUploadUrl({
-        tenant_id: tenantId,
-        agent_id: body.agent_id,
-        file_name: body.file_name,
-        file_size_bytes: body.file_size_bytes || 0,
-      }),
+      this._knowledgeService.getDocumentUploadUrl(
+        {
+          tenant_id: tenantId,
+          agent_id: body.agent_id,
+          file_name: body.file_name,
+          file_size_bytes: body.file_size_bytes || 0,
+        },
+        metadata,
+      ),
     );
     return {
       message: 'Presigned upload URL generated successfully',
@@ -563,10 +569,7 @@ export class KnowledgeController implements OnModuleInit {
     @Req() req: AuthenticatedTenantRequest,
     @Body() body: ConfirmDocumentUploadDto,
   ) {
-    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-    if (!tenantId) {
-      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-    }
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
       this._knowledgeService.confirmDocumentUpload({
         tenant_id: tenantId,
@@ -585,10 +588,7 @@ export class KnowledgeController implements OnModuleInit {
     @Req() req: AuthenticatedTenantRequest,
     @Query() query: ListDocumentsQueryDto,
   ) {
-    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-    if (!tenantId) {
-      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-    }
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
       this._knowledgeService.listDocuments({
         tenant_id: tenantId,
@@ -607,10 +607,7 @@ export class KnowledgeController implements OnModuleInit {
     @Req() req: AuthenticatedTenantRequest,
     @Param('documentId') documentId: string,
   ) {
-    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-    if (!tenantId) {
-      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-    }
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
       this._knowledgeService.deleteDocument({
         tenant_id: tenantId,

@@ -15,15 +15,6 @@ export interface IServiceDoc extends Document<string> {
     amount: number;
     currency: string;
   };
-  deposit: {
-    required: boolean;
-    amount: number;
-    processor: string;
-    upi_id: string;
-    qr_code_url: string;
-    confirmation_method: string;
-    payment_instructions: string;
-  };
   verification?: {
     require_otp?: boolean | null;
   };
@@ -65,15 +56,6 @@ export const ServiceMongooseSchema = new Schema<IServiceDoc>(
       },
       amount: { type: Number, default: 0, min: 0 },
       currency: { type: String, default: 'USD', uppercase: true },
-    },
-    deposit: {
-      required: { type: Boolean, default: false },
-      amount: { type: Number, default: 0, min: 0 },
-      processor: { type: String, default: '' },
-      upi_id: { type: String, default: '' },
-      qr_code_url: { type: String, default: '' },
-      confirmation_method: { type: String, default: 'automatic' },
-      payment_instructions: { type: String, default: '' },
     },
     verification: {
       require_otp: { type: Boolean, default: null },

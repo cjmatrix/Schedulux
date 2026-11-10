@@ -8,7 +8,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DASHBOARD_USER_SERVICE_NAME = exports.DASHBOARD_AUTH_SERVICE_NAME = exports.DASHBOARD_PACKAGE_NAME = exports.protobufPackage = void 0;
 exports.DashboardAuthServiceControllerMethods = DashboardAuthServiceControllerMethods;
 exports.DashboardUserServiceControllerMethods = DashboardUserServiceControllerMethods;
-/* eslint-disable */
 const microservices_1 = require("@nestjs/microservices");
 exports.protobufPackage = "dashboard";
 exports.DASHBOARD_PACKAGE_NAME = "dashboard";

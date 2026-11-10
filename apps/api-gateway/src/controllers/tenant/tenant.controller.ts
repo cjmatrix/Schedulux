@@ -10,6 +10,7 @@ import {
   Query,
   Req,
   Res,
+  UnauthorizedException,
   UseGuards,
   UsePipes,
 } from '@nestjs/common';
@@ -58,10 +59,18 @@ export class TenantController implements OnModuleInit {
       this._dashboardClient.getService<DashboardUserServiceClient>('DashboardUserService');
   }
 
+  private _getTenantId(req: AuthenticatedTenantRequest): string {
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_CONTEXT_MISSING);
+    }
+    return tenantId;
+  }
+
   @Get(API_ROUTES.TENANT.AUTH.ME)
   @UseGuards(TenantAuthGuard)
   async getProfile(@Req() req: AuthenticatedTenantRequest) {
-    const tenantId = req.tenant?.tenant_id || '';
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
       this._tenantAuthService.getProfile({ tenant_id: tenantId }),
     );
@@ -195,10 +204,22 @@ export class TenantController implements OnModuleInit {
   }
 
   @Post(API_ROUTES.TENANT.AUTH.INVITE_USER)
+  @UseGuards(TenantAuthGuard)
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(ZodValidationPipe)
-  async inviteUser(@Body() body: InviteUserDto) {
-    const response = await lastValueFrom(this._dashboardUserServiceClient.inviteUser(body));
+  async inviteUser(
+    @Req() req: AuthenticatedTenantRequest,
+    @Body() body: InviteUserDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const response = await lastValueFrom(
+      this._dashboardUserServiceClient.inviteUser({
+        tenant_id: tenantId,
+        email: body.email,
+        name: body.name,
+        system_role: body.system_role,
+      }),
+    );
     return {
       message: response.message,
       data: {
@@ -211,11 +232,16 @@ export class TenantController implements OnModuleInit {
   }
 
   @Get(API_ROUTES.TENANT.AUTH.WORKSPACE_USERS)
+  @UseGuards(TenantAuthGuard)
   @UsePipes(ZodValidationPipe)
-  async listWorkspaceUsers(@Query() query: ListWorkspaceUsersDto) {
+  async listWorkspaceUsers(
+    @Req() req: AuthenticatedTenantRequest,
+    @Query() query: ListWorkspaceUsersDto,
+  ) {
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
       this._dashboardUserServiceClient.listWorkspaceUsers({
-        tenant_id: query.tenant_id,
+        tenant_id: tenantId,
         page: query.page,
         limit: query.limit,
         search: query.search,

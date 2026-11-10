@@ -88,10 +88,7 @@ export class RedisService
     return this._client;
   }
 
-  /**
-   * Atomic sliding-window / counter rate check via Lua script.
-   * Returns allowed status, remaining requests, and reset TTL in seconds.
-   */
+
   async checkRateLimit(
     key: string,
     limit: number,
@@ -178,7 +175,7 @@ export class RedisService
         ttl = Number(results[1][1]);
       }
 
-      // If key doesn't have an expiration (ttl == -1), set it to 7 days
+   
       if (ttl < 0) {
         await this._client.expire(key, 7 * 24 * 3600);
       }

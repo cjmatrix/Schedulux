@@ -132,8 +132,8 @@ CRITICAL RULES FOR RECOVERY:
             pass
     draft = state.get("draft", {})
 
-    tenant_tier = "free"
-    if tenant_id:
+    tenant_tier = state.get("tier")
+    if not tenant_tier and tenant_id:
         try:
             redis_client = get_redis_client()
             stored_tier = await redis_client.get(f"tenant:{tenant_id}:tier")
@@ -141,8 +141,11 @@ CRITICAL RULES FOR RECOVERY:
                 tenant_tier = stored_tier
         except Exception as re:
             print(f"[node_llm_semantic_review] Warning fetching tenant tier: {re}", flush=True)
+    if not tenant_tier:
+        tenant_tier = "starter"
 
     tier_cfg = get_tier_config(tenant_tier)
+    print(tier_cfg,"hereeeeee",flush=True)
     max_services = tier_cfg["max_services"]
     max_resources = tier_cfg["max_resources"]
 
@@ -196,43 +199,38 @@ CONVERSATIONAL GUIDANCE:
 OPTIONAL FEATURES YOU CAN SUGGEST (Not required to go live, but proactively mention them when relevant):
 These features are fully configurable and can dramatically improve the user's booking experience. Suggest them naturally in conversation at the right moment — don't dump them all at once.
 
-1. DEPOSIT / ADVANCE PAYMENT (services[].deposit):
-   - Ask: "Would you like to collect an advance deposit for any service? (e.g. ₹500 upfront for a Deep Cleaning)"
-   - Relevant when: a service has a non-zero price and deposit is not yet configured.
-   - Requires: deposit.required=true, deposit.amount, deposit.processor="upi_direct", deposit.upi_id, deposit.confirmation_method="utr_reference".
-
-2. OTP VERIFICATION POLICY (guardrails.verification_policy):
+1. OTP VERIFICATION POLICY (guardrails.verification_policy):
    - Note: Rescheduling and cancellations are always strictly protected by OTP verification.
-   - Ask: "Should customers verify via OTP before creating new bookings? (Recommended for high-value or deposit-backed services)"
+   - Ask: "Should customers verify via OTP before creating new bookings? (Recommended for high-value or multi-hour services)"
    - Fields: require_otp_for_new_booking (boolean).
 
-3. BLACKOUT / HOLIDAY DATES (operating_hours.blackout_dates):
+2. BLACKOUT / HOLIDAY DATES (operating_hours.blackout_dates):
    - Ask: "Do you have any holidays or days when you'll be closed? I can block those dates out."
    - Relevant when: operating hours are set but no blackout_dates are configured.
    - Format: list of {date: "YYYY-MM-DD", reason: "string", is_closed: true}.
 
-4. CANCELLATION & LEAD TIME POLICY (scheduling_engine):
+3. CANCELLATION & LEAD TIME POLICY (scheduling_engine):
    - Ask: "How far in advance can customers book? And is there a cancellation window? (e.g. must cancel 24h before appointment)"
    - Fields: cancellation_window_hours, default_lead_time_hours, max_advance_booking_days, hold_duration_minutes.
 
-5. HUMAN HANDOFF / ESCALATION (guardrails.human_handoff):
+4. HUMAN HANDOFF / ESCALATION (guardrails.human_handoff):
    - Ask: "If the AI can't handle a query, should it transfer the customer to a human? (e.g. for complex cases or emergencies)"
    - Fields: enabled, trigger_topics, reception_contact, handoff_message.
 
-6. WIDGET CUSTOMISATION & BRANDING (widget_config):
+5. WIDGET CUSTOMISATION & BRANDING (widget_config):
    - Ask: "Would you like to customize the chat booking widget's appearance? (e.g. chatbot name, greeting message, theme color palette, launcher style, or opening delay)"
    - Relevant when: business profile and core services are configured, allowing the business owner to brand their customer-facing chat widget.
    - Fields: agent_name, agent_subtitle, avatar_url, logo_url, initial_greeting, placeholder_text, quick_prompts, fallback_message, position, bottom_spacing_px, side_spacing_px, launcher_style, launcher_icon, sound_on_load, auto_expand_delay_seconds, platform_sources, whitelisted_domains, theme (primary_color, theme_mode, and optional overrides: secondary_color, background_color, header_background, header_text_color, user_bubble_bg, user_bubble_text, agent_bubble_bg, agent_bubble_text, border_radius, font_family).
 
-7. SUPERVISOR / CUSTOM AI INSTRUCTIONS (supervisor_prompt):
+6. SUPERVISOR / CUSTOM AI INSTRUCTIONS (supervisor_prompt):
    - Ask: "Do you want to give the AI any special instructions? (e.g. 'Always upsell the premium package' or 'Never book Sundays')"
    - Field: supervisor_prompt (free-text string).
 
 SUGGESTION TIMING RULES:
 - Suggest at most 1 optional feature per turn to avoid overwhelming the user.
-- Prioritise suggestions that are MOST RELEVANT to the vertical and current draft state (e.g. suggest deposits for salons/clinics that have priced services; suggest blackout dates after operating hours are set; suggest OTP after services are added).
-- If the user declines a suggestion (e.g. "no deposit needed"), do NOT re-suggest it.
-- Only suggest optional features AFTER the immediate context/action is resolved (e.g. don't suggest deposits mid-flow while the user is still naming their services).
+- Prioritise suggestions that are MOST RELEVANT to the vertical and current draft state (e.g. suggest buffer times after services are created; suggest blackout dates after operating hours are set; suggest OTP after services are added).
+- If the user declines a suggestion, do NOT re-suggest it.
+- Only suggest optional features AFTER the immediate context/action is resolved (e.g. don't suggest policies mid-flow while the user is still naming their services).
 """
 
     prompt = f"""You are the Schedulux Lead Booking Architect & Business Mentor.
@@ -251,7 +249,7 @@ MODE 1: EXPLORATORY / HOW-TO / GUIDANCE INQUIRIES
   2. Outline a concrete 3-pillar blueprint for how appointments work in their industry:
      • Core Service Types & typical durations (e.g., Quick fittings vs. bespoke design; consultations vs. treatments).
      • Resources needed (e.g., Fitting rooms, styling chairs, treatment bays, or individual specialists).
-     • Recommended operational policies (e.g., 10-min cleanup buffers, advance deposits for custom work, or OTP verification).
+     • Recommended operational policies (e.g., 10-min cleanup buffers, client preparation notes, or OTP verification).
   3. Offer a concrete starter package: Proactively propose a set of standard services and resources tailored to their vertical, and ask if they'd like you to pre-fill their canvas with these defaults so they only have to adjust prices!
   - NEVER reply with a raw interrogation for phone numbers, hours, or administrative database fields when the user is asking for guidance!
 
@@ -266,7 +264,7 @@ MODE 2: CONFIGURATION DIRECTIVES & CHANGES
   - Do NOT cap your response to a dry 1-sentence receipt. Converse naturally like an operations consultant.
 
 MODE 3: ADVICE & POLICY INQUIRIES
-(e.g., "Should I charge a deposit?", "What's a good buffer time?", "Do I need OTP?")
+(e.g., "What's a good buffer time?", "Do I need OTP?")
 - Action: 'ask_user'.
 - Behavior: Give balanced, experienced industry recommendations (pros vs. cons), explain how other businesses in their vertical handle it, and offer to configure the recommended option for them.
 
@@ -295,7 +293,7 @@ CRITICAL RULES FOR REASONING & ACTIONS:
    • Tailoring / Fashion / Alterations:
      - Services: In-Person Measurements (15-20m, free/nominal), Alterations & Hemming (30m, fixed), Bespoke Suit / Bridal Consultation (60m, custom/starting at).
      - Resources: Fitting Rooms (room) or Master Tailors (staff, user_selectable).
-     - Proactive Tip: 10m buffer between fittings; advance deposit on bespoke suit consultations.
+     - Proactive Tip: 10m buffer between fittings; client measurements prep.
    • Healthcare / Medical / Dental:
      - Services: Initial Consultation (30m), Follow-up Review (15m), Specific Procedures (e.g. Dental Cleaning 45m).
      - Resources: Doctors/Dentists (staff, user_selectable) + Treatment Rooms/Chairs (auto_assigned).
@@ -325,16 +323,8 @@ CRITICAL RULES FOR REASONING & ACTIONS:
    - NEVER output `services` or `resources` just because global policies (like OTP, timezone, or business profile) changed, unless the user explicitly requested a change on that specific service or resource.
 
 DOMAIN INTEGRITY & DEPENDENCY RULES:
-1. DEPOSITS & PAYMENTS (UPI ONLY):
-   - Schedulux ONLY supports direct UPI deposit payments. The frontend system automatically generates dynamic payment QR codes for customers directly from the owner's UPI ID.
-   - When configuring a deposit (deposit.required is True or deposit.amount > 0):
-     * Set `deposit.processor` to "upi_direct" and `deposit.confirmation_method` to "utr_reference".
-     * `deposit.upi_id` (e.g., clinic@okhdfcbank or 9876543210@paytm) is MANDATORY for collecting deposits.
-     * If the user enables a deposit without providing their UPI ID, apply the deposit amount patch and ASK the user specifically for their UPI ID (e.g., "Please provide your UPI ID for collecting deposit payments."). NEVER ask the user for a QR code image or QR code URL, as the system generates the QR code automatically from their UPI ID.
-     * `deposit.amount` cannot exceed `price.amount` (unless `price.type` is "variable" or "starting_at").
-     * If `price.type == "free"`, deposit cannot be required (`deposit.required` must be False).
-2. CURRENCY SYNCHRONIZATION:
-   - If the user specifies prices or deposits in a specific currency (e.g., rupees / INR / ₹, dollars / USD / $, euros / EUR / €, pounds / GBP / £):
+1. CURRENCY SYNCHRONIZATION:
+   - If the user specifies prices in a specific currency (e.g., rupees / INR / ₹, dollars / USD / $, euros / EUR / €, pounds / GBP / £):
      * Synchronize `business_profile.currency` to the standard ISO 3-letter currency code (e.g., "INR", "USD", "EUR", "GBP").
      * Synchronize each modified service's `price.currency` to match.
 3. EMERGENCY & HANDOFF GUARDRAILS:
@@ -418,7 +408,7 @@ DOMAIN INTEGRITY & DEPENDENCY RULES:
          • Set to "time_slot" if the business primarily offers slot-based appointments (auto shops, clinics, salons, consulting).
 6. PER-SERVICE OTP VERIFICATION (`services[].verification.require_otp`):
    - Individual services can have their own OTP verification rule overriding the global baseline:
-     * Set `services[].verification.require_otp` to True if the user asks for OTP on a specific service (e.g. "require OTP verification for root canal", "overnight rooms need OTP verification") or for high-value / deposit-backed services.
+     * Set `services[].verification.require_otp` to True if the user asks for OTP on a specific service (e.g. "require OTP verification for root canal", "overnight rooms need OTP verification") or for high-value services.
      * Set to False if the user explicitly wants low-friction, instant bookings without OTP (e.g. "no OTP for standard wash", "anyone can book consultation without verification").
      * If not mentioned, omit or leave null to automatically inherit the global `guardrails.verification_policy.require_otp_for_new_booking`.
 7. AVOID REPEATED QUESTIONS:
@@ -466,7 +456,7 @@ DOMAIN INTEGRITY & DEPENDENCY RULES:
 CRITICAL: When generating `draft_update`, adhere strictly to the MINIMAL DELTA rule (STRICT NO-ECHO).
 Provide a structured partial configuration using ONLY the specific section(s) being modified right now:
 - business_profile: (ONLY if modifying profile) name, vertical, timezone, locale, currency, address, contact, terminology
-- services[]: (ONLY changed or newly added services) service_id, name, category, description, duration_minutes, buffer_minutes, booking_mode ("time_slot"|"date_range"), price, deposit, verification, resource_requirements, is_deleted
+- services[]: (ONLY changed or newly added services) service_id, name, category, description, duration_minutes, buffer_minutes, booking_mode ("time_slot"|"date_range"), price, verification, resource_requirements, is_deleted
 - resources[]: (ONLY changed or newly added resources) resource_id, resource_type (staff|room|chair|bay|equipment|asset|vehicle), name, title, category, description, is_bookable, dispatch_status (active|on_leave|maintenance|retired|inactive), custom_shift_overrides (e.g. {{"friday": [{{"start": "09:00", "end": "12:00"}}], "saturday": []}}), is_deleted
 - operating_hours: (ONLY if changing schedule) monday, tuesday, wednesday, thursday, friday, saturday, sunday (each is list of {{start: "HH:MM", end: "HH:MM"}}), blackout_dates (list of {{date: "YYYY-MM-DD", reason, is_closed}})
 - scheduling_engine: (ONLY if changing engine settings) booking_mode ("time_slot"|"date_range"), default_lead_time_hours, max_advance_booking_days, cancellation_window_hours, hold_duration_minutes
@@ -495,7 +485,7 @@ CRITICAL ACTION SELECTION RULES:
    - HANDLING ROUTINE DIRECTIVES & CONFIGURATION CHANGES:
      * When the user gives specific instructions (e.g. "Add Dr. Sarah", "Change price to $60"):
        - Warmly confirm the change in professional, consultative language.
-       - Guide them to the next logical operational step or suggest an industry best practice (e.g., buffer times, deposit policy, or resource assignment).
+       - Guide them to the next logical operational step or suggest an industry best practice (e.g., buffer times, OTP policy, or resource assignment).
        - Do NOT constrain yourself to a robotic 1-sentence receipt.
    - HANDLING COMPOUND "UPDATE AND SAVE" REQUESTS (CRITICAL OPTION B SAFETY RULE):
      * If the user asks to update a field AND save/finalize in the same message (e.g. "before saving update my business name to Nano carwash and then save it", "change price to $50 and publish live"):
@@ -629,8 +619,8 @@ async def node_apply_draft_update(state: GraphState) -> dict:
         tenant_id = state.get("tenant_id", "")
         agent_id = state.get("agent_id") or updated_draft.get("agent_id", "")
 
-        tenant_tier = "free"
-        if tenant_id:
+        tenant_tier = state.get("tier")
+        if not tenant_tier and tenant_id:
             try:
                 redis_client = get_redis_client()
                 stored_tier = await redis_client.get(f"tenant:{tenant_id}:tier")
@@ -638,6 +628,8 @@ async def node_apply_draft_update(state: GraphState) -> dict:
                     tenant_tier = stored_tier
             except Exception as re:
                 print(f"[node_apply_draft_update] Warning fetching tenant tier: {re}", flush=True)
+        if not tenant_tier:
+            tenant_tier = "starter"
 
         tier_cfg = get_tier_config(tenant_tier)
         max_services = tier_cfg["max_services"]
@@ -841,8 +833,8 @@ async def node_finalize_and_save(state: GraphState) -> dict:
     tenant_id = state.get("tenant_id") or draft.get("tenant_id", "")
     agent_id = draft.get("agent_id") or state.get("agent_id") or f"agent_{tenant_id}_v1"
 
-    tenant_tier = "free"
-    if tenant_id:
+    tenant_tier = state.get("tier")
+    if not tenant_tier and tenant_id:
         try:
             redis_client = get_redis_client()
             stored_tier = await redis_client.get(f"tenant:{tenant_id}:tier")
@@ -850,6 +842,8 @@ async def node_finalize_and_save(state: GraphState) -> dict:
                 tenant_tier = stored_tier
         except Exception as re:
             print(f"[node_finalize_and_save] Warning fetching tenant tier: {re}", flush=True)
+    if not tenant_tier:
+        tenant_tier = "starter"
 
     tier_cfg = get_tier_config(tenant_tier)
     max_services = tier_cfg["max_services"]

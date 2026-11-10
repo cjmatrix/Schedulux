@@ -66,17 +66,26 @@ class ChatServiceProtocol(Protocol):
 
 class AgentManagementServiceProtocol(Protocol):
     async def save_initial_draft(
-        self, tenant_id: str, creation_source: str, draft_json: str | None, name: str | None
+        self,
+        tenant_id: str,
+        creation_source: str,
+        draft_json: str | None,
+        name: str | None,
+        tier: str | None = None,
     ) -> tuple[str, str]: ...
     async def list_tenant_agents(self, tenant_id: str) -> list[AgentSummaryDTO]: ...
 
 
 class OnboardingServiceProtocol(Protocol):
     async def start_session(
-        self, tenant_id: str, agent_id: str, initial_draft_json: str | None = None
+        self,
+        tenant_id: str,
+        agent_id: str,
+        initial_draft_json: str | None = None,
+        tier: str | None = None,
     ) -> OnboardingResult: ...
     async def resume_session(
-        self, tenant_id: str, agent_id: str, user_answer: str
+        self, tenant_id: str, agent_id: str, user_answer: str, tier: str | None = None
     ) -> OnboardingResult: ...
 
 
@@ -89,7 +98,12 @@ class MemoryServiceProtocol(Protocol):
 
 class DocumentServiceProtocol(Protocol):
     async def get_upload_url(
-        self, tenant_id: str, agent_id: str, file_name: str, file_size_bytes: int = 0
+        self,
+        tenant_id: str,
+        agent_id: str,
+        file_name: str,
+        file_size_bytes: int = 0,
+        tier: str | None = None,
     ) -> tuple[str, str, str, int]: ...
 
     async def confirm_upload(self, tenant_id: str, document_id: str) -> bool: ...

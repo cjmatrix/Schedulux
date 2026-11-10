@@ -29,7 +29,6 @@ export interface CreateBookingPayload {
   customer_email?: string;
   notes?: string;
   source?: 'manual' | 'customer_agent' | 'web_portal' | 'sandbox_simulation';
-  deposit_status?: 'not_required' | 'pending' | 'verified' | 'waived';
   created_by?: string;
 }
 

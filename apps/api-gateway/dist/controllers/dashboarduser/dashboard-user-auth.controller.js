@@ -43,7 +43,7 @@ let DashboardUserAuthController = class DashboardUserAuthController {
     async refreshToken(req, body, res) {
         const token = req.cookies?.[cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN] || body?.refresh_token || '';
         if (!token) {
-            throw new Error(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.NO_REFRESH_TOKEN);
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.NO_REFRESH_TOKEN);
         }
         const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserAuthClient.refreshToken({ refresh_token: token }));
         res.cookie(cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN, response.access_token, (0, cookie_util_js_1.getAccessTokenCookieOptions)());
@@ -73,7 +73,7 @@ let DashboardUserAuthController = class DashboardUserAuthController {
     async getProfile(req) {
         const userId = req.dashboardUser?.user_id;
         if (!userId) {
-            throw new Error(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.USER_ID_NOT_FOUND);
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.USER_ID_NOT_FOUND);
         }
         const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserAuthClient.getProfile({ user_id: userId }));
         return {

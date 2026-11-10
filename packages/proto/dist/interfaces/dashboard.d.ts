@@ -1,3 +1,4 @@
+import type { Metadata } from "@grpc/grpc-js";
 import { Observable } from "rxjs";
 export declare const protobufPackage = "dashboard";
 export interface DashboardUserLoginRequest {
@@ -71,28 +72,28 @@ export interface ListWorkspaceUsersResponse {
 }
 export declare const DASHBOARD_PACKAGE_NAME = "dashboard";
 export interface DashboardAuthServiceClient {
-    login(request: DashboardUserLoginRequest): Observable<DashboardUserLoginResponse>;
-    getProfile(request: DashboardUserProfileRequest): Observable<DashboardUserProfileResponse>;
-    refreshToken(request: DashboardUserRefreshTokenRequest): Observable<DashboardUserRefreshTokenResponse>;
-    forgotPassword(request: DashboardUserForgotPasswordRequest): Observable<DashboardUserForgotPasswordResponse>;
-    resetPassword(request: DashboardUserResetPasswordRequest): Observable<DashboardUserResetPasswordResponse>;
+    login(request: DashboardUserLoginRequest, metadata?: Metadata): Observable<DashboardUserLoginResponse>;
+    getProfile(request: DashboardUserProfileRequest, metadata?: Metadata): Observable<DashboardUserProfileResponse>;
+    refreshToken(request: DashboardUserRefreshTokenRequest, metadata?: Metadata): Observable<DashboardUserRefreshTokenResponse>;
+    forgotPassword(request: DashboardUserForgotPasswordRequest, metadata?: Metadata): Observable<DashboardUserForgotPasswordResponse>;
+    resetPassword(request: DashboardUserResetPasswordRequest, metadata?: Metadata): Observable<DashboardUserResetPasswordResponse>;
 }
 export interface DashboardAuthServiceController {
-    login(request: DashboardUserLoginRequest): Promise<DashboardUserLoginResponse> | Observable<DashboardUserLoginResponse> | DashboardUserLoginResponse;
-    getProfile(request: DashboardUserProfileRequest): Promise<DashboardUserProfileResponse> | Observable<DashboardUserProfileResponse> | DashboardUserProfileResponse;
-    refreshToken(request: DashboardUserRefreshTokenRequest): Promise<DashboardUserRefreshTokenResponse> | Observable<DashboardUserRefreshTokenResponse> | DashboardUserRefreshTokenResponse;
-    forgotPassword(request: DashboardUserForgotPasswordRequest): Promise<DashboardUserForgotPasswordResponse> | Observable<DashboardUserForgotPasswordResponse> | DashboardUserForgotPasswordResponse;
-    resetPassword(request: DashboardUserResetPasswordRequest): Promise<DashboardUserResetPasswordResponse> | Observable<DashboardUserResetPasswordResponse> | DashboardUserResetPasswordResponse;
+    login(request: DashboardUserLoginRequest, metadata?: Metadata): Promise<DashboardUserLoginResponse> | Observable<DashboardUserLoginResponse> | DashboardUserLoginResponse;
+    getProfile(request: DashboardUserProfileRequest, metadata?: Metadata): Promise<DashboardUserProfileResponse> | Observable<DashboardUserProfileResponse> | DashboardUserProfileResponse;
+    refreshToken(request: DashboardUserRefreshTokenRequest, metadata?: Metadata): Promise<DashboardUserRefreshTokenResponse> | Observable<DashboardUserRefreshTokenResponse> | DashboardUserRefreshTokenResponse;
+    forgotPassword(request: DashboardUserForgotPasswordRequest, metadata?: Metadata): Promise<DashboardUserForgotPasswordResponse> | Observable<DashboardUserForgotPasswordResponse> | DashboardUserForgotPasswordResponse;
+    resetPassword(request: DashboardUserResetPasswordRequest, metadata?: Metadata): Promise<DashboardUserResetPasswordResponse> | Observable<DashboardUserResetPasswordResponse> | DashboardUserResetPasswordResponse;
 }
 export declare function DashboardAuthServiceControllerMethods(): (constructor: Function) => void;
 export declare const DASHBOARD_AUTH_SERVICE_NAME = "DashboardAuthService";
 export interface DashboardUserServiceClient {
-    inviteUser(request: InviteUserRequest): Observable<InviteUserResponse>;
-    listWorkspaceUsers(request: ListWorkspaceUsersRequest): Observable<ListWorkspaceUsersResponse>;
+    inviteUser(request: InviteUserRequest, metadata?: Metadata): Observable<InviteUserResponse>;
+    listWorkspaceUsers(request: ListWorkspaceUsersRequest, metadata?: Metadata): Observable<ListWorkspaceUsersResponse>;
 }
 export interface DashboardUserServiceController {
-    inviteUser(request: InviteUserRequest): Promise<InviteUserResponse> | Observable<InviteUserResponse> | InviteUserResponse;
-    listWorkspaceUsers(request: ListWorkspaceUsersRequest): Promise<ListWorkspaceUsersResponse> | Observable<ListWorkspaceUsersResponse> | ListWorkspaceUsersResponse;
+    inviteUser(request: InviteUserRequest, metadata?: Metadata): Promise<InviteUserResponse> | Observable<InviteUserResponse> | InviteUserResponse;
+    listWorkspaceUsers(request: ListWorkspaceUsersRequest, metadata?: Metadata): Promise<ListWorkspaceUsersResponse> | Observable<ListWorkspaceUsersResponse> | ListWorkspaceUsersResponse;
 }
 export declare function DashboardUserServiceControllerMethods(): (constructor: Function) => void;
 export declare const DASHBOARD_USER_SERVICE_NAME = "DashboardUserService";

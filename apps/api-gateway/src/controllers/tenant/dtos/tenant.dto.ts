@@ -54,8 +54,8 @@ export const LogoutSchema: z.ZodType<LogoutRequest> = z.object({
 
 export class LogoutDto extends createZodDto(LogoutSchema) {}
 
-export const InviteUserSchema: z.ZodType<InviteUserRequest> = z.object({
-  tenant_id: z.string().min(1, 'Tenant ID is required'),
+export const InviteUserSchema = z.object({
+  tenant_id: z.string().optional(),
   email: z.string().trim().email('Please provide a valid email address'),
   name: z.string().trim().min(2, 'Name must be at least 2 characters'),
   system_role: z.string().min(1, 'System role is required'),
@@ -63,10 +63,10 @@ export const InviteUserSchema: z.ZodType<InviteUserRequest> = z.object({
 
 export class InviteUserDto extends createZodDto(InviteUserSchema) {}
 
-export const ListWorkspaceUsersSchema: z.ZodType<ListWorkspaceUsersRequest> = z.object({
-  tenant_id: z.string().min(1, 'Tenant ID is required'),
-  page: z.coerce.number().optional(),
-  limit: z.coerce.number().optional(),
+export const ListWorkspaceUsersSchema = z.object({
+  tenant_id: z.string().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
   search: z.string().optional(),
   role: z.string().optional(),
 });

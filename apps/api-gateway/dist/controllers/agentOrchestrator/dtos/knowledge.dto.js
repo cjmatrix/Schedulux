@@ -1,24 +1,30 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ListDocumentsQueryDto = exports.ListDocumentsQuerySchema = exports.ConfirmDocumentUploadDto = exports.ConfirmDocumentUploadSchema = exports.GetDocumentUploadUrlDto = exports.GetDocumentUploadUrlSchema = exports.SendSandboxMessageDto = exports.SendSandboxMessageSchema = exports.CustomerChatDto = exports.CustomerChatSchema = exports.InitCustomerChatDto = exports.InitCustomerChatSchema = exports.SaveInitialAgentDraftDto = exports.SaveInitialAgentDraftSchema = exports.ResumeOnboardingDto = exports.ResumeOnboardingSchema = exports.StartOnboardingDto = exports.StartOnboardingSchema = exports.GetCrawlStatusDto = exports.GetCrawlStatusSchema = exports.CrawlSiteDto = exports.CrawlSiteSchema = void 0;
+exports.PublicChatMessagesQueryDto = exports.PublicChatMessagesQuerySchema = exports.PublicChatConfigQueryDto = exports.PublicChatConfigQuerySchema = exports.ListDocumentsQueryDto = exports.ListDocumentsQuerySchema = exports.ConfirmDocumentUploadDto = exports.ConfirmDocumentUploadSchema = exports.GetDocumentUploadUrlDto = exports.GetDocumentUploadUrlSchema = exports.GetOnboardingMessagesQueryDto = exports.GetOnboardingMessagesQuerySchema = exports.GetAgentMessagesQueryDto = exports.GetAgentMessagesQuerySchema = exports.GetSandboxMessagesQueryDto = exports.GetSandboxMessagesQuerySchema = exports.GetSandboxWidgetConfigQueryDto = exports.GetSandboxWidgetConfigQuerySchema = exports.SendSandboxMessageDto = exports.SendSandboxMessageSchema = exports.CustomerChatDto = exports.CustomerChatSchema = exports.InitSandboxChatDto = exports.InitSandboxChatSchema = exports.InitCustomerChatDto = exports.InitCustomerChatSchema = exports.SaveInitialAgentDraftDto = exports.SaveInitialAgentDraftSchema = exports.ResumeOnboardingDto = exports.ResumeOnboardingSchema = exports.StartOnboardingDto = exports.StartOnboardingSchema = exports.GetSchemaQueryDto = exports.GetSchemaQuerySchema = exports.GetCrawlStatusDto = exports.GetCrawlStatusSchema = exports.CrawlSiteDto = exports.CrawlSiteSchema = void 0;
 const nestjs_zod_1 = require("nestjs-zod");
 const zod_1 = require("zod");
 exports.CrawlSiteSchema = zod_1.z.object({
-    tenant_id: zod_1.z.string().min(1, 'Tenant ID is required'),
+    tenant_id: zod_1.z.string().optional(),
     url: zod_1.z.string().trim().url('Please provide a valid URL'),
 });
 class CrawlSiteDto extends (0, nestjs_zod_1.createZodDto)(exports.CrawlSiteSchema) {
 }
 exports.CrawlSiteDto = CrawlSiteDto;
 exports.GetCrawlStatusSchema = zod_1.z.object({
-    tenant_id: zod_1.z.string().min(1, 'Tenant ID is required'),
+    tenant_id: zod_1.z.string().optional(),
     job_id: zod_1.z.string().min(1, 'Job ID is required'),
 });
 class GetCrawlStatusDto extends (0, nestjs_zod_1.createZodDto)(exports.GetCrawlStatusSchema) {
 }
 exports.GetCrawlStatusDto = GetCrawlStatusDto;
+exports.GetSchemaQuerySchema = zod_1.z.object({
+    job_id: zod_1.z.string().optional(),
+});
+class GetSchemaQueryDto extends (0, nestjs_zod_1.createZodDto)(exports.GetSchemaQuerySchema) {
+}
+exports.GetSchemaQueryDto = GetSchemaQueryDto;
 exports.StartOnboardingSchema = zod_1.z.object({
-    tenant_id: zod_1.z.string().min(1, 'Tenant ID is required'),
+    tenant_id: zod_1.z.string().optional(),
     agent_id: zod_1.z.string().optional(),
     initial_draft_json: zod_1.z.string().optional().default('{}'),
 });
@@ -26,7 +32,7 @@ class StartOnboardingDto extends (0, nestjs_zod_1.createZodDto)(exports.StartOnb
 }
 exports.StartOnboardingDto = StartOnboardingDto;
 exports.ResumeOnboardingSchema = zod_1.z.object({
-    tenant_id: zod_1.z.string().min(1, 'Tenant ID is required'),
+    tenant_id: zod_1.z.string().optional(),
     agent_id: zod_1.z.string().optional(),
     user_answer: zod_1.z.string().min(1, 'User answer is required'),
 });
@@ -54,6 +60,15 @@ exports.InitCustomerChatSchema = zod_1.z.object({
 class InitCustomerChatDto extends (0, nestjs_zod_1.createZodDto)(exports.InitCustomerChatSchema) {
 }
 exports.InitCustomerChatDto = InitCustomerChatDto;
+exports.InitSandboxChatSchema = zod_1.z.object({
+    tenant_id: zod_1.z.string().optional(),
+    agent_id: zod_1.z.string().optional().default('default'),
+    token: zod_1.z.string().optional(),
+    session_id: zod_1.z.string().optional(),
+});
+class InitSandboxChatDto extends (0, nestjs_zod_1.createZodDto)(exports.InitSandboxChatSchema) {
+}
+exports.InitSandboxChatDto = InitSandboxChatDto;
 exports.CustomerChatSchema = zod_1.z.object({
     tenant_id: zod_1.z.string().min(1, 'Tenant ID is required'),
     agent_id: zod_1.z.string().min(1, 'Agent ID is required'),
@@ -69,7 +84,7 @@ class CustomerChatDto extends (0, nestjs_zod_1.createZodDto)(exports.CustomerCha
 exports.CustomerChatDto = CustomerChatDto;
 exports.SendSandboxMessageSchema = zod_1.z.object({
     tenant_id: zod_1.z.string().optional(),
-    agent_id: zod_1.z.string().optional(),
+    agent_id: zod_1.z.string().optional().default('default'),
     session_id: zod_1.z.string().optional(),
     token: zod_1.z.string().optional(),
     message: zod_1.z.string().min(1, 'Message cannot be empty'),
@@ -80,6 +95,37 @@ exports.SendSandboxMessageSchema = zod_1.z.object({
 class SendSandboxMessageDto extends (0, nestjs_zod_1.createZodDto)(exports.SendSandboxMessageSchema) {
 }
 exports.SendSandboxMessageDto = SendSandboxMessageDto;
+exports.GetSandboxWidgetConfigQuerySchema = zod_1.z.object({
+    agent_id: zod_1.z.string().optional().default('default'),
+});
+class GetSandboxWidgetConfigQueryDto extends (0, nestjs_zod_1.createZodDto)(exports.GetSandboxWidgetConfigQuerySchema) {
+}
+exports.GetSandboxWidgetConfigQueryDto = GetSandboxWidgetConfigQueryDto;
+exports.GetSandboxMessagesQuerySchema = zod_1.z.object({
+    agent_id: zod_1.z.string().optional().default('default'),
+    session_id: zod_1.z.string().optional(),
+    token: zod_1.z.string().optional(),
+    before: zod_1.z.string().optional(),
+    limit: zod_1.z.coerce.number().int().min(1).max(100).default(20),
+});
+class GetSandboxMessagesQueryDto extends (0, nestjs_zod_1.createZodDto)(exports.GetSandboxMessagesQuerySchema) {
+}
+exports.GetSandboxMessagesQueryDto = GetSandboxMessagesQueryDto;
+exports.GetAgentMessagesQuerySchema = zod_1.z.object({
+    limit: zod_1.z.coerce.number().int().min(1).max(100).default(20),
+    before: zod_1.z.string().optional(),
+});
+class GetAgentMessagesQueryDto extends (0, nestjs_zod_1.createZodDto)(exports.GetAgentMessagesQuerySchema) {
+}
+exports.GetAgentMessagesQueryDto = GetAgentMessagesQueryDto;
+exports.GetOnboardingMessagesQuerySchema = zod_1.z.object({
+    agent_id: zod_1.z.string().min(1, 'agent_id is required'),
+    limit: zod_1.z.coerce.number().int().min(1).max(100).default(50),
+    before: zod_1.z.string().optional(),
+});
+class GetOnboardingMessagesQueryDto extends (0, nestjs_zod_1.createZodDto)(exports.GetOnboardingMessagesQuerySchema) {
+}
+exports.GetOnboardingMessagesQueryDto = GetOnboardingMessagesQueryDto;
 exports.GetDocumentUploadUrlSchema = zod_1.z.object({
     agent_id: zod_1.z.string().min(1, 'Agent ID is required'),
     file_name: zod_1.z
@@ -109,3 +155,21 @@ exports.ListDocumentsQuerySchema = zod_1.z.object({
 class ListDocumentsQueryDto extends (0, nestjs_zod_1.createZodDto)(exports.ListDocumentsQuerySchema) {
 }
 exports.ListDocumentsQueryDto = ListDocumentsQueryDto;
+exports.PublicChatConfigQuerySchema = zod_1.z.object({
+    tenant_id: zod_1.z.string().min(1, 'Tenant ID is required'),
+    agent_id: zod_1.z.string().min(1, 'Agent ID is required'),
+});
+class PublicChatConfigQueryDto extends (0, nestjs_zod_1.createZodDto)(exports.PublicChatConfigQuerySchema) {
+}
+exports.PublicChatConfigQueryDto = PublicChatConfigQueryDto;
+exports.PublicChatMessagesQuerySchema = zod_1.z.object({
+    tenant_id: zod_1.z.string().min(1, 'Tenant ID is required'),
+    agent_id: zod_1.z.string().min(1, 'Agent ID is required'),
+    session_id: zod_1.z.string().optional(),
+    token: zod_1.z.string().optional(),
+    limit: zod_1.z.coerce.number().int().min(1).max(100).default(20),
+    before: zod_1.z.string().optional(),
+});
+class PublicChatMessagesQueryDto extends (0, nestjs_zod_1.createZodDto)(exports.PublicChatMessagesQuerySchema) {
+}
+exports.PublicChatMessagesQueryDto = PublicChatMessagesQueryDto;

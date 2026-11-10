@@ -38,6 +38,13 @@ export const API_ROUTES = {
       INVITE_USER: 'invite-user',
       WORKSPACE_USERS: 'workspace-users',
     },
+    BILLING: {
+      BASE: 'api/v1/tenant/billing',
+      SUBSCRIPTION: 'subscription',
+      CONFIG: 'config',
+      WEBHOOK: 'webhook',
+      CHECKOUT: 'checkout',
+    },
   },
   SCHEDULING: {
     BASE: 'api/v1/tenant/scheduling',

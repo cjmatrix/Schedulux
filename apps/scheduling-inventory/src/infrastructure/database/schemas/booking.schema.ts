@@ -23,20 +23,10 @@ export interface IBookingDoc extends Document<string> {
   duration_minutes: number;
   source: string;
   status: string;
-  deposit_status: string;
   price: {
     type: string;
     amount: number;
     currency: string;
-  };
-  deposit: {
-    required: boolean;
-    amount: number;
-    processor: string;
-    upi_id: string;
-    qr_code_url: string;
-    confirmation_method: string;
-    payment_instructions: string;
   };
   notes: string;
   created_by: string;
@@ -80,29 +70,14 @@ export const BookingMongooseSchema = new Schema<IBookingDoc>(
     },
     status: {
       type: String,
-      enum: ['confirmed', 'pending_deposit', 'cancelled', 'completed', 'no_show'],
+      enum: ['confirmed', 'cancelled', 'completed', 'no_show'],
       default: 'confirmed',
-      index: true,
-    },
-    deposit_status: {
-      type: String,
-      enum: ['not_required', 'pending', 'verified', 'waived'],
-      default: 'not_required',
       index: true,
     },
     price: {
       type: { type: String, default: 'fixed' },
       amount: { type: Number, default: 0 },
       currency: { type: String, default: 'INR' },
-    },
-    deposit: {
-      required: { type: Boolean, default: false },
-      amount: { type: Number, default: 0 },
-      processor: { type: String, default: 'direct_upi' },
-      upi_id: { type: String, default: '' },
-      qr_code_url: { type: String, default: '' },
-      confirmation_method: { type: String, default: 'manual_verification' },
-      payment_instructions: { type: String, default: '' },
     },
     notes: { type: String, default: '', trim: true },
     created_by: { type: String, default: '', trim: true },

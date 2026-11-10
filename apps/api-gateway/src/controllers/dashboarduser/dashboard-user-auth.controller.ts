@@ -7,6 +7,7 @@ import {
   Post,
   Req,
   Res,
+  UnauthorizedException,
   UseGuards,
   UsePipes,
 } from '@nestjs/common';
@@ -67,7 +68,7 @@ export class DashboardUserAuthController implements OnModuleInit {
   ) {
     const token = req.cookies?.[COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN] || body?.refresh_token || '';
     if (!token) {
-      throw new Error(RESPONSE_MESSAGES.AUTH.NO_REFRESH_TOKEN);
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.NO_REFRESH_TOKEN);
     }
 
     const response = await lastValueFrom(
@@ -117,7 +118,7 @@ export class DashboardUserAuthController implements OnModuleInit {
   async getProfile(@Req() req: AuthenticatedTenantRequest) {
     const userId = req.dashboardUser?.user_id;
     if (!userId) {
-      throw new Error(RESPONSE_MESSAGES.AUTH.USER_ID_NOT_FOUND);
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.USER_ID_NOT_FOUND);
     }
 
     const response = await lastValueFrom(

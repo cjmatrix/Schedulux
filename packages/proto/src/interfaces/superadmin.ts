@@ -5,6 +5,7 @@
 // source: superadmin.proto
 
 /* eslint-disable */
+import type { Metadata } from "@grpc/grpc-js";
 import { GrpcMethod, GrpcStreamMethod } from "@nestjs/microservices";
 import { Observable } from "rxjs";
 
@@ -59,26 +60,31 @@ export interface GetProfileResponse {
 export const SUPERADMIN_PACKAGE_NAME = "superadmin";
 
 export interface SuperAdminAuthServiceClient {
-  login(request: LoginRequest): Observable<LoginResponse>;
+  login(request: LoginRequest, metadata?: Metadata): Observable<LoginResponse>;
 
-  logout(request: LogoutRequest): Observable<LogoutResponse>;
+  logout(request: LogoutRequest, metadata?: Metadata): Observable<LogoutResponse>;
 
-  refreshToken(request: RefreshTokenRequest): Observable<RefreshTokenResponse>;
+  refreshToken(request: RefreshTokenRequest, metadata?: Metadata): Observable<RefreshTokenResponse>;
 
-  getProfile(request: GetProfileRequest): Observable<GetProfileResponse>;
+  getProfile(request: GetProfileRequest, metadata?: Metadata): Observable<GetProfileResponse>;
 }
 
 export interface SuperAdminAuthServiceController {
-  login(request: LoginRequest): Promise<LoginResponse> | Observable<LoginResponse> | LoginResponse;
+  login(request: LoginRequest, metadata?: Metadata): Promise<LoginResponse> | Observable<LoginResponse> | LoginResponse;
 
-  logout(request: LogoutRequest): Promise<LogoutResponse> | Observable<LogoutResponse> | LogoutResponse;
+  logout(
+    request: LogoutRequest,
+    metadata?: Metadata,
+  ): Promise<LogoutResponse> | Observable<LogoutResponse> | LogoutResponse;
 
   refreshToken(
     request: RefreshTokenRequest,
+    metadata?: Metadata,
   ): Promise<RefreshTokenResponse> | Observable<RefreshTokenResponse> | RefreshTokenResponse;
 
   getProfile(
     request: GetProfileRequest,
+    metadata?: Metadata,
   ): Promise<GetProfileResponse> | Observable<GetProfileResponse> | GetProfileResponse;
 }
 

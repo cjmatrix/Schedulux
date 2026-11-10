@@ -60,16 +60,6 @@ class StrictPriceSchema(BaseModel):
     amount: Optional[float] = None
     currency: Optional[str] = None
 
-class StrictDepositSchema(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    required: Optional[bool] = None
-    amount: Optional[float] = None
-    processor: Optional[str] = None
-    upi_id: Optional[str] = None
-    qr_code_url: Optional[str] = None
-    confirmation_method: Optional[str] = None
-    payment_instructions: Optional[str] = None
-
 class StrictServiceVerificationSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
     require_otp: Optional[bool] = None
@@ -96,9 +86,10 @@ class StrictServiceSchema(BaseModel):
     buffer_minutes: Optional[int] = None
     booking_mode: Optional[BookingMode] = None
     price: Optional[StrictPriceSchema] = None
-    deposit: Optional[StrictDepositSchema] = None
     verification: Optional[StrictServiceVerificationSchema] = None
     resource_requirements: Optional[list[StrictResourceRequirementSchema]] = None
+    is_deleted: Optional[bool] = None
+    deleted_at: Optional[str] = None
 
 class StrictResourceSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -111,6 +102,8 @@ class StrictResourceSchema(BaseModel):
     is_bookable: Optional[bool] = None
     dispatch_status: Optional[DispatchStatus] = None
     custom_shift_overrides: Optional[dict] = None
+    is_deleted: Optional[bool] = None
+    deleted_at: Optional[str] = None
 
 class StrictTimeSlotSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -247,7 +240,9 @@ class GeneratedAgentDraftSchema(BaseModel):
     services: Optional[list[StrictServiceSchema]] = None
     resources: Optional[list[StrictResourceSchema]] = None
     scheduling_engine: Optional[StrictSchedulingEngineSchema] = None
+    widget_config: Optional[StrictWidgetConfigSchema] = None
     guardrails: Optional[StrictGuardrailsSchema] = None
+    supervisor_prompt: Optional[str] = None
     runtime_meta: Optional[StrictRuntimeMetaSchema] = None
 
 
@@ -267,7 +262,6 @@ def validate_and_sanitize_schema(schema: dict) -> tuple[dict, bool, list[str]]:
     try:
         validated = StrictDraftPatchValidator.model_validate(schema)
         
-       
         cleaned = copy.deepcopy(schema)
         
         if validated.business_profile:
@@ -278,6 +272,16 @@ def validate_and_sanitize_schema(schema: dict) -> tuple[dict, bool, list[str]]:
             cleaned["resources"] = [r.model_dump(mode="json", exclude_none=True) for r in validated.resources]
         if validated.operating_hours:
             cleaned["operating_hours"] = validated.operating_hours.model_dump(mode="json", exclude_none=True)
+        if validated.scheduling_engine:
+            cleaned["scheduling_engine"] = validated.scheduling_engine.model_dump(mode="json", exclude_none=True)
+        if validated.widget_config:
+            cleaned["widget_config"] = validated.widget_config.model_dump(mode="json", exclude_none=True)
+        if validated.guardrails:
+            cleaned["guardrails"] = validated.guardrails.model_dump(mode="json", exclude_none=True)
+        if validated.supervisor_prompt is not None:
+            cleaned["supervisor_prompt"] = validated.supervisor_prompt
+        if validated.runtime_meta:
+            cleaned["runtime_meta"] = validated.runtime_meta.model_dump(mode="json", exclude_none=True)
             
         return cleaned, True, []
     except ValidationError as ve:

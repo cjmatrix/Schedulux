@@ -30,8 +30,8 @@ export const STATIC_TIER_CONFIGS: Record<string, TierConfig> = {
     tier: 'starter',
     name: 'Starter',
     max_agents: 1,
-    max_services: 5,
-    max_resources: 3,
+    max_services: 2,
+    max_resources: 2,
     max_kb_docs: 3,
     max_kb_doc_size_mb: 5,
     weekly_token_limit: 100_000,
@@ -80,11 +80,11 @@ export const STATIC_TIER_CONFIGS: Record<string, TierConfig> = {
   },
 };
 
-export const DEFAULT_TIER = 'free';
+export const DEFAULT_TIER = 'starter';
 
 export function getTierConfig(tier?: string | null): TierConfig {
-  if (!tier) return STATIC_TIER_CONFIGS.free;
+  if (!tier) return STATIC_TIER_CONFIGS.starter;
   const normalized = tier.trim().toLowerCase();
-  return STATIC_TIER_CONFIGS[normalized] || STATIC_TIER_CONFIGS.free;
+  return STATIC_TIER_CONFIGS[normalized] || STATIC_TIER_CONFIGS.starter;
 }
 

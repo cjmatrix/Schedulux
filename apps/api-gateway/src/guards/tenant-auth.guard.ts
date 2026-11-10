@@ -10,6 +10,7 @@ import { Request } from 'express';
 import jwt from 'jsonwebtoken';
 import { COOKIE_NAMES } from '../constants/cookies.constant.js';
 import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
+import { RedisService } from '../services/redis.service.js';
 
 export interface AuthenticatedTenantRequest extends Request {
   tenant?: {
@@ -42,9 +43,12 @@ interface DecodedToken {
 
 @Injectable()
 export class TenantAuthGuard implements CanActivate {
-  constructor(@Inject(ConfigService) private readonly _configService: ConfigService) {}
+  constructor(
+    @Inject(ConfigService) private readonly _configService: ConfigService,
+    @Inject(RedisService) private readonly _redisService: RedisService,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedTenantRequest>();
     const tenantToken = request.cookies?.[COOKIE_NAMES.TENANT_ACCESS_TOKEN];
     const dashboardToken = request.cookies?.[COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN];
@@ -63,6 +67,14 @@ export class TenantAuthGuard implements CanActivate {
       if (!decoded || !decoded.tenant_id) {
         throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.INVALID_TOKEN_STRUCTURE);
       }
+
+      
+      let tier = await this._redisService.getTenantTier(decoded.tenant_id);
+      if (!tier) {
+        tier = decoded.tier || 'starter';
+        await this._redisService.setTenantTier(decoded.tenant_id, tier).catch(() => {});
+      }
+      decoded.tier = tier;
 
       if (decoded.role === 'tenant_owner') {
         request.tenant = decoded as AuthenticatedTenantRequest['tenant'];

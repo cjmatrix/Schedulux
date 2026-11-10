@@ -40,7 +40,7 @@ export const ServicesCatalogCard: React.FC<ServicesCatalogCardProps> = ({
             <tr className="border-b border-slate-100 bg-slate-50/60 text-[10px] font-bold uppercase tracking-wider text-slate-400">
               <th className="py-3 px-4">SERVICE &amp; CATEGORY</th>
               <th className="py-3 px-4">DURATION &amp; BUFFER</th>
-              <th className="py-3 px-4">PRICE &amp; DEPOSIT</th>
+              <th className="py-3 px-4">PRICE &amp; VERIFICATION</th>
               <th className="py-3 px-4">ELIGIBLE PROVIDERS</th>
               <th className="py-3 px-4 text-right">BOOKING MODEL</th>
             </tr>
@@ -86,14 +86,12 @@ export const ServicesCatalogCard: React.FC<ServicesCatalogCardProps> = ({
                           srv.price?.type,
                         )}
                       </p>
-                      {srv.deposit?.required ? (
+                      {srv.verification?.require_otp ? (
                         <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200/70 px-2 py-0.2 rounded-full inline-block">
-                          Deposit:{' '}
-                          {formatPrice(srv.deposit.amount, srv.price?.currency || currency)} (
-                          {srv.deposit.processor === 'upi_direct' ? 'UPI' : srv.deposit.processor})
+                          OTP Verification
                         </span>
                       ) : (
-                        <span className="text-[10px] text-slate-400">No deposit</span>
+                        <span className="text-[10px] text-slate-400">Direct booking</span>
                       )}
                     </div>
                   </td>

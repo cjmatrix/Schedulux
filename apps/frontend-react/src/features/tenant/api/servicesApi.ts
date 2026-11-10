@@ -1,5 +1,4 @@
 import type {
-  DepositInfo,
   PriceInfo,
   ResourceInfo,
   ResourceRequirementInfo,
@@ -7,7 +6,7 @@ import type {
 } from '@repo/proto/scheduling';
 import { type ApiResponse, axiosClient } from '../../../api/axiosClient';
 
-export type { DepositInfo, PriceInfo, ResourceInfo, ResourceRequirementInfo, ServiceInfo };
+export type { PriceInfo, ResourceInfo, ResourceRequirementInfo, ServiceInfo };
 
 export interface ListServicesParams {
   page?: number;
@@ -20,7 +19,6 @@ export interface ListServicesParams {
 export interface ServiceSummaryData {
   total_count: number;
   avg_price: number;
-  deposit_count: number;
   categories: string[];
 }
 
@@ -47,15 +45,6 @@ export interface CreateServicePayload {
     type: 'fixed' | 'starting_at' | 'hourly' | 'free' | 'custom';
     amount: number;
     currency: string;
-  };
-  deposit?: {
-    required: boolean;
-    amount: number;
-    processor?: string;
-    upi_id?: string;
-    qr_code_url?: string;
-    confirmation_method?: string;
-    payment_instructions?: string;
   };
   verification?: {
     require_otp?: boolean | null;

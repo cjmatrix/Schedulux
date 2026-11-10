@@ -7,7 +7,7 @@ import type {
   ListWorkspaceUsersRequest,
   ListWorkspaceUsersResponse,
 } from '@repo/proto/dashboard';
-import type { RegisterRequest, RegisterResponse } from '@repo/proto/tenant';
+import type { RegisterRequest, RegisterResponse, TenantInfo } from '@repo/proto/tenant';
 import { OAuth2Client } from 'google-auth-library';
 import type { SignOptions } from 'jsonwebtoken';
 import { nanoid } from 'nanoid';
@@ -19,6 +19,7 @@ import { IJwtService } from '../interfaces/IJwtService.js';
 import { IPasswordHasher } from '../interfaces/IPasswordHasher.js';
 import { ITenantRepository } from '../interfaces/ITenantRepository.js';
 import { ITenantService } from '../interfaces/ITenantService.js';
+import type { TenantTier } from '../model/Tenent.js';
 
 @Injectable()
 export class TenantService implements ITenantService {
@@ -159,9 +160,14 @@ export class TenantService implements ITenantService {
       { expiresIn: this._refreshTokenExpiry },
     );
 
-    await this._cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, {
-      EX: this._refreshTokenTtlSeconds,
-    });
+    await Promise.all([
+      this._cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, {
+        EX: this._refreshTokenTtlSeconds,
+      }),
+      this._cacheRepo.set(`tenant:${tenant._id}:tier`, tenant.tier || 'starter', {
+        EX: 86400 * 30,
+      }),
+    ]);
 
     return {
       accessToken,
@@ -248,9 +254,14 @@ export class TenantService implements ITenantService {
       { expiresIn: this._refreshTokenExpiry },
     );
 
-    await this._cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, {
-      EX: this._refreshTokenTtlSeconds,
-    });
+    await Promise.all([
+      this._cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, {
+        EX: this._refreshTokenTtlSeconds,
+      }),
+      this._cacheRepo.set(`tenant:${tenant._id}:tier`, tenant.tier || 'starter', {
+        EX: 86400 * 30,
+      }),
+    ]);
 
     return {
       accessToken,

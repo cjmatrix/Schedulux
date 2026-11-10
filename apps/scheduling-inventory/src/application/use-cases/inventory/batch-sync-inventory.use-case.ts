@@ -18,7 +18,6 @@ import {
   TENANT_SCHEDULE_REPOSITORY,
 } from '../../../domain/tokens.js';
 import { generateSemanticId } from '../../../domain/utils/id-generator.js';
-import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
 import { PriceVO } from '../../../domain/value-objects/price.vo.js';
 import type { ICacheRepository } from '../../../infrastructure/cache/cache-repository.interface.js';
 import { ResourceMapper } from '../../../infrastructure/database/mappers/resource.mapper.js';
@@ -41,7 +40,10 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
     private readonly _cacheRepo: ICacheRepository,
   ) {}
 
-  async execute(dto: BatchSyncInventoryRequest): Promise<BatchSyncInventoryResponse> {
+  async execute(
+    dto: BatchSyncInventoryRequest,
+    propagatedTier?: string,
+  ): Promise<BatchSyncInventoryResponse> {
     const tenantId = dto.tenant_id;
     const agentId = dto.agent_id || '';
 
@@ -58,7 +60,8 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
       `Starting BatchSyncInventory for tenant: ${tenantId}, agent: ${agentId} (${dto.resources.length} resources, ${dto.services.length} services)`,
     );
 
-    const tier = (await this._cacheRepo.get(`tenant:${tenantId}:tier`)) || 'free';
+    const tier =
+      propagatedTier || (await this._cacheRepo.get(`tenant:${tenantId}:tier`)) || 'starter';
     const tierConfig = getTierConfig(tier);
 
     const activeIncomingResources = dto.resources.filter((r) => !r.is_deleted);
@@ -169,15 +172,6 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
       });
 
       const price = PriceVO.create(s.price?.type, s.price?.amount, s.price?.currency);
-      const deposit = DepositVO.create({
-        required: s.deposit?.required,
-        amount: s.deposit?.amount,
-        processor: s.deposit?.processor,
-        upiId: s.deposit?.upi_id,
-        qrCodeUrl: s.deposit?.qr_code_url,
-        confirmationMethod: s.deposit?.confirmation_method,
-        paymentInstructions: s.deposit?.payment_instructions,
-      });
 
       const isDelSvc = s.is_deleted ?? false;
       const entity = new ServiceEntity({
@@ -191,7 +185,6 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
         bufferMinutes: s.buffer_minutes || 0,
         bookingMode: s.booking_mode || 'time_slot',
         price,
-        deposit,
         verification: s.verification ? { require_otp: s.verification.require_otp } : undefined,
         resourceRequirements: mappedRequirements,
         isDeleted: isDelSvc,

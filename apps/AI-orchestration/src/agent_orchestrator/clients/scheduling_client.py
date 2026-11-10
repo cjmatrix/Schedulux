@@ -6,7 +6,6 @@ from typing import Any
 import grpc
 
 from agent_orchestrator.models import (
-    DepositEmbed,
     PriceEmbed,
     ResourceEmbed,
     ResourceRequirementEmbed,
@@ -44,7 +43,6 @@ def build_embedded_services(raw_services: list[dict[str, Any]]) -> list[ServiceE
     services_list: list[ServiceEmbed] = []
     for svc in raw_services:
         price_d = svc.get("price", {}) or {}
-        deposit_d = svc.get("deposit", {}) or {}
         verif_d = svc.get("verification", {}) or {}
         services_list.append(
             ServiceEmbed(
@@ -62,17 +60,6 @@ def build_embedded_services(raw_services: list[dict[str, Any]]) -> list[ServiceE
                 )
                 if price_d
                 else PriceEmbed(),
-                deposit=DepositEmbed(
-                    required=bool(deposit_d.get("required", False)),
-                    amount=float(deposit_d.get("amount", 0.0)),
-                    processor=deposit_d.get("processor") or "",
-                    upi_id=deposit_d.get("upi_id") or "",
-                    qr_code_url=deposit_d.get("qr_code_url") or "",
-                    confirmation_method=deposit_d.get("confirmation_method") or "automatic",
-                    payment_instructions=deposit_d.get("payment_instructions") or "",
-                )
-                if deposit_d
-                else DepositEmbed(),
                 verification=ServiceVerificationEmbed(require_otp=verif_d.get("require_otp"))
                 if verif_d
                 else ServiceVerificationEmbed(),
@@ -148,7 +135,6 @@ async def sync_agent_inventory(
         proto_services: list[scheduling_pb2.CreateServiceRequest] = []
         for svc in raw_services:
             price_d = svc.get("price") or {}
-            deposit_d = svc.get("deposit") or {}
             verif_d = svc.get("verification") or {}
             verif_info = None
             if verif_d and verif_d.get("require_otp") is not None:
@@ -171,17 +157,6 @@ async def sync_agent_inventory(
                         type=str(price_d.get("type") or "fixed"),
                         amount=float(price_d.get("amount") or 0.0),
                         currency=str(price_d.get("currency") or "USD"),
-                    ),
-                    deposit=scheduling_pb2.DepositInfo(
-                        required=bool(deposit_d.get("required", False)),
-                        amount=float(deposit_d.get("amount") or 0.0),
-                        processor=str(deposit_d.get("processor") or ""),
-                        upi_id=str(deposit_d.get("upi_id") or ""),
-                        qr_code_url=str(deposit_d.get("qr_code_url") or ""),
-                        confirmation_method=str(
-                            deposit_d.get("confirmation_method") or "automatic"
-                        ),
-                        payment_instructions=str(deposit_d.get("payment_instructions") or ""),
                     ),
                     verification=verif_info,
                     resource_requirements=[
@@ -474,7 +449,6 @@ async def create_booking(
                 "start_time": bk.start_time,
                 "end_time": bk.end_time,
                 "status": bk.status,
-                "deposit_status": bk.deposit_status,
                 "price": {
                     "type": bk.price.type,
                     "amount": bk.price.amount,

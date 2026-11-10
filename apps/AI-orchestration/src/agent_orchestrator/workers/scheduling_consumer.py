@@ -15,7 +15,6 @@ from agent_orchestrator.models import (
     BlackoutDateEmbed,
     BookingMode,
     BusinessProfileEmbed,
-    DepositEmbed,
     DispatchStatus,
     GuardrailsEmbed,
     OperatingHoursEmbed,
@@ -52,7 +51,6 @@ async def handle_service_event(payload: dict[str, Any]) -> None:
 
     data = payload.get("data")
     price_raw = data.get("price", {}) if data else {}
-    deposit_raw = data.get("deposit", {}) if data else {}
 
     config = await AgentRuntimeConfig.find_one({"agent_id": agent_id})
     agent_draft = await AgentDraft.find_one({"agent_id": agent_id})
@@ -63,15 +61,6 @@ async def handle_service_event(payload: dict[str, Any]) -> None:
             type=PriceType(price_raw.get("type", "fixed")),
             amount=float(price_raw.get("amount", 0)),
             currency=price_raw.get("currency", "USD"),
-        )
-        deposit = DepositEmbed(
-            required=bool(deposit_raw.get("required", False)),
-            amount=float(deposit_raw.get("amount", 0)),
-            processor=deposit_raw.get("processor", ""),
-            upi_id=deposit_raw.get("upi_id", ""),
-            qr_code_url=deposit_raw.get("qr_code_url", ""),
-            confirmation_method=deposit_raw.get("confirmation_method", "automatic"),
-            payment_instructions=deposit_raw.get("payment_instructions", ""),
         )
         verif_raw = data.get("verification")
         if verif_raw is not None and isinstance(verif_raw, dict):
@@ -108,7 +97,6 @@ async def handle_service_event(payload: dict[str, Any]) -> None:
             buffer_minutes=int(data.get("buffer_minutes") or 0),
             booking_mode=bm,
             price=price,
-            deposit=deposit,
             verification=verification,
             resource_requirements=[
                 ResourceRequirementEmbed(

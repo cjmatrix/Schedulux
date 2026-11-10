@@ -39,9 +39,10 @@
     "lint": "biome lint .",
     "format": "biome format --write .",
     "check": "biome check .",
-    "build": "mkdir -p ./src/interfaces && protoc -I=./src --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=./src/interfaces ./src/*.proto --ts_proto_opt=esModuleInterop=true,outputEncodeMethods=false,outputJsonMethods=false,nestJs=true,snakeToCamel=false && tsc"
+    "build": "mkdir -p ./src/interfaces && protoc -I=./src --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=./src/interfaces ./src/*.proto --ts_proto_opt=esModuleInterop=true,outputEncodeMethods=false,outputJsonMethods=false,nestJs=true,snakeToCamel=false,addGrpcMetadata=true && tsc"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.5",
     "@nestjs/microservices": "^12.1.0",
     "rxjs": "^7.8.2"
   },

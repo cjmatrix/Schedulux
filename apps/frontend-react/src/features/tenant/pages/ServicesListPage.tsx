@@ -62,7 +62,6 @@ export default function ServicesListPage() {
   const categories = summary?.categories || [];
 
   const totalCount = summary?.total_count ?? total;
-  const depositCount = summary?.deposit_count ?? 0;
   const avgPrice = summary?.avg_price !== undefined ? summary.avg_price.toFixed(2) : '0.00';
 
   const handleDeleteConfirm = async () => {
@@ -122,7 +121,7 @@ export default function ServicesListPage() {
           <p className="text-sm text-slate-500">
             {agentId
               ? `Configure execution durations, fees, and rules for AI agent: ${agentId}`
-              : 'Configure clinical execution durations, fee schedules, deposits, and multi-resource allocation rules.'}
+              : 'Configure execution durations, fee schedules, OTP verification, and multi-resource allocation rules.'}
           </p>
         </div>
 
@@ -176,10 +175,10 @@ export default function ServicesListPage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs flex items-center justify-between">
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Deposit Enforced
+              Categories
             </p>
-            <p className="text-2xl font-extrabold text-slate-900 mt-1">{depositCount}</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">Requires upfront booking hold</p>
+            <p className="text-2xl font-extrabold text-slate-900 mt-1">{categories.length}</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Active service groupings</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center">
             <Shield className="w-5 h-5" />
@@ -263,8 +262,6 @@ export default function ServicesListPage() {
           {filteredServices.map((service) => {
             const price = service.price?.amount ?? 0;
             const currency = service.price?.currency || 'USD';
-            const depositRequired = service.deposit?.required;
-            const depositAmount = service.deposit?.amount ?? 0;
 
             const reqs = service.resource_requirements || [];
             const staffCount = reqs
@@ -309,12 +306,12 @@ export default function ServicesListPage() {
                       {service.buffer_minutes ? ` (+${service.buffer_minutes}m buffer)` : ''}
                     </span>
 
-                    {depositRequired ? (
-                      <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
-                        Hold: ${depositAmount.toFixed(2)}
+                    {service.verification?.require_otp ? (
+                      <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100 flex items-center gap-1">
+                        <Shield className="w-3 h-3" /> OTP Required
                       </span>
                     ) : (
-                      <span className="text-[11px] text-slate-400 font-medium">No deposit</span>
+                      <span className="text-[11px] text-slate-400 font-medium">Direct Booking</span>
                     )}
                   </div>
 

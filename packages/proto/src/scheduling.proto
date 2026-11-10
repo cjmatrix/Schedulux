@@ -42,16 +42,6 @@ message PriceInfo {
   string currency = 3;
 }
 
-message DepositInfo {
-  bool required = 1;
-  double amount = 2;
-  string processor = 3;
-  string upi_id = 4;
-  string qr_code_url = 5;
-  string confirmation_method = 6;
-  string payment_instructions = 7;
-}
-
 message ServiceVerificationInfo {
   optional bool require_otp = 1;
 }
@@ -73,7 +63,6 @@ message ServiceInfo {
   int32 duration_minutes = 6;
   int32 buffer_minutes = 7;
   PriceInfo price = 9;
-  DepositInfo deposit = 10;
   string created_at = 14;
   string updated_at = 15;
   string booking_mode = 16;
@@ -92,7 +81,6 @@ message CreateServiceRequest {
   int32 duration_minutes = 5;
   int32 buffer_minutes = 6;
   PriceInfo price = 8;
-  DepositInfo deposit = 9;
   optional string booking_mode = 13;
   string agent_id = 14;
   optional string service_id = 15;
@@ -119,7 +107,6 @@ message ListServicesRequest {
 message ServiceSummaryInfo {
   int32 total_count = 1;
   double avg_price = 2;
-  int32 deposit_count = 3;
   repeated string categories = 4;
 }
 
@@ -140,7 +127,6 @@ message UpdateServiceRequest {
   optional int32 duration_minutes = 6;
   optional int32 buffer_minutes = 7;
   PriceInfo price = 9;
-  DepositInfo deposit = 10;
   optional string booking_mode = 14;
   optional string agent_id = 15;
   optional ServiceVerificationInfo verification = 16;
@@ -334,9 +320,7 @@ message BookingInfo {
   int32 duration_minutes = 12;
   string source = 13;
   string status = 14;
-  string deposit_status = 15;
   PriceInfo price = 16;
-  optional DepositInfo deposit = 17;
   optional string notes = 18;
   optional string created_by = 19;
   string created_at = 20;
@@ -358,7 +342,6 @@ message CreateBookingRequest {
   optional string customer_email = 9;
   optional string notes = 10;
   optional string source = 11;
-  optional string deposit_status = 12;
   optional string created_by = 13;
   repeated string resource_ids = 14;
 }

@@ -89,10 +89,14 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
         agent_id = getattr(request, "agent_id", "")
         print(f"[gRPC] StartOnboardingSession for tenant: {request.tenant_id}, agent: {agent_id}")
         try:
+            metadata_dict = dict(context.invocation_metadata()) if context else {}
+            tier = metadata_dict.get("x-tenant-tier")
+            print(f"[gRPC] StartOnboardingSession for tenant: {request.tenant_id}, agent: {agent_id}, tier: {tier}",flush=True)
             res = await self.onboarding_service.start_session(
                 tenant_id=request.tenant_id,
                 agent_id=agent_id,
                 initial_draft_json=request.initial_draft_json,
+                tier=tier,
             )
             return knowledge_pb2.OnboardingResponse(
                 status=res.status,
@@ -118,10 +122,13 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
         agent_id = getattr(request, "agent_id", "")
         print(f"[gRPC] ResumeOnboardingSession for tenant: {request.tenant_id}, agent: {agent_id}")
         try:
+            metadata_dict = dict(context.invocation_metadata()) if context else {}
+            tier = metadata_dict.get("x-tenant-tier")
             res = await self.onboarding_service.resume_session(
                 tenant_id=request.tenant_id,
                 agent_id=agent_id,
                 user_answer=request.user_answer,
+                tier=tier,
             )
             return knowledge_pb2.OnboardingResponse(
                 status=res.status,
@@ -147,11 +154,15 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
     ) -> knowledge_pb2.SaveInitialAgentDraftResponse:
         print(f"[gRPC] SaveInitialAgentDraft for tenant: {request.tenant_id}")
         try:
+            metadata_dict = dict(context.invocation_metadata()) if context else {}
+            tier = metadata_dict.get("x-tenant-tier")
+            print(f"[gRPC] tier: {tier}")
             agent_id, status = await self.agent_service.save_initial_draft(
                 tenant_id=request.tenant_id,
                 creation_source=request.creation_source,
                 draft_json=request.draft_json,
                 name=request.name,
+                tier=tier,
             )
             return knowledge_pb2.SaveInitialAgentDraftResponse(
                 message="Agent draft saved successfully",
@@ -344,11 +355,14 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             f"[gRPC] GetDocumentUploadUrl tenant: {request.tenant_id}, agent: {request.agent_id}, file: {request.file_name}"
         )
         try:
+            metadata_dict = dict(context.invocation_metadata()) if context else {}
+            tier = metadata_dict.get("x-tenant-tier")
             upload_url, doc_id, s3_key, expires_in = await self.document_service.get_upload_url(
                 tenant_id=request.tenant_id,
                 agent_id=request.agent_id,
                 file_name=request.file_name,
                 file_size_bytes=request.file_size_bytes,
+                tier=tier,
             )
             return knowledge_pb2.GetDocumentUploadUrlResponse(
                 upload_url=upload_url,

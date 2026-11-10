@@ -185,25 +185,14 @@ export function BookingDetailsModal({
             </div>
           </div>
 
-          {/* Price / Deposit details */}
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="p-3 border border-slate-100 rounded-xl bg-white shadow-2xs">
-              <span className="block text-[10px] font-bold text-slate-400 uppercase">Pricing</span>
-              <span className="font-semibold text-slate-800 mt-0.5 block">
-                {booking.price?.amount
-                  ? `$${booking.price.amount} ${booking.price.currency || 'USD'}`
-                  : 'Free / Included'}
-              </span>
-            </div>
-
-            <div className="p-3 border border-slate-100 rounded-xl bg-white shadow-2xs">
-              <span className="block text-[10px] font-bold text-slate-400 uppercase">
-                Deposit Status
-              </span>
-              <span className="font-semibold text-slate-800 mt-0.5 block capitalize">
-                {booking.deposit_status?.replace('_', ' ') || 'Not Required'}
-              </span>
-            </div>
+          {/* Pricing details */}
+          <div className="p-3 border border-slate-100 rounded-xl bg-white shadow-2xs text-xs">
+            <span className="block text-[10px] font-bold text-slate-400 uppercase">Pricing</span>
+            <span className="font-semibold text-slate-800 mt-0.5 block">
+              {booking.price?.amount
+                ? `$${booking.price.amount} ${booking.price.currency || 'USD'}`
+                : 'Free / Included'}
+            </span>
           </div>
 
           {/* Notes */}

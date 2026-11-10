@@ -238,26 +238,6 @@ class PriceEmbed(TolerantBaseModel):
             return 0.0
 
 
-class DepositEmbed(TolerantBaseModel):
-    required: bool = False
-    amount: float = 0.0
-    processor: str = "upi_direct"
-    upi_id: str = ""
-    qr_code_url: str = ""
-    confirmation_method: str = "utr_reference"
-    payment_instructions: str = ""
-
-    @field_validator("amount", mode="before")
-    @classmethod
-    def parse_amount(cls, v: object) -> float:
-        if v is None:
-            return 0.0
-        try:
-            return float(v)  # type: ignore[arg-type]
-        except (ValueError, TypeError):
-            return 0.0
-
-
 class ServiceVerificationEmbed(TolerantBaseModel):
     require_otp: bool | None = None
 
@@ -307,7 +287,6 @@ class ServiceEmbed(TolerantBaseModel):
     buffer_minutes: int | None = 0
     booking_mode: BookingMode = BookingMode.TIME_SLOT
     price: PriceEmbed = Field(default_factory=PriceEmbed)
-    deposit: DepositEmbed = Field(default_factory=DepositEmbed)
     verification: ServiceVerificationEmbed | None = None
     resource_requirements: list[ResourceRequirementEmbed] = Field(default_factory=list)
     is_deleted: bool = False
@@ -495,17 +474,6 @@ class StrictPriceSchema(BaseModel):
     currency: str | None = None
 
 
-class StrictDepositSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    required: bool | None = None
-    amount: float | None = None
-    processor: str | None = None
-    upi_id: str | None = None
-    qr_code_url: str | None = None
-    confirmation_method: str | None = None
-    payment_instructions: str | None = None
-
-
 class StrictServiceVerificationSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     require_otp: bool | None = None
@@ -530,7 +498,6 @@ class StrictServiceSchema(BaseModel):
     buffer_minutes: int | None = None
     booking_mode: BookingMode | None = None
     price: StrictPriceSchema | None = None
-    deposit: StrictDepositSchema | None = None
     verification: StrictServiceVerificationSchema | None = None
     resource_requirements: list[StrictResourceRequirementSchema] | None = None
     is_deleted: bool | None = None

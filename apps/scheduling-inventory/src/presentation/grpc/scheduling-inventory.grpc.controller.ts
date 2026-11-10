@@ -1,3 +1,4 @@
+import { Metadata } from '@grpc/grpc-js';
 import { Controller, Inject, UseFilters } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import {
@@ -139,8 +140,12 @@ export class SchedulingInventoryGrpcController {
   ) {}
 
   @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.CREATE_SERVICE)
-  async createService(request: CreateServiceRequest): Promise<ServiceResponse> {
-    const service = await this._createServiceUseCase.execute(request);
+  async createService(
+    request: CreateServiceRequest,
+    metadata?: Metadata,
+  ): Promise<ServiceResponse> {
+    const tier = metadata?.get?.('x-tenant-tier')?.[0]?.toString();
+    const service = await this._createServiceUseCase.execute(request, tier);
     return {
       service: ServiceMapper.toProto(service),
       message: RESPONSE_MESSAGES.SERVICE.CREATED,
@@ -168,7 +173,6 @@ export class SchedulingInventoryGrpcController {
         ? {
             total_count: result.summary.totalCount,
             avg_price: result.summary.avgPrice,
-            deposit_count: result.summary.depositCount,
             categories: result.summary.categories,
           }
         : undefined,
@@ -194,8 +198,12 @@ export class SchedulingInventoryGrpcController {
   }
 
   @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.CREATE_RESOURCE)
-  async createResource(request: CreateResourceRequest): Promise<ResourceResponse> {
-    const resource = await this._createResourceUseCase.execute(request);
+  async createResource(
+    request: CreateResourceRequest,
+    metadata?: Metadata,
+  ): Promise<ResourceResponse> {
+    const tier = metadata?.get?.('x-tenant-tier')?.[0]?.toString();
+    const resource = await this._createResourceUseCase.execute(request, tier);
     return {
       resource: ResourceMapper.toProto(resource),
       message: RESPONSE_MESSAGES.RESOURCE.CREATED,
@@ -254,8 +262,10 @@ export class SchedulingInventoryGrpcController {
   )
   async batchSyncInventory(
     request: BatchSyncInventoryRequest,
+    metadata?: Metadata,
   ): Promise<BatchSyncInventoryResponse> {
-    return this._batchSyncInventoryUseCase.execute(request);
+    const tier = metadata?.get?.('x-tenant-tier')?.[0]?.toString();
+    return this._batchSyncInventoryUseCase.execute(request, tier);
   }
 
   @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.CREATE_BOOKING)

@@ -72,15 +72,6 @@ async def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) ->
                     "buffer_minutes": 0,
                     "booking_mode": "time_slot",
                     "price": {"type": "fixed", "amount": 100.0, "currency": "USD"},
-                    "deposit": {
-                        "required": False,
-                        "amount": 0.0,
-                        "processor": "upi_direct",
-                        "upi_id": "",
-                        "qr_code_url": "",
-                        "confirmation_method": "utr_reference",
-                        "payment_instructions": ""
-                    },
                     "verification": {
                         "require_otp": False
                     },
@@ -173,8 +164,7 @@ CRITICAL DOMAIN INSTRUCTIONS:
      * "buffer_minutes": Post-service buffer time in minutes (default 0)
      * "booking_mode": "time_slot" or "date_range"
      * "price": {{"type": "fixed"|"starting_at"|"hourly"|"free"|"custom", "amount": float, "currency": "USD"}}
-     * "deposit": {{"required": bool, "amount": float, "processor": "upi_direct", "upi_id": str, "qr_code_url": str, "confirmation_method": "utr_reference", "payment_instructions": str}} (Schedulux only supports direct UPI deposits via upi_id or qr_code_url)
-     * "verification": {{"require_otp": bool|null}} (Optional per-service OTP verification override: true for high-value/sensitive/exclusive services or date-range stays with deposits; false for low-friction/routine services; null to inherit global verification policy)
+     * "verification": {{"require_otp": bool|null}} (Optional per-service OTP verification override: true for high-value/sensitive/exclusive services or date-range stays; false for low-friction/routine services; null to inherit global verification policy)
      * "resource_requirements": list of required resource specs, e.g. [{{"role": "Provider", "resource_type": "staff", "count": 1, "eligible_resource_ids": ["res_..."], "selection_mode": "user_selectable"|"auto_assign"}}] (use "user_selectable" for human specialists/practitioners or bookable hotel/meeting rooms; "auto_assign" for internal facility chairs, operation bays, equipment, or assets that the system assigns automatically)
 
 2. RESOURCES ATTRIBUTES & ENUMS:
@@ -203,6 +193,10 @@ CRITICAL DOMAIN INSTRUCTIONS:
    - Extract real clinic or business name, address, contact phone/email, and timezone into `business_profile`.
    - Extract real staff, practitioners, or assets into `resources`.
    - Extract all offered services, categories, and prices into `services`.
+
+6. WIDGET CONFIGURATION & SUPERVISOR PROMPT:
+   - Provide a customized `widget_config` (agent_name, initial_greeting, quick_prompts) tailored to this specific business vertical.
+   - If relevant, include custom AI operational instructions in `supervisor_prompt`.
 
 Crawled Data:
 {crawled_data}

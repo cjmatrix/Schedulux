@@ -1,10 +1,8 @@
-import { DepositVO } from '../value-objects/deposit.vo.js';
 import { PriceVO } from '../value-objects/price.vo.js';
 
 export type BookingMode = 'time_slot' | 'date_range';
 export type BookingSource = 'manual' | 'customer_agent' | 'web_portal' | 'sandbox_simulation';
-export type BookingStatus = 'confirmed' | 'pending_deposit' | 'cancelled' | 'completed' | 'no_show';
-export type BookingDepositStatus = 'not_required' | 'pending' | 'verified' | 'waived';
+export type BookingStatus = 'confirmed' | 'cancelled' | 'completed' | 'no_show';
 
 export interface CustomerSnapshot {
   name: string;
@@ -31,9 +29,7 @@ export interface BookingEntityProps {
   durationMinutes: number;
   source?: BookingSource;
   status?: BookingStatus;
-  depositStatus?: BookingDepositStatus;
   price: PriceVO;
-  deposit?: DepositVO;
   notes?: string;
   createdBy?: string;
   isDeleted?: boolean;
@@ -61,9 +57,7 @@ export class BookingEntity {
   private _durationMinutes: number;
   private _source: BookingSource;
   private _status: BookingStatus;
-  private _depositStatus: BookingDepositStatus;
   private _price: PriceVO;
-  private _deposit: DepositVO;
   private _notes: string;
   private _createdBy: string;
   private _isDeleted: boolean;
@@ -116,9 +110,7 @@ export class BookingEntity {
     this._durationMinutes = props.durationMinutes;
     this._source = props.source ?? 'manual';
     this._status = props.status ?? 'confirmed';
-    this._depositStatus = props.depositStatus ?? 'not_required';
     this._price = props.price ?? PriceVO.create();
-    this._deposit = props.deposit ?? DepositVO.create();
     this._notes = props.notes?.trim() || '';
     this._createdBy = props.createdBy?.trim() || '';
     this._isDeleted = props.isDeleted ?? false;
@@ -199,16 +191,8 @@ export class BookingEntity {
     return this._status;
   }
 
-  get depositStatus(): BookingDepositStatus {
-    return this._depositStatus;
-  }
-
   get price(): PriceVO {
     return this._price;
-  }
-
-  get deposit(): DepositVO {
-    return this._deposit;
   }
 
   get notes(): string {
@@ -301,11 +285,6 @@ export class BookingEntity {
 
   complete(): void {
     this._status = 'completed';
-    this._updatedAt = new Date();
-  }
-
-  markDepositVerified(): void {
-    this._depositStatus = 'verified';
     this._updatedAt = new Date();
   }
 

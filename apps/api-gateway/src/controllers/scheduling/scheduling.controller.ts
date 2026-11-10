@@ -28,6 +28,7 @@ import { API_ROUTES } from '../../constants/routes.constant.js';
 import { Roles } from '../../decorators/roles.decorator.js';
 import { RolesGuard } from '../../guards/roles.guard.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
+import { createTenantGrpcMetadata } from '../../utils/grpc-metadata.util.js';
 import { GetAvailabilityQueryDto } from './dtos/availability.dto.js';
 import {
   CancelBookingDto,
@@ -69,28 +70,37 @@ export class SchedulingController implements OnModuleInit {
     return tenantId;
   }
 
+  private _getTenantTier(req: AuthenticatedTenantRequest): string {
+    return req.tenant?.tier || req.dashboardUser?.tier || 'starter';
+  }
+
   @Post(API_ROUTES.SCHEDULING.SERVICES)
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(ZodValidationPipe)
   async createService(@Req() req: AuthenticatedTenantRequest, @Body() body: CreateServiceDto) {
     const tenantId = this._getTenantId(req);
+    const tier = this._getTenantTier(req);
+    const metadata = createTenantGrpcMetadata(tenantId, tier);
+
     const response = await lastValueFrom(
-      this._schedulingService.createService({
-        tenant_id: tenantId,
-        agent_id: body.agent_id,
-        name: body.name,
-        category: body.category,
-        description: body.description,
-        duration_minutes: body.duration_minutes,
-        buffer_minutes: body.buffer_minutes,
-        booking_mode: body.booking_mode,
-        price: body.price,
-        deposit: body.deposit,
-        verification: body.verification
-          ? { require_otp: body.verification.require_otp ?? undefined }
-          : undefined,
-        resource_requirements: body.resource_requirements ?? [],
-      }),
+      this._schedulingService.createService(
+        {
+          tenant_id: tenantId,
+          agent_id: body.agent_id,
+          name: body.name,
+          category: body.category,
+          description: body.description,
+          duration_minutes: body.duration_minutes,
+          buffer_minutes: body.buffer_minutes,
+          booking_mode: body.booking_mode,
+          price: body.price,
+          verification: body.verification
+            ? { require_otp: body.verification.require_otp ?? undefined }
+            : undefined,
+          resource_requirements: body.resource_requirements ?? [],
+        },
+        metadata,
+      ),
     );
 
     return {
@@ -161,7 +171,6 @@ export class SchedulingController implements OnModuleInit {
         buffer_minutes: body.buffer_minutes,
         booking_mode: body.booking_mode,
         price: body.price,
-        deposit: body.deposit,
         verification: body.verification
           ? { require_otp: body.verification.require_otp ?? undefined }
           : undefined,
@@ -196,19 +205,25 @@ export class SchedulingController implements OnModuleInit {
   @UsePipes(ZodValidationPipe)
   async createResource(@Req() req: AuthenticatedTenantRequest, @Body() body: CreateResourceDto) {
     const tenantId = this._getTenantId(req);
+    const tier = this._getTenantTier(req);
+    const metadata = createTenantGrpcMetadata(tenantId, tier);
+
     const response = await lastValueFrom(
-      this._schedulingService.createResource({
-        tenant_id: tenantId,
-        agent_id: body.agent_id,
-        resource_type: body.resource_type,
-        name: body.name,
-        title: body.title,
-        category: body.category,
-        description: body.description,
-        is_bookable: body.is_bookable,
-        dispatch_status: body.dispatch_status,
-        custom_shift_overrides_json: body.custom_shift_overrides_json,
-      }),
+      this._schedulingService.createResource(
+        {
+          tenant_id: tenantId,
+          agent_id: body.agent_id,
+          resource_type: body.resource_type,
+          name: body.name,
+          title: body.title,
+          category: body.category,
+          description: body.description,
+          is_bookable: body.is_bookable,
+          dispatch_status: body.dispatch_status,
+          custom_shift_overrides_json: body.custom_shift_overrides_json,
+        },
+        metadata,
+      ),
     );
 
     return {
@@ -363,7 +378,6 @@ export class SchedulingController implements OnModuleInit {
         customer_email: body.customer_email || undefined,
         notes: body.notes,
         source: body.source,
-        deposit_status: body.deposit_status,
         created_by: body.created_by || userId,
       }),
     );

@@ -9,7 +9,6 @@ import {
   SERVICE_REPOSITORY,
   UNIT_OF_WORK,
 } from '../../../domain/tokens.js';
-import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
 import { PriceVO } from '../../../domain/value-objects/price.vo.js';
 import type { ICacheRepository } from '../../../infrastructure/cache/cache-repository.interface.js';
 import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-events-producer.interface.js';
@@ -41,18 +40,6 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
       ? PriceVO.create(dto.price.type, dto.price.amount, dto.price.currency)
       : undefined;
 
-    const deposit = dto.deposit
-      ? DepositVO.create({
-          required: dto.deposit.required,
-          amount: dto.deposit.amount,
-          processor: dto.deposit.processor,
-          upiId: dto.deposit.upi_id,
-          qrCodeUrl: dto.deposit.qr_code_url,
-          confirmationMethod: dto.deposit.confirmation_method,
-          paymentInstructions: dto.deposit.payment_instructions,
-        })
-      : undefined;
-
     existing.updateDetails({
       name: dto.name,
       category: dto.category,
@@ -61,7 +48,6 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
       bufferMinutes: dto.buffer_minutes,
       bookingMode: dto.booking_mode,
       price,
-      deposit,
       verification: dto.verification ? { require_otp: dto.verification.require_otp } : undefined,
       resourceRequirements: dto.resource_requirements?.length
         ? dto.resource_requirements.map((r) => ({

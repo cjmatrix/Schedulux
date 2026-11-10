@@ -74,7 +74,6 @@ export function CreateBookingModal({
   const [customerPhone, setCustomerPhone] = useState<string>('');
   const [customerEmail, setCustomerEmail] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
-  const [depositStatus, setDepositStatus] = useState<'pending' | 'verified' | 'waived'>('pending');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   useEffect(() => {
@@ -318,7 +317,6 @@ export function CreateBookingModal({
       customer_email: customerEmail.trim() || undefined,
       notes: notes.trim() || undefined,
       source: 'manual',
-      deposit_status: selectedService.deposit?.required ? depositStatus : 'not_required',
     };
 
     try {
@@ -432,11 +430,6 @@ export function CreateBookingModal({
                       {selectedService.price?.currency || 'USD'}
                     </strong>
                   </span>
-                  {selectedService.deposit?.required && (
-                    <span className="text-amber-700 font-medium">
-                      Deposit: ${selectedService.deposit.amount}
-                    </span>
-                  )}
                 </div>
               )}
             </div>
@@ -811,26 +804,6 @@ export function CreateBookingModal({
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white"
                 />
               </div>
-
-              {selectedService?.deposit?.required && (
-                <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl flex items-center justify-between text-xs">
-                  <div>
-                    <span className="font-bold text-amber-900">Deposit Status:</span>
-                    <span className="text-amber-700 ml-1.5">
-                      ${selectedService.deposit.amount} required
-                    </span>
-                  </div>
-                  <select
-                    value={depositStatus}
-                    onChange={(e) => setDepositStatus(e.target.value as any)}
-                    className="px-2.5 py-1 bg-white border border-amber-300 rounded-lg text-xs font-bold text-amber-900"
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="verified">Verified (Paid)</option>
-                    <option value="waived">Waived by Staff</option>
-                  </select>
-                </div>
-              )}
             </div>
 
             {/* Footer Buttons */}

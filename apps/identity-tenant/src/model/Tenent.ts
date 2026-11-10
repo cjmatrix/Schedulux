@@ -1,6 +1,10 @@
 import mongoose, { Document } from 'mongoose';
 import { nanoid } from 'nanoid';
 
+export type TenantTier = 'starter' | 'pro' | 'business' | 'enterprise' | 'free';
+
+export const TENANT_TIERS = ['starter', 'pro', 'business', 'enterprise', 'free'] as const;
+
 export interface ITenant extends Document<string> {
   _id: string;
   business_name: string;
@@ -10,8 +14,11 @@ export interface ITenant extends Document<string> {
   google_id?: string;
   timezone: string;
   currency: string;
-  tier: string;
+  tier: TenantTier;
   stripe_customer_id?: string;
+  paddle_customer_id?: string;
+  paddle_subscription_id?: string;
+  subscription_status?: string;
   status: string;
   monthly_token_limit?: number;
   created_at: Date;
@@ -27,8 +34,16 @@ const tenantSchema = new mongoose.Schema(
     google_id: { type: String, default: null },
     timezone: { type: String, default: 'UTC' },
     currency: { type: String, default: 'USD' },
-    tier: { type: String, required: true },
+    tier: {
+      type: String,
+      enum: TENANT_TIERS,
+      default: 'starter',
+      required: true,
+    },
     stripe_customer_id: { type: String, default: null },
+    paddle_customer_id: { type: String, default: null, index: true },
+    paddle_subscription_id: { type: String, default: null, index: true },
+    subscription_status: { type: String, default: 'active' },
     status: { type: String, default: 'active' },
     monthly_token_limit: { type: Number, default: null },
     created_at: { type: Date, default: Date.now },

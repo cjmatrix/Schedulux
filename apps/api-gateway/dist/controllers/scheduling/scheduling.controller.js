@@ -22,6 +22,7 @@ const routes_constant_js_1 = require("../../constants/routes.constant.js");
 const roles_decorator_js_1 = require("../../decorators/roles.decorator.js");
 const roles_guard_js_1 = require("../../guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
+const grpc_metadata_util_js_1 = require("../../utils/grpc-metadata.util.js");
 const availability_dto_js_1 = require("./dtos/availability.dto.js");
 const booking_dto_js_1 = require("./dtos/booking.dto.js");
 const resource_dto_js_1 = require("./dtos/resource.dto.js");
@@ -44,8 +45,13 @@ let SchedulingController = class SchedulingController {
         }
         return tenantId;
     }
+    _getTenantTier(req) {
+        return req.tenant?.tier || req.dashboardUser?.tier || 'starter';
+    }
     async createService(req, body) {
         const tenantId = this._getTenantId(req);
+        const tier = this._getTenantTier(req);
+        const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
         const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.createService({
             tenant_id: tenantId,
             agent_id: body.agent_id,
@@ -56,12 +62,11 @@ let SchedulingController = class SchedulingController {
             buffer_minutes: body.buffer_minutes,
             booking_mode: body.booking_mode,
             price: body.price,
-            deposit: body.deposit,
             verification: body.verification
                 ? { require_otp: body.verification.require_otp ?? undefined }
                 : undefined,
             resource_requirements: body.resource_requirements ?? [],
-        }));
+        }, metadata));
         return {
             message: response.message,
             data: response.service,
@@ -111,7 +116,6 @@ let SchedulingController = class SchedulingController {
             buffer_minutes: body.buffer_minutes,
             booking_mode: body.booking_mode,
             price: body.price,
-            deposit: body.deposit,
             verification: body.verification
                 ? { require_otp: body.verification.require_otp ?? undefined }
                 : undefined,
@@ -135,6 +139,8 @@ let SchedulingController = class SchedulingController {
     }
     async createResource(req, body) {
         const tenantId = this._getTenantId(req);
+        const tier = this._getTenantTier(req);
+        const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
         const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.createResource({
             tenant_id: tenantId,
             agent_id: body.agent_id,
@@ -146,7 +152,7 @@ let SchedulingController = class SchedulingController {
             is_bookable: body.is_bookable,
             dispatch_status: body.dispatch_status,
             custom_shift_overrides_json: body.custom_shift_overrides_json,
-        }));
+        }, metadata));
         return {
             message: response.message,
             data: response.resource,
@@ -256,7 +262,6 @@ let SchedulingController = class SchedulingController {
             customer_email: body.customer_email || undefined,
             notes: body.notes,
             source: body.source,
-            deposit_status: body.deposit_status,
             created_by: body.created_by || userId,
         }));
         return {

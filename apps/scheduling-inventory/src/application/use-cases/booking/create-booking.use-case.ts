@@ -2,7 +2,6 @@ import { BadRequestException, Inject, Injectable, Logger, NotFoundException } fr
 import { CreateBookingRequest } from '@repo/proto/scheduling';
 import { RESPONSE_MESSAGES } from '../../../constants/index.js';
 import {
-  BookingDepositStatus,
   BookingEntity,
   BookingSource,
 } from '../../../domain/entities/booking.entity.js';
@@ -170,11 +169,6 @@ export class CreateBookingUseCase implements ICreateBookingUseCase {
         totalBookings: 1,
       });
     }
-    const depositStatus: BookingDepositStatus = dto.deposit_status
-      ? (dto.deposit_status as BookingDepositStatus)
-      : service.deposit.required
-        ? 'pending'
-        : 'not_required';
 
     const booking = new BookingEntity({
       id: generateSemanticId('bk', service.name),
@@ -199,9 +193,7 @@ export class CreateBookingUseCase implements ICreateBookingUseCase {
       durationMinutes,
       source,
       status: 'confirmed',
-      depositStatus,
       price: service.price,
-      deposit: service.deposit,
       notes: dto.notes?.trim() || '',
       createdBy: dto.created_by?.trim() || '',
     });

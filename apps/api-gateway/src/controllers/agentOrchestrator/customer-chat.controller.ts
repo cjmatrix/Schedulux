@@ -23,7 +23,12 @@ import {
   signSessionId,
   verifySessionToken,
 } from '../../utils/session-token.util.js';
-import { CustomerChatDto, InitCustomerChatDto } from './dtos/knowledge.dto.js';
+import {
+  CustomerChatDto,
+  InitCustomerChatDto,
+  PublicChatConfigQueryDto,
+  PublicChatMessagesQueryDto,
+} from './dtos/knowledge.dto.js';
 
 @Controller(API_ROUTES.PUBLIC_CHAT.BASE)
 export class CustomerChatController implements OnModuleInit {
@@ -161,18 +166,12 @@ export class CustomerChatController implements OnModuleInit {
   }
 
   @Get(API_ROUTES.PUBLIC_CHAT.CONFIG)
-  async getConfig(
-    @Query('tenant_id') tenantId: string,
-    @Query('agent_id') agentId: string,
-  ) {
-    if (!tenantId || !agentId) {
-      throw new BadRequestException(RESPONSE_MESSAGES.CHAT.REQUIRED_FIELDS);
-    }
-
+  @UsePipes(ZodValidationPipe)
+  async getConfig(@Query() query: PublicChatConfigQueryDto) {
     const response = await lastValueFrom(
       this._knowledgeService.getWidgetConfig({
-        tenant_id: tenantId,
-        agent_id: agentId,
+        tenant_id: query.tenant_id,
+        agent_id: query.agent_id,
         source: 'live',
       }),
     );
@@ -189,44 +188,37 @@ export class CustomerChatController implements OnModuleInit {
     return {
       message: 'Widget configuration retrieved',
       data: {
-        tenant_id: response.tenant_id || tenantId,
-        agent_id: response.agent_id || agentId,
+        tenant_id: response.tenant_id || query.tenant_id,
+        agent_id: response.agent_id || query.agent_id,
         widget_config: widgetConfig,
       },
     };
   }
 
   @Get(API_ROUTES.PUBLIC_CHAT.MESSAGES)
-  async getMessages(
-    @Query('tenant_id') tenantId: string,
-    @Query('agent_id') agentId: string,
-    @Query('session_id') sessionId?: string,
-    @Query('token') token?: string,
-    @Query('limit') limitStr?: string,
-    @Query('before') before?: string,
-  ) {
-    let resolvedSessionId = sessionId;
+  @UsePipes(ZodValidationPipe)
+  async getMessages(@Query() query: PublicChatMessagesQueryDto) {
+    let resolvedSessionId = query.session_id;
 
-    if (token) {
-      const verified = verifySessionToken(token);
+    if (query.token) {
+      const verified = verifySessionToken(query.token);
       if (!verified.valid || !verified.sessionId) {
         throw new UnauthorizedException(RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
       }
       resolvedSessionId = verified.sessionId;
     }
 
-    if (!tenantId || !agentId || !resolvedSessionId) {
-      throw new BadRequestException(RESPONSE_MESSAGES.CHAT.REQUIRED_FIELDS);
+    if (!resolvedSessionId) {
+      throw new BadRequestException('session_id or valid token is required');
     }
 
-    const limit = limitStr ? parseInt(limitStr, 10) : 20;
     const response = await lastValueFrom(
       this._knowledgeService.getCustomerMessages({
-        tenant_id: tenantId,
-        agent_id: agentId,
+        tenant_id: query.tenant_id,
+        agent_id: query.agent_id,
         session_id: resolvedSessionId,
-        limit,
-        before,
+        limit: query.limit,
+        before: query.before,
       }),
     );
 

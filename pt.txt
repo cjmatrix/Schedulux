@@ -1,6 +1,8 @@
 //prarelle call
 implcit caching
 
+// should send tier in meta data
+//semantic caching
 
 
 Please build and configure my complete booking agent with the following specifications:

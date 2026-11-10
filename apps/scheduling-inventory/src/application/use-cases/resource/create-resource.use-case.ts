@@ -34,20 +34,17 @@ export class CreateResourceUseCase implements ICreateResourceUseCase {
     private readonly _cacheRepo: ICacheRepository,
   ) {}
 
-  async execute(dto: CreateResourceRequest): Promise<ResourceEntity> {
-    
-    const tier = (await this._cacheRepo.get(`tenant:${dto.tenant_id}:tier`)) || 'free';
+  async execute(dto: CreateResourceRequest, propagatedTier?: string): Promise<ResourceEntity> {
+    const tier =
+      propagatedTier || (await this._cacheRepo.get(`tenant:${dto.tenant_id}:tier`)) || 'starter';
     const tierConfig = getTierConfig(tier);
 
     if (tierConfig.max_resources !== -1) {
-      const currentCount = await this._resourceRepository.countByTenant(
-        dto.tenant_id,
-        dto.agent_id || undefined,
-      );
+      const currentCount = await this._resourceRepository.countByTenant(dto.tenant_id);
       if (currentCount >= tierConfig.max_resources) {
         throw new RpcException({
           code: grpc.status.RESOURCE_EXHAUSTED,
-          message: `Resource limit reached (${tierConfig.max_resources} resources per agent) for your tier (${tierConfig.name}). This agent currently has ${currentCount} resources. Please upgrade your tier.`,
+          message: `Resource limit reached (${tierConfig.max_resources} resources) for your tier (${tierConfig.name}). This workspace currently has ${currentCount} resources. Please upgrade your tier.`,
         });
       }
     }

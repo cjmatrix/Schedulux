@@ -1,6 +1,5 @@
 import { ServiceInfo } from '@repo/proto/scheduling';
 import { ServiceEntity } from '../../../domain/entities/service.entity.js';
-import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
 import { PriceVO } from '../../../domain/value-objects/price.vo.js';
 import { IServiceDoc } from '../schemas/service.schema.js';
 
@@ -17,15 +16,6 @@ export class ServiceMapper {
       bufferMinutes: doc.buffer_minutes,
       bookingMode: doc.booking_mode ?? 'time_slot',
       price: PriceVO.create(doc.price?.type, doc.price?.amount, doc.price?.currency),
-      deposit: DepositVO.create({
-        required: doc.deposit?.required,
-        amount: doc.deposit?.amount,
-        processor: doc.deposit?.processor,
-        upiId: doc.deposit?.upi_id,
-        qrCodeUrl: doc.deposit?.qr_code_url,
-        confirmationMethod: doc.deposit?.confirmation_method,
-        paymentInstructions: doc.deposit?.payment_instructions,
-      }),
       verification: doc.verification ? { require_otp: doc.verification.require_otp } : undefined,
       resourceRequirements: (doc.resource_requirements ?? []).map((r) => ({
         role: r.role,
@@ -57,15 +47,6 @@ export class ServiceMapper {
         amount: entity.price.amount,
         currency: entity.price.currency,
       },
-      deposit: {
-        required: entity.deposit.required,
-        amount: entity.deposit.amount,
-        processor: entity.deposit.processor,
-        upi_id: entity.deposit.upiId,
-        qr_code_url: entity.deposit.qrCodeUrl,
-        confirmation_method: entity.deposit.confirmationMethod,
-        payment_instructions: entity.deposit.paymentInstructions,
-      },
       verification: entity.verification
         ? { require_otp: entity.verification.require_otp ?? null }
         : undefined,
@@ -96,15 +77,6 @@ export class ServiceMapper {
         type: entity.price.type,
         amount: entity.price.amount,
         currency: entity.price.currency,
-      },
-      deposit: {
-        required: entity.deposit.required,
-        amount: entity.deposit.amount,
-        processor: entity.deposit.processor,
-        upi_id: entity.deposit.upiId,
-        qr_code_url: entity.deposit.qrCodeUrl,
-        confirmation_method: entity.deposit.confirmationMethod,
-        payment_instructions: entity.deposit.paymentInstructions,
       },
       verification: entity.verification
         ? { require_otp: entity.verification.require_otp ?? undefined }

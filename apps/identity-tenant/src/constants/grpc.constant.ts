@@ -27,6 +27,10 @@ export const GRPC_METHODS = {
   TENANT: {
     LIST_TENANTS: 'ListTenants',
     SUSPEND_TENANT: 'SuspendTenant',
+    UPDATE_SUBSCRIPTION: 'UpdateTenantSubscription',
+    GET_BILLING_INFO: 'GetTenantBillingInfo',
+    PROCESS_PADDLE_WEBHOOK: 'ProcessPaddleWebhook',
+    CREATE_PADDLE_CHECKOUT: 'CreatePaddleCheckout',
   },
   DASHBOARD_AUTH: {
     LOGIN: 'Login',

@@ -22,6 +22,7 @@ class GraphState(TypedDict):
     status: str
     patch_retries: int
     react_step_count: int
+    tier: str | None
 
 
 STRUCTURAL_REQUIREMENTS: list[dict] = [

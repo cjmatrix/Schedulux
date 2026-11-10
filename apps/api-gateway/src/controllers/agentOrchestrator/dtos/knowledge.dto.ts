@@ -1,23 +1,28 @@
-import { CrawlSiteRequest, GetCrawlStatusRequest } from '@repo/proto/knowledge';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
-export const CrawlSiteSchema: z.ZodType<CrawlSiteRequest> = z.object({
-  tenant_id: z.string().min(1, 'Tenant ID is required'),
+export const CrawlSiteSchema = z.object({
+  tenant_id: z.string().optional(),
   url: z.string().trim().url('Please provide a valid URL'),
 });
 
 export class CrawlSiteDto extends createZodDto(CrawlSiteSchema) {}
 
-export const GetCrawlStatusSchema: z.ZodType<GetCrawlStatusRequest> = z.object({
-  tenant_id: z.string().min(1, 'Tenant ID is required'),
+export const GetCrawlStatusSchema = z.object({
+  tenant_id: z.string().optional(),
   job_id: z.string().min(1, 'Job ID is required'),
 });
 
 export class GetCrawlStatusDto extends createZodDto(GetCrawlStatusSchema) {}
 
+export const GetSchemaQuerySchema = z.object({
+  job_id: z.string().optional(),
+});
+
+export class GetSchemaQueryDto extends createZodDto(GetSchemaQuerySchema) {}
+
 export const StartOnboardingSchema = z.object({
-  tenant_id: z.string().min(1, 'Tenant ID is required'),
+  tenant_id: z.string().optional(),
   agent_id: z.string().optional(),
   initial_draft_json: z.string().optional().default('{}'),
 });
@@ -25,7 +30,7 @@ export const StartOnboardingSchema = z.object({
 export class StartOnboardingDto extends createZodDto(StartOnboardingSchema) {}
 
 export const ResumeOnboardingSchema = z.object({
-  tenant_id: z.string().min(1, 'Tenant ID is required'),
+  tenant_id: z.string().optional(),
   agent_id: z.string().optional(),
   user_answer: z.string().min(1, 'User answer is required'),
 });
@@ -53,6 +58,15 @@ export const InitCustomerChatSchema = z.object({
 
 export class InitCustomerChatDto extends createZodDto(InitCustomerChatSchema) {}
 
+export const InitSandboxChatSchema = z.object({
+  tenant_id: z.string().optional(),
+  agent_id: z.string().optional().default('default'),
+  token: z.string().optional(),
+  session_id: z.string().optional(),
+});
+
+export class InitSandboxChatDto extends createZodDto(InitSandboxChatSchema) {}
+
 export const CustomerChatSchema = z.object({
   tenant_id: z.string().min(1, 'Tenant ID is required'),
   agent_id: z.string().min(1, 'Agent ID is required'),
@@ -68,7 +82,7 @@ export class CustomerChatDto extends createZodDto(CustomerChatSchema) {}
 
 export const SendSandboxMessageSchema = z.object({
   tenant_id: z.string().optional(),
-  agent_id: z.string().optional(),
+  agent_id: z.string().optional().default('default'),
   session_id: z.string().optional(),
   token: z.string().optional(),
   message: z.string().min(1, 'Message cannot be empty'),
@@ -78,6 +92,37 @@ export const SendSandboxMessageSchema = z.object({
 });
 
 export class SendSandboxMessageDto extends createZodDto(SendSandboxMessageSchema) {}
+
+export const GetSandboxWidgetConfigQuerySchema = z.object({
+  agent_id: z.string().optional().default('default'),
+});
+
+export class GetSandboxWidgetConfigQueryDto extends createZodDto(GetSandboxWidgetConfigQuerySchema) {}
+
+export const GetSandboxMessagesQuerySchema = z.object({
+  agent_id: z.string().optional().default('default'),
+  session_id: z.string().optional(),
+  token: z.string().optional(),
+  before: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export class GetSandboxMessagesQueryDto extends createZodDto(GetSandboxMessagesQuerySchema) {}
+
+export const GetAgentMessagesQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  before: z.string().optional(),
+});
+
+export class GetAgentMessagesQueryDto extends createZodDto(GetAgentMessagesQuerySchema) {}
+
+export const GetOnboardingMessagesQuerySchema = z.object({
+  agent_id: z.string().min(1, 'agent_id is required'),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  before: z.string().optional(),
+});
+
+export class GetOnboardingMessagesQueryDto extends createZodDto(GetOnboardingMessagesQuerySchema) {}
 
 export const GetDocumentUploadUrlSchema = z.object({
   agent_id: z.string().min(1, 'Agent ID is required'),
@@ -107,3 +152,21 @@ export const ListDocumentsQuerySchema = z.object({
 });
 
 export class ListDocumentsQueryDto extends createZodDto(ListDocumentsQuerySchema) {}
+
+export const PublicChatConfigQuerySchema = z.object({
+  tenant_id: z.string().min(1, 'Tenant ID is required'),
+  agent_id: z.string().min(1, 'Agent ID is required'),
+});
+
+export class PublicChatConfigQueryDto extends createZodDto(PublicChatConfigQuerySchema) {}
+
+export const PublicChatMessagesQuerySchema = z.object({
+  tenant_id: z.string().min(1, 'Tenant ID is required'),
+  agent_id: z.string().min(1, 'Agent ID is required'),
+  session_id: z.string().optional(),
+  token: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  before: z.string().optional(),
+});
+
+export class PublicChatMessagesQueryDto extends createZodDto(PublicChatMessagesQuerySchema) {}

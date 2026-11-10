@@ -17,7 +17,9 @@ export interface ListServicesOutput {
   summary?: ServiceSummary;
 }
 
-export interface ICreateServiceUseCase extends IUseCase<CreateServiceRequest, ServiceEntity> {}
+export interface ICreateServiceUseCase {
+  execute(input: CreateServiceRequest, tier?: string): Promise<ServiceEntity>;
+}
 export interface IGetServiceUseCase extends IUseCase<GetServiceRequest, ServiceEntity> {}
 export interface IListServicesUseCase extends IUseCase<ListServicesRequest, ListServicesOutput> {}
 export interface IUpdateServiceUseCase extends IUseCase<UpdateServiceRequest, ServiceEntity> {}

@@ -59,7 +59,9 @@ def build_tenant_onboarding_graph():
 _graph = build_tenant_onboarding_graph()
 
 
-async def start_onboarding_session(tenant_id: str, draft: dict, agent_id: str = "") -> dict:
+async def start_onboarding_session(
+    tenant_id: str, draft: dict, agent_id: str = "", tier: str | None = None
+) -> dict:
     target_agent_id = agent_id or draft.get("agent_id") or f"agent_{tenant_id}_v1"
     draft["agent_id"] = target_agent_id
 
@@ -76,6 +78,7 @@ async def start_onboarding_session(tenant_id: str, draft: dict, agent_id: str = 
         "status": "onboarding",
         "patch_retries": 0,
         "react_step_count": 0,
+        "tier": tier or "starter",
     }
 
     try:
@@ -89,7 +92,9 @@ async def start_onboarding_session(tenant_id: str, draft: dict, agent_id: str = 
     return _extract_payload(result_state)
 
 
-async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: str = "") -> dict:
+async def resume_onboarding_session(
+    tenant_id: str, user_answer: str, agent_id: str = "", tier: str | None = None
+) -> dict:
     from agent_orchestrator.clients.redis_client import get_cached_draft
 
     draft = await get_cached_draft(tenant_id, agent_id)
@@ -179,6 +184,7 @@ async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: 
         "status": "onboarding",
         "patch_retries": 0,
         "react_step_count": 0,
+        "tier": tier or "starter",
     }
 
     result_state = await _graph.ainvoke(initial)

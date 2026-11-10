@@ -526,7 +526,6 @@ async def book_appointment(
     runtime: AgentRuntimeConfig | None = None
     service_doc = None
     service_otp_override: bool | None = None
-    deposit_required = False
     global_otp = False
     tz_str = "UTC"
 
@@ -544,7 +543,6 @@ async def book_appointment(
     if service_doc:
         if service_doc.verification and service_doc.verification.require_otp is not None:
             service_otp_override = service_doc.verification.require_otp
-        deposit_required = bool(service_doc.deposit and service_doc.deposit.required)
     if runtime.guardrails and runtime.guardrails.verification_policy:
         global_otp = bool(runtime.guardrails.verification_policy.require_otp_for_new_booking)
     if runtime.business_profile and runtime.business_profile.timezone:
@@ -553,7 +551,7 @@ async def book_appointment(
     requires_otp = (
         service_otp_override
         if service_otp_override is not None
-        else (deposit_required or global_otp)
+        else global_otp
     )
 
     if requires_otp:
@@ -640,7 +638,6 @@ async def book_appointment(
             "start_time_local": _format_local_datetime(start_utc, tz_str),
             "end_time_local": _format_local_datetime(end_utc, tz_str),
             "timezone": tz_str,
-            "deposit_status": bk.get("deposit_status"),
             "price": bk.get("price"),
         },
         indent=2,

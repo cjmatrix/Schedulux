@@ -3,6 +3,8 @@ import type { ApiResponse } from '../../../api/axiosClient';
 import {
   type AgentSummaryInfo,
   type KnowledgeDocumentInfo,
+  type SaveInitialAgentDraftRequest,
+  type SaveInitialAgentDraftResponse,
   knowledgeApi,
 } from '../../../api/knowledgeApi';
 
@@ -108,6 +110,25 @@ export function useDeleteDocument(activeAgentId?: string) {
       }
       queryClient.invalidateQueries({
         queryKey: KNOWLEDGE_KEYS.allDocuments,
+      });
+    },
+  });
+}
+
+export function useSaveInitialAgentDraft() {
+  const queryClient = useQueryClient();
+
+  return useMutation<SaveInitialAgentDraftResponse, Error, SaveInitialAgentDraftRequest>({
+    mutationFn: async (payload) => {
+      const res = await knowledgeApi.saveInitialAgentDraft(payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: KNOWLEDGE_KEYS.agentsList,
+      });
+      queryClient.invalidateQueries({
+        queryKey: KNOWLEDGE_KEYS.allAgents,
       });
     },
   });

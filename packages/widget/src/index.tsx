@@ -13,6 +13,23 @@ export * from './types';
 
 const activeInstances = new Map<string, ScheduluxWidgetInstance>();
 
+function cleanUndefined<T extends Record<string, any>>(obj?: T): Partial<T> {
+  if (!obj || typeof obj !== 'object') return {};
+  const cleaned: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined && value !== null) {
+      if (typeof value === 'object' && !Array.isArray(value)) {
+        const sub = cleanUndefined(value);
+        if (Object.keys(sub).length > 0) {
+          cleaned[key] = sub;
+        }
+      } else {
+        cleaned[key] = value;
+      }
+    }
+  }
+  return cleaned as Partial<T>;
+}
 
 export function initScheduluxWidget(options: WidgetInitOptions): ScheduluxWidgetInstance {
   const instanceKey = `${options.tenantId}_${options.agentId}`;
@@ -35,7 +52,7 @@ export function initScheduluxWidget(options: WidgetInitOptions): ScheduluxWidget
 
 
   const styleEl = document.createElement('style');
-  let currentConfig: Partial<WidgetConfig> = { ...options.config };
+  let currentConfig: Partial<WidgetConfig> = cleanUndefined(options.config);
   styleEl.textContent = getWidgetStyles(currentConfig, options.inline);
   shadowRoot.appendChild(styleEl);
 
@@ -101,12 +118,13 @@ export function initScheduluxWidget(options: WidgetInitOptions): ScheduluxWidget
       resetBtn?.click();
     },
     updateConfig: (newConfig: Partial<WidgetConfig>) => {
+      const cleanNew = cleanUndefined(newConfig);
       currentConfig = {
         ...currentConfig,
-        ...newConfig,
+        ...cleanNew,
         theme: {
           ...(currentConfig.theme || {}),
-          ...(newConfig.theme || {}),
+          ...(cleanNew.theme || {}),
         },
       };
       styleEl.textContent = getWidgetStyles(currentConfig, options.inline);
@@ -135,14 +153,14 @@ export function initScheduluxWidget(options: WidgetInitOptions): ScheduluxWidget
   )
     .then((remoteCfg) => {
       if (remoteCfg && Object.keys(remoteCfg).length > 0) {
-        const mergedTheme = {
-          ...(remoteCfg.theme || {}),
-          ...(options.config?.theme || {}),
-        };
+        const localOverrides = cleanUndefined(options.config);
         const mergedConfig: Partial<WidgetConfig> = {
           ...remoteCfg,
-          ...options.config,
-          theme: mergedTheme,
+          ...localOverrides,
+          theme: {
+            ...(remoteCfg.theme || {}),
+            ...(localOverrides.theme || {}),
+          },
         };
         instance.updateConfig(mergedConfig);
       }
@@ -199,21 +217,44 @@ if (typeof window !== 'undefined') {
       const themeMode = currentScript.getAttribute(
         'data-theme-mode',
       ) as WidgetConfig['theme'] extends { theme_mode?: infer M } ? M : never;
+      const containerSelector = currentScript.getAttribute('data-container');
+      const inlineAttr = currentScript.getAttribute('data-inline');
 
-      initScheduluxWidget({
-        tenantId,
-        agentId,
-        apiBase,
-        config: {
-          agent_name: agentName || undefined,
-          initial_greeting: greeting || undefined,
-          position: position || undefined,
-          theme: {
-            primary_color: primaryColor || undefined,
-            theme_mode: themeMode || undefined,
-          },
-        },
-      });
+      const scriptConfig: Partial<WidgetConfig> = {};
+      if (agentName) scriptConfig.agent_name = agentName;
+      if (greeting) scriptConfig.initial_greeting = greeting;
+      if (position) scriptConfig.position = position;
+      if (primaryColor || themeMode) {
+        scriptConfig.theme = {};
+        if (primaryColor) scriptConfig.theme.primary_color = primaryColor;
+        if (themeMode) scriptConfig.theme.theme_mode = themeMode;
+      }
+
+      const resolveAndInit = () => {
+        const containerEl = containerSelector
+          ? (document.querySelector(containerSelector) as HTMLElement | null)
+          : null;
+        const isInline = inlineAttr === 'true' || Boolean(containerEl);
+
+        initScheduluxWidget({
+          tenantId,
+          agentId,
+          apiBase,
+          container: containerEl || undefined,
+          inline: isInline,
+          config: scriptConfig,
+        });
+      };
+
+      if (
+        containerSelector &&
+        !document.querySelector(containerSelector) &&
+        document.readyState === 'loading'
+      ) {
+        document.addEventListener('DOMContentLoaded', resolveAndInit);
+      } else {
+        resolveAndInit();
+      }
     }
   }
 }

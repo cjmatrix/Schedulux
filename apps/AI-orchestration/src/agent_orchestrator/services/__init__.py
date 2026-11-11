@@ -17,13 +17,22 @@ from agent_orchestrator.services.onboarding_service import (
     OnboardingResult,
     OnboardingService,
 )
+from agent_orchestrator.services.outbox_service import (
+    OutboxService,
+    get_outbox_service,
+    run_outbox_recovery_loop,
+    set_outbox_service,
+)
 from agent_orchestrator.services.protocols import (
     AgentManagementServiceProtocol,
     ChatServiceProtocol,
     CrawlerServiceProtocol,
     MemoryServiceProtocol,
     OnboardingServiceProtocol,
+    OutboxServiceProtocol,
+    TokenTrackingServiceProtocol,
 )
+from agent_orchestrator.services.token_service import TokenTrackingService, TokenUsageTracker
 
 __all__ = [
     "OnboardingService",
@@ -42,4 +51,12 @@ __all__ = [
     "MemoryService",
     "MemoryServiceProtocol",
     "DocumentService",
+    "OutboxService",
+    "OutboxServiceProtocol",
+    "get_outbox_service",
+    "set_outbox_service",
+    "run_outbox_recovery_loop",
+    "TokenTrackingService",
+    "TokenTrackingServiceProtocol",
+    "TokenUsageTracker",
 ]

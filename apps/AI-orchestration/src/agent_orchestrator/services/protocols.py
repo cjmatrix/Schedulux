@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from agent_orchestrator.models import KnowledgeDocument
+from agent_orchestrator.models import KnowledgeDocument, OutboxEvent
 
 
 @dataclass
@@ -111,3 +111,44 @@ class DocumentServiceProtocol(Protocol):
     async def list_documents(self, tenant_id: str, agent_id: str) -> list[KnowledgeDocument]: ...
 
     async def delete_document(self, tenant_id: str, document_id: str) -> bool: ...
+
+
+class OutboxServiceProtocol(Protocol):
+    """Protocol for transactional outbox dispatching and recovery."""
+
+    async def save_event(
+        self,
+        event_id: str,
+        aggregate_type: str,
+        aggregate_id: str,
+        event_type: str,
+        topic: str,
+        partition_key: str,
+        payload: dict[str, Any],
+    ) -> OutboxEvent: ...
+
+    async def publish_outbox_event(self, outbox_doc: OutboxEvent) -> None: ...
+
+    def dispatch_async(self, outbox_doc: OutboxEvent) -> None: ...
+
+    async def sweep_stuck_events(self) -> None: ...
+
+
+class TokenTrackingServiceProtocol(Protocol):
+    """Protocol for tracking weekly token usage and rate quotas."""
+
+    async def record_tokens(
+        self,
+        tenant_id: str,
+        agent_id: str,
+        source: str,
+        input_tokens: int,
+        output_tokens: int,
+        model_id: str | None = None,
+        event_id: str | None = None,
+    ) -> int: ...
+
+    async def check_weekly_quota(
+        self, tenant_id: str, tier: str | None = None
+    ) -> tuple[bool, int, int]: ...
+

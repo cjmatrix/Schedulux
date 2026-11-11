@@ -240,7 +240,7 @@ export class MongoBookingRepository implements IBookingRepository {
     const skip = Math.max(0, (filter.page - 1) * filter.limit);
     const [docs, total] = await Promise.all([
       BookingModel.find(query)
-        .sort({ start_time: -1 })
+        .sort({ created_at: -1 })
         .skip(skip)
         .limit(filter.limit)
         .lean()

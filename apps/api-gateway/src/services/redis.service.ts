@@ -144,10 +144,25 @@ export class RedisService
     }
   }
 
+  private _getCurrentIsoWeek(): string {
+    const now = new Date();
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+  }
+
   async getWeeklyTokenUsage(tenantId: string): Promise<number> {
     try {
-      const raw = await this._client.get(`tenant:${tenantId}:tokens:weekly`);
-      return raw ? parseInt(raw, 10) || 0 : 0;
+      const isoWeek = this._getCurrentIsoWeek();
+      const isoKey = `tenant:${tenantId}:tokens:${isoWeek}`;
+      const raw = await this._client.get(isoKey);
+      if (raw) return parseInt(raw, 10) || 0;
+
+      const legacyRaw = await this._client.get(`tenant:${tenantId}:tokens:weekly`);
+      return legacyRaw ? parseInt(legacyRaw, 10) || 0 : 0;
     } catch (err) {
       this._logger.error(`Failed to get weekly token usage for ${tenantId}:`, err);
       return 0;
@@ -159,7 +174,8 @@ export class RedisService
     tokens: number,
     weeklyLimit: number,
   ): Promise<{ current: number; limit: number; exceeded: boolean }> {
-    const key = `tenant:${tenantId}:tokens:weekly`;
+    const isoWeek = this._getCurrentIsoWeek();
+    const key = `tenant:${tenantId}:tokens:${isoWeek}`;
     try {
       const multi = this._client.multi();
       multi.incrby(key, tokens);
@@ -175,9 +191,8 @@ export class RedisService
         ttl = Number(results[1][1]);
       }
 
-   
       if (ttl < 0) {
-        await this._client.expire(key, 7 * 24 * 3600);
+        await this._client.expire(key, 35 * 24 * 3600);
       }
 
       const exceeded = weeklyLimit !== -1 && current > weeklyLimit;

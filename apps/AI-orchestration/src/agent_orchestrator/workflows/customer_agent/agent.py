@@ -16,6 +16,7 @@ from pydantic import SecretStr
 
 from agent_orchestrator.mcp.scheduling_mcp_server import get_scheduling_mcp_tools
 from agent_orchestrator.repositories.customer_message_repository import CustomerMessageRepository
+from agent_orchestrator.services.token_service import TokenTrackingService, TokenUsageTracker
 from agent_orchestrator.workflows.customer_agent.context import resolve_business_context
 from agent_orchestrator.workflows.customer_agent.state import CustomerGraphState
 from agent_orchestrator.workflows.customer_agent.subagents import (
@@ -330,6 +331,43 @@ async def process_customer_chat(
     biz_context = await resolve_business_context(tenant_id, agent_id, is_sandbox=is_sandbox)
     all_tools = get_scheduling_mcp_tools()
 
+    from agent_orchestrator.services.token_service import TokenTrackingService
+
+    
+    is_exceeded, current_tokens, token_limit = await TokenTrackingService.check_weekly_quota(tenant_id)
+    if is_exceeded:
+        logger.warning(
+            "[CustomerAgent] Tenant %s exceeded weekly token quota (%d/%d). Blocking interaction.",
+            tenant_id,
+            current_tokens,
+            token_limit,
+        )
+        quota_msg = (
+            "This workspace has reached its weekly AI token usage limit. "
+            "Please contact the administrator or upgrade your subscription plan to continue."
+        )
+        assistant_msg = await _customer_msg_repo.save_message(
+            session_id=session_id,
+            tenant_id=tenant_id,
+            agent_id=agent_id,
+            role="assistant",
+            content=quota_msg,
+        )
+        user_msg_id = str(user_msg.id) if user_msg and hasattr(user_msg, "id") else ""
+        agent_msg_id = str(assistant_msg.id) if assistant_msg and hasattr(assistant_msg, "id") else ""
+        created_at_iso = (
+            assistant_msg.created_at.isoformat()
+            if assistant_msg and hasattr(assistant_msg, "created_at") and assistant_msg.created_at
+            else ""
+        )
+        return {
+            "session_id": session_id,
+            "response": quota_msg,
+            "user_message_id": user_msg_id,
+            "agent_message_id": agent_msg_id,
+            "created_at": created_at_iso,
+        }
+
     initial_state: CustomerGraphState = {
         "session_id": session_id,
         "tenant_id": tenant_id,
@@ -347,10 +385,11 @@ async def process_customer_chat(
         "is_sandbox": is_sandbox,
     }
 
+    tracker = TokenUsageTracker()
     try:
         final_state = await customer_orchestration_graph.ainvoke(
             initial_state,
-            config={"recursion_limit": 8},
+            config={"recursion_limit": 8, "callbacks": [tracker]},
         )
         response_text = final_state.get("response") or (
             "I'm sorry, I encountered a temporary issue while processing your request. "
@@ -369,6 +408,42 @@ async def process_customer_chat(
         agent_id=agent_id,
         role="assistant",
         content=response_text,
+    )
+
+    fallback_prompt = f"{message} " + " ".join(
+        m.content for m in langchain_messages if hasattr(m, "content") and isinstance(m.content, str)
+    )
+    fallback_inp = max(1, len(fallback_prompt) // 4)
+    fallback_out = max(1, len(response_text) // 4)
+
+    if tracker.total_tokens > 0:
+        inp_tokens = tracker.input_tokens
+        out_tokens = tracker.output_tokens
+        model_name = tracker.model_id or os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+        logger.info(
+            "[CustomerAgent] Recorded %d subagent/node LLM calls for session %s (In: %d, Out: %d, Total: %d, Model: %s)",
+            tracker.call_count,
+            session_id,
+            inp_tokens,
+            out_tokens,
+            tracker.total_tokens,
+            model_name,
+        )
+    else:
+        inp_tokens = fallback_inp
+        out_tokens = fallback_out
+        model_name = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+
+    det_event_id = f"evt_tok_{tenant_id}_{agent_id}_{assistant_msg.id}"
+
+    await TokenTrackingService.record_tokens(
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        source="customer_agent",
+        input_tokens=inp_tokens,
+        output_tokens=out_tokens,
+        model_id=model_name,
+        event_id=det_event_id,
     )
 
     user_msg_id = str(user_msg.id) if user_msg and hasattr(user_msg, "id") else ""

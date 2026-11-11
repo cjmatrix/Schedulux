@@ -1,11 +1,13 @@
 import 'dotenv/config';
 import { startBookingEventsConsumer, } from './consumers/bookingEventsConsumer.js';
+import { startTokenLedgerConsumer, } from './consumers/tokenLedgerConsumer.js';
 import { createEmailWorker } from './workers/emailWorker.js';
 import { createSmsWorker } from './workers/smsWorker.js';
 console.log(' [Background Worker Service] Starting workers & consumers...');
 let emailWorker = null;
 let smsWorker = null;
 let bookingEventsConsumer = null;
+let tokenLedgerConsumer = null;
 async function bootstrap() {
     try {
         emailWorker = await createEmailWorker();
@@ -15,6 +17,10 @@ async function bootstrap() {
         bookingEventsConsumer = await startBookingEventsConsumer();
         if (bookingEventsConsumer) {
             console.log(' [Background Worker] Listening for domain events on Kafka "scheduling.booking.events"');
+        }
+        tokenLedgerConsumer = await startTokenLedgerConsumer();
+        if (tokenLedgerConsumer) {
+            console.log(' [Background Worker] Listening for token usage on Kafka "billing.tokens.consumed"');
         }
     }
     catch (err) {
@@ -34,6 +40,9 @@ const gracefulShutdown = async (signal) => {
         }
         if (bookingEventsConsumer) {
             shutdowns.push(bookingEventsConsumer.close());
+        }
+        if (tokenLedgerConsumer) {
+            shutdowns.push(tokenLedgerConsumer.close());
         }
         await Promise.allSettled(shutdowns);
         console.log(' Workers & consumers closed. Exiting process.');

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 import {
   billingApi,
   type PaddlePublicConfig,
@@ -18,8 +19,8 @@ export function useBillingSubscription() {
       const res = await billingApi.getSubscription();
       return res.data;
     },
-    staleTime: 30 * 1000,
-    refetchOnWindowFocus: true,
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -31,14 +32,15 @@ export function useBillingConfig() {
       return res.data;
     },
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
 
 export function useInvalidateBilling() {
   const queryClient = useQueryClient();
-  return () => {
+  return useCallback(() => {
     queryClient.invalidateQueries({ queryKey: BILLING_KEYS.subscription() });
-  };
+  }, [queryClient]);
 }
 
 export function useCreateCheckout() {

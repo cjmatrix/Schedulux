@@ -10,6 +10,7 @@ from agent_orchestrator.models import (
     AgentRuntimeConfig,
     KnowledgeDocument,
     KnowledgeDocumentStatus,
+    OutboxEvent,
 )
 
 
@@ -190,6 +191,22 @@ class EventSubscriber(Protocol):
     async def stop(self) -> None: ...
 
 
+@runtime_checkable
+class EventPublisher(Protocol):
+    
+
+    async def publish(
+        self,
+        topic: str,
+        payload: dict[str, Any],
+        key: str | None = None,
+    ) -> None: ...
+
+    async def start(self) -> None: ...
+
+    async def stop(self) -> None: ...
+
+
 class DenseEmbedder(Protocol):
     async def embed_texts(
         self, texts: list[str], input_type: str = "document"
@@ -232,3 +249,34 @@ class KnowledgeVectorStore(Protocol):
         agent_id: str | None,
         limit: int,
     ) -> list[dict[str, Any]]: ...
+
+
+@runtime_checkable
+class OutboxRepository(Protocol):
+    """Abstract persistence for transactional OutboxEvent entities."""
+
+    async def save_event(
+        self,
+        event_id: str,
+        aggregate_type: str,
+        aggregate_id: str,
+        event_type: str,
+        topic: str,
+        partition_key: str,
+        payload: dict[str, Any],
+    ) -> OutboxEvent: ...
+
+    async def mark_published(
+        self, event_id: str, published_at: datetime | None = None
+    ) -> None: ...
+
+    async def mark_failed(
+        self, event_id: str, error: str, max_retries: int = 5
+    ) -> None: ...
+
+    async def get_stuck_pending_events(
+        self, older_than: datetime, limit: int = 50
+    ) -> list[OutboxEvent]: ...
+
+    async def get_by_id(self, event_id: str) -> OutboxEvent | None: ...
+

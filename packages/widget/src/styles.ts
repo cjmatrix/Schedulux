@@ -71,7 +71,7 @@ export function getWidgetStyles(config?: Partial<WidgetConfig>, inline?: boolean
       ${inline ? '' : isLeft ? 'left: var(--schedulux-pos-side);' : 'right: var(--schedulux-pos-side);'}
       z-index: ${inline ? '1' : '2147483647'};
       display: flex;
-      flex-direction: column;
+      flex-direction: ${isTop ? 'column-reverse' : 'column'};
       min-height: 0;
       ${inline ? 'align-items: stretch;' : isLeft ? 'align-items: flex-start;' : 'align-items: flex-end;'}
       pointer-events: ${inline ? 'auto' : 'none'};
@@ -194,10 +194,11 @@ export function getWidgetStyles(config?: Partial<WidgetConfig>, inline?: boolean
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      margin-bottom: 14px;
+      margin-bottom: ${isTop ? '0' : '14px'};
+      margin-top: ${isTop ? '14px' : '0'};
       opacity: 0;
-      transform: translateY(16px) scale(0.96);
-      transform-origin: ${isLeft ? 'bottom left' : 'bottom right'};
+      transform: translateY(${isTop ? '-16px' : '16px'}) scale(0.96);
+      transform-origin: ${isTop ? (isLeft ? 'top left' : 'top right') : (isLeft ? 'bottom left' : 'bottom right')};
       transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
       visibility: hidden;
     }

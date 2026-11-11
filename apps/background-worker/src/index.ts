@@ -3,6 +3,10 @@ import {
   startBookingEventsConsumer,
   type BookingEventsConsumerController,
 } from './consumers/bookingEventsConsumer.js';
+import {
+  startTokenLedgerConsumer,
+  type TokenLedgerConsumerController,
+} from './consumers/tokenLedgerConsumer.js';
 import { createEmailWorker, type EmailWorkerController } from './workers/emailWorker.js';
 import { createSmsWorker, type SmsWorkerController } from './workers/smsWorker.js';
 
@@ -11,6 +15,7 @@ console.log(' [Background Worker Service] Starting workers & consumers...');
 let emailWorker: EmailWorkerController | null = null;
 let smsWorker: SmsWorkerController | null = null;
 let bookingEventsConsumer: BookingEventsConsumerController | null = null;
+let tokenLedgerConsumer: TokenLedgerConsumerController | null = null;
 
 async function bootstrap() {
   try {
@@ -23,6 +28,11 @@ async function bootstrap() {
     bookingEventsConsumer = await startBookingEventsConsumer();
     if (bookingEventsConsumer) {
       console.log(' [Background Worker] Listening for domain events on Kafka "scheduling.booking.events"');
+    }
+
+    tokenLedgerConsumer = await startTokenLedgerConsumer();
+    if (tokenLedgerConsumer) {
+      console.log(' [Background Worker] Listening for token usage on Kafka "billing.tokens.consumed"');
     }
   } catch (err) {
     console.error(' [Background Worker] Failed to start workers:', err);
@@ -42,6 +52,9 @@ const gracefulShutdown = async (signal: string) => {
     }
     if (bookingEventsConsumer) {
       shutdowns.push(bookingEventsConsumer.close());
+    }
+    if (tokenLedgerConsumer) {
+      shutdowns.push(tokenLedgerConsumer.close());
     }
     await Promise.allSettled(shutdowns);
     console.log(' Workers & consumers closed. Exiting process.');

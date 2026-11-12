@@ -12,10 +12,15 @@ import { MESSAGING_SERVICE, OUTBOX_REPOSITORY } from '../../domain/tokens.js';
 import { IOutboxDoc } from '../database/schemas/outbox.schema.js';
 import type { ITenantScheduleDoc } from '../database/schemas/tenant-schedule.schema.js';
 
-export const KAFKA_SERVICE_TOPIC_SERVICES = 'scheduling.service.events';
-export const KAFKA_SERVICE_TOPIC_RESOURCES = 'scheduling.resource.events';
-export const KAFKA_SERVICE_TOPIC_BOOKINGS = 'scheduling.booking.events';
-export const KAFKA_SERVICE_TOPIC_SCHEDULES = 'scheduling.schedule.events';
+export const KAFKA_SERVICE_TOPIC_DOMAIN =
+  process.env.KAFKA_SCHEDULING_DOMAIN_TOPIC || 'scheduling.domain.events';
+export const KAFKA_SERVICE_TOPIC_BOOKINGS =
+  process.env.KAFKA_BOOKING_TOPIC || 'scheduling.booking.events';
+
+
+export const KAFKA_SERVICE_TOPIC_SERVICES = KAFKA_SERVICE_TOPIC_DOMAIN;
+export const KAFKA_SERVICE_TOPIC_RESOURCES = KAFKA_SERVICE_TOPIC_DOMAIN;
+export const KAFKA_SERVICE_TOPIC_SCHEDULES = KAFKA_SERVICE_TOPIC_DOMAIN;
 
 export type SchedulingEventType =
   | 'service.created'

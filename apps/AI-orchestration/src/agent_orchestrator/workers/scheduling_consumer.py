@@ -35,7 +35,26 @@ load_dotenv(local_env)
 
 logger = logging.getLogger(__name__)
 
-TOPICS = ["scheduling.service.events", "scheduling.resource.events", "scheduling.schedule.events"]
+SCHEDULING_DOMAIN_TOPIC = os.environ.get(
+    "KAFKA_SCHEDULING_DOMAIN_TOPIC", "scheduling.domain.events"
+)
+TOPICS = [SCHEDULING_DOMAIN_TOPIC]
+
+
+async def handle_domain_event(payload: dict[str, Any]) -> None:
+    event_type = payload.get("event_type", "")
+    if event_type.startswith("service."):
+        await handle_service_event(payload)
+    elif event_type.startswith("resource."):
+        await handle_resource_event(payload)
+    elif event_type.startswith("schedule.") or event_type == "schedule.updated":
+        await handle_schedule_event(payload)
+    else:
+        logger.warning(
+            "[SchedulingConsumer] Unknown domain event type '%s' in payload: %s",
+            event_type,
+            payload,
+        )
 
 
 async def handle_service_event(payload: dict[str, Any]) -> None:
@@ -370,14 +389,13 @@ class SchedulingConsumer:
     def __init__(
         self,
         subscriber: EventSubscriber,
-        service_topic: str = "scheduling.service.events",
-        resource_topic: str = "scheduling.resource.events",
-        schedule_topic: str = "scheduling.schedule.events",
+        domain_topic: str = "scheduling.domain.events",
     ) -> None:
         self.subscriber = subscriber
-        self.service_topic = service_topic
-        self.resource_topic = resource_topic
-        self.schedule_topic = schedule_topic
+        self.domain_topic = os.environ.get("KAFKA_SCHEDULING_DOMAIN_TOPIC", domain_topic)
+
+    async def handle_domain_event(self, payload: dict[str, Any]) -> None:
+        await handle_domain_event(payload)
 
     async def handle_service_event(self, payload: dict[str, Any]) -> None:
         await handle_service_event(payload)
@@ -389,17 +407,13 @@ class SchedulingConsumer:
         await handle_schedule_event(payload)
 
     async def start(self) -> None:
-        """Register topic handlers, start the subscriber connection, and listen."""
-        await self.subscriber.subscribe(self.service_topic, self.handle_service_event)
-        await self.subscriber.subscribe(self.resource_topic, self.handle_resource_event)
-        await self.subscriber.subscribe(self.schedule_topic, self.handle_schedule_event)
+        """Register domain topic handler, start the subscriber connection, and listen."""
+        await self.subscriber.subscribe(self.domain_topic, self.handle_domain_event)
         await self.subscriber.start()
         logger.info(
-            "[SchedulingConsumer] Listening for scheduling events via %s on topics: [%s, %s, %s]...",
+            "[SchedulingConsumer] Listening for consolidated scheduling domain events via %s on topic: %s...",
             type(self.subscriber).__name__,
-            self.service_topic,
-            self.resource_topic,
-            self.schedule_topic,
+            self.domain_topic,
         )
         await self.subscriber.run()
 

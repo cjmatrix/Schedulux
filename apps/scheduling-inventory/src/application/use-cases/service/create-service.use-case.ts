@@ -1,5 +1,5 @@
 import * as grpc from '@grpc/grpc-js';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { CreateServiceRequest } from '@repo/proto/scheduling';
 import { getTierConfig } from '../../../domain/constants/tiers.constant.js';
@@ -20,6 +20,8 @@ import { ICreateServiceUseCase } from '../../interfaces/service-use-cases.interf
 
 @Injectable()
 export class CreateServiceUseCase implements ICreateServiceUseCase {
+  private readonly _logger = new Logger(CreateServiceUseCase.name);
+
   constructor(
     @Inject(SERVICE_REPOSITORY)
     private readonly _serviceRepository: IServiceRepository,
@@ -79,7 +81,11 @@ export class CreateServiceUseCase implements ICreateServiceUseCase {
       return { created: createdEntity, outbox: outboxDoc };
     });
 
-    await this._eventsProducer.publishOutboxEvent(outbox);
+    void this._eventsProducer.publishOutboxEvent(outbox).catch((err: unknown) => {
+      this._logger.warn(
+        `Immediate outbox dispatch failed for service ${serviceId}: ${err}. Recovery sweeper will retry.`,
+      );
+    });
 
     return created;
   }

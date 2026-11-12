@@ -1,5 +1,5 @@
 import * as grpc from '@grpc/grpc-js';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { CreateResourceRequest } from '@repo/proto/scheduling';
 import { getTierConfig } from '../../../domain/constants/tiers.constant.js';
@@ -23,6 +23,8 @@ import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-even
 
 @Injectable()
 export class CreateResourceUseCase implements ICreateResourceUseCase {
+  private readonly _logger = new Logger(CreateResourceUseCase.name);
+
   constructor(
     @Inject(RESOURCE_REPOSITORY)
     private readonly _resourceRepository: IResourceRepository,
@@ -71,7 +73,11 @@ export class CreateResourceUseCase implements ICreateResourceUseCase {
       return { created: createdEntity, outbox: outboxDoc };
     });
 
-    await this._eventsProducer.publishOutboxEvent(outbox);
+    void this._eventsProducer.publishOutboxEvent(outbox).catch((err: unknown) => {
+      this._logger.warn(
+        `Immediate outbox dispatch failed for resource ${resourceId}: ${err}. Recovery sweeper will retry.`,
+      );
+    });
 
     return created;
   }

@@ -50,7 +50,6 @@ class KafkaTokenProducer(EventPublisher):
                 "linger_ms": 10,            
                 "acks": 1,                   
                 "max_batch_size": 16384,    
-                "retries": 5,             
                 "retry_backoff_ms": 100,  
             }
 

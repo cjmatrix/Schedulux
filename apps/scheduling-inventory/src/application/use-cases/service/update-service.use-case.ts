@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { UpdateServiceRequest } from '@repo/proto/scheduling';
 import { ServiceEntity } from '../../../domain/entities/service.entity.js';
 import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
@@ -17,6 +17,8 @@ import { invalidateCachedService } from '../../utils/service-cache.helper.js';
 
 @Injectable()
 export class UpdateServiceUseCase implements IUpdateServiceUseCase {
+  private readonly _logger = new Logger(UpdateServiceUseCase.name);
+
   constructor(
     @Inject(SERVICE_REPOSITORY)
     private readonly _serviceRepository: IServiceRepository,
@@ -71,7 +73,11 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
       return { updated: updatedEntity, outbox: outboxDoc };
     });
 
-    await this._eventsProducer.publishOutboxEvent(outbox);
+    void this._eventsProducer.publishOutboxEvent(outbox).catch((err: unknown) => {
+      this._logger.warn(
+        `Immediate outbox dispatch failed for service ${dto.service_id}: ${err}. Recovery sweeper will retry.`,
+      );
+    });
 
     invalidateCachedService(this._cacheRepo, dto.tenant_id, dto.service_id);
 

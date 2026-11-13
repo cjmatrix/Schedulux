@@ -54,6 +54,10 @@ export const API_ROUTES = {
       WEBHOOK: 'webhook',
       CHECKOUT: 'checkout',
     },
+    DASHBOARD: {
+      BASE: 'api/v1/tenant/dashboard',
+      OVERVIEW: 'overview',
+    },
   },
   SCHEDULING: {
     BASE: 'api/v1/tenant/scheduling',

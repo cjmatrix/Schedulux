@@ -59,10 +59,14 @@ export interface UpdateTenantSchedulePayload {
 
 export const scheduleApi = {
   getSchedule: async (agentId?: string): Promise<ApiResponse<TenantSchedule>> => {
+    const cleanId = agentId?.trim();
+    if (!cleanId) {
+      throw new Error('agent_id is required to fetch schedule');
+    }
     const { data } = await axiosClient.get<ApiResponse<TenantSchedule>>(
       '/api/v1/tenant/scheduling/schedule',
       {
-        params: { agent_id: agentId || '' },
+        params: { agent_id: cleanId },
       },
     );
     return data;

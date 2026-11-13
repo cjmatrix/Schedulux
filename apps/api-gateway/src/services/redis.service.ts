@@ -144,6 +144,23 @@ export class RedisService
     }
   }
 
+  async getTenantStatus(tenantId: string): Promise<string | null> {
+    try {
+      return await this._client.get(`tenant:${tenantId}:status`);
+    } catch (err) {
+      this._logger.error(`Failed to get cached tenant status for ${tenantId}:`, err);
+      return null;
+    }
+  }
+
+  async setTenantStatus(tenantId: string, status: string, ttlSeconds = 86400 * 30): Promise<void> {
+    try {
+      await this._client.set(`tenant:${tenantId}:status`, status, 'EX', ttlSeconds);
+    } catch (err) {
+      this._logger.error(`Failed to cache tenant status for ${tenantId}:`, err);
+    }
+  }
+
   private _getCurrentIsoWeek(): string {
     const now = new Date();
     const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));

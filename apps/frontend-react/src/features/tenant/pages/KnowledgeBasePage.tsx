@@ -2,6 +2,7 @@ import {
   AlertCircle,
   ArrowLeft,
   BookOpen,
+  Bot,
   CheckCircle2,
   ChevronRight,
   Clock,
@@ -16,7 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import React, { useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import type { KnowledgeDocumentInfo } from '../../../api/knowledgeApi';
 import {
   useDeleteDocument,
@@ -50,14 +51,12 @@ async function verifyPdfMagicBytes(file: File): Promise<boolean> {
 export default function KnowledgeBasePage() {
   const navigate = useNavigate();
   const { agentId: routeAgentId } = useParams<{ agentId?: string }>();
+  const [searchParams] = useSearchParams();
+  const queryAgentId = searchParams.get('agent_id');
 
   const { data: agents = [] } = useTenantAgents();
 
-  const [selectedAgentId, setSelectedAgentId] = useState<string>(
-    routeAgentId || agents[0]?.agent_id || '',
-  );
-
-  const activeAgentId = routeAgentId || selectedAgentId || agents[0]?.agent_id || '';
+  const activeAgentId = routeAgentId || queryAgentId || agents[0]?.agent_id || '';
   const currentAgent = agents.find((a) => a.agent_id === activeAgentId);
 
   const {
@@ -267,23 +266,11 @@ export default function KnowledgeBasePage() {
             <span>s3://my-client-pdf-uploads-mumbai</span>
           </div>
 
-          {agents.length > 1 && (
-            <select
-              value={activeAgentId}
-              onChange={(e) => {
-                setSelectedAgentId(e.target.value);
-                if (routeAgentId) {
-                  navigate(`/tenant/agents/${e.target.value}/knowledge`);
-                }
-              }}
-              className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none"
-            >
-              {agents.map((a) => (
-                <option key={a.agent_id} value={a.agent_id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+          {currentAgent && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200/80 text-xs font-semibold text-slate-700">
+              <Bot className="w-3.5 h-3.5 text-slate-600" />
+              <span>{currentAgent.name || currentAgent.agent_id}</span>
+            </div>
           )}
         </div>
       </div>

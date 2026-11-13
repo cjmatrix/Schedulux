@@ -196,6 +196,7 @@ let SuperAdminService = class SuperAdminService {
         if (!updated) {
             throw new Error(RESPONSE_MESSAGES.ERRORS.FAILED_TO_UPDATE_TENANT_STATUS);
         }
+        await this._cacheRepo.set(`tenant:${tenantId}:status`, nextStatus, { EX: 86400 * 30 });
         return {
             message: RESPONSE_MESSAGES.AUTH.TENANT_STATUS_UPDATED(nextStatus),
             tenant: {

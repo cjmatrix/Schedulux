@@ -1,7 +1,6 @@
 import {
   AlertCircle,
   Check,
-  ChevronDown,
   Code2,
   Copy,
   Globe,
@@ -17,7 +16,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useTenantAgents } from '../hooks/useKnowledgeDocuments';
 import { useUpdateWidgetConfig, useWidgetConfig } from '../hooks/useWidgetConfig';
@@ -26,20 +25,21 @@ type IntegrationTab = 'html' | 'react' | 'wordpress' | 'webflow' | 'shopify';
 type EmbedDisplayMode = 'bubble' | 'inline';
 
 export default function EmbedWidgetPage() {
-  const navigate = useNavigate();
   const { agentId: routeAgentId } = useParams<{ agentId?: string }>();
+  const [searchParams] = useSearchParams();
+  const queryAgentId = searchParams.get('agent_id');
   const authUser = useAuthStore((state) => state.user);
   const tenantId = authUser?.tenant_id || '';
 
-  const { data: agents = [], isLoading: agentsLoading } = useTenantAgents();
+  const { data: agents = [] } = useTenantAgents();
 
-  // Selected agent selection logic
   const selectedAgentId = useMemo(() => {
-    if (routeAgentId && agents.some((a) => a.agent_id === routeAgentId)) {
-      return routeAgentId;
+    const target = routeAgentId || queryAgentId;
+    if (target && agents.some((a) => a.agent_id === target)) {
+      return target;
     }
-    return agents[0]?.agent_id || '';
-  }, [routeAgentId, agents]);
+    return target || agents[0]?.agent_id || '';
+  }, [routeAgentId, queryAgentId, agents]);
 
   const selectedAgent = useMemo(() => {
     return agents.find((a) => a.agent_id === selectedAgentId);
@@ -67,10 +67,6 @@ export default function EmbedWidgetPage() {
       setDomains([]);
     }
   }, [configData]);
-
-  const handleSelectAgent = (newId: string) => {
-    navigate(`/tenant/agents/${newId}/widget`);
-  };
 
   const handleAddDomain = () => {
     const trimmed = newDomainInput.trim().toLowerCase();
@@ -198,11 +194,11 @@ export default function AppointmentChatWidget() {
           </p>
         </div>
 
-        {/* Agent Selector Dropdown */}
-        <div className="flex items-center gap-3">
-          {selectedAgent && (
+        {selectedAgent && (
+          <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200/80 text-xs">
+            <span className="font-semibold text-slate-700">{selectedAgent.name || selectedAgent.agent_id}</span>
             <span
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
                 selectedAgent.status === 'created'
                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                   : 'bg-amber-50 text-amber-700 border border-amber-200'
@@ -213,28 +209,10 @@ export default function AppointmentChatWidget() {
                   selectedAgent.status === 'created' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
                 }`}
               />
-              {selectedAgent.status === 'created' ? 'Live Agent' : 'Draft Mode'}
+              {selectedAgent.status === 'created' ? 'Live' : 'Draft'}
             </span>
-          )}
-          <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Selected Agent:
-          </label>
-          <div className="relative min-w-[220px]">
-            <select
-              value={selectedAgentId}
-              onChange={(e) => handleSelectAgent(e.target.value)}
-              disabled={agentsLoading || agents.length === 0}
-              className="w-full appearance-none bg-white border border-slate-200 text-slate-800 text-sm font-semibold rounded-xl px-4 py-2.5 pr-10 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shadow-sm"
-            >
-              {agents.map((ag) => (
-                <option key={ag.agent_id} value={ag.agent_id}>
-                  {ag.name || ag.agent_id} ({ag.status === 'created' ? 'Live' : 'Draft'})
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
-        </div>
+        )}
       </div>
 
       {/* Main Grid: Left Column (Embed Code & Guides) | Right Column (CORS Origins & Security) */}

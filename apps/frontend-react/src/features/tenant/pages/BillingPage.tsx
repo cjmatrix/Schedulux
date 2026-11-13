@@ -15,7 +15,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import {
   useBillingConfig,
@@ -103,7 +103,9 @@ const PLANS: PlanDefinition[] = [
 ];
 
 export default function BillingPage() {
+  const { agentId: routeAgentId } = useParams<{ agentId?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const currentAgentId = routeAgentId || searchParams.get('agent_id') || undefined;
   const paymentSuccess = searchParams.get('payment') === 'success';
 
   const { data: subscription, isLoading: isSubLoading, refetch } = useBillingSubscription();
@@ -303,6 +305,11 @@ export default function BillingPage() {
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">
               Paddle Sandbox
             </span>
+            {currentAgentId && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-mono font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                Agent: {currentAgentId.slice(-6)}
+              </span>
+            )}
           </div>
           <p className="mt-1 text-sm text-slate-500">
             Workspace quotas are pooled and shared across all AI agents in your account.

@@ -16,7 +16,6 @@ import SuperAdminLoginPage from './features/superadmin/pages/SuperAdminLoginPage
 import SystemHealthPage from './features/superadmin/pages/SystemHealthPage.tsx';
 import TenantListPage from './features/superadmin/pages/TenantListPage.tsx';
 import { TenantProtectedRoute } from './features/tenant/components/TenantProtectedRoute.tsx';
-import AgentDashboardPage from './features/tenant/pages/AgentDashboardPage.tsx';
 import BookingsPage from './features/tenant/pages/BookingsPage.tsx';
 import CustomersPage from './features/tenant/pages/CustomersPage.tsx';
 import ForgotPasswordPage from './features/tenant/pages/ForgotPasswordPage.tsx';
@@ -35,6 +34,7 @@ import ScheduleSettingsPage from './features/tenant/pages/ScheduleSettingsPage.t
 import ServiceEditorPage from './features/tenant/pages/ServiceEditorPage.tsx';
 import ServicesListPage from './features/tenant/pages/ServicesListPage.tsx';
 import TenantAgentsPage from './features/tenant/pages/TenantAgentsPage.tsx';
+import TenantDashboardPage from './features/tenant/pages/TenantDashboardPage.tsx';
 import VerifyEmailPage from './features/tenant/pages/VerifyEmailPage.tsx';
 import WorkspaceUsersPage from './features/tenant/pages/WorkspaceUsersPage.tsx';
 import AgentOnboardingWizard from './pages/AgentOnboardingWizard.tsx';
@@ -133,11 +133,7 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Navigate to="/tenant/agents" replace />,
-      },
-      {
-        path: 'dashboard',
-        element: <Navigate to="/tenant/agents" replace />,
+        element: <Navigate to="/tenant/dashboard" replace />,
       },
       {
         path: 'agents',
@@ -155,11 +151,27 @@ const router = createBrowserRouter([
         element: <TenantLayout isTenant={true} />,
         children: [
           {
+            path: 'dashboard',
+            element: <TenantDashboardPage />,
+          },
+          {
+            path: 'agents/:agentId/dashboard',
+            element: <TenantDashboardPage />,
+          },
+          {
             path: 'billing',
             element: <BillingPage />,
           },
           {
+            path: 'agents/:agentId/billing',
+            element: <BillingPage />,
+          },
+          {
             path: 'users',
+            element: <WorkspaceUsersPage />,
+          },
+          {
+            path: 'agents/:agentId/users',
             element: <WorkspaceUsersPage />,
           },
           {
@@ -171,10 +183,7 @@ const router = createBrowserRouter([
             element: <CustomersPage />,
           },
 
-          {
-            path: 'agents/:agentId/dashboard',
-            element: <AgentDashboardPage />,
-          },
+
           {
             path: 'agents/:agentId/knowledge',
             element: <KnowledgeBasePage />,

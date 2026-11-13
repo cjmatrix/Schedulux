@@ -7,22 +7,30 @@ interface InviteUserModalProps {
   isOpen: boolean;
   onClose: () => void;
   tenantId: string;
+  defaultAgentId?: string;
 }
 
-export function InviteUserModal({ isOpen, onClose, tenantId }: InviteUserModalProps) {
+export function InviteUserModal({
+  isOpen,
+  onClose,
+  tenantId,
+  defaultAgentId,
+}: InviteUserModalProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [selectedAgentId, setSelectedAgentId] = useState('');
+  const [selectedAgentId, setSelectedAgentId] = useState(defaultAgentId || '');
   const [errorMsg, setErrorMsg] = useState('');
 
   const { data: agents = [], isLoading: isLoadingAgents } = useTenantAgents();
   const inviteUserMutation = useInviteUser();
 
   useEffect(() => {
-    if (agents.length > 0 && !selectedAgentId) {
+    if (defaultAgentId) {
+      setSelectedAgentId(defaultAgentId);
+    } else if (agents.length > 0 && !selectedAgentId) {
       setSelectedAgentId(agents[0].agent_id);
     }
-  }, [agents, selectedAgentId]);
+  }, [agents, defaultAgentId, selectedAgentId]);
 
   if (!isOpen) return null;
 

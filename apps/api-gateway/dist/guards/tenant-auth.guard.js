@@ -19,15 +19,24 @@ exports.TenantAuthGuard = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const rxjs_1 = require("rxjs");
 const cookies_constant_js_1 = require("../constants/cookies.constant.js");
 const messages_constant_js_1 = require("../constants/messages.constant.js");
 const redis_service_js_1 = require("../services/redis.service.js");
 let TenantAuthGuard = class TenantAuthGuard {
     _configService;
     _redisService;
-    constructor(_configService, _redisService) {
+    _client;
+    _tenantService;
+    constructor(_configService, _redisService, _client) {
         this._configService = _configService;
         this._redisService = _redisService;
+        this._client = _client;
+    }
+    onModuleInit() {
+        if (this._client) {
+            this._tenantService = this._client.getService('TenantService');
+        }
     }
     async canActivate(context) {
         const request = context.switchToHttp().getRequest();
@@ -42,6 +51,32 @@ let TenantAuthGuard = class TenantAuthGuard {
             const decoded = jsonwebtoken_1.default.verify(token, secret);
             if (!decoded || !decoded.tenant_id) {
                 throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.INVALID_TOKEN_STRUCTURE);
+            }
+            let status = await this._redisService.getTenantStatus(decoded.tenant_id);
+            if (!status) {
+                if (this._tenantService) {
+                    try {
+                        const tenantList = await (0, rxjs_1.lastValueFrom)(this._tenantService.listTenants({
+                            page: 1,
+                            limit: 1,
+                            search: '',
+                            tier: '',
+                            status: '',
+                            tenant_ids: [decoded.tenant_id],
+                        }));
+                        status = tenantList?.tenants?.[0]?.status || 'active';
+                        await this._redisService.setTenantStatus(decoded.tenant_id, status);
+                    }
+                    catch {
+                        status = 'active';
+                    }
+                }
+                else {
+                    status = 'active';
+                }
+            }
+            if (status === 'suspended') {
+                throw new common_1.ForbiddenException('Tenant account is suspended. Please contact support.');
             }
             let tier = await this._redisService.getTenantTier(decoded.tenant_id);
             if (!tier) {
@@ -61,7 +96,7 @@ let TenantAuthGuard = class TenantAuthGuard {
             return true;
         }
         catch (err) {
-            if (err instanceof common_1.UnauthorizedException) {
+            if (err instanceof common_1.UnauthorizedException || err instanceof common_1.ForbiddenException) {
                 throw err;
             }
             throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.INVALID_TOKEN);
@@ -73,6 +108,8 @@ exports.TenantAuthGuard = TenantAuthGuard = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, common_1.Inject)(config_1.ConfigService)),
     __param(1, (0, common_1.Inject)(redis_service_js_1.RedisService)),
+    __param(2, (0, common_1.Optional)()),
+    __param(2, (0, common_1.Inject)('TENANT_PACKAGE')),
     __metadata("design:paramtypes", [config_1.ConfigService,
-        redis_service_js_1.RedisService])
+        redis_service_js_1.RedisService, Object])
 ], TenantAuthGuard);

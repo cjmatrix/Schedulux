@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ResetPasswordDto = exports.ResetPasswordSchema = exports.ForgotPasswordDto = exports.ForgotPasswordSchema = exports.ListWorkspaceUsersDto = exports.ListWorkspaceUsersSchema = exports.InviteUserDto = exports.InviteUserSchema = exports.LogoutDto = exports.LogoutSchema = exports.RefreshTokenDto = exports.RefreshTokenSchema = exports.VerifyEmailDto = exports.VerifyEmailSchema = exports.TenantLoginDto = exports.TenantLoginSchema = exports.TenantRegisterDto = exports.TenantRegisterSchema = exports.TenantGoogleLoginDto = exports.TenantGoogleLoginSchema = void 0;
+exports.TenantDashboardOverviewDto = exports.TenantDashboardOverviewSchema = exports.ResetPasswordDto = exports.ResetPasswordSchema = exports.ForgotPasswordDto = exports.ForgotPasswordSchema = exports.ListWorkspaceUsersDto = exports.ListWorkspaceUsersSchema = exports.InviteUserDto = exports.InviteUserSchema = exports.LogoutDto = exports.LogoutSchema = exports.RefreshTokenDto = exports.RefreshTokenSchema = exports.VerifyEmailDto = exports.VerifyEmailSchema = exports.TenantLoginDto = exports.TenantLoginSchema = exports.TenantRegisterDto = exports.TenantRegisterSchema = exports.TenantGoogleLoginDto = exports.TenantGoogleLoginSchema = void 0;
 const nestjs_zod_1 = require("nestjs-zod");
 const zod_1 = require("zod");
 exports.TenantGoogleLoginSchema = zod_1.z.object({
@@ -80,3 +80,9 @@ exports.ResetPasswordSchema = zod_1.z.object({
 class ResetPasswordDto extends (0, nestjs_zod_1.createZodDto)(exports.ResetPasswordSchema) {
 }
 exports.ResetPasswordDto = ResetPasswordDto;
+exports.TenantDashboardOverviewSchema = zod_1.z.object({
+    agent_id: zod_1.z.string().optional(),
+});
+class TenantDashboardOverviewDto extends (0, nestjs_zod_1.createZodDto)(exports.TenantDashboardOverviewSchema) {
+}
+exports.TenantDashboardOverviewDto = TenantDashboardOverviewDto;

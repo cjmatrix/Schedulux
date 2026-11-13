@@ -86,3 +86,9 @@ export const ResetPasswordSchema = z.object({
 });
 
 export class ResetPasswordDto extends createZodDto(ResetPasswordSchema) {}
+
+export const TenantDashboardOverviewSchema = z.object({
+  agent_id: z.string().optional(),
+});
+
+export class TenantDashboardOverviewDto extends createZodDto(TenantDashboardOverviewSchema) {}

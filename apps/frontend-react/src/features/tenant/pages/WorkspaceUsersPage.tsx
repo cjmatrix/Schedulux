@@ -1,6 +1,7 @@
 import type { WorkspaceUserInfo } from '@repo/proto/dashboard';
 import { Filter, Plus, Search, Shield, ShieldCheck } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useParams, useSearchParams } from 'react-router';
 import useDebounceHook from '../../../shared/hooks/useDebounceHook';
 import { InviteUserModal } from '../components/InviteUserModal';
 import { WorkspaceUsersTable } from '../components/WorkspaceUsersTable';
@@ -12,6 +13,10 @@ export default function WorkspaceUsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+
+  const { agentId: routeAgentId } = useParams<{ agentId?: string }>();
+  const [searchParams] = useSearchParams();
+  const currentAgentId = routeAgentId || searchParams.get('agent_id') || undefined;
 
   const { data: profileData } = useTenantProfile();
   const tenantId = profileData?.data?.tenant_id || '';
@@ -171,6 +176,7 @@ export default function WorkspaceUsersPage() {
         isOpen={isInviteModalOpen}
         onClose={() => setIsInviteModalOpen(false)}
         tenantId={tenantId}
+        defaultAgentId={currentAgentId}
       />
     </div>
   );

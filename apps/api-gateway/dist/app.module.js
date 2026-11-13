@@ -18,6 +18,7 @@ const superadmin_controller_js_1 = require("./controllers/superadmin/superadmin.
 const superadmin_dashboard_controller_js_1 = require("./controllers/superadmin/superadmin-dashboard.controller.js");
 const superadmin_tenant_controller_js_1 = require("./controllers/superadmin/superadmin-tenant.controller.js");
 const tenant_controller_js_1 = require("./controllers/tenant/tenant.controller.js");
+const tenant_dashboard_controller_js_1 = require("./controllers/tenant/tenant-dashboard.controller.js");
 const paddle_webhook_guard_js_1 = require("./guards/paddle-webhook.guard.js");
 const roles_guard_js_1 = require("./guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("./guards/tenant-auth.guard.js");
@@ -122,6 +123,7 @@ exports.AppModule = AppModule = __decorate([
         ],
         controllers: [
             tenant_controller_js_1.TenantController,
+            tenant_dashboard_controller_js_1.TenantDashboardController,
             billing_controller_js_1.BillingController,
             superadmin_controller_js_1.SuperAdminController,
             superadmin_dashboard_controller_js_1.SuperAdminDashboardController,

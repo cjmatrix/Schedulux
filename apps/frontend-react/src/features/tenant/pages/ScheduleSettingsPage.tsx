@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  Bot,
   Calendar,
   CheckCircle2,
   Clock,
@@ -12,7 +13,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
 import type {
   BlackoutDate,
   OperatingHours,
@@ -53,24 +54,19 @@ const COMMON_CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'AUD', 'CAD', 'SGD', 'AED
 
 export default function ScheduleSettingsPage() {
   const { agentId: routeAgentId } = useParams<{ agentId?: string }>();
+  const [searchParams] = useSearchParams();
+  const queryAgentId = searchParams.get('agent_id');
   const { data: agents = [], isLoading: isLoadingAgents } = useTenantAgents();
 
-  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
-
-  useEffect(() => {
-    if (routeAgentId) {
-      setSelectedAgentId(routeAgentId);
-    } else if (agents.length > 0 && !selectedAgentId) {
-      setSelectedAgentId(agents[0].agent_id);
-    }
-  }, [routeAgentId, agents, selectedAgentId]);
+  const effectiveAgentId = routeAgentId || queryAgentId || agents[0]?.agent_id || '';
+  const currentAgent = agents.find((a) => a.agent_id === effectiveAgentId);
 
   const {
     data: scheduleResponse,
     isLoading: isLoadingSchedule,
     isError,
     error,
-  } = useTenantSchedule(selectedAgentId || undefined);
+  } = useTenantSchedule(effectiveAgentId);
 
   const updateMutation = useUpdateTenantSchedule();
 
@@ -201,7 +197,7 @@ export default function ScheduleSettingsPage() {
   };
 
   const handleSave = () => {
-    if (!selectedAgentId) {
+    if (!effectiveAgentId) {
       setSaveErrorMessage('Please select an agent first.');
       return;
     }
@@ -210,7 +206,7 @@ export default function ScheduleSettingsPage() {
 
     updateMutation.mutate(
       {
-        agent_id: selectedAgentId,
+        agent_id: effectiveAgentId,
         timezone,
         currency,
         operating_hours: operatingHours,
@@ -230,7 +226,7 @@ export default function ScheduleSettingsPage() {
     );
   };
 
-  if (isLoadingAgents || (selectedAgentId && isLoadingSchedule)) {
+  if (isLoadingAgents || (effectiveAgentId && isLoadingSchedule)) {
     return (
       <div className="flex h-96 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
@@ -253,20 +249,13 @@ export default function ScheduleSettingsPage() {
           </p>
         </div>
 
-        {/* Agent Picker & Save CTA */}
+        {/* Agent Info & Save CTA */}
         <div className="flex items-center gap-3">
-          {agents.length > 1 && (
-            <select
-              value={selectedAgentId}
-              onChange={(e) => setSelectedAgentId(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              {agents.map((a) => (
-                <option key={a.agent_id} value={a.agent_id}>
-                  {a.name || a.agent_id}
-                </option>
-              ))}
-            </select>
+          {effectiveAgentId && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200">
+              <Bot className="w-3.5 h-3.5 text-slate-800" />
+              <span>{currentAgent?.name || effectiveAgentId}</span>
+            </div>
           )}
 
           <button

@@ -22,6 +22,7 @@ export const RESPONSE_MESSAGES = {
     SUCCESS: 'successfull',
     TENANT_SUSPENDED: 'Tenant suspended successfully',
     WORKSPACE_USERS_RETRIEVED: 'Workspace users retrieved successfully',
+    DASHBOARD_OVERVIEW_RETRIEVED: 'Tenant dashboard overview retrieved successfully',
   },
   SCHEDULING: {
     SERVICES_RETRIEVED: 'Services retrieved successfully',

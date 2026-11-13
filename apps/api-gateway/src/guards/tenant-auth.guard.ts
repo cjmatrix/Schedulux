@@ -1,13 +1,19 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Inject,
   Injectable,
+  OnModuleInit,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ClientGrpc } from '@nestjs/microservices';
+import { TenantServiceClient } from '@repo/proto/tenant';
 import { Request } from 'express';
 import jwt from 'jsonwebtoken';
+import { lastValueFrom } from 'rxjs';
 import { COOKIE_NAMES } from '../constants/cookies.constant.js';
 import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
 import { RedisService } from '../services/redis.service.js';
@@ -44,11 +50,20 @@ interface DecodedToken {
 }
 
 @Injectable()
-export class TenantAuthGuard implements CanActivate {
+export class TenantAuthGuard implements CanActivate, OnModuleInit {
+  private _tenantService?: TenantServiceClient;
+
   constructor(
     @Inject(ConfigService) private readonly _configService: ConfigService,
     @Inject(RedisService) private readonly _redisService: RedisService,
+    @Optional() @Inject('TENANT_PACKAGE') private readonly _client?: ClientGrpc,
   ) {}
+
+  onModuleInit() {
+    if (this._client) {
+      this._tenantService = this._client.getService<TenantServiceClient>('TenantService');
+    }
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedTenantRequest>();
@@ -70,7 +85,34 @@ export class TenantAuthGuard implements CanActivate {
         throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.INVALID_TOKEN_STRUCTURE);
       }
 
-      
+      let status = await this._redisService.getTenantStatus(decoded.tenant_id);
+      if (!status) {
+        if (this._tenantService) {
+          try {
+            const tenantList = await lastValueFrom(
+              this._tenantService.listTenants({
+                page: 1,
+                limit: 1,
+                search: '',
+                tier: '',
+                status: '',
+                tenant_ids: [decoded.tenant_id],
+              }),
+            );
+            status = tenantList?.tenants?.[0]?.status || 'active';
+            await this._redisService.setTenantStatus(decoded.tenant_id, status);
+          } catch {
+            status = 'active';
+          }
+        } else {
+          status = 'active';
+        }
+      }
+
+      if (status === 'suspended') {
+        throw new ForbiddenException('Tenant account is suspended. Please contact support.');
+      }
+
       let tier = await this._redisService.getTenantTier(decoded.tenant_id);
       if (!tier) {
         tier = decoded.tier || 'starter';
@@ -88,7 +130,7 @@ export class TenantAuthGuard implements CanActivate {
 
       return true;
     } catch (err: unknown) {
-      if (err instanceof UnauthorizedException) {
+      if (err instanceof UnauthorizedException || err instanceof ForbiddenException) {
         throw err;
       }
       throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.INVALID_TOKEN);

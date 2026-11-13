@@ -130,6 +130,23 @@ let RedisService = RedisService_1 = class RedisService {
             this._logger.error(`Failed to cache tenant tier for ${tenantId}:`, err);
         }
     }
+    async getTenantStatus(tenantId) {
+        try {
+            return await this._client.get(`tenant:${tenantId}:status`);
+        }
+        catch (err) {
+            this._logger.error(`Failed to get cached tenant status for ${tenantId}:`, err);
+            return null;
+        }
+    }
+    async setTenantStatus(tenantId, status, ttlSeconds = 86400 * 30) {
+        try {
+            await this._client.set(`tenant:${tenantId}:status`, status, 'EX', ttlSeconds);
+        }
+        catch (err) {
+            this._logger.error(`Failed to cache tenant status for ${tenantId}:`, err);
+        }
+    }
     _getCurrentIsoWeek() {
         const now = new Date();
         const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));

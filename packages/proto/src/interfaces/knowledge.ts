@@ -11,6 +11,15 @@ import { Observable } from "rxjs";
 
 export const protobufPackage = "knowledge";
 
+export interface GetAgentStatsRequest {
+}
+
+export interface GetAgentStatsResponse {
+  total_agents: number;
+  active_agents: number;
+  draft_agents: number;
+}
+
 export interface CrawlSiteRequest {
   tenant_id: string;
   url: string;
@@ -289,6 +298,8 @@ export interface KnowledgeServiceClient {
   listDocuments(request: ListDocumentsRequest, metadata?: Metadata): Observable<ListDocumentsResponse>;
 
   deleteDocument(request: DeleteDocumentRequest, metadata?: Metadata): Observable<DeleteDocumentResponse>;
+
+  getAgentStats(request: GetAgentStatsRequest, metadata?: Metadata): Observable<GetAgentStatsResponse>;
 }
 
 export interface KnowledgeServiceController {
@@ -366,6 +377,11 @@ export interface KnowledgeServiceController {
     request: DeleteDocumentRequest,
     metadata?: Metadata,
   ): Promise<DeleteDocumentResponse> | Observable<DeleteDocumentResponse> | DeleteDocumentResponse;
+
+  getAgentStats(
+    request: GetAgentStatsRequest,
+    metadata?: Metadata,
+  ): Promise<GetAgentStatsResponse> | Observable<GetAgentStatsResponse> | GetAgentStatsResponse;
 }
 
 export function KnowledgeServiceControllerMethods() {
@@ -386,6 +402,7 @@ export function KnowledgeServiceControllerMethods() {
       "confirmDocumentUpload",
       "listDocuments",
       "deleteDocument",
+      "getAgentStats",
     ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

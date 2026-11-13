@@ -8,8 +8,14 @@ import { ICacheRepository } from '../interfaces/ICacheRepository.js';
 import { IJwtService } from '../interfaces/IJwtService.js';
 import { IPasswordHasher } from '../interfaces/IPasswordHasher.js';
 import { ISuperAdminRepository } from '../interfaces/ISuperAdminRepository.js';
-import { ISuperAdminService } from '../interfaces/ISuperAdminService.js';
+import {
+  ISuperAdminService,
+  RevenueDataPointResult,
+  SuperAdminOverviewResult,
+} from '../interfaces/ISuperAdminService.js';
 import { ITenantRepository } from '../interfaces/ITenantRepository.js';
+import { BillingLedgerModel } from '../model/BillingLedger.js';
+import { Tenent } from '../model/Tenent.js';
 
 @Injectable()
 export class SuperAdminService implements ISuperAdminService {
@@ -256,5 +262,93 @@ export class SuperAdminService implements ISuperAdminService {
         status: updated.status,
       },
     };
+  }
+
+  async getOverview(startDate?: string, endDate?: string): Promise<SuperAdminOverviewResult> {
+    const from = startDate ? new Date(startDate) : new Date(0);
+    const to = endDate ? new Date(endDate) : new Date();
+
+    
+    const [totalTenants, activeTenants, suspendedTenants, tierGroups, revenueAggregate] =
+      await Promise.all([
+        Tenent.countDocuments({}),
+        Tenent.countDocuments({ status: 'active' }),
+        Tenent.countDocuments({ status: 'suspended' }),
+        Tenent.aggregate<{ _id: string; count: number }>([
+          { $group: { _id: '$tier', count: { $sum: 1 } } },
+        ]),
+        BillingLedgerModel.aggregate<{ _id: null; total: number }>([
+          {
+            $match: {
+              created_at: { $gte: from, $lte: to },
+              status: { $in: ['completed', 'activated', 'paid'] },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              total: { $sum: '$amount' },
+            },
+          },
+        ]),
+      ]);
+
+    const tenantsByTier: Record<string, number> = {};
+    for (const group of tierGroups) {
+      if (group._id) {
+        tenantsByTier[group._id] = group.count;
+      }
+    }
+
+    const totalRevenue = revenueAggregate.length > 0 ? revenueAggregate[0].total : 0;
+
+    return {
+      totalTenants,
+      activeTenants,
+      suspendedTenants,
+      totalRevenue,
+      currency: 'USD',
+      tenantsByTier,
+    };
+  }
+
+  async getRevenueChart(
+    startDate?: string,
+    endDate?: string,
+    interval = 'day',
+  ): Promise<RevenueDataPointResult[]> {
+    const from = startDate
+      ? new Date(startDate)
+      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const to = endDate ? new Date(endDate) : new Date();
+
+    const format = interval === 'month' ? '%Y-%m' : '%Y-%m-%d';
+
+    const points = await BillingLedgerModel.aggregate<{
+      _id: string;
+      amount: number;
+      transaction_count: number;
+    }>([
+      {
+        $match: {
+          created_at: { $gte: from, $lte: to },
+          status: { $in: ['completed', 'activated', 'paid'] },
+        },
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format, date: '$created_at' } },
+          amount: { $sum: '$amount' },
+          transaction_count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    return points.map((p) => ({
+      date: p._id,
+      amount: p.amount,
+      transactionCount: p.transaction_count,
+    }));
   }
 }

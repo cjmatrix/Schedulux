@@ -2,6 +2,7 @@ export const GRPC_SERVICES = {
   TENANT_AUTH: 'TenantAuthService',
   TENANT: 'TenantService',
   SUPERADMIN_AUTH: 'SuperAdminAuthService',
+  SUPERADMIN_DASHBOARD: 'SuperAdminDashboardService',
   DASHBOARD_AUTH: 'DashboardAuthService',
   DASHBOARD_USER: 'DashboardUserService',
 } as const;
@@ -23,6 +24,10 @@ export const GRPC_METHODS = {
     REFRESH_TOKEN: 'RefreshToken',
     LOGOUT: 'Logout',
     GET_PROFILE: 'GetProfile',
+  },
+  SUPERADMIN_DASHBOARD: {
+    GET_OVERVIEW: 'GetSuperAdminOverview',
+    GET_REVENUE_CHART: 'GetRevenueChart',
   },
   TENANT: {
     LIST_TENANTS: 'ListTenants',

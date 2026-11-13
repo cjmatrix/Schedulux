@@ -28,6 +28,7 @@ exports.ListTenantsSchema = zod_1.z.object({
     search: zod_1.z.string().optional(),
     tier: zod_1.z.string().optional(),
     status: zod_1.z.string().optional(),
+    tenant_ids: zod_1.z.array(zod_1.z.string()).default([]),
 });
 class ListTenantsDto extends (0, nestjs_zod_1.createZodDto)(exports.ListTenantsSchema) {
 }

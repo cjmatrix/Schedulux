@@ -38,6 +38,37 @@ export interface GetProfileRequest {
 export interface GetProfileResponse {
     superAdmin: SuperAdminInfo | undefined;
 }
+export interface SuperAdminOverviewRequest {
+    start_date: string;
+    end_date: string;
+}
+export interface SuperAdminOverviewResponse {
+    total_tenants: number;
+    active_tenants: number;
+    suspended_tenants: number;
+    total_revenue: number;
+    currency: string;
+    tenants_by_tier: {
+        [key: string]: number;
+    };
+}
+export interface SuperAdminOverviewResponse_TenantsByTierEntry {
+    key: string;
+    value: number;
+}
+export interface RevenueChartRequest {
+    start_date: string;
+    end_date: string;
+    interval: string;
+}
+export interface RevenueDataPoint {
+    date: string;
+    amount: number;
+    transaction_count: number;
+}
+export interface RevenueChartResponse {
+    points: RevenueDataPoint[];
+}
 export declare const SUPERADMIN_PACKAGE_NAME = "superadmin";
 export interface SuperAdminAuthServiceClient {
     login(request: LoginRequest, metadata?: Metadata): Observable<LoginResponse>;
@@ -53,4 +84,14 @@ export interface SuperAdminAuthServiceController {
 }
 export declare function SuperAdminAuthServiceControllerMethods(): (constructor: Function) => void;
 export declare const SUPER_ADMIN_AUTH_SERVICE_NAME = "SuperAdminAuthService";
+export interface SuperAdminDashboardServiceClient {
+    getSuperAdminOverview(request: SuperAdminOverviewRequest, metadata?: Metadata): Observable<SuperAdminOverviewResponse>;
+    getRevenueChart(request: RevenueChartRequest, metadata?: Metadata): Observable<RevenueChartResponse>;
+}
+export interface SuperAdminDashboardServiceController {
+    getSuperAdminOverview(request: SuperAdminOverviewRequest, metadata?: Metadata): Promise<SuperAdminOverviewResponse> | Observable<SuperAdminOverviewResponse> | SuperAdminOverviewResponse;
+    getRevenueChart(request: RevenueChartRequest, metadata?: Metadata): Promise<RevenueChartResponse> | Observable<RevenueChartResponse> | RevenueChartResponse;
+}
+export declare function SuperAdminDashboardServiceControllerMethods(): (constructor: Function) => void;
+export declare const SUPER_ADMIN_DASHBOARD_SERVICE_NAME = "SuperAdminDashboardService";
 //# sourceMappingURL=superadmin.d.ts.map

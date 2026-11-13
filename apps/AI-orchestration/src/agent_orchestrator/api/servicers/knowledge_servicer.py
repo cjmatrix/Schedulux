@@ -428,7 +428,6 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             if not updated_config_dict:
                 updated_config_dict = WidgetConfigEmbed(whitelisted_domains=domains).model_dump()
 
-            # 3. Invalidate Redis context caches and distributed whitelist cache
             try:
                 from agent_orchestrator.clients.redis_client import (
                     delete_cached_biz_context,
@@ -555,3 +554,28 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"DELETE_DOCUMENT_ERROR: {str(e)}")
             return knowledge_pb2.DeleteDocumentResponse(success=False, message=str(e))
+
+    async def GetAgentStats(
+        self, request: knowledge_pb2.GetAgentStatsRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.GetAgentStatsResponse:
+        try:
+            import asyncio
+            from agent_orchestrator.models import AgentDraft, AgentRuntimeConfig
+
+            active, draft = await asyncio.gather(
+                AgentRuntimeConfig.count(),
+                AgentDraft.find(AgentDraft.status != "created").count(),
+            )
+            total = active + draft
+
+            print(active,draft,flush=True)
+            return knowledge_pb2.GetAgentStatsResponse(
+                total_agents=int(total),
+                active_agents=int(active),
+                draft_agents=int(draft),
+            )
+        except Exception as e:
+            print(f"[gRPC Error] GetAgentStats failed: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"GET_AGENT_STATS_ERROR: {str(e)}")
+            return knowledge_pb2.GetAgentStatsResponse()

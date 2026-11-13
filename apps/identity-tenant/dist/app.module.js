@@ -14,10 +14,12 @@ import { SuperAdminAuthController } from './controllers/SuperAdminController.js'
 import { TenantBillingController } from './controllers/TenantBillingController.js';
 import { TenantAuthController } from './controllers/TenantController.js';
 import { EmailProducer } from './producers/emailProducer.js';
+import { BillingLedgerRepository } from './repository/BillingLedgerRepository.js';
 import { CacheRepository } from './repository/CacheRepository.js';
 import { DashboardUserRepository } from './repository/DashboardUserRepository.js';
 import { SuperAdminRepository } from './repository/SuperAdminRepository.js';
 import { TenantRepository } from './repository/TenantRepository.js';
+import { UnitOfWork } from './repository/UnitOfWork.js';
 import { BcryptPasswordHasher } from './services/bcryptPasswordHasher.js';
 import { BillingService } from './services/billingService.js';
 import { DashboardUserService } from './services/dashboardUserService.js';
@@ -58,6 +60,7 @@ AppModule = __decorate([
             DashboardUserController,
         ],
         providers: [
+            { provide: 'IUnitOfWork', useClass: UnitOfWork },
             { provide: 'ITenantRepository', useClass: TenantRepository },
             { provide: 'IDashboardUserRepository', useClass: DashboardUserRepository },
             { provide: 'ISuperAdminRepository', useClass: SuperAdminRepository },
@@ -66,6 +69,7 @@ AppModule = __decorate([
             { provide: 'IPasswordHasher', useClass: BcryptPasswordHasher },
             { provide: 'IJwtService', useClass: JwtTokenService },
             { provide: 'ITenantService', useClass: TenantService },
+            { provide: 'IBillingLedgerRepository', useClass: BillingLedgerRepository },
             { provide: 'IBillingService', useClass: BillingService },
             { provide: 'ISuperAdminService', useClass: SuperAdminService },
             { provide: 'IDashboardUserService', useClass: DashboardUserService },

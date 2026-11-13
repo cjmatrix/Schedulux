@@ -6,12 +6,14 @@ import { BillingController } from './controllers/billing/billing.controller.js';
 import { DashboardUserAuthController } from './controllers/dashboarduser/dashboard-user-auth.controller.js';
 import { SchedulingController } from './controllers/scheduling/scheduling.controller.js';
 import { SuperAdminController } from './controllers/superadmin/superadmin.controller.js';
+import { SuperAdminDashboardController } from './controllers/superadmin/superadmin-dashboard.controller.js';
 import { SuperAdminTenantController } from './controllers/superadmin/superadmin-tenant.controller.js';
 import { TenantController } from './controllers/tenant/tenant.controller.js';
 import { PaddleWebhookGuard } from './guards/paddle-webhook.guard.js';
 import { RolesGuard } from './guards/roles.guard.js';
 import { TenantAuthGuard } from './guards/tenant-auth.guard.js';
 import { RateLimiterMiddleware } from './middleware/rate-limiter.middleware.js';
+import { OpenSearchAnalyticsService } from './services/opensearch-analytics.service.js';
 import { RedisService } from './services/redis.service.js';
 import { SchemaGateway } from './websockets/schema.gateway.js';
 
@@ -107,6 +109,7 @@ import { SchemaGateway } from './websockets/schema.gateway.js';
     TenantController,
     BillingController,
     SuperAdminController,
+    SuperAdminDashboardController,
     SuperAdminTenantController,
     DashboardUserAuthController,
     KnowledgeController,
@@ -114,6 +117,7 @@ import { SchemaGateway } from './websockets/schema.gateway.js';
   ],
   providers: [
     RedisService,
+    OpenSearchAnalyticsService,
     {
       provide: 'ISchemaEventSubscriber',
       useExisting: RedisService,

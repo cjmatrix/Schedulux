@@ -7,12 +7,15 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-import { Injectable } from '@nestjs/common';
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Tenent } from '../model/Tenent.js';
 import { BaseRepository } from './BaseRepository.js';
 let TenantRepository = class TenantRepository extends BaseRepository {
-    constructor() {
-        super(Tenent);
+    constructor(unitOfWork) {
+        super(Tenent, unitOfWork);
     }
     async findByTenantId(tenantId) {
         return this.model.findById(tenantId);
@@ -40,10 +43,14 @@ let TenantRepository = class TenantRepository extends BaseRepository {
         return tenants;
     }
     async listTenants(data) {
-        const page = Math.max(1, data.page);
-        const limit = Math.max(1, Math.min(data.limit, 100));
+        const page = Math.max(1, data.page || 1);
+        const defaultLimit = data.tenant_ids && data.tenant_ids.length > 0 ? data.tenant_ids.length : 10;
+        const limit = Math.max(1, Math.min(data.limit || defaultLimit, 100));
         const skip = (page - 1) * limit;
         const query = {};
+        if (data.tenant_ids && data.tenant_ids.length > 0) {
+            query._id = { $in: data.tenant_ids };
+        }
         if (data.status && data.status.toLowerCase() !== 'all') {
             query.status = data.status.toLowerCase();
         }
@@ -59,7 +66,7 @@ let TenantRepository = class TenantRepository extends BaseRepository {
             ];
         }
         const [docs, totalCount] = await Promise.all([
-            this.model.find(query).skip(skip).limit(limit).select('-password_hash').exec(),
+            this.model.find(query).skip(skip).limit(limit).select('-password_hash').lean().exec(),
             this.model.countDocuments(query).exec(),
         ]);
         const tenants = docs.map((t) => ({
@@ -74,6 +81,8 @@ let TenantRepository = class TenantRepository extends BaseRepository {
 };
 TenantRepository = __decorate([
     Injectable(),
-    __metadata("design:paramtypes", [])
+    __param(0, Optional()),
+    __param(0, Inject('IUnitOfWork')),
+    __metadata("design:paramtypes", [Object])
 ], TenantRepository);
 export { TenantRepository };

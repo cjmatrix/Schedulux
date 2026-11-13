@@ -12,6 +12,13 @@ export const API_ROUTES = {
       ROOT: '',
       SUSPEND: ':id/suspend',
     },
+    DASHBOARD: {
+      BASE: 'api/v1/superadmin/dashboard',
+      OVERVIEW: 'overview',
+      REVENUE_CHART: 'revenue-chart',
+      TOKEN_CHART: 'token-chart',
+      TOP_TENANTS: 'top-tenants',
+    },
   },
   DASHBOARD_USER: {
     AUTH: {

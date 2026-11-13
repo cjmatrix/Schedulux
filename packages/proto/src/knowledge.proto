@@ -19,6 +19,16 @@ service KnowledgeService {
   rpc ConfirmDocumentUpload (ConfirmDocumentUploadRequest) returns (ConfirmDocumentUploadResponse);
   rpc ListDocuments (ListDocumentsRequest) returns (ListDocumentsResponse);
   rpc DeleteDocument (DeleteDocumentRequest) returns (DeleteDocumentResponse);
+
+  rpc GetAgentStats (GetAgentStatsRequest) returns (GetAgentStatsResponse);
+}
+
+message GetAgentStatsRequest {}
+
+message GetAgentStatsResponse {
+  int32 total_agents = 1;
+  int32 active_agents = 2;
+  int32 draft_agents = 3;
 }
 
 message CrawlSiteRequest {

@@ -57,6 +57,41 @@ export interface GetProfileResponse {
   superAdmin: SuperAdminInfo | undefined;
 }
 
+export interface SuperAdminOverviewRequest {
+  start_date: string;
+  end_date: string;
+}
+
+export interface SuperAdminOverviewResponse {
+  total_tenants: number;
+  active_tenants: number;
+  suspended_tenants: number;
+  total_revenue: number;
+  currency: string;
+  tenants_by_tier: { [key: string]: number };
+}
+
+export interface SuperAdminOverviewResponse_TenantsByTierEntry {
+  key: string;
+  value: number;
+}
+
+export interface RevenueChartRequest {
+  start_date: string;
+  end_date: string;
+  interval: string;
+}
+
+export interface RevenueDataPoint {
+  date: string;
+  amount: number;
+  transaction_count: number;
+}
+
+export interface RevenueChartResponse {
+  points: RevenueDataPoint[];
+}
+
 export const SUPERADMIN_PACKAGE_NAME = "superadmin";
 
 export interface SuperAdminAuthServiceClient {
@@ -106,3 +141,43 @@ export function SuperAdminAuthServiceControllerMethods() {
 }
 
 export const SUPER_ADMIN_AUTH_SERVICE_NAME = "SuperAdminAuthService";
+
+export interface SuperAdminDashboardServiceClient {
+  getSuperAdminOverview(
+    request: SuperAdminOverviewRequest,
+    metadata?: Metadata,
+  ): Observable<SuperAdminOverviewResponse>;
+
+  getRevenueChart(request: RevenueChartRequest, metadata?: Metadata): Observable<RevenueChartResponse>;
+}
+
+export interface SuperAdminDashboardServiceController {
+  getSuperAdminOverview(
+    request: SuperAdminOverviewRequest,
+    metadata?: Metadata,
+  ): Promise<SuperAdminOverviewResponse> | Observable<SuperAdminOverviewResponse> | SuperAdminOverviewResponse;
+
+  getRevenueChart(
+    request: RevenueChartRequest,
+    metadata?: Metadata,
+  ): Promise<RevenueChartResponse> | Observable<RevenueChartResponse> | RevenueChartResponse;
+}
+
+export function SuperAdminDashboardServiceControllerMethods() {
+  return function (constructor: Function) {
+    const grpcMethods: string[] = ["getSuperAdminOverview", "getRevenueChart"];
+    for (const method of grpcMethods) {
+      const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
+      GrpcMethod("SuperAdminDashboardService", method)(constructor.prototype[method], method, descriptor);
+      Object.defineProperty(constructor.prototype, method, descriptor);
+    }
+    const grpcStreamMethods: string[] = [];
+    for (const method of grpcStreamMethods) {
+      const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
+      GrpcStreamMethod("SuperAdminDashboardService", method)(constructor.prototype[method], method, descriptor);
+      Object.defineProperty(constructor.prototype, method, descriptor);
+    }
+  };
+}
+
+export const SUPER_ADMIN_DASHBOARD_SERVICE_NAME = "SuperAdminDashboardService";

@@ -58,6 +58,7 @@ export interface ListTenantsRequest {
   search?: string | undefined;
   tier?: string | undefined;
   status?: string | undefined;
+  tenant_ids: string[];
 }
 
 export interface ListTenantsResponse {

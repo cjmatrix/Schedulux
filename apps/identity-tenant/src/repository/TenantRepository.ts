@@ -1,17 +1,22 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { TenantInfo } from '@repo/proto/tenant';
 import {
   ITenantRepository,
   ListTenantsRequest,
   ListTenantsResponse,
 } from '../interfaces/ITenantRepository.js';
+import type { IUnitOfWork } from '../interfaces/IUnitOfWork.js';
 import { ITenant, Tenent } from '../model/Tenent.js';
 import { BaseRepository } from './BaseRepository.js';
 
 @Injectable()
 export class TenantRepository extends BaseRepository<ITenant> implements ITenantRepository {
-  constructor() {
-    super(Tenent);
+  constructor(
+    @Optional()
+    @Inject('IUnitOfWork')
+    unitOfWork?: IUnitOfWork,
+  ) {
+    super(Tenent, unitOfWork);
   }
 
   async findByTenantId(tenantId: string): Promise<ITenant | null> {
@@ -46,11 +51,15 @@ export class TenantRepository extends BaseRepository<ITenant> implements ITenant
   }
 
   async listTenants(data: ListTenantsRequest): Promise<ListTenantsResponse> {
-    const page = Math.max(1, data.page);
-    const limit = Math.max(1, Math.min(data.limit, 100));
+    const page = Math.max(1, data.page || 1);
+    const defaultLimit = data.tenant_ids && data.tenant_ids.length > 0 ? data.tenant_ids.length : 10;
+    const limit = Math.max(1, Math.min(data.limit || defaultLimit, 100));
     const skip = (page - 1) * limit;
 
     const query: Record<string, unknown> = {};
+    if (data.tenant_ids && data.tenant_ids.length > 0) {
+      query._id = { $in: data.tenant_ids };
+    }
     if (data.status && data.status.toLowerCase() !== 'all') {
       query.status = data.status.toLowerCase();
     }
@@ -67,11 +76,11 @@ export class TenantRepository extends BaseRepository<ITenant> implements ITenant
     }
 
     const [docs, totalCount] = await Promise.all([
-      this.model.find(query).skip(skip).limit(limit).select('-password_hash').exec(),
+      this.model.find(query).skip(skip).limit(limit).select('-password_hash').lean().exec(),
       this.model.countDocuments(query).exec(),
     ]);
 
-    const tenants: TenantInfo[] = docs.map((t) => ({
+    const tenants: TenantInfo[] = docs.map((t: any) => ({
       tenant_id: t._id.toString(),
       business_name: t.business_name,
       contact_email: t.contact_email,

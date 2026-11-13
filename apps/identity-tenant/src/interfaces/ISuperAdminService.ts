@@ -31,6 +31,21 @@ export interface SuspendTenantResult {
   };
 }
 
+export interface SuperAdminOverviewResult {
+  totalTenants: number;
+  activeTenants: number;
+  suspendedTenants: number;
+  totalRevenue: number;
+  currency: string;
+  tenantsByTier: Record<string, number>;
+}
+
+export interface RevenueDataPointResult {
+  date: string;
+  amount: number;
+  transactionCount: number;
+}
+
 export interface ISuperAdminService {
   login(email: string, password: string): Promise<SuperAdminAuthResult>;
 
@@ -52,4 +67,12 @@ export interface ISuperAdminService {
   ListTenants(data: ListTenantsRequest): Promise<ListTenantsResponse>;
 
   suspendTenant(tenantId: string): Promise<SuspendTenantResult>;
+
+  getOverview(startDate?: string, endDate?: string): Promise<SuperAdminOverviewResult>;
+
+  getRevenueChart(
+    startDate?: string,
+    endDate?: string,
+    interval?: string,
+  ): Promise<RevenueDataPointResult[]>;
 }

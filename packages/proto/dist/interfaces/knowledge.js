@@ -28,6 +28,7 @@ function KnowledgeServiceControllerMethods() {
             "confirmDocumentUpload",
             "listDocuments",
             "deleteDocument",
+            "getAgentStats",
         ];
         for (const method of grpcMethods) {
             const descriptor = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

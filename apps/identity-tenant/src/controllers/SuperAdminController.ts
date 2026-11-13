@@ -87,4 +87,33 @@ export class SuperAdminAuthController {
     if (!data.tenant_id) throw new Error(RESPONSE_MESSAGES.ERRORS.TENANT_ID_REQUIRED);
     return this._superAdminService.suspendTenant(data.tenant_id);
   }
+
+  @GrpcMethod(GRPC_SERVICES.SUPERADMIN_DASHBOARD, GRPC_METHODS.SUPERADMIN_DASHBOARD.GET_OVERVIEW)
+  async getSuperAdminOverview(data: SuperAdminProto.SuperAdminOverviewRequest) {
+    const result = await this._superAdminService.getOverview(data.start_date, data.end_date);
+    return {
+      total_tenants: result.totalTenants,
+      active_tenants: result.activeTenants,
+      suspended_tenants: result.suspendedTenants,
+      total_revenue: result.totalRevenue,
+      currency: result.currency,
+      tenants_by_tier: result.tenantsByTier,
+    };
+  }
+
+  @GrpcMethod(GRPC_SERVICES.SUPERADMIN_DASHBOARD, GRPC_METHODS.SUPERADMIN_DASHBOARD.GET_REVENUE_CHART)
+  async getRevenueChart(data: SuperAdminProto.RevenueChartRequest) {
+    const points = await this._superAdminService.getRevenueChart(
+      data.start_date,
+      data.end_date,
+      data.interval,
+    );
+    return {
+      points: points.map((p) => ({
+        date: p.date,
+        amount: p.amount,
+        transaction_count: p.transactionCount,
+      })),
+    };
+  }
 }

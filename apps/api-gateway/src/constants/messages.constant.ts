@@ -53,6 +53,12 @@ export const RESPONSE_MESSAGES = {
     MISSING_TENANT_ID: 'Missing tenant_id',
     SCHEMA_GENERATION_FAILED: 'Failed to generate agent schema',
   },
+  DASHBOARD: {
+    OVERVIEW_RETRIEVED: 'Dashboard overview retrieved successfully',
+    REVENUE_CHART_RETRIEVED: 'Revenue chart data retrieved successfully',
+    TOKEN_CHART_RETRIEVED: 'Token chart data retrieved successfully',
+    TOP_TENANTS_RETRIEVED: 'Top tenants data retrieved successfully',
+  },
   ERROR: {
     INTERNAL_SERVER_ERROR: 'Internal Server Error',
     MICROSERVICE_ERROR: 'Microservice error',

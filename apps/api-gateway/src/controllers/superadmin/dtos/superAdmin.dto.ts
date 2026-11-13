@@ -28,6 +28,7 @@ export const ListTenantsSchema: z.ZodType<ListTenantsRequest> = z.object({
   search: z.string().optional(),
   tier: z.string().optional(),
   status: z.string().optional(),
+  tenant_ids: z.array(z.string()).default([]),
 });
 
 export class ListTenantsDto extends createZodDto(ListTenantsSchema) {}

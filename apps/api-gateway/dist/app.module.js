@@ -15,12 +15,14 @@ const billing_controller_js_1 = require("./controllers/billing/billing.controlle
 const dashboard_user_auth_controller_js_1 = require("./controllers/dashboarduser/dashboard-user-auth.controller.js");
 const scheduling_controller_js_1 = require("./controllers/scheduling/scheduling.controller.js");
 const superadmin_controller_js_1 = require("./controllers/superadmin/superadmin.controller.js");
+const superadmin_dashboard_controller_js_1 = require("./controllers/superadmin/superadmin-dashboard.controller.js");
 const superadmin_tenant_controller_js_1 = require("./controllers/superadmin/superadmin-tenant.controller.js");
 const tenant_controller_js_1 = require("./controllers/tenant/tenant.controller.js");
 const paddle_webhook_guard_js_1 = require("./guards/paddle-webhook.guard.js");
 const roles_guard_js_1 = require("./guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("./guards/tenant-auth.guard.js");
 const rate_limiter_middleware_js_1 = require("./middleware/rate-limiter.middleware.js");
+const opensearch_analytics_service_js_1 = require("./services/opensearch-analytics.service.js");
 const redis_service_js_1 = require("./services/redis.service.js");
 const schema_gateway_js_1 = require("./websockets/schema.gateway.js");
 let AppModule = class AppModule {
@@ -122,6 +124,7 @@ exports.AppModule = AppModule = __decorate([
             tenant_controller_js_1.TenantController,
             billing_controller_js_1.BillingController,
             superadmin_controller_js_1.SuperAdminController,
+            superadmin_dashboard_controller_js_1.SuperAdminDashboardController,
             superadmin_tenant_controller_js_1.SuperAdminTenantController,
             dashboard_user_auth_controller_js_1.DashboardUserAuthController,
             knowledge_controller_js_1.KnowledgeController,
@@ -129,6 +132,7 @@ exports.AppModule = AppModule = __decorate([
         ],
         providers: [
             redis_service_js_1.RedisService,
+            opensearch_analytics_service_js_1.OpenSearchAnalyticsService,
             {
                 provide: 'ISchemaEventSubscriber',
                 useExisting: redis_service_js_1.RedisService,

@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
   CreatePaddleCheckoutRequest,
@@ -10,10 +10,12 @@ import type {
   UpdateTenantSubscriptionRequest,
   UpdateTenantSubscriptionResponse,
 } from '@repo/proto/tenant';
+import type { IBillingLedgerRepository } from '../interfaces/IBillingLedgerRepository.js';
 import type { IBillingService } from '../interfaces/IBillingService.js';
 import type { ICacheRepository } from '../interfaces/ICacheRepository.js';
 import type { IEmailProducer } from '../interfaces/IEmailProducer.js';
 import type { ITenantRepository } from '../interfaces/ITenantRepository.js';
+import type { IUnitOfWork } from '../interfaces/IUnitOfWork.js';
 import type { TenantTier } from '../model/Tenent.js';
 
 interface PaddleEventItem {
@@ -46,7 +48,51 @@ export class BillingService implements IBillingService {
     @Inject('ICacheRepository') private readonly _cacheRepo: ICacheRepository,
     @Inject(ConfigService) private readonly _configService: ConfigService,
     @Inject('IEmailProducer') private readonly _emailProducer?: IEmailProducer,
+    @Inject('IBillingLedgerRepository')
+    private readonly _billingLedgerRepo?: IBillingLedgerRepository,
+    @Optional()
+    @Inject('IUnitOfWork')
+    private readonly _unitOfWork?: IUnitOfWork,
   ) {}
+
+  private async _executeTransaction<T>(work: () => Promise<T>): Promise<T> {
+    if (this._unitOfWork) {
+      return this._unitOfWork.withTransaction(work);
+    }
+    return work();
+  }
+
+  private _extractAmountAndCurrency(data: PaddleEventData): { amount: number; currency: string } {
+    let amount = 0;
+    let currency = 'USD';
+
+    const details = data.details as
+      | { totals?: { total?: string | number; currency_code?: string } }
+      | undefined;
+    if (details?.totals) {
+      if (details.totals.total !== undefined) {
+        amount = Number(details.totals.total) || 0;
+      }
+      if (details.totals.currency_code) {
+        currency = String(details.totals.currency_code);
+      }
+    }
+
+    if (amount === 0 && Array.isArray(data.payments) && data.payments.length > 0) {
+      const firstPayment = data.payments[0] as {
+        amount?: string | number;
+        currency_code?: string;
+      };
+      if (firstPayment?.amount !== undefined) {
+        amount = Number(firstPayment.amount) || 0;
+      }
+      if (firstPayment?.currency_code) {
+        currency = String(firstPayment.currency_code);
+      }
+    }
+
+    return { amount, currency };
+  }
 
   private _resolveTier(eventData: PaddleEventData): TenantTier {
    
@@ -140,15 +186,38 @@ export class BillingService implements IBillingService {
       case 'subscription.created':
       case 'subscription.activated': {
         const tier = this._resolveTier(data);
+        const { amount, currency } = this._extractAmountAndCurrency(data);
         this._logger.log(
           `Activating subscription ${subscriptionId} for tenant ${tenant._id} at tier ${tier}`,
         );
 
-        await this._tenantRepo.update(tenant._id, {
-          tier,
-          paddle_customer_id: customerId || tenant.paddle_customer_id,
-          paddle_subscription_id: subscriptionId || tenant.paddle_subscription_id,
-          subscription_status: status,
+        await this._executeTransaction(async () => {
+          await this._tenantRepo.update(tenant._id, {
+            tier,
+            paddle_customer_id: customerId || tenant.paddle_customer_id,
+            paddle_subscription_id: subscriptionId || tenant.paddle_subscription_id,
+            subscription_status: status,
+          });
+
+          if (this._billingLedgerRepo) {
+            await this._billingLedgerRepo.recordEntry({
+              tenant_id: tenant._id,
+              event_type,
+              event_id,
+              provider: 'paddle',
+              amount,
+              currency,
+              tier,
+              status: 'activated',
+              paddle_customer_id: customerId || tenant.paddle_customer_id,
+              paddle_subscription_id: subscriptionId || tenant.paddle_subscription_id,
+              details: {
+                subscription_status: status,
+                items: data.items,
+                custom_data: data.custom_data,
+              },
+            });
+          }
         });
 
         await this._cacheRepo.set(`tenant:${tenant._id}:tier`, tier, { EX: 86400 * 30 });
@@ -158,16 +227,39 @@ export class BillingService implements IBillingService {
       case 'subscription.updated': {
         const isCanceled = status === 'canceled';
         const effectiveTier = isCanceled ? 'starter' : this._resolveTier(data);
+        const { amount, currency } = this._extractAmountAndCurrency(data);
 
         this._logger.log(
           `Updating subscription ${subscriptionId} for tenant ${tenant._id} to status ${status}, tier ${effectiveTier}`,
         );
 
-        await this._tenantRepo.update(tenant._id, {
-          tier: effectiveTier,
-          paddle_customer_id: customerId || tenant.paddle_customer_id,
-          paddle_subscription_id: subscriptionId || tenant.paddle_subscription_id,
-          subscription_status: status,
+        await this._executeTransaction(async () => {
+          await this._tenantRepo.update(tenant._id, {
+            tier: effectiveTier,
+            paddle_customer_id: customerId || tenant.paddle_customer_id,
+            paddle_subscription_id: subscriptionId || tenant.paddle_subscription_id,
+            subscription_status: status,
+          });
+
+          if (this._billingLedgerRepo) {
+            await this._billingLedgerRepo.recordEntry({
+              tenant_id: tenant._id,
+              event_type,
+              event_id,
+              provider: 'paddle',
+              amount,
+              currency,
+              tier: effectiveTier,
+              status: isCanceled ? 'canceled' : 'updated',
+              paddle_customer_id: customerId || tenant.paddle_customer_id,
+              paddle_subscription_id: subscriptionId || tenant.paddle_subscription_id,
+              details: {
+                subscription_status: status,
+                items: data.items,
+                custom_data: data.custom_data,
+              },
+            });
+          }
         });
 
         await this._cacheRepo.set(`tenant:${tenant._id}:tier`, effectiveTier, { EX: 86400 * 30 });
@@ -179,9 +271,26 @@ export class BillingService implements IBillingService {
           `Subscription ${subscriptionId} canceled for tenant ${tenant._id}. Downgrading to starter`,
         );
 
-        await this._tenantRepo.update(tenant._id, {
-          tier: 'starter',
-          subscription_status: 'canceled',
+        await this._executeTransaction(async () => {
+          await this._tenantRepo.update(tenant._id, {
+            tier: 'starter',
+            subscription_status: 'canceled',
+          });
+
+          if (this._billingLedgerRepo) {
+            await this._billingLedgerRepo.recordEntry({
+              tenant_id: tenant._id,
+              event_type,
+              event_id,
+              provider: 'paddle',
+              amount: 0,
+              tier: 'starter',
+              status: 'canceled',
+              paddle_customer_id: customerId || tenant.paddle_customer_id,
+              paddle_subscription_id: subscriptionId || tenant.paddle_subscription_id,
+              details: { subscription_status: 'canceled' },
+            });
+          }
         });
 
         await this._cacheRepo.set(`tenant:${tenant._id}:tier`, 'starter', { EX: 86400 * 30 });
@@ -193,8 +302,25 @@ export class BillingService implements IBillingService {
           `Subscription ${subscriptionId} past due for tenant ${tenant._id}`,
         );
 
-        await this._tenantRepo.update(tenant._id, {
-          subscription_status: 'past_due',
+        await this._executeTransaction(async () => {
+          await this._tenantRepo.update(tenant._id, {
+            subscription_status: 'past_due',
+          });
+
+          if (this._billingLedgerRepo) {
+            await this._billingLedgerRepo.recordEntry({
+              tenant_id: tenant._id,
+              event_type,
+              event_id,
+              provider: 'paddle',
+              amount: 0,
+              tier: tenant.tier,
+              status: 'past_due',
+              paddle_customer_id: customerId || tenant.paddle_customer_id,
+              paddle_subscription_id: subscriptionId || tenant.paddle_subscription_id,
+              details: { subscription_status: 'past_due' },
+            });
+          }
         });
         break;
       }
@@ -203,11 +329,35 @@ export class BillingService implements IBillingService {
         this._logger.log(
           `Paddle transaction completed for customer ${customerId}, tenant ${tenant._id}`,
         );
-        if (customerId && !tenant.paddle_customer_id) {
-          await this._tenantRepo.update(tenant._id, {
-            paddle_customer_id: customerId,
-          });
-        }
+        const { amount, currency } = this._extractAmountAndCurrency(data);
+
+        await this._executeTransaction(async () => {
+          if (customerId && !tenant.paddle_customer_id) {
+            await this._tenantRepo.update(tenant._id, {
+              paddle_customer_id: customerId,
+            });
+          }
+
+          if (this._billingLedgerRepo) {
+            await this._billingLedgerRepo.recordEntry({
+              tenant_id: tenant._id,
+              event_type,
+              event_id,
+              provider: 'paddle',
+              amount,
+              currency,
+              tier: tenant.tier,
+              status: 'completed',
+              paddle_customer_id: customerId || tenant.paddle_customer_id,
+              paddle_subscription_id: subscriptionId || tenant.paddle_subscription_id,
+              paddle_transaction_id: data.id || event_id,
+              details: {
+                details: data.details,
+                payments: data.payments,
+              },
+            });
+          }
+        });
         break;
       }
 
@@ -236,13 +386,35 @@ export class BillingService implements IBillingService {
     const normalizedTier = (request.tier || tenant.tier || 'starter').toLowerCase() as TenantTier;
     const status = request.subscription_status || tenant.subscription_status || 'active';
 
-    const updated = await this._tenantRepo.update(tenant._id, {
-      tier: normalizedTier,
-      subscription_status: status,
+    const updated = await this._executeTransaction(async () => {
+      const up = await this._tenantRepo.update(tenant._id, {
+        tier: normalizedTier,
+        subscription_status: status,
+      });
+      if (!up) {
+        throw new Error('Failed to update tenant subscription in database');
+      }
+
+      if (this._billingLedgerRepo) {
+        await this._billingLedgerRepo.recordEntry({
+          tenant_id: tenant._id,
+          event_type: 'subscription.manual_updated',
+          event_id: `evt_manual_sub_${tenant._id}_${Date.now()}`,
+          provider: 'manual',
+          amount: 0,
+          tier: normalizedTier,
+          status,
+          paddle_customer_id: up.paddle_customer_id,
+          paddle_subscription_id: up.paddle_subscription_id,
+          details: {
+            previous_tier: tenant.tier,
+            new_tier: normalizedTier,
+          },
+        });
+      }
+
+      return up;
     });
-    if (!updated) {
-      throw new Error('Failed to update tenant subscription in database');
-    }
 
     await this._cacheRepo.set(`tenant:${tenant._id}:tier`, normalizedTier, {
       EX: 86400 * 30,

@@ -54,3 +54,38 @@ message GetProfileRequest {
 message GetProfileResponse {
   SuperAdminInfo superAdmin = 1;
 }
+
+service SuperAdminDashboardService {
+  rpc GetSuperAdminOverview (SuperAdminOverviewRequest) returns (SuperAdminOverviewResponse);
+  rpc GetRevenueChart (RevenueChartRequest) returns (RevenueChartResponse);
+}
+
+message SuperAdminOverviewRequest {
+  string start_date = 1;
+  string end_date = 2;
+}
+
+message SuperAdminOverviewResponse {
+  int32 total_tenants = 1;
+  int32 active_tenants = 2;
+  int32 suspended_tenants = 3;
+  double total_revenue = 4;
+  string currency = 5;
+  map<string, int32> tenants_by_tier = 6;
+}
+
+message RevenueChartRequest {
+  string start_date = 1;
+  string end_date = 2;
+  string interval = 3;
+}
+
+message RevenueDataPoint {
+  string date = 1;
+  double amount = 2;
+  int32 transaction_count = 3;
+}
+
+message RevenueChartResponse {
+  repeated RevenueDataPoint points = 1;
+}

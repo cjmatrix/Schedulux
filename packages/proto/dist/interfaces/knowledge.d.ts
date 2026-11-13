@@ -1,6 +1,13 @@
 import type { Metadata } from "@grpc/grpc-js";
 import { Observable } from "rxjs";
 export declare const protobufPackage = "knowledge";
+export interface GetAgentStatsRequest {
+}
+export interface GetAgentStatsResponse {
+    total_agents: number;
+    active_agents: number;
+    draft_agents: number;
+}
 export interface CrawlSiteRequest {
     tenant_id: string;
     url: string;
@@ -218,6 +225,7 @@ export interface KnowledgeServiceClient {
     confirmDocumentUpload(request: ConfirmDocumentUploadRequest, metadata?: Metadata): Observable<ConfirmDocumentUploadResponse>;
     listDocuments(request: ListDocumentsRequest, metadata?: Metadata): Observable<ListDocumentsResponse>;
     deleteDocument(request: DeleteDocumentRequest, metadata?: Metadata): Observable<DeleteDocumentResponse>;
+    getAgentStats(request: GetAgentStatsRequest, metadata?: Metadata): Observable<GetAgentStatsResponse>;
 }
 export interface KnowledgeServiceController {
     crawlSite(request: CrawlSiteRequest, metadata?: Metadata): Promise<CrawlSiteResponse> | Observable<CrawlSiteResponse> | CrawlSiteResponse;
@@ -235,6 +243,7 @@ export interface KnowledgeServiceController {
     confirmDocumentUpload(request: ConfirmDocumentUploadRequest, metadata?: Metadata): Promise<ConfirmDocumentUploadResponse> | Observable<ConfirmDocumentUploadResponse> | ConfirmDocumentUploadResponse;
     listDocuments(request: ListDocumentsRequest, metadata?: Metadata): Promise<ListDocumentsResponse> | Observable<ListDocumentsResponse> | ListDocumentsResponse;
     deleteDocument(request: DeleteDocumentRequest, metadata?: Metadata): Promise<DeleteDocumentResponse> | Observable<DeleteDocumentResponse> | DeleteDocumentResponse;
+    getAgentStats(request: GetAgentStatsRequest, metadata?: Metadata): Promise<GetAgentStatsResponse> | Observable<GetAgentStatsResponse> | GetAgentStatsResponse;
 }
 export declare function KnowledgeServiceControllerMethods(): (constructor: Function) => void;
 export declare const KNOWLEDGE_SERVICE_NAME = "KnowledgeService";

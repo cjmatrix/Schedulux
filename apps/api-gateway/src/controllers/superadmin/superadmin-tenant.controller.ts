@@ -39,6 +39,7 @@ export class SuperAdminTenantController implements OnModuleInit {
         search: query.search,
         tier: query.tier,
         status: query.status,
+        tenant_ids: query.tenant_ids ?? [],
       }),
     );
 

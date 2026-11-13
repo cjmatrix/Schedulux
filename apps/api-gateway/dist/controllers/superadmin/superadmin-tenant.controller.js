@@ -36,6 +36,7 @@ let SuperAdminTenantController = class SuperAdminTenantController {
             search: query.search,
             tier: query.tier,
             status: query.status,
+            tenant_ids: query.tenant_ids ?? [],
         }));
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.TENANT.SUCCESS,

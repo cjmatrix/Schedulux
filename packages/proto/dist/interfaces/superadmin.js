@@ -5,8 +5,9 @@
 //   protoc               v3.21.12
 // source: superadmin.proto
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SUPER_ADMIN_AUTH_SERVICE_NAME = exports.SUPERADMIN_PACKAGE_NAME = exports.protobufPackage = void 0;
+exports.SUPER_ADMIN_DASHBOARD_SERVICE_NAME = exports.SUPER_ADMIN_AUTH_SERVICE_NAME = exports.SUPERADMIN_PACKAGE_NAME = exports.protobufPackage = void 0;
 exports.SuperAdminAuthServiceControllerMethods = SuperAdminAuthServiceControllerMethods;
+exports.SuperAdminDashboardServiceControllerMethods = SuperAdminDashboardServiceControllerMethods;
 const microservices_1 = require("@nestjs/microservices");
 exports.protobufPackage = "superadmin";
 exports.SUPERADMIN_PACKAGE_NAME = "superadmin";
@@ -27,4 +28,21 @@ function SuperAdminAuthServiceControllerMethods() {
     };
 }
 exports.SUPER_ADMIN_AUTH_SERVICE_NAME = "SuperAdminAuthService";
+function SuperAdminDashboardServiceControllerMethods() {
+    return function (constructor) {
+        const grpcMethods = ["getSuperAdminOverview", "getRevenueChart"];
+        for (const method of grpcMethods) {
+            const descriptor = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
+            (0, microservices_1.GrpcMethod)("SuperAdminDashboardService", method)(constructor.prototype[method], method, descriptor);
+            Object.defineProperty(constructor.prototype, method, descriptor);
+        }
+        const grpcStreamMethods = [];
+        for (const method of grpcStreamMethods) {
+            const descriptor = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
+            (0, microservices_1.GrpcStreamMethod)("SuperAdminDashboardService", method)(constructor.prototype[method], method, descriptor);
+            Object.defineProperty(constructor.prototype, method, descriptor);
+        }
+    };
+}
+exports.SUPER_ADMIN_DASHBOARD_SERVICE_NAME = "SuperAdminDashboardService";
 //# sourceMappingURL=superadmin.js.map

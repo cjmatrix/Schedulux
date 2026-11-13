@@ -29,16 +29,16 @@ function formatTokens(num: number): string {
 }
 
 const STATUS_PILL: Record<string, string> = {
-  CONFIRMED: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  PENDING: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  CANCELLED: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
-  COMPLETED: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  confirmed: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  pending: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  cancelled: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
-  completed: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  created: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  live: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  CONFIRMED: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+  PENDING: 'bg-amber-50 text-amber-700 border-amber-200/80',
+  CANCELLED: 'bg-rose-50 text-rose-700 border-rose-200/80',
+  COMPLETED: 'bg-blue-50 text-blue-700 border-blue-200/80',
+  confirmed: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+  pending: 'bg-amber-50 text-amber-700 border-amber-200/80',
+  cancelled: 'bg-rose-50 text-rose-700 border-rose-200/80',
+  completed: 'bg-blue-50 text-blue-700 border-blue-200/80',
+  created: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+  live: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
 };
 
 export default function TenantDashboardPage() {
@@ -66,28 +66,29 @@ export default function TenantDashboardPage() {
   }, [data]);
 
   return (
-    <div className="p-5 lg:p-7 space-y-6 max-w-[1700px] mx-auto">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900/40 p-4.5 rounded-2xl border border-slate-800/60 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-white tracking-tight">
-                {authUser?.business_name || 'My Workspace'}
-              </h2>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-semibold uppercase tracking-wider">
-                {data?.tier.name || authUser?.tier || 'Starter'}
-              </span>
+    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-8 font-sans">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+              <Bot className="w-5 h-5" />
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Agent-isolated operations cockpit: services, inventory capacity, and customer bookings.
-            </p>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              {authUser?.business_name || 'My Workspace'}
+            </h1>
+            <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/80 text-xs font-semibold uppercase tracking-wider">
+              {data?.tier.name || authUser?.tier || 'Starter'}
+            </span>
           </div>
+          <p className="mt-1 text-sm text-slate-500">
+            Agent-isolated operations cockpit: services, inventory capacity, and customer bookings.
+          </p>
         </div>
 
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => navigate('/tenant/landingboard')}
-            className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 flex items-center gap-1.5 transition-all"
+            className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>New Agent</span>
@@ -95,28 +96,28 @@ export default function TenantDashboardPage() {
           <button
             onClick={handleRefresh}
             disabled={isRefetching}
-            className="p-2 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200 transition-all disabled:opacity-50"
+            className="p-2 rounded-xl border border-slate-200 hover:border-slate-300 bg-white text-slate-600 hover:text-slate-900 transition-all disabled:opacity-50 cursor-pointer shadow-2xs"
             title="Refresh dashboard"
           >
             <RefreshCw
-              className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-indigo-400' : ''}`}
+              className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-indigo-600' : ''}`}
             />
           </button>
         </div>
       </div>
 
       {!isLoading && !activeAgent && (
-        <div className="rounded-2xl border border-dashed border-indigo-500/40 bg-indigo-950/20 p-8 text-center space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center mx-auto text-indigo-400">
+        <div className="rounded-2xl border border-dashed border-indigo-300 bg-indigo-50/50 p-8 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-100 border border-indigo-200 flex items-center justify-center mx-auto text-indigo-600">
             <Bot className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-white">No AI Agent Configured</h3>
-          <p className="text-xs text-slate-400 max-w-md mx-auto">
+          <h3 className="text-base font-bold text-slate-900">No AI Agent Configured</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
             Get started by creating your first autonomous receptionist to handle bookings, customer inquiries, and staff scheduling.
           </p>
           <button
             onClick={() => navigate('/tenant/landingboard')}
-            className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition"
+            className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition cursor-pointer shadow-xs"
           >
             <Plus className="w-4 h-4" />
             Create AI Agent
@@ -127,31 +128,31 @@ export default function TenantDashboardPage() {
       {activeAgent && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between hover:border-slate-700 transition-all shadow-sm">
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between hover:border-slate-300 transition-all shadow-xs">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400 font-medium">Active Agent</span>
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-600/20">
-                  <Bot className="w-4 h-4 text-white" />
+                <span className="text-xs text-slate-500 font-semibold">Active Agent</span>
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-2xs">
+                  <Bot className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-4">
-                <h3 className="text-lg font-bold text-white tracking-tight truncate">
+                <h3 className="text-lg font-bold text-slate-900 tracking-tight truncate">
                   {isLoading ? '...' : activeAgent.name}
                 </h3>
                 <div className="flex items-center gap-2 mt-2">
                   <span
-                    className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border ${
-                      STATUS_PILL[activeAgent.status] || 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border ${
+                      STATUS_PILL[activeAgent.status] || 'bg-amber-50 text-amber-700 border-amber-200'
                     }`}
                   >
                     <span
                       className={`w-1.5 h-1.5 rounded-full ${
-                        activeAgent.status === 'created' ? 'bg-emerald-400' : 'bg-amber-400'
+                        activeAgent.status === 'created' ? 'bg-emerald-500' : 'bg-amber-500'
                       }`}
                     />
                     {activeAgent.status === 'created' ? 'Live' : 'Draft'}
                   </span>
-                  <span className="text-[11px] text-slate-400 font-mono truncate">
+                  <span className="text-[11px] text-slate-500 font-mono truncate">
                     {activeAgent.creation_source || 'custom'}
                   </span>
                 </div>
@@ -160,69 +161,69 @@ export default function TenantDashboardPage() {
 
             <div
               onClick={() => navigate(`/tenant/agents/${activeAgent.agent_id}/services`)}
-              className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between hover:border-slate-700 transition-all shadow-sm cursor-pointer group"
+              className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between hover:border-slate-300 hover:shadow-sm transition-all shadow-xs cursor-pointer group"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400 font-medium">Agent Services</span>
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-600/20">
-                  <Tag className="w-4 h-4 text-white" />
+                <span className="text-xs text-slate-500 font-semibold">Agent Services</span>
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shadow-2xs">
+                  <Tag className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-4">
-                <p className="text-2xl font-bold text-white tracking-tight">
+                <p className="text-2xl font-bold text-slate-900 tracking-tight">
                   {isLoading ? '...' : data?.inventory.total_services ?? 0}
                 </p>
                 <div className="flex items-center justify-between mt-2">
-                  <span className="text-[11px] text-slate-400 font-medium">
+                  <span className="text-[11px] text-slate-500 font-medium">
                     Assigned to this agent
                   </span>
-                  <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-emerald-400 group-hover:translate-x-0.5 transition-all" />
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all" />
                 </div>
               </div>
             </div>
 
             <div
               onClick={() => navigate(`/tenant/agents/${activeAgent.agent_id}/resources`)}
-              className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between hover:border-slate-700 transition-all shadow-sm cursor-pointer group"
+              className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between hover:border-slate-300 hover:shadow-sm transition-all shadow-xs cursor-pointer group"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400 font-medium">Resources & Capacity</span>
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-600 to-cyan-600 flex items-center justify-center shadow-lg shadow-teal-600/20">
-                  <Package className="w-4 h-4 text-white" />
+                <span className="text-xs text-slate-500 font-semibold">Resources &amp; Capacity</span>
+                <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 shadow-2xs">
+                  <Package className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-4">
-                <p className="text-2xl font-bold text-white tracking-tight">
+                <p className="text-2xl font-bold text-slate-900 tracking-tight">
                   {isLoading ? '...' : data?.inventory.total_resources ?? 0}
                 </p>
                 <div className="flex items-center justify-between mt-2">
-                  <span className="text-[11px] text-slate-400 font-medium">
-                    Staff, rooms & equipment
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    Staff, rooms &amp; equipment
                   </span>
-                  <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-teal-400 group-hover:translate-x-0.5 transition-all" />
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-teal-600 group-hover:translate-x-0.5 transition-all" />
                 </div>
               </div>
             </div>
 
             <div
               onClick={() => navigate('/tenant/bookings')}
-              className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between hover:border-slate-700 transition-all shadow-sm cursor-pointer group"
+              className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between hover:border-slate-300 hover:shadow-sm transition-all shadow-xs cursor-pointer group"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400 font-medium">Agent Appointments</span>
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-600 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-600/20">
-                  <Calendar className="w-4 h-4 text-white" />
+                <span className="text-xs text-slate-500 font-semibold">Agent Appointments</span>
+                <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shadow-2xs">
+                  <Calendar className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-4">
-                <p className="text-2xl font-bold text-white tracking-tight">
+                <p className="text-2xl font-bold text-slate-900 tracking-tight">
                   {isLoading ? '...' : data?.bookings.total ?? 0}
                 </p>
                 <div className="flex items-center gap-2 mt-2">
-                  <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                  <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                     {data?.bookings.confirmed ?? 0} Confirmed
                   </span>
-                  <span className="inline-flex items-center gap-1 text-[11px] text-amber-400 font-medium bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                  <span className="inline-flex items-center gap-1 text-[11px] text-slate-600 font-medium bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
                     {data?.bookings.pending ?? 0} Other
                   </span>
                 </div>
@@ -231,14 +232,14 @@ export default function TenantDashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-4.5 flex items-center justify-between">
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-4.5 flex items-center justify-between shadow-xs">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/60 flex items-center justify-center text-amber-600 shrink-0">
                   <Zap className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400 font-medium">Weekly AI Token Quota</p>
-                  <p className="text-base font-bold text-white font-mono mt-0.5">
+                  <p className="text-xs text-slate-500 font-semibold">Weekly AI Token Quota</p>
+                  <p className="text-base font-bold text-slate-900 font-mono mt-0.5">
                     {isLoading ? '...' : formatTokens(data?.tokens.used_this_week ?? 0)}
                     <span className="text-xs text-slate-400 font-normal">
                       {' '}/ {formatTokens(data?.tokens.weekly_limit ?? 0)}
@@ -247,13 +248,13 @@ export default function TenantDashboardPage() {
                 </div>
               </div>
               <div className="w-32 hidden sm:block">
-                <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/60">
                   <div
                     className="bg-gradient-to-r from-amber-500 to-orange-500 h-full rounded-full transition-all duration-500"
                     style={{ width: `${tokenPercentage}%` }}
                   />
                 </div>
-                <p className="text-[10px] text-slate-500 text-right mt-1 font-mono">
+                <p className="text-[10px] text-slate-500 text-right mt-1 font-mono font-medium">
                   {tokenPercentage}% used
                 </p>
               </div>
@@ -261,21 +262,21 @@ export default function TenantDashboardPage() {
 
             <div
               onClick={() => navigate(`/tenant/agents/${activeAgent.agent_id}/knowledge`)}
-              className="bg-slate-900/50 border border-slate-800/80 hover:border-slate-700 rounded-2xl p-4.5 flex items-center justify-between cursor-pointer transition-all group"
+              className="bg-white border border-slate-200/80 hover:border-slate-300 rounded-2xl p-4.5 flex items-center justify-between cursor-pointer transition-all group shadow-xs hover:shadow-sm"
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200/60 flex items-center justify-center text-indigo-600 shrink-0">
                   <BookOpen className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400 font-medium">Trained Knowledge Base</p>
-                  <p className="text-base font-bold text-white mt-0.5">
+                  <p className="text-xs text-slate-500 font-semibold">Trained Knowledge Base</p>
+                  <p className="text-base font-bold text-slate-900 mt-0.5">
                     {isLoading ? '...' : data?.knowledge.total_documents ?? 0}{' '}
                     <span className="text-xs text-slate-400 font-normal">Documents / FAQs</span>
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-1 text-xs font-semibold text-indigo-400 group-hover:text-indigo-300">
+              <div className="flex items-center gap-1 text-xs font-semibold text-indigo-600 group-hover:text-indigo-700">
                 <span>Manage</span>
                 <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
               </div>
@@ -308,30 +309,30 @@ export default function TenantDashboardPage() {
               <button
                 key={action.path}
                 onClick={() => navigate(action.path)}
-                className="flex items-center justify-between p-3.5 rounded-xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700 hover:bg-slate-800/40 text-left transition-all group"
+                className="flex items-center justify-between p-3.5 rounded-xl bg-white border border-slate-200/80 hover:border-slate-300 hover:bg-slate-50/80 text-left transition-all group shadow-2xs cursor-pointer"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <action.icon className="w-4 h-4 text-indigo-400 flex-shrink-0" />
-                  <span className="text-xs font-semibold text-slate-300 group-hover:text-white truncate">
+                  <action.icon className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+                  <span className="text-xs font-semibold text-slate-700 group-hover:text-slate-900 truncate">
                     {action.label}
                   </span>
                 </div>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-indigo-400 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
               </button>
             ))}
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-            <div className="xl:col-span-7 bg-slate-900/60 border border-slate-800/80 rounded-2xl overflow-hidden shadow-sm flex flex-col justify-between">
+            <div className="xl:col-span-7 bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs flex flex-col justify-between">
               <div>
-                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800/60">
-                  <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-cyan-400" />
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-indigo-600" />
                     Recent Appointments for {activeAgent.name}
                   </h3>
                   <button
                     onClick={() => navigate('/tenant/bookings')}
-                    className="text-xs text-indigo-400 hover:text-indigo-300 font-medium transition-colors flex items-center gap-1"
+                    className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold transition-colors flex items-center gap-1 cursor-pointer"
                   >
                     View calendar <ArrowRight className="w-3 h-3" />
                   </button>
@@ -339,41 +340,41 @@ export default function TenantDashboardPage() {
 
                 <div className="overflow-x-auto">
                   {isLoading ? (
-                    <div className="p-8 text-center text-slate-500 text-xs">
+                    <div className="p-8 text-center text-slate-400 text-xs font-medium">
                       Loading appointments...
                     </div>
                   ) : !data?.bookings.recent || data.bookings.recent.length === 0 ? (
-                    <div className="p-8 text-center text-slate-500 text-xs">
+                    <div className="p-8 text-center text-slate-400 text-xs font-medium">
                       No appointments scheduled for this agent yet.
                     </div>
                   ) : (
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="text-[11px] text-slate-500 font-medium uppercase tracking-wider border-b border-slate-800/50">
-                          <th className="text-left px-5 py-3 bg-slate-900/40">Customer</th>
-                          <th className="text-left px-5 py-3 bg-slate-900/40 hidden sm:table-cell">
-                            Date & Time
+                        <tr className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider border-b border-slate-100 bg-slate-50/60">
+                          <th className="text-left px-5 py-3">Customer</th>
+                          <th className="text-left px-5 py-3 hidden sm:table-cell">
+                            Date &amp; Time
                           </th>
-                          <th className="text-left px-5 py-3 bg-slate-900/40">Status</th>
+                          <th className="text-left px-5 py-3">Status</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800/50">
+                      <tbody className="divide-y divide-slate-100">
                         {data.bookings.recent.map((booking) => (
                           <tr
                             key={booking.booking_id}
-                            className="hover:bg-slate-800/30 transition-colors"
+                            className="hover:bg-slate-50/70 transition-colors"
                           >
                             <td className="px-5 py-3.5">
-                              <p className="text-sm font-medium text-white leading-none">
+                              <p className="text-sm font-semibold text-slate-900 leading-none">
                                 {booking.customer_name}
                               </p>
-                              <p className="text-[11px] text-slate-500 mt-1 font-mono">
+                              <p className="text-[11px] text-slate-400 mt-1 font-mono">
                                 {booking.customer_phone || booking.booking_reference}
                               </p>
                             </td>
-                            <td className="px-5 py-3.5 hidden sm:table-cell text-xs text-slate-400">
+                            <td className="px-5 py-3.5 hidden sm:table-cell text-xs text-slate-600 font-medium">
                               <div className="flex items-center gap-1.5">
-                                <Clock className="w-3.5 h-3.5 text-slate-500" />
+                                <Clock className="w-3.5 h-3.5 text-slate-400" />
                                 <span>
                                   {booking.start_time
                                     ? new Date(booking.start_time).toLocaleString(undefined, {
@@ -388,8 +389,8 @@ export default function TenantDashboardPage() {
                             </td>
                             <td className="px-5 py-3.5">
                               <span
-                                className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium border uppercase tracking-wider ${
-                                  STATUS_PILL[booking.status] || 'bg-slate-800 text-slate-400'
+                                className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold border uppercase tracking-wider ${
+                                  STATUS_PILL[booking.status] || 'bg-slate-100 text-slate-600 border-slate-200'
                                 }`}
                               >
                                 {booking.status}
@@ -404,16 +405,16 @@ export default function TenantDashboardPage() {
               </div>
             </div>
 
-            <div className="xl:col-span-5 bg-slate-900/60 border border-slate-800/80 rounded-2xl overflow-hidden shadow-sm flex flex-col justify-between">
+            <div className="xl:col-span-5 bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs flex flex-col justify-between">
               <div>
-                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800/60">
-                  <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                    <Tag className="w-4 h-4 text-emerald-400" />
-                    Agent Services & Offerings
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Tag className="w-4 h-4 text-emerald-600" />
+                    Agent Services &amp; Offerings
                   </h3>
                   <button
                     onClick={() => navigate(`/tenant/agents/${activeAgent.agent_id}/services`)}
-                    className="text-xs text-indigo-400 hover:text-indigo-300 font-medium transition-colors flex items-center gap-1"
+                    className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold transition-colors flex items-center gap-1 cursor-pointer"
                   >
                     All services <ArrowRight className="w-3 h-3" />
                   </button>
@@ -421,29 +422,29 @@ export default function TenantDashboardPage() {
 
                 <div className="p-4 space-y-2.5">
                   {isLoading ? (
-                    <div className="p-6 text-center text-slate-500 text-xs">
+                    <div className="p-6 text-center text-slate-400 text-xs font-medium">
                       Loading services...
                     </div>
                   ) : !data?.inventory.recent_services || data.inventory.recent_services.length === 0 ? (
-                    <div className="p-6 text-center text-slate-500 text-xs">
+                    <div className="p-6 text-center text-slate-400 text-xs font-medium">
                       No bookable services assigned to this agent yet.
                     </div>
                   ) : (
                     data.inventory.recent_services.map((svc) => (
                       <div
                         key={svc.service_id}
-                        className="p-3 rounded-xl bg-slate-800/40 border border-slate-700/50 hover:bg-slate-800/70 transition-all flex items-center justify-between gap-3"
+                        className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70 hover:bg-slate-100/70 hover:border-slate-300 transition-all flex items-center justify-between gap-3 shadow-2xs"
                       >
                         <div className="min-w-0">
-                          <p className="text-xs font-semibold text-white truncate">{svc.name}</p>
-                          <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2">
+                          <p className="text-xs font-bold text-slate-900 truncate">{svc.name}</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2 font-medium">
                             <span>{svc.category}</span>
                             <span>•</span>
                             <span>{svc.duration_minutes} min</span>
                           </p>
                         </div>
                         <div className="text-right shrink-0">
-                          <span className="text-xs font-bold text-emerald-400 font-mono">
+                          <span className="text-xs font-bold text-emerald-600 font-mono">
                             {svc.price
                               ? `${svc.price.currency} ${svc.price.amount}`
                               : 'Free'}
@@ -455,13 +456,13 @@ export default function TenantDashboardPage() {
                 </div>
               </div>
 
-              <div className="p-4 border-t border-slate-800/60 bg-slate-900/40 flex items-center justify-between">
-                <span className="text-xs text-slate-400 font-medium">
+              <div className="p-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between">
+                <span className="text-xs text-slate-500 font-medium">
                   {data?.inventory.total_services ?? 0} active services
                 </span>
                 <button
                   onClick={() => navigate(`/tenant/agents/${activeAgent.agent_id}/services`)}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold border border-emerald-500/20 flex items-center gap-1 transition"
+                  className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold border border-emerald-200/80 flex items-center gap-1 transition cursor-pointer"
                 >
                   <Plus className="w-3 h-3" />
                   <span>Add Service</span>

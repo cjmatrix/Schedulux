@@ -53,7 +53,7 @@ export class CompleteBookingDto extends createZodDto(CompleteBookingDtoSchema) {
 
 export const ListBookingsQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20),
+  limit: z.coerce.number().min(1).max(1000).default(20),
   agent_id: z.string().optional(),
   service_id: z.string().optional(),
   resource_id: z.string().optional(),

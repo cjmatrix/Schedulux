@@ -293,6 +293,7 @@ async def process_customer_chat(
     customer_phone: str | None = None,
     customer_name: str | None = None,
     mode: str | None = None,
+    tier: str | None = None,
 ) -> dict[str, Any]:
     if mode == "sandbox":
         is_sandbox = True
@@ -334,7 +335,7 @@ async def process_customer_chat(
     from agent_orchestrator.services.token_service import TokenTrackingService
 
     
-    is_exceeded, current_tokens, token_limit = await TokenTrackingService.check_weekly_quota(tenant_id)
+    is_exceeded, current_tokens, token_limit = await TokenTrackingService.check_weekly_quota(tenant_id, tier=tier)
     if is_exceeded:
         logger.warning(
             "[CustomerAgent] Tenant %s exceeded weekly token quota (%d/%d). Blocking interaction.",

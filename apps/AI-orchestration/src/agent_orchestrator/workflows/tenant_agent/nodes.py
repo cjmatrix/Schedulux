@@ -132,11 +132,11 @@ MODE 1: EXPLORATORY / HOW-TO / GUIDANCE INQUIRIES
 - Action: 'ask_user' (or 'update_schema' if they also provided their business name/vertical to store).
 - Behavior: ACT AS AN EXPERT BUSINESS MENTOR:
   1. Validate their business vision warmly and encouragingly.
-  2. Outline a concrete 3-pillar blueprint for how appointments work in their industry:
-     • Core Service Types & typical durations (e.g., Quick fittings vs. bespoke design; consultations vs. treatments).
-     • Resources needed (e.g., Fitting rooms, styling chairs, treatment bays, or individual specialists).
-     • Recommended operational policies (e.g., 10-min cleanup buffers, client preparation notes, or OTP verification).
-  3. Offer a concrete starter package: Proactively propose a set of standard services and resources tailored to their vertical, and ask if they'd like you to pre-fill their canvas with these defaults so they only have to adjust prices!
+  2. Outline a concrete 3-pillar blueprint for how appointments work in their industry using clean markdown bullet points:
+     - **Core Service Types**: typical durations & pricing models (e.g. Quick fittings vs. bespoke design; consultations vs. treatments).
+     - **Required Resources**: fitting rooms, styling chairs, service bays, or individual specialists.
+     - **Operational Policies**: 10-min cleanup buffers, client preparation notes, or OTP verification.
+  3. Offer a concrete starter package: Proactively propose a list of standard services and resources in clean bullet points, and ask if they'd like you to pre-fill their canvas with these defaults so they only have to adjust prices!
   - NEVER reply with a raw interrogation for phone numbers, hours, or administrative database fields when the user is asking for guidance!
 
 MODE 2: CONFIGURATION DIRECTIVES & CHANGES
@@ -145,9 +145,10 @@ MODE 2: CONFIGURATION DIRECTIVES & CHANGES
 - Behavior: SILENT EXECUTION + CONSULTATIVE CONFIRMATION:
   1. Emit the precise minimal delta in `draft_update`.
   2. In your conversational text (`question`):
-     • Acknowledge the change with warm, professional competence (e.g., "I've added Suit Fitting (45 mins at $80) and assigned it to Master Tailor David on your canvas.").
-     • Proactively suggest the next logical operational layer or ask an empowering question (e.g., "Would you like to add a 10-minute buffer time between fittings for room prep, or should we add another tailoring service?").
-  - Do NOT cap your response to a dry 1-sentence receipt. Converse naturally like an operations consultant.
+     - Acknowledge the change with warm, professional competence using bold entities (e.g. "I've added **Suit Fitting** (**45 mins** at **$80**) and assigned it to **Master Tailor David** on your canvas.").
+     - If multiple items were added or updated, list them as clear bullet points.
+     - Proactively suggest the next logical operational layer or ask an empowering question (e.g. "Would you like to add a **10-minute buffer** between fittings for room prep, or should we add another tailoring service?").
+  - Do NOT cap your response to a dry 1-sentence receipt. Converse naturally like an operations consultant using structured markdown.
 
 MODE 3: ADVICE & POLICY INQUIRIES
 (e.g., "What's a good buffer time?", "Do I need OTP?")
@@ -275,18 +276,25 @@ DECIDE YOUR NEXT ACTION:
    - You can ONLY choose 'finalize' when the user explicitly commanded you to save, finalize, publish, or deploy without new changes in the same turn.
    - NEVER finalize automatically just because all items are complete.
 
-CRITICAL OUTPUT RULE — QUESTION FIELD IS MANDATORY:
+CRITICAL OUTPUT RULE — QUESTION FIELD IS MANDATORY & MARKDOWN-STRUCTURED:
 - You MUST always populate the `question` field. It must NEVER be empty, null, or a generic filler like "Do you have any more changes?".
-- For 'update_schema': warmly confirm the update, provide consultative guidance, and propose the next operational step or starter blueprint.
-- For 'ask_user': provide thorough, helpful answers, mentor the business owner, or ask a contextual design question based on what's missing in the draft.
-- For 'finalize': celebrate the go-live and confirm next steps (e.g. "✅ Your agent is now live! Customers can start booking.").
+- The frontend chat UI parses your `question` with a full GitHub Flavored Markdown (GFM) renderer.
+- MANDATORY MARKDOWN READABILITY RULES:
+  1. USE BULLET POINTS FOR MULTI-ITEM INFORMATION: Always break down multiple services, resources, options, or recommendations into clean bullet points (`- **Entity**: description`). NEVER write a dense wall of text.
+  2. BOLD KEY TERMS & ENTITIES: Use `**bold**` for all service names, staff/resource names, prices, durations, buffer times, and operating days (e.g. `**Express Wash** (30 mins at **$25**)`).
+  3. STRUCTURED HEADINGS & SECTIONS: Use bold section titles or markdown headers (e.g. `### Recommended Services` or `**Operational Blueprint:**`) to logically segment lengthy advice or blueprints.
+  4. CLEAN SPACING & PARAGRAPHS: Keep introduction and confirmation statements to 1-2 concise sentences, insert a blank line before bullet points, and place the closing consultative question on its own paragraph.
+  5. INLINE CODE & HIGHLIGHTS: Use backticks for technical settings, hours, or flags (e.g. `9:00 AM - 6:00 PM`, `30 mins`).
+- For 'update_schema': warmly confirm the update with bolded entities, outline what was added/updated in clean bullet points if multiple items changed, and propose the next operational step or blueprint.
+- For 'ask_user': provide thorough, helpful answers using structured bulleted blueprints, mentor the business owner, or ask a contextual design question based on what's missing in the draft.
+- For 'finalize': celebrate the go-live and confirm next steps (e.g. "✅ **Your agent is now live!** Customers can start booking.").
 - FAILURE TO FILL `question` WILL BREAK THE FRONTEND — the user will see a blank message."""
 
 
 async def node_llm_semantic_review(state: GraphState) -> dict:
     llm = _get_llm().with_structured_output(SemanticAction)
 
-    print(_format_draft_toon(state["draft"]), flush=True)
+  
     all_msgs = state.get("messages", [])
     last_msg = all_msgs[-1] if all_msgs else None
     is_system_feedback = isinstance(last_msg, SystemMessage)
@@ -331,23 +339,42 @@ CRITICAL RULES FOR RECOVERY:
 
     facts_block = ""
     if agent_id and all_msgs:
-        try:
-            from agent_orchestrator.utils.embedding_util import embed_query
-            from agent_orchestrator.utils.qdrant_util import get_qdrant_store
+       
+        raw_user_msg = ""
+        for m in reversed(all_msgs):
+            if isinstance(m, HumanMessage):
+                raw_user_msg = str(m.content)
+                break
+        if not raw_user_msg and all_msgs:
+            raw_user_msg = str(all_msgs[-1].content)
 
-            last_text = str(all_msgs[-1].content)
-            q_vec = await embed_query(last_text)
-            facts = await get_qdrant_store().search_relevant_facts(
-                q_vec, tenant_id, agent_id, limit=3
-            )
-            if facts:
-                facts_block = (
-                    "\nRELEVANT BUSINESS RULES & FACTS RETRIEVED FROM LONG-TERM MEMORY:\n"
-                    + "\n".join([f"- {f}" for f in facts])
-                    + "\n"
+        if raw_user_msg.startswith("Tenant: ") or raw_user_msg.startswith("User: "):
+            raw_user_msg = raw_user_msg.split(": ", 1)[1]
+
+        if raw_user_msg.strip():
+            try:
+                from agent_orchestrator.utils.embedding_util import embed_query
+                from agent_orchestrator.utils.qdrant_util import get_qdrant_store
+
+                q_vec = await embed_query(raw_user_msg.strip())
+                if q_vec and any(q_vec):
+                    facts = await get_qdrant_store().search_relevant_facts(
+                        q_vec, tenant_id, agent_id, limit=5, score_threshold=0.45
+                    )
+                    print("fact blocks", facts, flush=True)
+                    if facts:
+                        facts_block = (
+                            "\nRELEVANT BUSINESS RULES & FACTS RETRIEVED FROM LONG-TERM MEMORY:\n"
+                            + "\n".join([f"- {f}" for f in facts])
+                            + "\n"
+                        )
+                    
+                    
+            except Exception as qe:
+                print(
+                    f"[node_llm_semantic_review] Warning retrieving long-term facts: {qe}",
+                    flush=True,
                 )
-        except Exception:
-            pass
     draft = state.get("draft", {})
 
     tenant_tier = state.get("tier")

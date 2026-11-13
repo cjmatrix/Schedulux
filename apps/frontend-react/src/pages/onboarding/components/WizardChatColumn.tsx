@@ -4,6 +4,7 @@ import React, { useRef } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import type { Message } from '../types.js';
 import { DiffDrawer } from './DiffDrawer.js';
+import { renderMarkdown } from '../../../utils/markdown.js';
 
 interface WizardChatColumnProps {
   allMessages: Message[];
@@ -81,20 +82,21 @@ export const WizardChatColumn: React.FC<WizardChatColumnProps> = ({
               <div className={`flex ${msg.role === 'tenant' ? 'justify-end' : 'justify-start'}`}>
                 {msg.role === 'tenant' ? (
                   <div className="bg-neutral-950 text-white rounded-3xl p-4 shadow-sm max-w-[85%] space-y-1.5">
-                    <p className="text-xs leading-relaxed font-medium">{msg.text}</p>
+                    <p className="text-[13px] leading-relaxed font-medium">{msg.text}</p>
                     <div className="flex items-center justify-end gap-1 text-[10px] text-slate-400 font-mono">
                       <span>✓ Compiled to Canvas</span>
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-white border border-slate-200 rounded-3xl p-4 shadow-2xs max-w-[85%] space-y-1">
+                  <div className="bg-white border border-slate-200 rounded-3xl p-4 shadow-2xs max-w-[85%] space-y-1.5">
                     <div className="flex items-center gap-1.5 mb-1 text-[11px] font-bold text-slate-700">
                       <Bot className="w-3.5 h-3.5 text-slate-500" />
                       <span>Schedulux AI</span>
                     </div>
-                    <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
-                      {msg.text}
-                    </p>
+                    <div
+                      className="text-[13px] text-slate-800 leading-relaxed wizard-markdown"
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }}
+                    />
                   </div>
                 )}
               </div>
@@ -165,7 +167,7 @@ export const WizardChatColumn: React.FC<WizardChatColumnProps> = ({
               onChange={(e) => setInputValue(e.target.value)}
               disabled={status === 'processing' || status === 'loading'}
               placeholder="Type your business rules..."
-              className="flex-1 bg-transparent text-xs text-slate-900 placeholder-slate-400 outline-none"
+              className="flex-1 bg-transparent text-[13px] text-slate-900 placeholder-slate-400 outline-none"
             />
             <button
               type="submit"

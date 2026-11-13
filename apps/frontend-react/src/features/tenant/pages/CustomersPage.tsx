@@ -102,7 +102,7 @@ export default function CustomersPage() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6 font-sans text-slate-800">
+    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-8 font-sans text-slate-800">
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 tracking-wide">
         {isManager ? (
           <>
@@ -143,13 +143,18 @@ export default function CustomersPage() {
         )}
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200/80">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
-            <Users className="w-6 h-6 text-emerald-600" />
-            Customer Directory
-          </h1>
-          <p className="text-xs text-slate-500 font-medium mt-1">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+              <Users className="w-5 h-5" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Customer Directory</h1>
+            <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
+              {total} Total
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-slate-500">
             Directory of client records, verified phone identities, and appointment volume.
           </p>
         </div>
@@ -157,10 +162,10 @@ export default function CustomersPage() {
         <button
           onClick={() => refetch()}
           disabled={isLoading || isRefetching}
-          className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200/90 rounded-2xl hover:bg-slate-50 hover:border-slate-300 transition shadow-2xs cursor-pointer disabled:opacity-50"
+          className="flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200/90 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition shadow-2xs cursor-pointer disabled:opacity-50"
         >
           <RefreshCw
-            className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-emerald-600' : 'text-slate-500'}`}
+            className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-indigo-600' : 'text-slate-500'}`}
           />
           <span>Refresh</span>
         </button>

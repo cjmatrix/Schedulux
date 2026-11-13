@@ -220,6 +220,8 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
         try:
             from agent_orchestrator.workflows.customer_agent import process_customer_chat
 
+            metadata_dict = dict(context.invocation_metadata()) if context else {}
+            tier = metadata_dict.get("x-tenant-tier")
             mode = getattr(request, "mode", None) or None
             result = await process_customer_chat(
                 tenant_id=request.tenant_id,
@@ -230,6 +232,7 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                 customer_phone=request.customer_phone if request.customer_phone else None,
                 customer_name=request.customer_name if request.customer_name else None,
                 mode=mode,
+                tier=tier,
             )
             return knowledge_pb2.CustomerChatResponse(
                 session_id=result["session_id"],

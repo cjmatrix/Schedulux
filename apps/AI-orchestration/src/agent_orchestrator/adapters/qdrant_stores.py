@@ -43,6 +43,9 @@ class QdrantMemoryStore(MemoryVectorStore):
         self.collection_name = collection_name
         self.vector_size = vector_size
 
+    async def ensure_collection(self) -> None:
+        await self._ensure_collection()
+
     async def _ensure_collection(self) -> None:
         try:
             resp = await self.client.get_collections()
@@ -108,8 +111,9 @@ class QdrantMemoryStore(MemoryVectorStore):
         tenant_id: str,
         agent_id: str | None = None,
         limit: int = 4,
+        score_threshold: float | None = 0.45,
     ) -> list[str]:
-        if not query_vector:
+        if not query_vector or not any(query_vector):
             return []
         must: list[models.Condition] = [
             models.FieldCondition(key="tenant_id", match=models.MatchValue(value=tenant_id))
@@ -124,6 +128,7 @@ class QdrantMemoryStore(MemoryVectorStore):
                 query=query_vector,
                 query_filter=models.Filter(must=must),
                 limit=limit,
+                score_threshold=score_threshold,
                 with_payload=True,
             )
             return [p.payload["fact"] for p in results.points if p.payload and "fact" in p.payload]

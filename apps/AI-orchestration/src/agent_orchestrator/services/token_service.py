@@ -221,17 +221,30 @@ class TokenTrackingService:
         """
         Returns (is_exceeded, current_tokens, limit).
         Evaluates current Redis usage against tier weekly_token_limit.
+        If tier is not supplied, resolves authoritative tenant tier from Redis.
         """
         if not tenant_id:
             return False, 0, -1
 
-        tier_cfg = get_tier_config(tier)
+        client = None
+        resolved_tier = tier
+        try:
+            client = get_redis_client()
+            if not resolved_tier:
+                cached_tier = await client.get(f"tenant:{tenant_id}:tier")
+                if cached_tier:
+                    resolved_tier = cached_tier.strip().lower()
+        except Exception as te:
+            logger.warning("[TokenService] Could not resolve tier from Redis for %s: %s", tenant_id, te)
+
+        tier_cfg = get_tier_config(resolved_tier)
         limit = tier_cfg.get("weekly_token_limit", 100_000)
         if limit == -1:
             return False, 0, -1
 
         try:
-            client = get_redis_client()
+            if client is None:
+                client = get_redis_client()
             redis_key = get_weekly_token_redis_key(tenant_id)
             raw = await client.get(redis_key)
             current = int(raw) if raw else 0

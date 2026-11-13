@@ -18,7 +18,7 @@ export default function AgentDashboardPage() {
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId: string }>();
 
-  const { data: agents = [], isLoading: agentsLoading } = useTenantAgents();
+  const { data: agents = [] } = useTenantAgents();
   const agentInfo = agents.find((a) => a.agent_id === agentId);
 
   const { data: servicesResponse, isLoading: servicesLoading } = useQuery({
@@ -43,11 +43,10 @@ export default function AgentDashboardPage() {
   const totalResources = resourcesResponse?.pagination?.total ?? resources.length;
   const totalDocuments = documents.length;
 
-  const isLoading = agentsLoading;
   const isLive = agentInfo?.status === 'created';
 
   return (
-    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6 font-sans">
+    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-8 font-sans">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 tracking-wide">
         <button
@@ -66,54 +65,50 @@ export default function AgentDashboardPage() {
       </div>
 
       {/* Agent Header */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-md shrink-0">
-            <Bot className="w-7 h-7 text-white" />
-          </div>
-          <div>
-            {isLoading ? (
-              <div className="w-40 h-6 bg-slate-100 rounded-lg animate-pulse mb-2" />
-            ) : (
-              <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-                {agentInfo?.name || agentId}
-              </h1>
-            )}
-            <div className="flex items-center gap-2 mt-1">
-              {isLive ? (
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Live
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                  Draft
-                </span>
-              )}
-              <span className="font-mono text-[11px] text-slate-400 truncate">{agentId}</span>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+              <Bot className="w-5 h-5" />
             </div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              {agentInfo?.name || agentId}
+            </h1>
+            {isLive ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                Draft
+              </span>
+            )}
           </div>
+          <p className="mt-1 text-sm text-slate-500">
+            Operations cockpit for {agentInfo?.name || 'this agent'}: service catalog, resource scheduling, and knowledge base.
+          </p>
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0">
           <button
             onClick={() => navigate(`/tenant/agent-setup/${agentId}`)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold transition cursor-pointer"
           >
             <Settings2 className="w-3.5 h-3.5" />
             Configure Agent
           </button>
           <button
             onClick={() => navigate(`/tenant/agents/${agentId}/knowledge`)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-lg text-xs font-semibold transition cursor-pointer shadow-2xs"
           >
             <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
             Knowledge Base
           </button>
           <button
             onClick={() => navigate(`/tenant/agents/${agentId}/services`)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-black text-white rounded-lg text-xs font-semibold shadow-xs transition cursor-pointer"
           >
             <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
             Manage Services

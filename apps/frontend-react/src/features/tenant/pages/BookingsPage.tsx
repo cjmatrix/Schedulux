@@ -66,7 +66,36 @@ export default function BookingsPage() {
     }, 4500);
   };
 
+  const calendarRange = useMemo(() => {
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth();
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const startOffset = (firstDayIndex + 6) % 7;
+    const gridStartDate = new Date(year, month, 1 - startOffset, 0, 0, 0, 0);
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    const lastDayIndex = new Date(year, month, totalDays).getDay();
+    const endOffset = (7 - ((lastDayIndex + 6) % 7) - 1 + 7) % 7;
+    const gridEndDate = new Date(year, month, totalDays + endOffset, 23, 59, 59, 999);
+
+    return {
+      startDate: gridStartDate.toISOString(),
+      endDate: gridEndDate.toISOString(),
+    };
+  }, [calendarDate]);
+
   const queryParams = useMemo(() => {
+    if (viewMode === 'calendar') {
+      return {
+        agent_id: activeAgentId,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        search: debouncedSearch.trim() || undefined,
+        start_date: calendarRange.startDate,
+        end_date: calendarRange.endDate,
+        limit: 1000,
+        page: 1,
+      };
+    }
+
     return {
       page,
       limit,
@@ -74,7 +103,7 @@ export default function BookingsPage() {
       status: statusFilter === 'all' ? undefined : statusFilter,
       search: debouncedSearch.trim() || undefined,
     };
-  }, [page, limit, activeAgentId, statusFilter, debouncedSearch]);
+  }, [viewMode, calendarRange, activeAgentId, statusFilter, debouncedSearch, page, limit]);
 
   const {
     data: bookingsResponse,
@@ -182,12 +211,12 @@ export default function BookingsPage() {
   };
 
   return (
-    <div className="p-6 sm:p-8 max-w-7xl mx-auto flex flex-col gap-6 font-sans">
+    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-8 font-sans">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 tracking-wide">
         <span>Operations</span>
         <span>/</span>
-        <span className="text-slate-800">Calendar & Bookings</span>
+        <span className="text-slate-800">Calendar &amp; Bookings</span>
       </div>
 
       {/* Success Notification Banner */}
@@ -208,17 +237,20 @@ export default function BookingsPage() {
       )}
 
       {/* Header & Main Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
         <div>
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-              Calendar & Bookings
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+              <CalendarDays className="w-5 h-5" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              Calendar &amp; Bookings
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-slate-200/70 text-slate-700 text-[10px] font-bold tracking-wider uppercase">
-              {pagination.total} TOTAL SLOTS
+            <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
+              {pagination.total} Total
             </span>
           </div>
-          <p className="text-xs text-slate-500 font-medium">
+          <p className="mt-1 text-sm text-slate-500">
             Manage real-time appointments, live calendar views, rescheduling, and cancellations.
           </p>
         </div>
@@ -407,18 +439,28 @@ export default function BookingsPage() {
           resources={resources}
         />
       ) : (
-        <BookingsCalendarView
-          bookings={bookings}
-          isLoading={isBookingsLoading}
-          services={services}
-          resources={resources}
-          currentDate={calendarDate}
-          onDateChange={(d) => setCalendarDate(d)}
-          onSelectBooking={(b) => setBookingForDetails(b)}
-          onReschedule={(b) => setBookingToReschedule(b)}
-          onCancel={(b) => setBookingToCancel(b)}
-          onNewBookingForDate={() => setIsNewBookingModalOpen(true)}
-        />
+        <div className="flex flex-col gap-3">
+          {pagination.total >= 1000 && (
+            <div className="p-3 bg-amber-50 border border-amber-200/80 text-amber-800 rounded-2xl text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+              <span>
+                Showing the first 1,000 bookings for this period. Use the staff filter or switch to Week View for high-volume dates.
+              </span>
+            </div>
+          )}
+          <BookingsCalendarView
+            bookings={bookings}
+            isLoading={isBookingsLoading}
+            services={services}
+            resources={resources}
+            currentDate={calendarDate}
+            onDateChange={(d) => setCalendarDate(d)}
+            onSelectBooking={(b) => setBookingForDetails(b)}
+            onReschedule={(b) => setBookingToReschedule(b)}
+            onCancel={(b) => setBookingToCancel(b)}
+            onNewBookingForDate={() => setIsNewBookingModalOpen(true)}
+          />
+        </div>
       )}
 
       {/* Booking Details Modal */}

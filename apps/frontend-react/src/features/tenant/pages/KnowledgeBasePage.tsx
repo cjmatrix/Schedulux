@@ -2,11 +2,9 @@ import {
   AlertCircle,
   ArrowLeft,
   BookOpen,
-  Bot,
   CheckCircle2,
   ChevronRight,
   Clock,
-  Database,
   FileText,
   HardDrive,
   Loader2,
@@ -217,7 +215,7 @@ export default function KnowledgeBasePage() {
   );
 
   return (
-    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6 font-sans">
+    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-8 font-sans">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 tracking-wide">
         <button
@@ -242,34 +240,31 @@ export default function KnowledgeBasePage() {
         <span className="text-slate-900 font-bold">Knowledge Base</span>
       </div>
 
-      {/* Header Banner */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-900 via-slate-900 to-slate-800 flex items-center justify-center shadow-md shrink-0">
-            <BookOpen className="w-7 h-7 text-indigo-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-              Knowledge Base & FAQ PDFs
+      {/* Top Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+              <BookOpen className="w-5 h-5" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              Knowledge Base &amp; FAQ PDFs
             </h1>
-            <p className="text-xs text-slate-500 mt-1">
-              Upload PDF documents (pricing matrices, FAQ sheets, policy guides) to train your AI
-              agent.
-            </p>
           </div>
+          <p className="mt-1 text-sm text-slate-500">
+            Upload PDF documents (pricing matrices, FAQ sheets, policy guides) to train your AI agent.
+          </p>
         </div>
 
         {/* Bucket badge & Agent selector */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200/80 text-[11px] font-mono text-slate-600">
-            <Database className="w-3.5 h-3.5 text-indigo-500" />
-            <span>s3://my-client-pdf-uploads-mumbai</span>
-          </div>
-
           {currentAgent && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200/80 text-xs font-semibold text-slate-700">
-              <Bot className="w-3.5 h-3.5 text-slate-600" />
-              <span>{currentAgent.name || currentAgent.agent_id}</span>
+            <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200/80 text-xs">
+              <span className="font-semibold text-slate-700">{currentAgent.name || currentAgent.agent_id}</span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live
+              </span>
             </div>
           )}
         </div>

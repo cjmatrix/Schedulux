@@ -133,13 +133,13 @@ export default function ResourcesListPage() {
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800 pb-20">
       {/* Top Header */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-4">
+      <div className="max-w-7xl mx-auto px-6 sm:px-8 pt-8 pb-4">
         {/* Breadcrumb */}
         {isManager ? (
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 tracking-wide mb-3">
             <span>Operations</span>
             <span>/</span>
-            <span className="text-slate-900 font-bold">Resources & Inventory</span>
+            <span className="text-slate-900 font-bold">Resources &amp; Inventory</span>
           </div>
         ) : effectiveAgentId ? (
           <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3">
@@ -157,29 +157,31 @@ export default function ResourcesListPage() {
               {effectiveAgentId}
             </button>
             <span>/</span>
-            <span className="text-slate-900 font-semibold">Resources & Inventory</span>
+            <span className="text-slate-900 font-semibold">Resources &amp; Inventory</span>
           </div>
         ) : (
           <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3">
             <span>Tenant Workspace</span>
             <span>/</span>
-            <span className="text-slate-900 font-semibold">Resources & Inventory</span>
+            <span className="text-slate-900 font-semibold">Resources &amp; Inventory</span>
           </div>
         )}
 
         {/* Header Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                <Package className="w-5 h-5" />
+              </div>
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
                 {effectiveAgentId ? 'Agent Resources & Inventory' : 'Resources & Inventory'}
               </h1>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
                 {stats.active} Dispatched
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-1 max-w-xl">
+            <p className="mt-1 text-sm text-slate-500">
               {effectiveAgentId
                 ? `Configure team members, rooms, and equipment linked to AI agent: ${effectiveAgentId}`
                 : 'Configure team members, meeting rooms, stations, and physical equipment available for autonomous AI booking.'}
@@ -190,10 +192,10 @@ export default function ResourcesListPage() {
             <button
               onClick={() => refetch()}
               disabled={isRefetching}
-              className="p-2 rounded-full border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+              className="p-2 border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 rounded-xl transition cursor-pointer disabled:opacity-50 shadow-2xs"
               title="Refresh inventory"
             >
-              <RefreshCw className={`w-4 h-4 ${isRefetching ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-indigo-600' : ''}`} />
             </button>
             <button
               onClick={() => {

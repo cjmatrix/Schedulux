@@ -1,5 +1,6 @@
 import type { BookingInfo, ResourceInfo, ServiceInfo } from '@repo/proto/scheduling';
 import {
+  CalendarDays,
   CalendarX,
   ChevronLeft,
   ChevronRight,
@@ -7,9 +8,11 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  Search,
   Users,
+  X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface BookingsCalendarViewProps {
   bookings: BookingInfo[];
@@ -40,8 +43,28 @@ export function BookingsCalendarView({
 }: BookingsCalendarViewProps) {
   const [mode, setMode] = useState<CalendarMode>('month');
   const [selectedStaffId, setSelectedStaffId] = useState<string>('all');
+  const [selectedDateForDrawer, setSelectedDateForDrawer] = useState<string | null>(null);
+  const [drawerSearch, setDrawerSearch] = useState<string>('');
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedDateForDrawer(null);
+      }
+    };
+    if (selectedDateForDrawer) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedDateForDrawer]);
+
+  useEffect(() => {
+    setDrawerSearch('');
+  }, [selectedDateForDrawer]);
 
   const getServiceName = (serviceId: string) => {
     const s = services.find((item) => item.service_id === serviceId);
@@ -238,6 +261,77 @@ export function BookingsCalendarView({
     }
   };
 
+  const drawerBookings = useMemo(() => {
+    if (!selectedDateForDrawer) return [];
+    return bookingsByDate.get(selectedDateForDrawer) || [];
+  }, [selectedDateForDrawer, bookingsByDate]);
+
+  const filteredDrawerBookings = useMemo(() => {
+    if (!drawerSearch.trim()) return drawerBookings;
+    const term = drawerSearch.toLowerCase().trim();
+    return drawerBookings.filter((b) => {
+      const cust = (b.customer?.name || '').toLowerCase();
+      const phone = (b.customer?.phone || '').toLowerCase();
+      const email = (b.customer?.email || '').toLowerCase();
+      const svc = getServiceName(b.service_id).toLowerCase();
+      const staff = getResourceName(b).toLowerCase();
+      const ref = (b.booking_reference || b.booking_id).toLowerCase();
+      return (
+        cust.includes(term) ||
+        phone.includes(term) ||
+        email.includes(term) ||
+        svc.includes(term) ||
+        staff.includes(term) ||
+        ref.includes(term)
+      );
+    });
+  }, [drawerBookings, drawerSearch, services, resources]);
+
+  const formatDrawerDate = (dateStr: string) => {
+    try {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const date = new Date(y, m - 1, d);
+      return date.toLocaleDateString(undefined, {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const getStatusBadgeStyle = (status: string) => {
+    switch (status) {
+      case 'confirmed':
+        return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+      case 'pending':
+        return 'bg-amber-50 text-amber-800 border-amber-200';
+      case 'completed':
+        return 'bg-blue-50 text-blue-800 border-blue-200';
+      case 'cancelled':
+        return 'bg-rose-50 text-rose-700 border-rose-200 line-through';
+      default:
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
+
+  const getStatusCardStyle = (status: string) => {
+    switch (status) {
+      case 'confirmed':
+        return 'bg-emerald-50/20 border-emerald-200/60 hover:border-emerald-300';
+      case 'pending':
+        return 'bg-amber-50/20 border-amber-200/60 hover:border-amber-300';
+      case 'completed':
+        return 'bg-blue-50/20 border-blue-200/60 hover:border-blue-300';
+      case 'cancelled':
+        return 'bg-slate-50/60 border-slate-200/60 opacity-60';
+      default:
+        return 'bg-white border-slate-200 hover:border-slate-300';
+    }
+  };
+
   const getStatusStyle = (status: string) => {
     switch (status) {
       case 'confirmed':
@@ -351,7 +445,14 @@ export function BookingsCalendarView({
             return (
               <div
                 key={cell.dateStr}
+                onClick={() => {
+                  if (dayBookings.length > 0) {
+                    setSelectedDateForDrawer(cell.dateStr);
+                  }
+                }}
                 className={`min-h-[110px] sm:min-h-[125px] p-2 rounded-2xl border transition-all flex flex-col justify-between group ${
+                  dayBookings.length > 0 ? 'cursor-pointer' : ''
+                } ${
                   cell.isToday
                     ? 'bg-slate-50 border-slate-900/30 ring-1 ring-slate-900/10'
                     : cell.isCurrentMonth
@@ -377,7 +478,10 @@ export function BookingsCalendarView({
                     <button
                       type="button"
                       title="New Booking on this date"
-                      onClick={() => onNewBookingForDate(cell.dateStr)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onNewBookingForDate(cell.dateStr);
+                      }}
                       className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-md transition cursor-pointer"
                     >
                       <Plus className="w-3 h-3" />
@@ -416,12 +520,16 @@ export function BookingsCalendarView({
                   })}
 
                   {dayBookings.length > 3 && (
-                    <div
-                      onClick={() => onSelectBooking(dayBookings[3])}
-                      className="text-[10px] font-bold text-slate-500 hover:text-slate-900 p-1 text-center bg-slate-100/70 hover:bg-slate-200/60 rounded-md cursor-pointer transition"
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedDateForDrawer(cell.dateStr);
+                      }}
+                      className="text-[10px] font-bold text-slate-600 hover:text-slate-900 p-1 text-center bg-slate-100 hover:bg-slate-200/80 rounded-md cursor-pointer transition w-full"
                     >
                       +{dayBookings.length - 3} more
-                    </div>
+                    </button>
                   )}
                 </div>
               </div>
@@ -444,7 +552,11 @@ export function BookingsCalendarView({
                 }`}
               >
                 {/* Header */}
-                <div className="flex flex-col items-center justify-center pb-2 border-b border-slate-100">
+                <div
+                  className="flex flex-col items-center justify-center pb-2 border-b border-slate-100 cursor-pointer group/col hover:bg-slate-50/80 rounded-xl transition"
+                  onClick={() => setSelectedDateForDrawer(col.dateStr)}
+                  title="View full day timeline"
+                >
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                     {col.dayName}
                   </span>
@@ -455,7 +567,7 @@ export function BookingsCalendarView({
                   >
                     {col.dayNum}
                   </span>
-                  <span className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                  <span className="text-[10px] text-slate-500 font-semibold mt-0.5 group-hover/col:text-slate-900 transition">
                     {dayBookings.length} {dayBookings.length === 1 ? 'session' : 'sessions'}
                   </span>
                 </div>
@@ -532,6 +644,166 @@ export function BookingsCalendarView({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Day Schedule Slide-Over Drawer (Option A - Shadcn Sheet Architecture) */}
+      {selectedDateForDrawer && (
+        <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+            onClick={() => setSelectedDateForDrawer(null)}
+          />
+
+          {/* Drawer Panel */}
+          <div className="relative w-full max-w-md sm:max-w-lg bg-white shadow-2xl flex flex-col h-full z-10 animate-in slide-in-from-right duration-300 font-sans">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 flex items-start justify-between bg-slate-50/70">
+              <div>
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="w-4 h-4 text-slate-700" />
+                  <h3 className="text-base font-bold text-slate-900">
+                    {formatDrawerDate(selectedDateForDrawer)}
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-200/80 text-slate-800 text-[11px] font-bold">
+                    {drawerBookings.length} {drawerBookings.length === 1 ? 'Appointment' : 'Appointments'}
+                  </span>
+                  {selectedDateForDrawer === todayStr && (
+                    <span className="px-2 py-0.5 rounded-full bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wider">
+                      Today
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {onNewBookingForDate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onNewBookingForDate(selectedDateForDrawer);
+                    }}
+                    className="px-3 py-1.5 bg-slate-950 hover:bg-black text-white rounded-full text-xs font-semibold flex items-center gap-1 shadow-xs transition active:scale-95 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>New Booking</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedDateForDrawer(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-full transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* In-Drawer Search Filter (if > 4 bookings) */}
+            {drawerBookings.length > 4 && (
+              <div className="p-3 border-b border-slate-100 bg-white">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Filter by customer, staff, or service..."
+                    value={drawerSearch}
+                    onChange={(e) => setDrawerSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200/90 rounded-full focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Drawer Body (Timeline List) */}
+            <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-3">
+              {filteredDrawerBookings.length === 0 ? (
+                <div className="py-16 text-center text-slate-400 text-xs">
+                  {drawerSearch ? 'No appointments match your search' : 'No appointments scheduled for this date.'}
+                </div>
+              ) : (
+                filteredDrawerBookings.map((b) => {
+                  const time = formatSlotTime(b.start_time);
+                  const endTime = b.end_time ? formatSlotTime(b.end_time) : '';
+                  const svc = getServiceName(b.service_id);
+                  const staff = getResourceName(b);
+                  const cust = b.customer?.name || 'Customer';
+                  const phone = b.customer?.phone || '';
+                  const isCancelled = b.status === 'cancelled';
+                  const isCompleted = b.status === 'completed';
+                  const canModify = !isCancelled && !isCompleted;
+
+                  return (
+                    <div
+                      key={b.booking_id}
+                      onClick={() => {
+                        onSelectBooking(b);
+                      }}
+                      className={`p-4 rounded-2xl border transition-all hover:shadow-xs cursor-pointer flex flex-col gap-2.5 ${getStatusCardStyle(
+                        b.status,
+                      )}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900">
+                          <Clock className="w-3.5 h-3.5 text-slate-500" />
+                          <span>
+                            {time}
+                            {endTime ? ` – ${endTime}` : ''}
+                          </span>
+                        </div>
+                        <span
+                          className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${getStatusBadgeStyle(
+                            b.status,
+                          )}`}
+                        >
+                          {b.status}
+                        </span>
+                      </div>
+
+                      <div>
+                        <div className="font-bold text-sm text-slate-900">{cust}</div>
+                        <div className="text-xs text-slate-600 font-medium">{svc}</div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-slate-600">Staff: {staff}</span>
+                          {phone && (
+                            <span className="text-slate-400 font-mono text-[11px]">• {phone}</span>
+                          )}
+                        </div>
+
+                        {canModify && (
+                          <div
+                            className="flex items-center gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => onReschedule(b)}
+                              className="px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 rounded-md transition cursor-pointer"
+                            >
+                              Reschedule
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onCancel(b)}
+                              className="px-2 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-50 rounded-md transition cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

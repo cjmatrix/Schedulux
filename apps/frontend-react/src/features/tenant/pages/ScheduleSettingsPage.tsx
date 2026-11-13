@@ -1,6 +1,5 @@
 import {
   AlertCircle,
-  Bot,
   Calendar,
   CheckCircle2,
   Clock,
@@ -236,13 +235,18 @@ export default function ScheduleSettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 p-6">
+    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-8 font-sans">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Schedule & Availability Settings
-          </h1>
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              Schedule &amp; Availability Settings
+            </h1>
+          </div>
           <p className="mt-1 text-sm text-slate-500">
             Configure global operating hours, blackout dates, scheduling constraints, and security
             policies for your agent.
@@ -252,9 +256,12 @@ export default function ScheduleSettingsPage() {
         {/* Agent Info & Save CTA */}
         <div className="flex items-center gap-3">
           {effectiveAgentId && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200">
-              <Bot className="w-3.5 h-3.5 text-slate-800" />
-              <span>{currentAgent?.name || effectiveAgentId}</span>
+            <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200/80 text-xs">
+              <span className="font-semibold text-slate-700">{currentAgent?.name || effectiveAgentId}</span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live
+              </span>
             </div>
           )}
 
@@ -262,12 +269,12 @@ export default function ScheduleSettingsPage() {
             type="button"
             onClick={handleSave}
             disabled={updateMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs transition cursor-pointer disabled:opacity-50"
           >
             {updateMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Save className="h-4 w-4" />
+              <Save className="h-3.5 w-3.5" />
             )}
             Save Changes
           </button>

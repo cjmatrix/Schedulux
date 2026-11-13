@@ -461,9 +461,9 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
         </div>
 
         {/* Title & Actions Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
               {isCreateMode ? 'Create New Resource' : `Edit Profile: ${name || 'Resource'}`}
             </h1>
           </div>

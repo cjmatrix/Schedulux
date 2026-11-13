@@ -86,14 +86,14 @@ export default function ServicesListPage() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6 font-sans text-slate-800">
+    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-8 font-sans text-slate-800">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 tracking-wide">
         {isManager ? (
           <>
             <span>Operations</span>
             <span>/</span>
-            <span className="text-slate-800 font-bold">Services & Pricing</span>
+            <span className="text-slate-800 font-bold">Services &amp; Pricing</span>
           </>
         ) : agentId ? (
           <>
@@ -118,26 +118,28 @@ export default function ServicesListPage() {
           <>
             <span>Dashboard</span>
             <span>/</span>
-            <span className="text-slate-800 font-bold">Services & Pricing</span>
+            <span className="text-slate-800 font-bold">Services &amp; Pricing</span>
           </>
         )}
       </div>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
         <div>
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
-              <Tag className="w-8 h-8 text-neutral-900" />
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+              <Tag className="w-5 h-5" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
               {agentId || (isManager && effectiveAgentId)
                 ? 'Agent Services & Pricing'
                 : 'Services & Pricing Catalog'}
             </h1>
-            <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-0.5 rounded-full font-bold">
+            <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
               {totalCount} Total
             </span>
           </div>
-          <p className="text-sm text-slate-500">
+          <p className="mt-1 text-sm text-slate-500">
             {agentId || (isManager && effectiveAgentId)
               ? `Configure execution durations, fees, and rules for AI agent: ${effectiveAgentId}`
               : 'Configure execution durations, fee schedules, OTP verification, and multi-resource allocation rules.'}
@@ -148,10 +150,10 @@ export default function ServicesListPage() {
           <button
             onClick={() => refetch()}
             disabled={isRefetching}
-            className="p-2.5 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition cursor-pointer disabled:opacity-50"
+            className="p-2 border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 rounded-xl transition cursor-pointer disabled:opacity-50 shadow-2xs"
             title="Refresh Services"
           >
-            <RefreshCw className={`w-4 h-4 ${isRefetching ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-indigo-600' : ''}`} />
           </button>
           <button
             onClick={() => {

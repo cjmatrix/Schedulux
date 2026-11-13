@@ -273,6 +273,8 @@ let KnowledgeController = class KnowledgeController {
             sessionId = session.sessionId;
             token = session.token;
         }
+        const tier = this._getTenantTier(req);
+        const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
         const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.customerChat({
             tenant_id: tenantId,
             agent_id: agentId,
@@ -282,7 +284,7 @@ let KnowledgeController = class KnowledgeController {
             customer_phone: body.customer_phone || '',
             customer_name: body.customer_name || 'Sandbox Tester',
             mode: 'sandbox',
-        }));
+        }, metadata));
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.SANDBOX_CHAT_PROCESSED,
             data: {

@@ -27,7 +27,7 @@ export class ListBookingsUseCase implements IListBookingsUseCase {
     const tenantId = dto.tenant_id.trim();
 
     const page = Math.max(1, dto.page || 1);
-    const limit = Math.min(100, Math.max(1, dto.limit || 20));
+    const limit = Math.min(1000, Math.max(1, dto.limit || 20));
 
     let startDate: Date | undefined;
     if (dto.start_date) {

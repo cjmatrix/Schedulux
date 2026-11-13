@@ -390,17 +390,23 @@ export class KnowledgeController implements OnModuleInit {
       token = session.token;
     }
 
+    const tier = this._getTenantTier(req);
+    const metadata = createTenantGrpcMetadata(tenantId, tier);
+
     const response = await lastValueFrom(
-      this._knowledgeService.customerChat({
-        tenant_id: tenantId,
-        agent_id: agentId,
-        session_id: sessionId,
-        message: body.message,
-        customer_id: body.customer_id || '',
-        customer_phone: body.customer_phone || '',
-        customer_name: body.customer_name || 'Sandbox Tester',
-        mode: 'sandbox',
-      }),
+      this._knowledgeService.customerChat(
+        {
+          tenant_id: tenantId,
+          agent_id: agentId,
+          session_id: sessionId,
+          message: body.message,
+          customer_id: body.customer_id || '',
+          customer_phone: body.customer_phone || '',
+          customer_name: body.customer_name || 'Sandbox Tester',
+          mode: 'sandbox',
+        },
+        metadata,
+      ),
     );
 
     return {

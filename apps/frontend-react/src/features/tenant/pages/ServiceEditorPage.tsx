@@ -396,9 +396,9 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
         )}
 
         {/* Header Bar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
           <div>
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
               {isCreateMode ? 'Create New Service' : `Edit Service: ${name || 'Untitled Service'}`}
             </h1>
             <div className="flex items-center gap-2.5 mt-2">

@@ -234,8 +234,9 @@ class MemoryVectorStore(Protocol):
         self,
         query_vector: list[float],
         tenant_id: str,
-        agent_id: str | None,
-        limit: int,
+        agent_id: str | None = None,
+        limit: int = 4,
+        score_threshold: float | None = 0.45,
     ) -> list[str]: ...
 
 

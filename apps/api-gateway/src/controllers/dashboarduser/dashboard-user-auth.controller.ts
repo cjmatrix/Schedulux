@@ -23,6 +23,7 @@ import { API_ROUTES } from '../../constants/routes.constant.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
 import {
   getAccessTokenCookieOptions,
+  getClearCookieOptions,
   getRefreshTokenCookieOptions,
 } from '../../utils/cookie.util.js';
 import {
@@ -49,6 +50,10 @@ export class DashboardUserAuthController implements OnModuleInit {
   async Login(@Body() data: DashboardUserLoginDto, @Res({ passthrough: true }) res: Response) {
     const response = await lastValueFrom(this._dashboardUserAuthClient.login(data));
 
+    // Clear any existing tenant cookies to prevent session collision on shared origins
+    res.clearCookie(COOKIE_NAMES.TENANT_ACCESS_TOKEN, getClearCookieOptions());
+    res.clearCookie(COOKIE_NAMES.TENANT_REFRESH_TOKEN, getClearCookieOptions());
+
     res.cookie(COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN, response.access_token, getAccessTokenCookieOptions());
     res.cookie(
       COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN,
@@ -59,6 +64,16 @@ export class DashboardUserAuthController implements OnModuleInit {
     return {
       message: response.message || RESPONSE_MESSAGES.AUTH.DASHBOARD_USER_LOGGED_IN,
       data: response.user,
+    };
+  }
+
+  @Post(API_ROUTES.DASHBOARD_USER.AUTH.LOGOUT)
+  async logout(@Res({ passthrough: true }) res: Response) {
+    res.clearCookie(COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN, getClearCookieOptions());
+    res.clearCookie(COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN, getClearCookieOptions());
+    return {
+      message: RESPONSE_MESSAGES.AUTH.LOGGED_OUT,
+      data: null,
     };
   }
 

@@ -22,6 +22,7 @@ export const RESPONSE_MESSAGES = {
     SUCCESS: 'successfull',
     TENANT_SUSPENDED: 'Tenant suspended successfully',
     WORKSPACE_USERS_RETRIEVED: 'Workspace users retrieved successfully',
+    WORKSPACE_USER_STATUS_UPDATED: 'Workspace user status updated successfully',
     DASHBOARD_OVERVIEW_RETRIEVED: 'Tenant dashboard overview retrieved successfully',
   },
   SCHEDULING: {
@@ -59,6 +60,10 @@ export const RESPONSE_MESSAGES = {
     REVENUE_CHART_RETRIEVED: 'Revenue chart data retrieved successfully',
     TOKEN_CHART_RETRIEVED: 'Token chart data retrieved successfully',
     TOP_TENANTS_RETRIEVED: 'Top tenants data retrieved successfully',
+  },
+  TIER_CONFIG: {
+    LIST_RETRIEVED: 'Tier configurations retrieved successfully',
+    UPDATED: 'Tier configuration updated successfully',
   },
   ERROR: {
     INTERNAL_SERVER_ERROR: 'Internal Server Error',

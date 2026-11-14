@@ -2,10 +2,20 @@ import { Controller, Inject, UseFilters } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import { SuperAdminProto } from '@repo/proto';
 import {
+  GetTenantByIdRequest,
+  GetTenantByIdResponse,
   ListTenantsRequest,
   ListTenantsResponse,
   SuspendTenantRequest,
 } from '@repo/proto/tenant';
+import {
+  GetTierConfigRequest,
+  GetTierConfigResponse,
+  ListTierConfigsRequest,
+  ListTierConfigsResponse,
+  UpdateTierConfigRequest,
+  UpdateTierConfigResponse,
+} from '@repo/proto/superadmin';
 import { GRPC_METHODS, GRPC_SERVICES } from '../constants/grpc.constant.js';
 import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
 import type { ISuperAdminService } from '../interfaces/ISuperAdminService.js';
@@ -82,6 +92,12 @@ export class SuperAdminAuthController {
     return lists;
   }
 
+  @GrpcMethod(GRPC_SERVICES.TENANT, GRPC_METHODS.TENANT.GET_TENANT_BY_ID)
+  async getTenantById(data: GetTenantByIdRequest): Promise<GetTenantByIdResponse> {
+    if (!data.tenant_id) throw new Error(RESPONSE_MESSAGES.ERRORS.TENANT_ID_REQUIRED);
+    return this._superAdminService.getTenantById(data.tenant_id);
+  }
+
   @GrpcMethod(GRPC_SERVICES.TENANT, GRPC_METHODS.TENANT.SUSPEND_TENANT)
   async suspendTenant(data: SuspendTenantRequest) {
     if (!data.tenant_id) throw new Error(RESPONSE_MESSAGES.ERRORS.TENANT_ID_REQUIRED);
@@ -114,6 +130,28 @@ export class SuperAdminAuthController {
         amount: p.amount,
         transaction_count: p.transactionCount,
       })),
+    };
+  }
+
+  @GrpcMethod(GRPC_SERVICES.SUPERADMIN_TIER_CONFIG, GRPC_METHODS.SUPERADMIN_TIER_CONFIG.LIST_TIER_CONFIGS)
+  async listTierConfigs(_data: ListTierConfigsRequest): Promise<ListTierConfigsResponse> {
+    const configs = await this._superAdminService.listTierConfigs();
+    return { configs };
+  }
+
+  @GrpcMethod(GRPC_SERVICES.SUPERADMIN_TIER_CONFIG, GRPC_METHODS.SUPERADMIN_TIER_CONFIG.GET_TIER_CONFIG)
+  async getTierConfig(data: GetTierConfigRequest): Promise<GetTierConfigResponse> {
+    const config = await this._superAdminService.getTierConfig(data.tier);
+    return { config };
+  }
+
+  @GrpcMethod(GRPC_SERVICES.SUPERADMIN_TIER_CONFIG, GRPC_METHODS.SUPERADMIN_TIER_CONFIG.UPDATE_TIER_CONFIG)
+  async updateTierConfig(data: UpdateTierConfigRequest): Promise<UpdateTierConfigResponse> {
+    const updated = await this._superAdminService.updateTierConfig(data.tier, data);
+    return {
+      success: true,
+      message: 'Tier configuration updated successfully',
+      config: updated,
     };
   }
 }

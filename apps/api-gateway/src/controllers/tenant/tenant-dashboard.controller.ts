@@ -20,7 +20,6 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { catchError, lastValueFrom, of } from 'rxjs';
 import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
 import { API_ROUTES } from '../../constants/routes.constant.js';
-import { STATIC_TIER_CONFIGS } from '../../constants/tiers.constant.js';
 import { Roles } from '../../decorators/roles.decorator.js';
 import { RolesGuard } from '../../guards/roles.guard.js';
 import {
@@ -65,7 +64,7 @@ export class TenantDashboardController implements OnModuleInit {
     }
 
     const tier = (req.tenant?.tier || req.dashboardUser?.tier || 'starter').toLowerCase();
-    const tierConfig = STATIC_TIER_CONFIGS[tier] || STATIC_TIER_CONFIGS.starter;
+    const tierConfig = await this._redisService.getCachedTierConfig(tier);
 
     const agentsRes = await lastValueFrom(
       this._knowledgeService
@@ -78,9 +77,23 @@ export class TenantDashboardController implements OnModuleInit {
         ),
     );
 
-    const agentsList = agentsRes?.agents || [];
-    const targetAgentId =
-      req.dashboardUser?.agent_id || query.agent_id || agentsList[0]?.agent_id;
+    const rawAgentsList = agentsRes?.agents || [];
+    const agentsList =
+      req.dashboardUser?.agent_ids && req.dashboardUser.agent_ids.length > 0
+        ? rawAgentsList.filter((a) => req.dashboardUser!.agent_ids!.includes(a.agent_id))
+        : rawAgentsList;
+
+    let targetAgentId = query.agent_id;
+    if (req.dashboardUser) {
+      const allowedAgentIds =
+        req.dashboardUser.agent_ids ||
+        (req.dashboardUser.agent_id ? [req.dashboardUser.agent_id] : []);
+      if (!targetAgentId || !allowedAgentIds.includes(targetAgentId)) {
+        targetAgentId = req.dashboardUser.agent_id || allowedAgentIds[0];
+      }
+    } else if (!targetAgentId) {
+      targetAgentId = agentsList[0]?.agent_id;
+    }
 
     const activeAgent =
       agentsList.find((a) => a.agent_id === targetAgentId) ||

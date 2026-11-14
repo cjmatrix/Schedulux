@@ -17,6 +17,7 @@ const scheduling_controller_js_1 = require("./controllers/scheduling/scheduling.
 const superadmin_controller_js_1 = require("./controllers/superadmin/superadmin.controller.js");
 const superadmin_dashboard_controller_js_1 = require("./controllers/superadmin/superadmin-dashboard.controller.js");
 const superadmin_tenant_controller_js_1 = require("./controllers/superadmin/superadmin-tenant.controller.js");
+const superadmin_tier_config_controller_js_1 = require("./controllers/superadmin/superadmin-tier-config.controller.js");
 const tenant_controller_js_1 = require("./controllers/tenant/tenant.controller.js");
 const tenant_dashboard_controller_js_1 = require("./controllers/tenant/tenant-dashboard.controller.js");
 const paddle_webhook_guard_js_1 = require("./guards/paddle-webhook.guard.js");
@@ -128,6 +129,7 @@ exports.AppModule = AppModule = __decorate([
             superadmin_controller_js_1.SuperAdminController,
             superadmin_dashboard_controller_js_1.SuperAdminDashboardController,
             superadmin_tenant_controller_js_1.SuperAdminTenantController,
+            superadmin_tier_config_controller_js_1.SuperAdminTierConfigController,
             dashboard_user_auth_controller_js_1.DashboardUserAuthController,
             knowledge_controller_js_1.KnowledgeController,
             scheduling_controller_js_1.SchedulingController,

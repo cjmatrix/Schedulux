@@ -42,6 +42,7 @@ function TenantServiceControllerMethods() {
     return function (constructor) {
         const grpcMethods = [
             "listTenants",
+            "getTenantById",
             "suspendTenant",
             "updateTenantSubscription",
             "getTenantBillingInfo",

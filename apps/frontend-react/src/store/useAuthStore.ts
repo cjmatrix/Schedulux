@@ -4,6 +4,7 @@ import { create } from 'zustand';
 export interface UserData {
   tenant_id: string;
   agent_id?: string;
+  agent_ids?: string[];
   business_name?: string;
   contact_email?: string;
   email?: string;

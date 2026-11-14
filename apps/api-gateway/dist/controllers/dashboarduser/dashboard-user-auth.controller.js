@@ -33,11 +33,22 @@ let DashboardUserAuthController = class DashboardUserAuthController {
     }
     async Login(data, res) {
         const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserAuthClient.login(data));
+        // Clear any existing tenant cookies to prevent session collision on shared origins
+        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.TENANT_ACCESS_TOKEN, (0, cookie_util_js_1.getClearCookieOptions)());
+        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.TENANT_REFRESH_TOKEN, (0, cookie_util_js_1.getClearCookieOptions)());
         res.cookie(cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN, response.access_token, (0, cookie_util_js_1.getAccessTokenCookieOptions)());
         res.cookie(cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN, response.refresh_token, (0, cookie_util_js_1.getRefreshTokenCookieOptions)());
         return {
             message: response.message || messages_constant_js_1.RESPONSE_MESSAGES.AUTH.DASHBOARD_USER_LOGGED_IN,
             data: response.user,
+        };
+    }
+    async logout(res) {
+        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN, (0, cookie_util_js_1.getClearCookieOptions)());
+        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN, (0, cookie_util_js_1.getClearCookieOptions)());
+        return {
+            message: messages_constant_js_1.RESPONSE_MESSAGES.AUTH.LOGGED_OUT,
+            data: null,
         };
     }
     async refreshToken(req, body, res) {
@@ -111,6 +122,13 @@ __decorate([
     __metadata("design:paramtypes", [dashboard_user_dto_js_1.DashboardUserLoginDto, Object]),
     __metadata("design:returntype", Promise)
 ], DashboardUserAuthController.prototype, "Login", null);
+__decorate([
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.DASHBOARD_USER.AUTH.LOGOUT),
+    __param(0, (0, common_1.Res)({ passthrough: true })),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], DashboardUserAuthController.prototype, "logout", null);
 __decorate([
     (0, common_1.Post)(routes_constant_js_1.API_ROUTES.DASHBOARD_USER.AUTH.REFRESH_TOKEN),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),

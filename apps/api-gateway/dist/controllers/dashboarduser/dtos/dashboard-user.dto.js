@@ -6,6 +6,7 @@ const zod_1 = require("zod");
 exports.DashboardUserLoginSchema = zod_1.z.object({
     email: zod_1.z.string().trim().email('Please provide a valid email address'),
     password: zod_1.z.string().min(1, 'Password is required'),
+    agent_id: zod_1.z.string().optional(),
 });
 class DashboardUserLoginDto extends (0, nestjs_zod_1.createZodDto)(exports.DashboardUserLoginSchema) {
 }

@@ -5,6 +5,7 @@ import { z } from 'zod';
 export const DashboardUserLoginSchema: z.ZodType<DashboardUserLoginRequest> = z.object({
   email: z.string().trim().email('Please provide a valid email address'),
   password: z.string().min(1, 'Password is required'),
+  agent_id: z.string().optional(),
 });
 
 export class DashboardUserLoginDto extends createZodDto(DashboardUserLoginSchema) {}

@@ -15,11 +15,13 @@ service DashboardAuthService {
 service DashboardUserService {
   rpc InviteUser (InviteUserRequest) returns (InviteUserResponse);
   rpc ListWorkspaceUsers (ListWorkspaceUsersRequest) returns (ListWorkspaceUsersResponse);
+  rpc SuspendWorkspaceUser (SuspendWorkspaceUserRequest) returns (SuspendWorkspaceUserResponse);
 }
 
 message DashboardUserLoginRequest {
   string email = 1;
   string password = 2;
+  optional string agent_id = 3;
 }
 
 message DashboardUserLoginResponse {
@@ -101,6 +103,7 @@ message InviteUserResponse {
   string name = 4;
   string system_role = 5;
   string agent_id = 6;
+  repeated string agent_ids = 7;
 }
 
 message WorkspaceUserInfo {
@@ -111,6 +114,8 @@ message WorkspaceUserInfo {
   string system_role = 5;
   string created_at = 6;
   string agent_id = 7;
+  optional string status = 8;
+  repeated string agent_ids = 9;
 }
 
 message ListWorkspaceUsersRequest {
@@ -119,9 +124,20 @@ message ListWorkspaceUsersRequest {
   optional int32 limit = 3;
   optional string search = 4;
   optional string role = 5;
+  optional string agent_id = 6;
 }
 
 message ListWorkspaceUsersResponse {
   repeated WorkspaceUserInfo users = 1;
   int32 total_count = 2;
+}
+
+message SuspendWorkspaceUserRequest {
+  string tenant_id = 1;
+  string user_id = 2;
+}
+
+message SuspendWorkspaceUserResponse {
+  string message = 1;
+  WorkspaceUserInfo user = 2;
 }

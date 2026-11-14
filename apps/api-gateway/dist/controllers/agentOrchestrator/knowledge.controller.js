@@ -18,20 +18,22 @@ const nestjs_zod_1 = require("nestjs-zod");
 const rxjs_1 = require("rxjs");
 const messages_constant_js_1 = require("../../constants/messages.constant.js");
 const routes_constant_js_1 = require("../../constants/routes.constant.js");
-const tiers_constant_js_1 = require("../../constants/tiers.constant.js");
 const roles_decorator_js_1 = require("../../decorators/roles.decorator.js");
 const roles_guard_js_1 = require("../../guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
+const redis_service_js_1 = require("../../services/redis.service.js");
 const knowledge_dto_js_1 = require("./dtos/knowledge.dto.js");
 const session_token_util_js_1 = require("../../utils/session-token.util.js");
 const grpc_metadata_util_js_1 = require("../../utils/grpc-metadata.util.js");
 let KnowledgeController = class KnowledgeController {
     _client;
     _schemaCacheService;
+    _redisService;
     _knowledgeService;
-    constructor(_client, _schemaCacheService) {
+    constructor(_client, _schemaCacheService, _redisService) {
         this._client = _client;
         this._schemaCacheService = _schemaCacheService;
+        this._redisService = _redisService;
     }
     onModuleInit() {
         this._knowledgeService = this._client.getService('KnowledgeService');
@@ -324,9 +326,13 @@ let KnowledgeController = class KnowledgeController {
         const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.listTenantAgents({
             tenant_id: tenantId,
         }));
+        let agents = response.agents || [];
+        if (req.dashboardUser?.agent_ids && req.dashboardUser.agent_ids.length > 0) {
+            agents = agents.filter((a) => req.dashboardUser.agent_ids.includes(a.agent_id));
+        }
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.AGENTS_RETRIEVED,
-            data: response.agents || [],
+            data: agents,
         };
     }
     async getAgentMessages(req, agentId, query) {
@@ -366,7 +372,7 @@ let KnowledgeController = class KnowledgeController {
     async getDocumentUploadUrl(req, body) {
         const tenantId = this._getTenantId(req);
         const tenantTier = this._getTenantTier(req);
-        const tierConfig = (0, tiers_constant_js_1.getTierConfig)(tenantTier);
+        const tierConfig = await this._redisService.getCachedTierConfig(tenantTier);
         if (body.file_size_bytes && body.file_size_bytes > 0) {
             const maxAllowedBytes = tierConfig.max_kb_doc_size_mb * 1024 * 1024;
             if (body.file_size_bytes > maxAllowedBytes) {
@@ -663,5 +669,6 @@ exports.KnowledgeController = KnowledgeController = __decorate([
     (0, roles_decorator_js_1.Roles)('tenant_owner'),
     __param(0, (0, common_1.Inject)('KNOWLEDGE_PACKAGE')),
     __param(1, (0, common_1.Inject)('ISchemaCacheService')),
-    __metadata("design:paramtypes", [Object, Object])
+    __param(2, (0, common_1.Inject)(redis_service_js_1.RedisService)),
+    __metadata("design:paramtypes", [Object, Object, redis_service_js_1.RedisService])
 ], KnowledgeController);

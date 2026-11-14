@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ApiResponse } from '../../../api/axiosClient';
 import { useAuthStore } from '../../../store/useAuthStore';
-import { type DashboardUserInfo, dashboardUserAuthApi } from '../../dashboard-user/api/authApi';
 import type {
   LoginTenantPayload,
   RegisterTenantData,
@@ -64,49 +63,12 @@ export function useTenantProfile(enabled: boolean = true) {
   });
 }
 
-export function useDashboardLogin() {
-  const queryClient = useQueryClient();
-  const authLogin = useAuthStore((state) => state.login);
-
-  return useMutation<ApiResponse<DashboardUserInfo>, Error, LoginTenantPayload>({
-    mutationFn: (payload: LoginTenantPayload) => dashboardUserAuthApi.login(payload),
-    onSuccess: (res) => {
-      queryClient.setQueryData(['currentDashboardUser'], res.data);
-      if (res?.data) {
-        authLogin(res.data);
-      }
-    },
-  });
-}
-
-export function useDashboardProfile(enabled: boolean = true) {
-  const authLogin = useAuthStore((state) => state.login);
-
-  return useQuery<ApiResponse<DashboardUserInfo>, Error>({
-    queryKey: ['currentDashboardUser'],
-    queryFn: async () => {
-      const res = await dashboardUserAuthApi.getProfile();
-      if (res?.data) {
-        authLogin(res.data);
-      }
-      return res;
-    },
-    enabled,
-    retry: false,
-    staleTime: 5 * 60 * 1000,
-  });
-}
-
-export function useAcceptInvitation() {
-  const queryClient = useQueryClient();
-
-  return useMutation<ApiResponse<DashboardUserInfo>, Error, { token: string; password: string }>({
-    mutationFn: (payload) => dashboardUserAuthApi.acceptInvitation(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['currentDashboardUser'] });
-    },
-  });
-}
+export {
+  useDashboardLogin,
+  useDashboardProfile,
+  useAcceptInvitation,
+  useDashboardLogout,
+} from '../../dashboard-user/hooks/useDashboardAuth';
 
 export function useVerifyEmail() {
   const queryClient = useQueryClient();

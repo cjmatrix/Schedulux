@@ -4,6 +4,7 @@ export declare const protobufPackage = "dashboard";
 export interface DashboardUserLoginRequest {
     email: string;
     password: string;
+    agent_id?: string | undefined;
 }
 export interface DashboardUserLoginResponse {
     message: string;
@@ -70,6 +71,7 @@ export interface InviteUserResponse {
     name: string;
     system_role: string;
     agent_id: string;
+    agent_ids: string[];
 }
 export interface WorkspaceUserInfo {
     user_id: string;
@@ -79,6 +81,8 @@ export interface WorkspaceUserInfo {
     system_role: string;
     created_at: string;
     agent_id: string;
+    status?: string | undefined;
+    agent_ids: string[];
 }
 export interface ListWorkspaceUsersRequest {
     tenant_id: string;
@@ -86,10 +90,19 @@ export interface ListWorkspaceUsersRequest {
     limit?: number | undefined;
     search?: string | undefined;
     role?: string | undefined;
+    agent_id?: string | undefined;
 }
 export interface ListWorkspaceUsersResponse {
     users: WorkspaceUserInfo[];
     total_count: number;
+}
+export interface SuspendWorkspaceUserRequest {
+    tenant_id: string;
+    user_id: string;
+}
+export interface SuspendWorkspaceUserResponse {
+    message: string;
+    user: WorkspaceUserInfo | undefined;
 }
 export declare const DASHBOARD_PACKAGE_NAME = "dashboard";
 export interface DashboardAuthServiceClient {
@@ -115,10 +128,12 @@ export declare const DASHBOARD_AUTH_SERVICE_NAME = "DashboardAuthService";
 export interface DashboardUserServiceClient {
     inviteUser(request: InviteUserRequest, metadata?: Metadata): Observable<InviteUserResponse>;
     listWorkspaceUsers(request: ListWorkspaceUsersRequest, metadata?: Metadata): Observable<ListWorkspaceUsersResponse>;
+    suspendWorkspaceUser(request: SuspendWorkspaceUserRequest, metadata?: Metadata): Observable<SuspendWorkspaceUserResponse>;
 }
 export interface DashboardUserServiceController {
     inviteUser(request: InviteUserRequest, metadata?: Metadata): Promise<InviteUserResponse> | Observable<InviteUserResponse> | InviteUserResponse;
     listWorkspaceUsers(request: ListWorkspaceUsersRequest, metadata?: Metadata): Promise<ListWorkspaceUsersResponse> | Observable<ListWorkspaceUsersResponse> | ListWorkspaceUsersResponse;
+    suspendWorkspaceUser(request: SuspendWorkspaceUserRequest, metadata?: Metadata): Promise<SuspendWorkspaceUserResponse> | Observable<SuspendWorkspaceUserResponse> | SuspendWorkspaceUserResponse;
 }
 export declare function DashboardUserServiceControllerMethods(): (constructor: Function) => void;
 export declare const DASHBOARD_USER_SERVICE_NAME = "DashboardUserService";

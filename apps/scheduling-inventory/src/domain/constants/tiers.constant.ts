@@ -9,6 +9,7 @@ export interface TierConfig {
   weekly_token_limit: number;
   rate_limit_rpm: number;
   status: 'active' | 'deprecated' | 'inactive';
+  description?: string;
 }
 
 export const STATIC_TIER_CONFIGS: Record<string, TierConfig> = {
@@ -80,5 +81,35 @@ export function getTierConfig(tier?: string | null): TierConfig {
   if (!tier) return STATIC_TIER_CONFIGS.starter;
   const normalized = tier.trim().toLowerCase();
   return STATIC_TIER_CONFIGS[normalized] || STATIC_TIER_CONFIGS.starter;
+}
+
+export async function resolveTierConfigWithCache(
+  cacheRepo: { get: (key: string) => Promise<string | null> },
+  tier?: string | null,
+): Promise<TierConfig> {
+  const fallback = getTierConfig(tier);
+  if (!tier || !cacheRepo) return fallback;
+  try {
+    const raw = await cacheRepo.get(`tier_config:${tier.trim().toLowerCase()}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        tier: String(parsed.tier || fallback.tier),
+        name: String(parsed.name || fallback.name),
+        max_agents: Number(parsed.max_agents ?? fallback.max_agents),
+        max_services: Number(parsed.max_services ?? fallback.max_services),
+        max_resources: Number(parsed.max_resources ?? fallback.max_resources),
+        max_kb_docs: Number(parsed.max_kb_docs ?? fallback.max_kb_docs),
+        max_kb_doc_size_mb: Number(parsed.max_kb_doc_size_mb ?? fallback.max_kb_doc_size_mb),
+        weekly_token_limit: Number(parsed.weekly_token_limit ?? fallback.weekly_token_limit),
+        rate_limit_rpm: Number(parsed.rate_limit_rpm ?? fallback.rate_limit_rpm),
+        status: (parsed.status || fallback.status) as TierConfig['status'],
+        description: parsed.description || fallback.description,
+      };
+    }
+  } catch {
+   
+  }
+  return fallback;
 }
 

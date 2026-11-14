@@ -14,12 +14,14 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { nanoid } from 'nanoid';
 import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
+import { DEFAULT_TIER, STATIC_TIER_CONFIGS } from '../constants/tiers.constant.js';
 import { BillingLedgerModel } from '../model/BillingLedger.js';
 import { Tenent } from '../model/Tenent.js';
 let SuperAdminService = class SuperAdminService {
     _superAdminRepo;
     _cacheRepo;
     _tenantRepo;
+    _tierConfigRepo;
     _passwordHasher;
     _jwtService;
     _configService;
@@ -28,10 +30,11 @@ let SuperAdminService = class SuperAdminService {
     _accessTokenExpiry;
     _refreshTokenExpiry;
     _refreshTokenTtlSeconds;
-    constructor(_superAdminRepo, _cacheRepo, _tenantRepo, _passwordHasher, _jwtService, _configService) {
+    constructor(_superAdminRepo, _cacheRepo, _tenantRepo, _tierConfigRepo, _passwordHasher, _jwtService, _configService) {
         this._superAdminRepo = _superAdminRepo;
         this._cacheRepo = _cacheRepo;
         this._tenantRepo = _tenantRepo;
+        this._tierConfigRepo = _tierConfigRepo;
         this._passwordHasher = _passwordHasher;
         this._jwtService = _jwtService;
         this._configService = _configService;
@@ -186,6 +189,24 @@ let SuperAdminService = class SuperAdminService {
     async ListTenants(data) {
         return this._tenantRepo.listTenants(data);
     }
+    async getTenantById(tenantId) {
+        const tenant = await this._tenantRepo.findByTenantId(tenantId);
+        if (!tenant) {
+            throw new Error(RESPONSE_MESSAGES.ERRORS.TENANT_NOT_FOUND);
+        }
+        return {
+            tenant: {
+                tenant_id: tenant._id.toString(),
+                business_name: tenant.business_name,
+                contact_email: tenant.contact_email,
+                tier: tenant.tier,
+                status: tenant.status,
+                paddle_customer_id: tenant.paddle_customer_id,
+                paddle_subscription_id: tenant.paddle_subscription_id,
+                subscription_status: tenant.subscription_status,
+            },
+        };
+    }
     async suspendTenant(tenantId) {
         const tenant = await this._tenantRepo.findByTenantId(tenantId);
         if (!tenant) {
@@ -277,15 +298,125 @@ let SuperAdminService = class SuperAdminService {
             transactionCount: p.transaction_count,
         }));
     }
+    _mapDocToItem(doc) {
+        const raw = doc;
+        return {
+            id: String(raw._id || raw.id || `tier_${doc.tier}`),
+            tier: String(doc.tier || 'starter'),
+            name: String(doc.name || doc.tier || 'Starter'),
+            max_agents: Number(doc.max_agents ?? 1),
+            max_services: Number(doc.max_services ?? 5),
+            max_resources: Number(doc.max_resources ?? 3),
+            max_kb_docs: Number(doc.max_kb_docs ?? 3),
+            max_kb_doc_size_mb: Number(doc.max_kb_doc_size_mb ?? 5),
+            weekly_token_limit: Number(doc.weekly_token_limit ?? 100000),
+            rate_limit_rpm: Number(doc.rate_limit_rpm ?? 60),
+            status: String(doc.status || 'active'),
+            description: String(doc.description || ''),
+            created_at: raw.created_at ? new Date(String(raw.created_at)).toISOString() : new Date().toISOString(),
+            updated_at: raw.updated_at ? new Date(String(raw.updated_at)).toISOString() : new Date().toISOString(),
+        };
+    }
+    async listTierConfigs() {
+        const cacheKey = 'tier_config:all';
+        try {
+            const cached = await this._cacheRepo.get(cacheKey);
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    return parsed;
+                }
+            }
+        }
+        catch {
+        }
+        const docs = await this._tierConfigRepo.findAll();
+        if (!docs || docs.length === 0) {
+            const items = Object.values(STATIC_TIER_CONFIGS).map((cfg) => this._mapDocToItem(cfg));
+            return items;
+        }
+        const items = docs.map((doc) => this._mapDocToItem(doc));
+        try {
+            await this._cacheRepo.set(cacheKey, JSON.stringify(items), { ttlSeconds: 86400 * 7 });
+            for (const item of items) {
+                await this._cacheRepo.set(`tier_config:${item.tier}`, JSON.stringify(item), { ttlSeconds: 86400 * 7 });
+            }
+        }
+        catch {
+        }
+        return items;
+    }
+    async getTierConfig(tier) {
+        const normalized = (tier || DEFAULT_TIER).trim().toLowerCase();
+        const cacheKey = `tier_config:${normalized}`;
+        try {
+            const cached = await this._cacheRepo.get(cacheKey);
+            if (cached) {
+                return JSON.parse(cached);
+            }
+        }
+        catch {
+        }
+        const doc = await this._tierConfigRepo.findByTier(normalized);
+        if (!doc) {
+            const fallback = STATIC_TIER_CONFIGS[normalized] || STATIC_TIER_CONFIGS[DEFAULT_TIER];
+            return this._mapDocToItem(fallback);
+        }
+        const item = this._mapDocToItem(doc);
+        try {
+            await this._cacheRepo.set(cacheKey, JSON.stringify(item), { ttlSeconds: 86400 * 7 });
+        }
+        catch {
+            // Non-blocking cache error
+        }
+        return item;
+    }
+    async updateTierConfig(tier, data) {
+        const normalized = (tier || DEFAULT_TIER).trim().toLowerCase();
+        const updatePayload = {};
+        if (data.name !== undefined)
+            updatePayload.name = data.name;
+        if (data.max_agents !== undefined)
+            updatePayload.max_agents = Number(data.max_agents);
+        if (data.max_services !== undefined)
+            updatePayload.max_services = Number(data.max_services);
+        if (data.max_resources !== undefined)
+            updatePayload.max_resources = Number(data.max_resources);
+        if (data.max_kb_docs !== undefined)
+            updatePayload.max_kb_docs = Number(data.max_kb_docs);
+        if (data.max_kb_doc_size_mb !== undefined)
+            updatePayload.max_kb_doc_size_mb = Number(data.max_kb_doc_size_mb);
+        if (data.weekly_token_limit !== undefined)
+            updatePayload.weekly_token_limit = Number(data.weekly_token_limit);
+        if (data.rate_limit_rpm !== undefined)
+            updatePayload.rate_limit_rpm = Number(data.rate_limit_rpm);
+        if (data.status !== undefined)
+            updatePayload.status = data.status;
+        if (data.description !== undefined)
+            updatePayload.description = data.description;
+        const updatedDoc = await this._tierConfigRepo.updateByTier(normalized, updatePayload);
+        if (!updatedDoc) {
+            throw new Error(`Tier configuration for "${normalized}" not found.`);
+        }
+        const item = this._mapDocToItem(updatedDoc);
+        try {
+            await this._cacheRepo.set(`tier_config:${normalized}`, JSON.stringify(item), { ttlSeconds: 86400 * 7 });
+            await this._cacheRepo.delete('tier_config:all');
+        }
+        catch {
+        }
+        return item;
+    }
 };
 SuperAdminService = __decorate([
     Injectable(),
     __param(0, Inject('ISuperAdminRepository')),
     __param(1, Inject('ICacheRepository')),
     __param(2, Inject('ITenantRepository')),
-    __param(3, Inject('IPasswordHasher')),
-    __param(4, Inject('IJwtService')),
-    __param(5, Inject(ConfigService)),
-    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, ConfigService])
+    __param(3, Inject('ITierConfigRepository')),
+    __param(4, Inject('IPasswordHasher')),
+    __param(5, Inject('IJwtService')),
+    __param(6, Inject(ConfigService)),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, ConfigService])
 ], SuperAdminService);
 export { SuperAdminService };

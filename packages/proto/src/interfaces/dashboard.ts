@@ -14,6 +14,7 @@ export const protobufPackage = "dashboard";
 export interface DashboardUserLoginRequest {
   email: string;
   password: string;
+  agent_id?: string | undefined;
 }
 
 export interface DashboardUserLoginResponse {
@@ -95,6 +96,7 @@ export interface InviteUserResponse {
   name: string;
   system_role: string;
   agent_id: string;
+  agent_ids: string[];
 }
 
 export interface WorkspaceUserInfo {
@@ -105,6 +107,8 @@ export interface WorkspaceUserInfo {
   system_role: string;
   created_at: string;
   agent_id: string;
+  status?: string | undefined;
+  agent_ids: string[];
 }
 
 export interface ListWorkspaceUsersRequest {
@@ -113,11 +117,22 @@ export interface ListWorkspaceUsersRequest {
   limit?: number | undefined;
   search?: string | undefined;
   role?: string | undefined;
+  agent_id?: string | undefined;
 }
 
 export interface ListWorkspaceUsersResponse {
   users: WorkspaceUserInfo[];
   total_count: number;
+}
+
+export interface SuspendWorkspaceUserRequest {
+  tenant_id: string;
+  user_id: string;
+}
+
+export interface SuspendWorkspaceUserResponse {
+  message: string;
+  user: WorkspaceUserInfo | undefined;
 }
 
 export const DASHBOARD_PACKAGE_NAME = "dashboard";
@@ -227,6 +242,11 @@ export interface DashboardUserServiceClient {
   inviteUser(request: InviteUserRequest, metadata?: Metadata): Observable<InviteUserResponse>;
 
   listWorkspaceUsers(request: ListWorkspaceUsersRequest, metadata?: Metadata): Observable<ListWorkspaceUsersResponse>;
+
+  suspendWorkspaceUser(
+    request: SuspendWorkspaceUserRequest,
+    metadata?: Metadata,
+  ): Observable<SuspendWorkspaceUserResponse>;
 }
 
 export interface DashboardUserServiceController {
@@ -239,11 +259,16 @@ export interface DashboardUserServiceController {
     request: ListWorkspaceUsersRequest,
     metadata?: Metadata,
   ): Promise<ListWorkspaceUsersResponse> | Observable<ListWorkspaceUsersResponse> | ListWorkspaceUsersResponse;
+
+  suspendWorkspaceUser(
+    request: SuspendWorkspaceUserRequest,
+    metadata?: Metadata,
+  ): Promise<SuspendWorkspaceUserResponse> | Observable<SuspendWorkspaceUserResponse> | SuspendWorkspaceUserResponse;
 }
 
 export function DashboardUserServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ["inviteUser", "listWorkspaceUsers"];
+    const grpcMethods: string[] = ["inviteUser", "listWorkspaceUsers", "suspendWorkspaceUser"];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
       GrpcMethod("DashboardUserService", method)(constructor.prototype[method], method, descriptor);

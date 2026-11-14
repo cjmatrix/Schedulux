@@ -6,6 +6,8 @@ import {
   HttpStatus,
   Inject,
   OnModuleInit,
+  Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -37,6 +39,7 @@ import {
   LogoutDto,
   RefreshTokenDto,
   ResetPasswordDto,
+  SuspendWorkspaceUserParamDto,
   TenantGoogleLoginDto,
   TenantLoginDto,
   TenantRegisterDto,
@@ -70,7 +73,8 @@ export class TenantController implements OnModuleInit {
   }
 
   @Get(API_ROUTES.TENANT.AUTH.ME)
-  @UseGuards(TenantAuthGuard)
+  @UseGuards(TenantAuthGuard, RolesGuard)
+  @Roles('tenant_owner')
   async getProfile(@Req() req: AuthenticatedTenantRequest) {
     const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
@@ -232,6 +236,7 @@ export class TenantController implements OnModuleInit {
         name: response.name,
         system_role: response.system_role,
         agent_id: response.agent_id,
+        agent_ids: response.agent_ids,
       },
     };
   }
@@ -248,6 +253,7 @@ export class TenantController implements OnModuleInit {
     const response = await lastValueFrom(
       this._dashboardUserServiceClient.listWorkspaceUsers({
         tenant_id: tenantId,
+        agent_id: query.agent_id,
         page: query.page,
         limit: query.limit,
         search: query.search,
@@ -257,6 +263,27 @@ export class TenantController implements OnModuleInit {
     return {
       message: RESPONSE_MESSAGES.TENANT.WORKSPACE_USERS_RETRIEVED,
       data: response,
+    };
+  }
+
+  @Patch(API_ROUTES.TENANT.AUTH.SUSPEND_WORKSPACE_USER)
+  @UseGuards(TenantAuthGuard, RolesGuard)
+  @Roles('tenant_owner')
+  @UsePipes(ZodValidationPipe)
+  async suspendWorkspaceUser(
+    @Req() req: AuthenticatedTenantRequest,
+    @Param() params: SuspendWorkspaceUserParamDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const response = await lastValueFrom(
+      this._dashboardUserServiceClient.suspendWorkspaceUser({
+        tenant_id: tenantId,
+        user_id: params.userId,
+      }),
+    );
+    return {
+      message: response.message || RESPONSE_MESSAGES.TENANT.WORKSPACE_USER_STATUS_UPDATED,
+      data: response.user,
     };
   }
 }

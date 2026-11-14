@@ -10,8 +10,8 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router';
-import { useAuthStore } from '../../store/useAuthStore';
-import { useDashboardLogin, useDashboardProfile } from '../tenant/hooks/useAuth';
+import { useDashboardAuthStore } from '../../store/useDashboardAuthStore';
+import { useDashboardLogin, useDashboardProfile } from './hooks/useDashboardAuth';
 
 export default function DashboardUserLoginPage() {
   const navigate = useNavigate();
@@ -21,12 +21,12 @@ export default function DashboardUserLoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const { login, isAuthenticated } = useAuthStore();
+  const { login, isAuthenticated } = useDashboardAuthStore();
   const dashboardLoginMutation = useDashboardLogin();
   const { data: profileData, isLoading: isProfileLoading } = useDashboardProfile(!isAuthenticated);
 
   if (isAuthenticated || profileData?.data) {
-    return <Navigate to="/dashboarduser/tenant/bookings" replace />;
+    return <Navigate to="/tenant/bookings" replace />;
   }
 
   if (isProfileLoading) {
@@ -51,7 +51,7 @@ export default function DashboardUserLoginPage() {
       {
         onSuccess: (res) => {
           login(res.data);
-          navigate('/dashboarduser/tenant/bookings');
+          navigate('/tenant/bookings');
         },
         onError: (error: unknown) => {
           setErrorMessage(

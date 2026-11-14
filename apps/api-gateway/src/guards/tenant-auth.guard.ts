@@ -5,11 +5,11 @@ import {
   Inject,
   Injectable,
   OnModuleInit,
-  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ClientGrpc } from '@nestjs/microservices';
+import { DashboardAuthServiceClient } from '@repo/proto/dashboard';
 import { TenantServiceClient } from '@repo/proto/tenant';
 import { Request } from 'express';
 import jwt from 'jsonwebtoken';
@@ -30,6 +30,7 @@ export interface AuthenticatedTenantRequest extends Request {
     user_id: string;
     tenant_id: string;
     agent_id?: string;
+    agent_ids?: string[];
     email: string;
     role: string;
     system_role: string;
@@ -41,6 +42,7 @@ export interface AuthenticatedTenantRequest extends Request {
 interface DecodedToken {
   tenant_id?: string;
   agent_id?: string;
+  agent_ids?: string[];
   user_id?: string;
   email?: string;
   role?: string;
@@ -51,18 +53,20 @@ interface DecodedToken {
 
 @Injectable()
 export class TenantAuthGuard implements CanActivate, OnModuleInit {
-  private _tenantService?: TenantServiceClient;
+  private _tenantService!: TenantServiceClient;
+  private _dashboardAuthService!: DashboardAuthServiceClient;
 
   constructor(
     @Inject(ConfigService) private readonly _configService: ConfigService,
     @Inject(RedisService) private readonly _redisService: RedisService,
-    @Optional() @Inject('TENANT_PACKAGE') private readonly _client?: ClientGrpc,
+    @Inject('TENANT_PACKAGE') private readonly _client: ClientGrpc,
+    @Inject('DASHBOARD_PACKAGE') private readonly _dashboardClient: ClientGrpc,
   ) {}
 
   onModuleInit() {
-    if (this._client) {
-      this._tenantService = this._client.getService<TenantServiceClient>('TenantService');
-    }
+    this._tenantService = this._client.getService<TenantServiceClient>('TenantService');
+    this._dashboardAuthService =
+      this._dashboardClient.getService<DashboardAuthServiceClient>('DashboardAuthService');
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -70,7 +74,18 @@ export class TenantAuthGuard implements CanActivate, OnModuleInit {
     const tenantToken = request.cookies?.[COOKIE_NAMES.TENANT_ACCESS_TOKEN];
     const dashboardToken = request.cookies?.[COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN];
 
-    const token = tenantToken || dashboardToken;
+    const isDashboardEndpoint = request.url?.includes('/dashboard-user/');
+    
+    const isTenantAuthEndpoint = request.url?.includes('/tenant/auth/');
+
+    let token: string | undefined;
+    if (isDashboardEndpoint) {
+      token = dashboardToken;
+    } else if (isTenantAuthEndpoint) {
+      token = tenantToken;
+    } else {
+      token = tenantToken || dashboardToken;
+    }
 
     if (!token) {
       throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TOKEN_MISSING);
@@ -87,24 +102,15 @@ export class TenantAuthGuard implements CanActivate, OnModuleInit {
 
       let status = await this._redisService.getTenantStatus(decoded.tenant_id);
       if (!status) {
-        if (this._tenantService) {
-          try {
-            const tenantList = await lastValueFrom(
-              this._tenantService.listTenants({
-                page: 1,
-                limit: 1,
-                search: '',
-                tier: '',
-                status: '',
-                tenant_ids: [decoded.tenant_id],
-              }),
-            );
-            status = tenantList?.tenants?.[0]?.status || 'active';
-            await this._redisService.setTenantStatus(decoded.tenant_id, status);
-          } catch {
-            status = 'active';
-          }
-        } else {
+        try {
+          const tenantResp = await lastValueFrom(
+            this._tenantService.getTenantById({
+              tenant_id: decoded.tenant_id,
+            }),
+          );
+          status = tenantResp?.tenant?.status || 'active';
+          await this._redisService.setTenantStatus(decoded.tenant_id, status);
+        } catch {
           status = 'active';
         }
       }
@@ -123,6 +129,27 @@ export class TenantAuthGuard implements CanActivate, OnModuleInit {
       if (decoded.role === 'tenant_owner') {
         request.tenant = decoded as AuthenticatedTenantRequest['tenant'];
       } else if (decoded.role === 'manager') {
+        const userId = decoded.user_id || (decoded.sub as string);
+        if (userId) {
+          let userStatus = await this._redisService.getDashboardUserStatus(userId);
+          if (!userStatus) {
+            try {
+              const profile = await lastValueFrom(
+                this._dashboardAuthService.getProfile({ user_id: userId }),
+              );
+              userStatus = profile?.user?.status || 'active';
+              await this._redisService.setDashboardUserStatus(userId, userStatus);
+            } catch {
+              userStatus = 'active';
+            }
+          }
+
+          if (userStatus === 'suspended') {
+            throw new ForbiddenException(
+              'Your account has been suspended. Please contact your workspace administrator.',
+            );
+          }
+        }
         request.dashboardUser = decoded as AuthenticatedTenantRequest['dashboardUser'];
       } else {
         throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.UNRECOGNIZED_ROLE);

@@ -148,6 +148,7 @@ let TenantController = class TenantController {
                 name: response.name,
                 system_role: response.system_role,
                 agent_id: response.agent_id,
+                agent_ids: response.agent_ids,
             },
         };
     }
@@ -155,6 +156,7 @@ let TenantController = class TenantController {
         const tenantId = this._getTenantId(req);
         const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserServiceClient.listWorkspaceUsers({
             tenant_id: tenantId,
+            agent_id: query.agent_id,
             page: query.page,
             limit: query.limit,
             search: query.search,
@@ -165,11 +167,23 @@ let TenantController = class TenantController {
             data: response,
         };
     }
+    async suspendWorkspaceUser(req, params) {
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserServiceClient.suspendWorkspaceUser({
+            tenant_id: tenantId,
+            user_id: params.userId,
+        }));
+        return {
+            message: response.message || messages_constant_js_1.RESPONSE_MESSAGES.TENANT.WORKSPACE_USER_STATUS_UPDATED,
+            data: response.user,
+        };
+    }
 };
 exports.TenantController = TenantController;
 __decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.TENANT.AUTH.ME),
-    (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard),
+    (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),
+    (0, roles_decorator_js_1.Roles)('tenant_owner'),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -269,6 +283,17 @@ __decorate([
     __metadata("design:paramtypes", [Object, tenant_dto_js_1.ListWorkspaceUsersDto]),
     __metadata("design:returntype", Promise)
 ], TenantController.prototype, "listWorkspaceUsers", null);
+__decorate([
+    (0, common_1.Patch)(routes_constant_js_1.API_ROUTES.TENANT.AUTH.SUSPEND_WORKSPACE_USER),
+    (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),
+    (0, roles_decorator_js_1.Roles)('tenant_owner'),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, tenant_dto_js_1.SuspendWorkspaceUserParamDto]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "suspendWorkspaceUser", null);
 exports.TenantController = TenantController = __decorate([
     (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.TENANT.AUTH.BASE),
     __param(0, (0, common_1.Inject)('TENANT_PACKAGE')),

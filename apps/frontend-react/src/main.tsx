@@ -5,7 +5,6 @@ import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import './index.css';
 import App from './App.tsx';
 import AcceptInvitePage from './features/dashboard-user/AcceptInvitePage.tsx';
-import { DashboardUserProtectedRoute } from './features/dashboard-user/components/DashboardUserProtectedRoute.tsx';
 import DashboardUserLoginPage from './features/dashboard-user/DashboardUserLoginPage.tsx';
 import AdminLayout from './features/superadmin/components/AdminLayout.tsx';
 import { SuperAdminProtectedRoute } from './features/superadmin/components/SuperAdminProtectedRoute.tsx';
@@ -15,6 +14,9 @@ import SuperAdminDashboard from './features/superadmin/pages/SuperAdminDashboard
 import SuperAdminLoginPage from './features/superadmin/pages/SuperAdminLoginPage.tsx';
 import SystemHealthPage from './features/superadmin/pages/SystemHealthPage.tsx';
 import TenantListPage from './features/superadmin/pages/TenantListPage.tsx';
+import RateLimitsPage from './features/superadmin/pages/RateLimitsPage.tsx';
+import { RoleProtectedRoute } from './features/tenant/components/RoleProtectedRoute.tsx';
+import { TenantIndexRedirect } from './features/tenant/components/TenantIndexRedirect.tsx';
 import { TenantProtectedRoute } from './features/tenant/components/TenantProtectedRoute.tsx';
 import BookingsPage from './features/tenant/pages/BookingsPage.tsx';
 import CustomersPage from './features/tenant/pages/CustomersPage.tsx';
@@ -116,6 +118,10 @@ const router = createBrowserRouter([
             element: <TenantListPage />,
           },
           {
+            path: 'rate-limits',
+            element: <RateLimitsPage />,
+          },
+          {
             path: 'system-health',
             element: <SystemHealthPage />,
           },
@@ -133,72 +139,161 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Navigate to="/tenant/dashboard" replace />,
+        element: <TenantIndexRedirect />,
       },
       {
         path: 'agents',
-        element: <TenantAgentsPage />,
+        element: (
+          <RoleProtectedRoute allowedRoles={['owner']}>
+            <TenantAgentsPage />
+          </RoleProtectedRoute>
+        ),
       },
       {
         path: 'landingboard',
-        element: <SchedulingOnboarding />,
+        element: (
+          <RoleProtectedRoute allowedRoles={['owner']}>
+            <SchedulingOnboarding />
+          </RoleProtectedRoute>
+        ),
       },
       {
         path: 'agent-setup/:id',
-        element: <AgentOnboardingWizard />,
+        element: (
+          <RoleProtectedRoute allowedRoles={['owner']}>
+            <AgentOnboardingWizard />
+          </RoleProtectedRoute>
+        ),
       },
       {
-        element: <TenantLayout isTenant={true} />,
+        element: <TenantLayout />,
         children: [
+          // Owner Only Routes
           {
             path: 'dashboard',
-            element: <TenantDashboardPage />,
+            element: (
+              <RoleProtectedRoute allowedRoles={['owner']}>
+                <TenantDashboardPage />
+              </RoleProtectedRoute>
+            ),
           },
           {
             path: 'agents/:agentId/dashboard',
-            element: <TenantDashboardPage />,
+            element: (
+              <RoleProtectedRoute allowedRoles={['owner']}>
+                <TenantDashboardPage />
+              </RoleProtectedRoute>
+            ),
           },
           {
             path: 'billing',
-            element: <BillingPage />,
+            element: (
+              <RoleProtectedRoute allowedRoles={['owner']}>
+                <BillingPage />
+              </RoleProtectedRoute>
+            ),
           },
           {
             path: 'agents/:agentId/billing',
-            element: <BillingPage />,
+            element: (
+              <RoleProtectedRoute allowedRoles={['owner']}>
+                <BillingPage />
+              </RoleProtectedRoute>
+            ),
           },
           {
             path: 'users',
-            element: <WorkspaceUsersPage />,
+            element: (
+              <RoleProtectedRoute allowedRoles={['owner']}>
+                <WorkspaceUsersPage />
+              </RoleProtectedRoute>
+            ),
           },
           {
             path: 'agents/:agentId/users',
-            element: <WorkspaceUsersPage />,
+            element: (
+              <RoleProtectedRoute allowedRoles={['owner']}>
+                <WorkspaceUsersPage />
+              </RoleProtectedRoute>
+            ),
           },
-          {
-            path: 'bookings',
-            element: <BookingsPage />,
-          },
-          {
-            path: 'customers',
-            element: <CustomersPage />,
-          },
-
-
           {
             path: 'agents/:agentId/knowledge',
-            element: <KnowledgeBasePage />,
+            element: (
+              <RoleProtectedRoute allowedRoles={['owner']}>
+                <KnowledgeBasePage />
+              </RoleProtectedRoute>
+            ),
           },
           {
             path: 'knowledge',
-            element: <KnowledgeBasePage />,
+            element: (
+              <RoleProtectedRoute allowedRoles={['owner']}>
+                <KnowledgeBasePage />
+              </RoleProtectedRoute>
+            ),
+          },
+          {
+            path: 'agents/:agentId/settings',
+            element: (
+              <RoleProtectedRoute allowedRoles={['owner']}>
+                <ScheduleSettingsPage />
+              </RoleProtectedRoute>
+            ),
+          },
+          {
+            path: 'settings',
+            element: (
+              <RoleProtectedRoute allowedRoles={['owner']}>
+                <ScheduleSettingsPage />
+              </RoleProtectedRoute>
+            ),
+          },
+          {
+            path: 'agents/:agentId/widget',
+            element: (
+              <RoleProtectedRoute allowedRoles={['owner']}>
+                <EmbedWidgetPage />
+              </RoleProtectedRoute>
+            ),
+          },
+          {
+            path: 'widget',
+            element: (
+              <RoleProtectedRoute allowedRoles={['owner']}>
+                <EmbedWidgetPage />
+              </RoleProtectedRoute>
+            ),
+          },
+
+          // Shared Operational Routes (Both Owner and Manager)
+          {
+            path: 'bookings',
+            element: <BookingsPage />,
           },
           {
             path: 'agents/:agentId/bookings',
             element: <BookingsPage />,
           },
           {
+            path: 'customers',
+            element: <CustomersPage />,
+          },
+          {
             path: 'agents/:agentId/customers',
             element: <CustomersPage />,
+          },
+          {
+            path: 'services',
+            element: <ServicesListPage />,
+          },
+          {
+            path: 'services/new',
+            element: <ServiceEditorPage mode="create" />,
+          },
+          {
+            path: 'services/:id',
+            element: <ServiceEditorPage mode="edit" />,
           },
           {
             path: 'agents/:agentId/services',
@@ -210,47 +305,6 @@ const router = createBrowserRouter([
           },
           {
             path: 'agents/:agentId/services/:id',
-            element: <ServiceEditorPage mode="edit" />,
-          },
-          {
-            path: 'agents/:agentId/resources',
-            element: <ResourcesListPage />,
-          },
-          {
-            path: 'agents/:agentId/resources/new',
-            element: <ResourceEditorPage mode="create" />,
-          },
-          {
-            path: 'agents/:agentId/resources/:id',
-            element: <ResourceEditorPage mode="edit" />,
-          },
-          {
-            path: 'agents/:agentId/settings',
-            element: <ScheduleSettingsPage />,
-          },
-          {
-            path: 'settings',
-            element: <ScheduleSettingsPage />,
-          },
-          {
-            path: 'agents/:agentId/widget',
-            element: <EmbedWidgetPage />,
-          },
-          {
-            path: 'widget',
-            element: <EmbedWidgetPage />,
-          },
-
-          {
-            path: 'services',
-            element: <ServicesListPage />,
-          },
-          {
-            path: 'services/new',
-            element: <ServiceEditorPage mode="create" />,
-          },
-          {
-            path: 'services/:id',
             element: <ServiceEditorPage mode="edit" />,
           },
           {
@@ -277,6 +331,18 @@ const router = createBrowserRouter([
             path: 'resources/:id',
             element: <Navigate to="/tenant/inventory/:id" replace />,
           },
+          {
+            path: 'agents/:agentId/resources',
+            element: <ResourcesListPage />,
+          },
+          {
+            path: 'agents/:agentId/resources/new',
+            element: <ResourceEditorPage mode="create" />,
+          },
+          {
+            path: 'agents/:agentId/resources/:id',
+            element: <ResourceEditorPage mode="edit" />,
+          },
         ],
       },
     ],
@@ -291,53 +357,10 @@ const router = createBrowserRouter([
   },
   {
     path: '/dashboarduser',
-    element: <DashboardUserProtectedRoute />,
     children: [
       {
-        path: 'tenant',
-        element: <TenantLayout isTenant={false} />,
-        children: [
-          {
-            index: true,
-            element: <Navigate to="/dashboarduser/tenant/bookings" replace />,
-          },
-          {
-            path: 'bookings',
-            element: <BookingsPage />,
-          },
-          {
-            path: 'customers',
-            element: <CustomersPage />,
-          },
-          {
-            path: 'services',
-            element: <ServicesListPage />,
-          },
-          {
-            path: 'services/new',
-            element: <ServiceEditorPage mode="create" />,
-          },
-          {
-            path: 'services/:id',
-            element: <ServiceEditorPage mode="edit" />,
-          },
-          {
-            path: 'resources',
-            element: <ResourcesListPage />,
-          },
-          {
-            path: 'resources/new',
-            element: <ResourceEditorPage mode="create" />,
-          },
-          {
-            path: 'resources/:id',
-            element: <ResourceEditorPage mode="edit" />,
-          },
-          {
-            path: 'inventory',
-            element: <Navigate to="/dashboarduser/tenant/resources" replace />,
-          },
-        ],
+        path: 'tenant/*',
+        element: <Navigate to="/tenant/bookings" replace />,
       },
     ],
   },

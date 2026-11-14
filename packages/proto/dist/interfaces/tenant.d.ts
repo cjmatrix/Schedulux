@@ -10,6 +10,12 @@ export interface TenantGetProfileRequest {
 export interface TenantGetProfileResponse {
     tenant: TenantInfo | undefined;
 }
+export interface GetTenantByIdRequest {
+    tenant_id: string;
+}
+export interface GetTenantByIdResponse {
+    tenant: TenantInfo | undefined;
+}
 export interface RegisterRequest {
     business_name: string;
     full_name: string;
@@ -161,6 +167,7 @@ export declare function TenantAuthServiceControllerMethods(): (constructor: Func
 export declare const TENANT_AUTH_SERVICE_NAME = "TenantAuthService";
 export interface TenantServiceClient {
     listTenants(request: ListTenantsRequest, metadata?: Metadata): Observable<ListTenantsResponse>;
+    getTenantById(request: GetTenantByIdRequest, metadata?: Metadata): Observable<GetTenantByIdResponse>;
     suspendTenant(request: SuspendTenantRequest, metadata?: Metadata): Observable<SuspendTenantResponse>;
     updateTenantSubscription(request: UpdateTenantSubscriptionRequest, metadata?: Metadata): Observable<UpdateTenantSubscriptionResponse>;
     getTenantBillingInfo(request: GetTenantBillingInfoRequest, metadata?: Metadata): Observable<GetTenantBillingInfoResponse>;
@@ -169,6 +176,7 @@ export interface TenantServiceClient {
 }
 export interface TenantServiceController {
     listTenants(request: ListTenantsRequest, metadata?: Metadata): Promise<ListTenantsResponse> | Observable<ListTenantsResponse> | ListTenantsResponse;
+    getTenantById(request: GetTenantByIdRequest, metadata?: Metadata): Promise<GetTenantByIdResponse> | Observable<GetTenantByIdResponse> | GetTenantByIdResponse;
     suspendTenant(request: SuspendTenantRequest, metadata?: Metadata): Promise<SuspendTenantResponse> | Observable<SuspendTenantResponse> | SuspendTenantResponse;
     updateTenantSubscription(request: UpdateTenantSubscriptionRequest, metadata?: Metadata): Promise<UpdateTenantSubscriptionResponse> | Observable<UpdateTenantSubscriptionResponse> | UpdateTenantSubscriptionResponse;
     getTenantBillingInfo(request: GetTenantBillingInfoRequest, metadata?: Metadata): Promise<GetTenantBillingInfoResponse> | Observable<GetTenantBillingInfoResponse> | GetTenantBillingInfoResponse;

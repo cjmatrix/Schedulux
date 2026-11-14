@@ -74,6 +74,11 @@ let SuperAdminAuthController = class SuperAdminAuthController {
         const lists = await this._superAdminService.ListTenants(data);
         return lists;
     }
+    async getTenantById(data) {
+        if (!data.tenant_id)
+            throw new Error(RESPONSE_MESSAGES.ERRORS.TENANT_ID_REQUIRED);
+        return this._superAdminService.getTenantById(data.tenant_id);
+    }
     async suspendTenant(data) {
         if (!data.tenant_id)
             throw new Error(RESPONSE_MESSAGES.ERRORS.TENANT_ID_REQUIRED);
@@ -98,6 +103,22 @@ let SuperAdminAuthController = class SuperAdminAuthController {
                 amount: p.amount,
                 transaction_count: p.transactionCount,
             })),
+        };
+    }
+    async listTierConfigs(_data) {
+        const configs = await this._superAdminService.listTierConfigs();
+        return { configs };
+    }
+    async getTierConfig(data) {
+        const config = await this._superAdminService.getTierConfig(data.tier);
+        return { config };
+    }
+    async updateTierConfig(data) {
+        const updated = await this._superAdminService.updateTierConfig(data.tier, data);
+        return {
+            success: true,
+            message: 'Tier configuration updated successfully',
+            config: updated,
         };
     }
 };
@@ -132,6 +153,12 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SuperAdminAuthController.prototype, "superAdminGetTenantList", null);
 __decorate([
+    GrpcMethod(GRPC_SERVICES.TENANT, GRPC_METHODS.TENANT.GET_TENANT_BY_ID),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], SuperAdminAuthController.prototype, "getTenantById", null);
+__decorate([
     GrpcMethod(GRPC_SERVICES.TENANT, GRPC_METHODS.TENANT.SUSPEND_TENANT),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -149,6 +176,24 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], SuperAdminAuthController.prototype, "getRevenueChart", null);
+__decorate([
+    GrpcMethod(GRPC_SERVICES.SUPERADMIN_TIER_CONFIG, GRPC_METHODS.SUPERADMIN_TIER_CONFIG.LIST_TIER_CONFIGS),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], SuperAdminAuthController.prototype, "listTierConfigs", null);
+__decorate([
+    GrpcMethod(GRPC_SERVICES.SUPERADMIN_TIER_CONFIG, GRPC_METHODS.SUPERADMIN_TIER_CONFIG.GET_TIER_CONFIG),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], SuperAdminAuthController.prototype, "getTierConfig", null);
+__decorate([
+    GrpcMethod(GRPC_SERVICES.SUPERADMIN_TIER_CONFIG, GRPC_METHODS.SUPERADMIN_TIER_CONFIG.UPDATE_TIER_CONFIG),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], SuperAdminAuthController.prototype, "updateTierConfig", null);
 SuperAdminAuthController = __decorate([
     Controller(),
     UseFilters(new AllExceptionsFilter()),

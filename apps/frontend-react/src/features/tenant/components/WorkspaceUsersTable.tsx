@@ -1,4 +1,4 @@
-import { Loader2, MoreVertical } from 'lucide-react';
+import { Ban, CheckCircle2, Loader2, MoreVertical } from 'lucide-react';
 import { useState } from 'react';
 import { Pagination } from '../../../components/Pagination';
 
@@ -8,6 +8,7 @@ export interface WorkspaceUser {
   email: string;
   system_role: 'manager' | 'owner';
   agent_id?: string;
+  agent_ids?: string[];
   status: string;
   last_active: string;
 }
@@ -20,6 +21,9 @@ export interface WorkspaceUsersTableProps {
   currentPage?: number;
   onPageChange?: (page: number) => void;
   onUserAction?: (user: WorkspaceUser) => void;
+  onToggleSuspend?: (user: WorkspaceUser) => void;
+  isSuspending?: boolean;
+  suspendingUserId?: string | null;
 }
 
 export function WorkspaceUsersTable({
@@ -30,6 +34,9 @@ export function WorkspaceUsersTable({
   currentPage: propCurrentPage,
   onPageChange,
   onUserAction,
+  onToggleSuspend,
+  isSuspending = false,
+  suspendingUserId = null,
 }: WorkspaceUsersTableProps) {
   const [internalPage, setInternalPage] = useState(1);
 
@@ -100,39 +107,83 @@ export function WorkspaceUsersTable({
                       </td>
 
                       <td className="px-6 py-4">
-                        {isOwner ? (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold bg-purple-100 text-purple-700 border border-purple-200/60">
-                            Owner
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-700 border border-blue-200/60">
-                            Manager
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {isOwner ? (
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold bg-purple-100 text-purple-700 border border-purple-200/60">
+                              Owner
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-700 border border-blue-200/60">
+                              Manager
+                            </span>
+                          )}
+                          {user.agent_ids && user.agent_ids.length > 1 && (
+                            <span
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200"
+                              title={`Assigned to ${user.agent_ids.length} agents`}
+                            >
+                              {user.agent_ids.length} agents
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              user.status === 'active' ? 'bg-emerald-500' : 'bg-slate-300'
-                            }`}
-                          />
-                          <span className="font-medium capitalize text-slate-800">
-                            {user.status === 'active' ? 'Active' : 'Pending'}
+                        {user.status === 'suspended' ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/60">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                            Suspended
                           </span>
-                        </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            Active
+                          </span>
+                        )}
                       </td>
 
                       <td className="px-6 py-4 text-slate-500 font-medium">{user.last_active}</td>
 
                       <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => onUserAction?.(user)}
-                          className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
+                        {isOwner ? (
+                          <span className="text-[11px] font-medium text-slate-400 italic">
+                            Protected
+                          </span>
+                        ) : (
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => onToggleSuspend?.(user)}
+                              disabled={isSuspending && suspendingUserId === user.user_id}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed ${
+                                user.status === 'suspended'
+                                  ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80'
+                                  : 'text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200/80'
+                              }`}
+                              title={
+                                user.status === 'suspended'
+                                  ? 'Reactivate workspace user'
+                                  : 'Suspend workspace user'
+                              }
+                            >
+                              {isSuspending && suspendingUserId === user.user_id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : user.status === 'suspended' ? (
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                              ) : (
+                                <Ban className="w-3.5 h-3.5" />
+                              )}
+                              <span>{user.status === 'suspended' ? 'Unsuspend' : 'Suspend'}</span>
+                            </button>
+                            {onUserAction && (
+                              <button
+                                onClick={() => onUserAction(user)}
+                                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );

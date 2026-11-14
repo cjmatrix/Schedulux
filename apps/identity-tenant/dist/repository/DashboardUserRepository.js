@@ -15,14 +15,45 @@ let DashboardUserRepository = class DashboardUserRepository extends BaseReposito
         super(DashboardUser);
     }
     async findByEmail(email) {
-        return this.model.findOne({ email }).exec();
+        return this.model.findOne({ email: email.toLowerCase().trim() }).exec();
+    }
+    async findAllByEmail(email) {
+        return this.model.find({ email: email.toLowerCase().trim() }).exec();
+    }
+    async findByTenantAndEmail(tenantId, email) {
+        return this.model
+            .findOne({
+            tenant_id: tenantId,
+            email: email.toLowerCase().trim(),
+        })
+            .exec();
+    }
+    async findByTenantAgentAndEmail(tenantId, agentId, email) {
+        return this.model
+            .findOne({
+            tenant_id: tenantId,
+            agent_ids: agentId,
+            email: email.toLowerCase().trim(),
+        })
+            .exec();
+    }
+    async addAgentToUser(userId, agentId) {
+        return this.model
+            .findByIdAndUpdate(userId, {
+            $addToSet: { agent_ids: agentId },
+        }, { new: true })
+            .exec();
     }
     async findByTenantId(tenantId) {
         return this.model.find({ tenant_id: tenantId }).select('-password_hash').exec();
     }
     async findWorkspaceUsers(options) {
-        const { tenantId, page = 1, limit = 10, search, role } = options;
+        const { tenantId, page = 1, limit = 10, search, role, agentId } = options;
         const query = { tenant_id: tenantId };
+        if (agentId?.trim()) {
+            const cleanAgentId = agentId.trim();
+            query.agent_ids = cleanAgentId;
+        }
         if (search?.trim()) {
             const regex = new RegExp(search.trim(), 'i');
             query.$or = [{ name: regex }, { email: regex }];
@@ -39,6 +70,11 @@ let DashboardUserRepository = class DashboardUserRepository extends BaseReposito
     }
     async update(id, data) {
         return this.model.findByIdAndUpdate(id, data, { new: true }).exec();
+    }
+    async updateStatus(tenantId, userId, status) {
+        return this.model
+            .findOneAndUpdate({ _id: userId, tenant_id: tenantId }, { $set: { status } }, { new: true })
+            .exec();
     }
 };
 DashboardUserRepository = __decorate([

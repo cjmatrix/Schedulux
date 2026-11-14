@@ -2,7 +2,7 @@ import * as grpc from '@grpc/grpc-js';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { CreateResourceRequest } from '@repo/proto/scheduling';
-import { getTierConfig } from '../../../domain/constants/tiers.constant.js';
+import { getTierConfig, resolveTierConfigWithCache } from '../../../domain/constants/tiers.constant.js';
 import {
   DispatchStatus,
   ResourceEntity,
@@ -39,7 +39,7 @@ export class CreateResourceUseCase implements ICreateResourceUseCase {
   async execute(dto: CreateResourceRequest, propagatedTier?: string): Promise<ResourceEntity> {
     const tier =
       propagatedTier || (await this._cacheRepo.get(`tenant:${dto.tenant_id}:tier`)) || 'starter';
-    const tierConfig = getTierConfig(tier);
+    const tierConfig = await resolveTierConfigWithCache(this._cacheRepo, tier);
 
     if (tierConfig.max_resources !== -1) {
       const currentCount = await this._resourceRepository.countByTenant(dto.tenant_id);

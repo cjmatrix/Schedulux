@@ -20,6 +20,13 @@ export const axiosClient = axios.create({
   },
 });
 
+axiosClient.interceptors.request.use((config) => {
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/dashboarduser')) {
+    config.headers['x-auth-type'] = 'dashboard_user';
+  }
+  return config;
+});
+
 let isRefreshing = false;
 let failedQueue: Array<{
   resolve: (value?: unknown) => void;
@@ -67,7 +74,11 @@ axiosClient.interceptors.response.use(
             {},
             { withCredentials: true },
           );
-        } else if (originalRequest.url?.includes('/dashboard-user/')) {
+        } else if (
+          originalRequest.url?.includes('/dashboard-user/') ||
+          originalRequest.headers?.['x-auth-type'] === 'dashboard_user' ||
+          (typeof window !== 'undefined' && window.location.pathname.startsWith('/dashboarduser'))
+        ) {
           await axios.post(
             `${axiosClient.defaults.baseURL}/api/v1/dashboard-user/auth/refresh-token`,
             {},

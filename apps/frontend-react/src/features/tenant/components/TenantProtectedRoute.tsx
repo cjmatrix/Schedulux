@@ -1,18 +1,29 @@
 import { Calendar, Loader2 } from 'lucide-react';
 import { Navigate, Outlet, useLocation } from 'react-router';
 import { useAuthStore } from '../../../store/useAuthStore';
+import { useDashboardAuthStore } from '../../../store/useDashboardAuthStore';
 import { useTenantProfile } from '../hooks/useAuth';
+import { useDashboardProfile } from '../../dashboard-user/hooks/useDashboardAuth';
 
 export function TenantProtectedRoute() {
   const location = useLocation();
-  const { user, isAuthenticated } = useAuthStore();
-  const { data: profileData, isLoading, isError } = useTenantProfile();
+  const { user: tenantUser, isAuthenticated: isTenantAuth } = useAuthStore();
+  const { user: dashboardUser, isAuthenticated: isDashboardAuth } = useDashboardAuthStore();
 
-  if (isAuthenticated && user) {
+  const isStoreAuthenticated =
+    (isTenantAuth && Boolean(tenantUser)) || (isDashboardAuth && Boolean(dashboardUser));
+
+  const shouldFetchProfiles = !isStoreAuthenticated;
+  const { data: tenantProfile, isLoading: isTenantLoading } =
+    useTenantProfile(shouldFetchProfiles);
+  const { data: dashboardProfile, isLoading: isDashboardLoading } =
+    useDashboardProfile(shouldFetchProfiles);
+
+  if (isStoreAuthenticated) {
     return <Outlet />;
   }
 
-  if (isLoading) {
+  if (shouldFetchProfiles && (isTenantLoading || isDashboardLoading)) {
     return (
       <div className="min-h-screen bg-[#f8f9fa] flex flex-col items-center justify-center gap-4 text-slate-800">
         <div className="w-12 h-12 bg-black rounded-2xl flex items-center justify-center text-white shadow-lg animate-pulse">
@@ -26,9 +37,9 @@ export function TenantProtectedRoute() {
     );
   }
 
-  if (isError || !profileData?.data) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+  if (tenantProfile?.data || dashboardProfile?.data) {
+    return <Outlet />;
   }
 
-  return <Outlet />;
+  return <Navigate to="/login" replace state={{ from: location }} />;
 }

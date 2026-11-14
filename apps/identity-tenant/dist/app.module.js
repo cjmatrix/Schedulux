@@ -19,6 +19,7 @@ import { CacheRepository } from './repository/CacheRepository.js';
 import { DashboardUserRepository } from './repository/DashboardUserRepository.js';
 import { SuperAdminRepository } from './repository/SuperAdminRepository.js';
 import { TenantRepository } from './repository/TenantRepository.js';
+import { TierConfigRepository } from './repository/TierConfigRepository.js';
 import { UnitOfWork } from './repository/UnitOfWork.js';
 import { BcryptPasswordHasher } from './services/bcryptPasswordHasher.js';
 import { BillingService } from './services/billingService.js';
@@ -62,6 +63,7 @@ AppModule = __decorate([
         providers: [
             { provide: 'IUnitOfWork', useClass: UnitOfWork },
             { provide: 'ITenantRepository', useClass: TenantRepository },
+            { provide: 'ITierConfigRepository', useClass: TierConfigRepository },
             { provide: 'IDashboardUserRepository', useClass: DashboardUserRepository },
             { provide: 'ISuperAdminRepository', useClass: SuperAdminRepository },
             { provide: 'ICacheRepository', useClass: CacheRepository },

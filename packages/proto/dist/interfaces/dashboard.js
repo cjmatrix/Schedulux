@@ -38,7 +38,7 @@ function DashboardAuthServiceControllerMethods() {
 exports.DASHBOARD_AUTH_SERVICE_NAME = "DashboardAuthService";
 function DashboardUserServiceControllerMethods() {
     return function (constructor) {
-        const grpcMethods = ["inviteUser", "listWorkspaceUsers"];
+        const grpcMethods = ["inviteUser", "listWorkspaceUsers", "suspendWorkspaceUser"];
         for (const method of grpcMethods) {
             const descriptor = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
             (0, microservices_1.GrpcMethod)("DashboardUserService", method)(constructor.prototype[method], method, descriptor);

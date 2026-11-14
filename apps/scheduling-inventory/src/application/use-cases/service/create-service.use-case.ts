@@ -2,7 +2,7 @@ import * as grpc from '@grpc/grpc-js';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { CreateServiceRequest } from '@repo/proto/scheduling';
-import { getTierConfig } from '../../../domain/constants/tiers.constant.js';
+import { getTierConfig, resolveTierConfigWithCache } from '../../../domain/constants/tiers.constant.js';
 import { ServiceEntity } from '../../../domain/entities/service.entity.js';
 import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
 import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
@@ -36,7 +36,7 @@ export class CreateServiceUseCase implements ICreateServiceUseCase {
   async execute(dto: CreateServiceRequest, propagatedTier?: string): Promise<ServiceEntity> {
     const tier =
       propagatedTier || (await this._cacheRepo.get(`tenant:${dto.tenant_id}:tier`)) || 'starter';
-    const tierConfig = getTierConfig(tier);
+    const tierConfig = await resolveTierConfigWithCache(this._cacheRepo, tier);
 
     if (tierConfig.max_services !== -1) {
       const currentCount = await this._serviceRepository.countByTenant(dto.tenant_id);

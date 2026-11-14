@@ -21,6 +21,7 @@ import { IDashboardUserService } from '../interfaces/IDashboardUserService.js';
 import { IEmailProducer } from '../interfaces/IEmailProducer.js';
 import { IJwtService } from '../interfaces/IJwtService.js';
 import { IPasswordHasher } from '../interfaces/IPasswordHasher.js';
+import type { IDashboardUser } from '../model/DashboardUser.js';
 
 interface DashboardUserRefreshTokenPayload {
   user_id?: string;
@@ -72,11 +73,20 @@ export class DashboardUserService implements IDashboardUserService {
       throw new Error(RESPONSE_MESSAGES.ERRORS.INVALID_CREDENTIALS);
     }
 
+    if (user.status === 'suspended') {
+      throw new Error(RESPONSE_MESSAGES.ERRORS.USER_ACCOUNT_SUSPENDED);
+    }
+
+    const userAgentIds = user.agent_ids || [];
+    const activeAgentId =
+      data.agent_id && userAgentIds.includes(data.agent_id) ? data.agent_id : userAgentIds[0] || '';
+
     const accessToken = this._jwtService.sign(
       {
         user_id: user._id.toString(),
         tenant_id: user.tenant_id,
-        agent_id: user.agent_id,
+        agent_id: activeAgentId,
+        agent_ids: userAgentIds,
         email: user.email,
         system_role: user.system_role,
         role: user.system_role,
@@ -108,10 +118,12 @@ export class DashboardUserService implements IDashboardUserService {
       user: {
         user_id: user._id.toString(),
         tenant_id: user.tenant_id,
-        agent_id: user.agent_id,
+        agent_id: activeAgentId,
+        agent_ids: userAgentIds,
         email: user.email,
         name: user.name,
         system_role: user.system_role,
+        status: user.status || 'active',
         created_at: user.created_at ? user.created_at.toISOString() : new Date().toISOString(),
       },
       access_token: accessToken,
@@ -129,14 +141,19 @@ export class DashboardUserService implements IDashboardUserService {
       throw new Error(RESPONSE_MESSAGES.ERRORS.USER_NOT_FOUND);
     }
 
+    const userAgentIds = user.agent_ids || [];
+    const activeAgentId = userAgentIds[0] || '';
+
     return {
       user: {
         user_id: user._id.toString(),
         tenant_id: user.tenant_id,
-        agent_id: user.agent_id,
+        agent_id: activeAgentId,
+        agent_ids: userAgentIds,
         email: user.email,
         name: user.name,
         system_role: user.system_role,
+        status: user.status || 'active',
         created_at: user.created_at ? user.created_at.toISOString() : new Date().toISOString(),
       },
     };
@@ -273,32 +290,45 @@ export class DashboardUserService implements IDashboardUserService {
       throw new Error(RESPONSE_MESSAGES.ERRORS.INVALID_OR_EXPIRED_TOKEN);
     }
 
-    const existing = await this._dashboardUserRepo.findByEmail(invite.email.toLowerCase().trim());
+    const existing = await this._dashboardUserRepo.findByTenantAndEmail(
+      invite.tenant_id,
+      invite.email.toLowerCase().trim(),
+    );
+
+    let user: IDashboardUser;
     if (existing) {
-      throw new Error(RESPONSE_MESSAGES.ERRORS.USER_ALREADY_EXISTS);
+      user =
+        (await this._dashboardUserRepo.addAgentToUser(
+          existing._id.toString(),
+          invite.agent_id,
+        )) || existing;
+    } else {
+      const password_hash = await this._passwordHasher.hash(data.password, 10);
+      user = await this._dashboardUserRepo.create({
+        tenant_id: invite.tenant_id,
+        agent_ids: [invite.agent_id],
+        email: invite.email.toLowerCase().trim(),
+        name: invite.name.trim(),
+        password_hash,
+        system_role: 'manager',
+      });
     }
 
-    const password_hash = await this._passwordHasher.hash(data.password, 10);
-    const user = await this._dashboardUserRepo.create({
-      tenant_id: invite.tenant_id,
-      agent_id: invite.agent_id,
-      email: invite.email.toLowerCase().trim(),
-      name: invite.name.trim(),
-      password_hash,
-      system_role: 'manager',
-    });
-
     await this._cacheRepo.delete(`dashboard_invitation:${data.token}`);
+
+    const userAgentIds = user.agent_ids || [];
 
     return {
       message: 'Account created successfully! You can now log in.',
       user: {
         user_id: user._id.toString(),
         tenant_id: user.tenant_id,
-        agent_id: user.agent_id,
+        agent_id: userAgentIds[0] || '',
+        agent_ids: userAgentIds,
         email: user.email,
         name: user.name,
         system_role: user.system_role,
+        status: user.status || 'active',
         created_at: user.created_at ? user.created_at.toISOString() : new Date().toISOString(),
       },
     };

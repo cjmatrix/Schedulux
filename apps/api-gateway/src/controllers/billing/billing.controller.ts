@@ -21,7 +21,6 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { lastValueFrom } from 'rxjs';
 import { API_ROUTES } from '../../constants/routes.constant.js';
 import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
-import { getTierConfig, STATIC_TIER_CONFIGS } from '../../constants/tiers.constant.js';
 import { Roles } from '../../decorators/roles.decorator.js';
 import { RolesGuard } from '../../guards/roles.guard.js';
 import { PaddleWebhookGuard } from '../../guards/paddle-webhook.guard.js';
@@ -82,7 +81,7 @@ export class BillingController implements OnModuleInit {
   async getSubscription(@Req() req: AuthenticatedTenantRequest) {
     const tenantId = this._getTenantId(req);
 
-    const [billingInfoRes, weeklyTokens] = await Promise.all([
+    const [billingInfoRes, weeklyTokens, allTiers] = await Promise.all([
       lastValueFrom(this._tenantService.getTenantBillingInfo({ tenant_id: tenantId })).catch(
         (err) => {
           this._logger.warn(`Could not get billing info via gRPC: ${err.message}`);
@@ -96,10 +95,11 @@ export class BillingController implements OnModuleInit {
         },
       ),
       this._redisService.getWeeklyTokenUsage(tenantId).catch(() => 0),
+      this._redisService.getCachedAllTierConfigs(),
     ]);
 
     const tier = billingInfoRes.tier || 'starter';
-    const tierConfig = getTierConfig(tier);
+    const tierConfig = await this._redisService.getCachedTierConfig(tier);
 
     const usage = {
       weekly_tokens: weeklyTokens || 0,
@@ -115,7 +115,7 @@ export class BillingController implements OnModuleInit {
         paddle_subscription_id: billingInfoRes.paddle_subscription_id || null,
         tier_config: tierConfig,
         usage,
-        all_tiers: STATIC_TIER_CONFIGS,
+        all_tiers: allTiers,
       },
     };
   }

@@ -78,8 +78,16 @@ export class SchedulingController implements OnModuleInit {
   }
 
   private _getEffectiveAgentId(req: AuthenticatedTenantRequest, requestedAgentId?: string): string {
-    if (req.dashboardUser?.agent_id) {
-      return req.dashboardUser.agent_id;
+    if (req.dashboardUser) {
+      if (requestedAgentId) {
+        const allowedAgentIds =
+          req.dashboardUser.agent_ids ||
+          (req.dashboardUser.agent_id ? [req.dashboardUser.agent_id] : []);
+        if (allowedAgentIds.length === 0 || allowedAgentIds.includes(requestedAgentId)) {
+          return requestedAgentId;
+        }
+      }
+      return req.dashboardUser.agent_id || '';
     }
     return requestedAgentId || '';
   }

@@ -8,6 +8,7 @@ import { SchedulingController } from './controllers/scheduling/scheduling.contro
 import { SuperAdminController } from './controllers/superadmin/superadmin.controller.js';
 import { SuperAdminDashboardController } from './controllers/superadmin/superadmin-dashboard.controller.js';
 import { SuperAdminTenantController } from './controllers/superadmin/superadmin-tenant.controller.js';
+import { SuperAdminTierConfigController } from './controllers/superadmin/superadmin-tier-config.controller.js';
 import { TenantController } from './controllers/tenant/tenant.controller.js';
 import { TenantDashboardController } from './controllers/tenant/tenant-dashboard.controller.js';
 import { PaddleWebhookGuard } from './guards/paddle-webhook.guard.js';
@@ -113,6 +114,7 @@ import { SchemaGateway } from './websockets/schema.gateway.js';
     SuperAdminController,
     SuperAdminDashboardController,
     SuperAdminTenantController,
+    SuperAdminTierConfigController,
     DashboardUserAuthController,
     KnowledgeController,
     SchedulingController,

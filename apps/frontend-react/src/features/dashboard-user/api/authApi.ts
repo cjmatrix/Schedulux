@@ -5,6 +5,7 @@ export interface DashboardUserInfo {
   user_id: string;
   tenant_id: string;
   agent_id?: string;
+  agent_ids?: string[];
   email: string;
   name: string;
   system_role: 'manager';
@@ -73,6 +74,13 @@ export const dashboardUserAuthApi = {
     const { data } = await axiosClient.post<ApiResponse<null>>(
       '/api/v1/dashboard-user/auth/reset-password',
       payload,
+    );
+    return data;
+  },
+
+  logout: async (): Promise<ApiResponse<null>> => {
+    const { data } = await axiosClient.post<ApiResponse<null>>(
+      '/api/v1/dashboard-user/auth/logout',
     );
     return data;
   },

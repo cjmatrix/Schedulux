@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { useAuthStore } from '../../../store/useAuthStore';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import type { CreateServicePayload, UpdateServicePayload } from '../api/servicesApi';
 import { useTenantAgents } from '../hooks/useKnowledgeDocuments';
 import {
@@ -34,8 +34,7 @@ interface ServiceEditorPageProps {
 export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPageProps) {
   const navigate = useNavigate();
   const { id: serviceIdFromParams, agentId } = useParams<{ id: string; agentId?: string }>();
-  const authUser = useAuthStore((state) => state.user);
-  const isManager = authUser?.system_role === 'manager';
+  const { user: authUser, isManager } = useCurrentUser();
   const { data: agents = [] } = useTenantAgents();
 
   const isCreateMode = mode === 'create' || !serviceIdFromParams || serviceIdFromParams === 'new';
@@ -51,9 +50,7 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
     (agents.length > 0 ? agents[0].agent_id : '');
 
   const navigateToServices = () => {
-    if (isManager) {
-      navigate('/dashboarduser/tenant/services');
-    } else if (effectiveAgentId) {
+    if (effectiveAgentId) {
       navigate(`/tenant/agents/${effectiveAgentId}/services`);
     } else {
       navigate('/tenant/services');
@@ -224,9 +221,7 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
         const res = await createServiceMutation.mutateAsync(payload);
         setFeedbackMessage({ type: 'success', text: 'Service created successfully!' });
         setTimeout(() => {
-          if (isManager) {
-            navigate(`/dashboarduser/tenant/services/${res.data.service_id}`);
-          } else if (effectiveAgentId) {
+          if (effectiveAgentId) {
             navigate(`/tenant/agents/${effectiveAgentId}/services/${res.data.service_id}`);
           } else {
             navigate(`/tenant/services/${res.data.service_id}`);
@@ -339,10 +334,10 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
     serviceData?.service_id || (isCreateMode ? 'srv_new_draft' : serviceIdFromParams);
 
   return (
-    <div className="min-h-screen bg-[#fafbfc] p-6 lg:p-10 font-sans text-slate-800">
+    <div className="min-h-screen bg-[#fafbfc] p-4 sm:p-6 lg:p-10 font-sans text-slate-800">
       <div className="max-w-5xl mx-auto flex flex-col gap-6">
         {/* Navigation Breadcrumbs */}
-        <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+        <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-semibold text-slate-400 flex-wrap">
           <button
             type="button"
             onClick={navigateToServices}
@@ -356,7 +351,7 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
             <>
               <span
                 onClick={() => navigate(`/tenant/agents/${effectiveAgentId}/dashboard`)}
-                className="hover:text-slate-600 cursor-pointer transition font-bold"
+                className="hover:text-slate-600 cursor-pointer transition font-bold truncate max-w-[140px] sm:max-w-none"
               >
                 {effectiveAgentId}
               </span>
@@ -365,14 +360,14 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
           )}
           <span
             onClick={navigateToServices}
-            className="hover:text-slate-600 cursor-pointer transition"
+            className="hover:text-slate-600 cursor-pointer transition truncate"
           >
             Services & Pricing
           </span>
           <span>/</span>
-          <span>{category || 'General'}</span>
+          <span className="capitalize">{category || 'General'}</span>
           <span>/</span>
-          <span className="text-slate-900 font-bold truncate max-w-[200px]">
+          <span className="text-slate-900 font-bold truncate max-w-[140px] sm:max-w-[200px]">
             {name || (isCreateMode ? 'New Service' : 'Service')}
           </span>
         </div>
@@ -396,9 +391,9 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
         )}
 
         {/* Header Bar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 sm:pb-6 border-b border-slate-200">
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight truncate">
               {isCreateMode ? 'Create New Service' : `Edit Service: ${name || 'Untitled Service'}`}
             </h1>
             <div className="flex items-center gap-2.5 mt-2">

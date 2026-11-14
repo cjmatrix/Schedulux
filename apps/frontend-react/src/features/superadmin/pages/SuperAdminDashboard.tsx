@@ -692,7 +692,10 @@ export default function SuperAdminDashboard() {
 
           <div className="mt-5 pt-3 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-500">
             <span>Schedulux Enterprise Core</span>
-            <span className="font-mono">v2.4-stable</span>
+            <span className="text-emerald-400 flex items-center gap-1.5 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              Operational
+            </span>
           </div>
         </div>
       </div>

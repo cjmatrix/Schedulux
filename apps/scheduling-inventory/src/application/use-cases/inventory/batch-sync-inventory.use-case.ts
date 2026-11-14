@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { BatchSyncInventoryRequest, BatchSyncInventoryResponse } from '@repo/proto/scheduling';
-import { getTierConfig } from '../../../domain/constants/tiers.constant.js';
+import { getTierConfig, resolveTierConfigWithCache } from '../../../domain/constants/tiers.constant.js';
 import { RESPONSE_MESSAGES } from '../../../constants/index.js';
 import {
   DispatchStatus,
@@ -62,7 +62,7 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
 
     const tier =
       propagatedTier || (await this._cacheRepo.get(`tenant:${tenantId}:tier`)) || 'starter';
-    const tierConfig = getTierConfig(tier);
+    const tierConfig = await resolveTierConfigWithCache(this._cacheRepo, tier);
 
     const activeIncomingResources = dto.resources.filter((r) => !r.is_deleted);
     const activeIncomingServices = dto.services.filter((s) => !s.is_deleted);

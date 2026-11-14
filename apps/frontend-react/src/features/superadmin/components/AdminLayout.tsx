@@ -3,6 +3,7 @@ import {
   Bell,
   Building2,
   ChevronRight,
+  Gauge,
   LayoutDashboard,
   Loader2,
   LogOut,
@@ -18,6 +19,7 @@ import { useSuperAdminLogout, useSuperAdminProfile } from '../hooks/useSuperAdmi
 const NAV_ITEMS = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/superadmin/dashboard' },
   { icon: Building2, label: 'Tenants', path: '/superadmin/tenants' },
+  { icon: Gauge, label: 'Rate Limits & Tiers', path: '/superadmin/rate-limits' },
   { icon: Activity, label: 'System Health', path: '/superadmin/system-health' },
   { icon: Settings, label: 'Global Settings', path: '/superadmin/settings' },
 ];

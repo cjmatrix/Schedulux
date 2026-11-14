@@ -23,6 +23,14 @@ export interface TenantGetProfileResponse {
   tenant: TenantInfo | undefined;
 }
 
+export interface GetTenantByIdRequest {
+  tenant_id: string;
+}
+
+export interface GetTenantByIdResponse {
+  tenant: TenantInfo | undefined;
+}
+
 export interface RegisterRequest {
   business_name: string;
   full_name: string;
@@ -272,6 +280,8 @@ export const TENANT_AUTH_SERVICE_NAME = "TenantAuthService";
 export interface TenantServiceClient {
   listTenants(request: ListTenantsRequest, metadata?: Metadata): Observable<ListTenantsResponse>;
 
+  getTenantById(request: GetTenantByIdRequest, metadata?: Metadata): Observable<GetTenantByIdResponse>;
+
   suspendTenant(request: SuspendTenantRequest, metadata?: Metadata): Observable<SuspendTenantResponse>;
 
   updateTenantSubscription(
@@ -297,6 +307,11 @@ export interface TenantServiceController {
     request: ListTenantsRequest,
     metadata?: Metadata,
   ): Promise<ListTenantsResponse> | Observable<ListTenantsResponse> | ListTenantsResponse;
+
+  getTenantById(
+    request: GetTenantByIdRequest,
+    metadata?: Metadata,
+  ): Promise<GetTenantByIdResponse> | Observable<GetTenantByIdResponse> | GetTenantByIdResponse;
 
   suspendTenant(
     request: SuspendTenantRequest,
@@ -331,6 +346,7 @@ export function TenantServiceControllerMethods() {
   return function (constructor: Function) {
     const grpcMethods: string[] = [
       "listTenants",
+      "getTenantById",
       "suspendTenant",
       "updateTenantSubscription",
       "getTenantBillingInfo",

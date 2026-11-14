@@ -3,6 +3,7 @@ export const GRPC_SERVICES = {
   TENANT: 'TenantService',
   SUPERADMIN_AUTH: 'SuperAdminAuthService',
   SUPERADMIN_DASHBOARD: 'SuperAdminDashboardService',
+  SUPERADMIN_TIER_CONFIG: 'SuperAdminTierConfigService',
   DASHBOARD_AUTH: 'DashboardAuthService',
   DASHBOARD_USER: 'DashboardUserService',
 } as const;
@@ -29,8 +30,14 @@ export const GRPC_METHODS = {
     GET_OVERVIEW: 'GetSuperAdminOverview',
     GET_REVENUE_CHART: 'GetRevenueChart',
   },
+  SUPERADMIN_TIER_CONFIG: {
+    LIST_TIER_CONFIGS: 'ListTierConfigs',
+    GET_TIER_CONFIG: 'GetTierConfig',
+    UPDATE_TIER_CONFIG: 'UpdateTierConfig',
+  },
   TENANT: {
     LIST_TENANTS: 'ListTenants',
+    GET_TENANT_BY_ID: 'GetTenantById',
     SUSPEND_TENANT: 'SuspendTenant',
     UPDATE_SUBSCRIPTION: 'UpdateTenantSubscription',
     GET_BILLING_INFO: 'GetTenantBillingInfo',
@@ -49,5 +56,6 @@ export const GRPC_METHODS = {
   DASHBOARD_USER: {
     INVITE_USER: 'InviteUser',
     LIST_WORKSPACE_USERS: 'ListWorkspaceUsers',
+    SUSPEND_WORKSPACE_USER: 'SuspendWorkspaceUser',
   },
 } as const;

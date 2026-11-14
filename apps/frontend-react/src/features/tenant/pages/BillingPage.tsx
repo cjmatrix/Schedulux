@@ -260,10 +260,10 @@ export default function BillingPage() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-8 font-sans">
+    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto flex flex-col gap-6 sm:gap-8 font-sans">
       {/* Payment Success Alert */}
       {showSuccessBanner && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between shadow-xs">
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-3">
             <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
             <div>
@@ -275,7 +275,7 @@ export default function BillingPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
             <button
               type="button"
               onClick={() => refetch()}
@@ -296,30 +296,30 @@ export default function BillingPage() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-              <CreditCard className="w-5 h-5" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 sm:pb-6 border-b border-slate-200">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            <div className="p-1.5 sm:p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+              <CreditCard className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-slate-900">
               Subscription &amp; Billing
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
               Paddle Sandbox
             </span>
             {currentAgentId && (
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-medium bg-slate-100 text-slate-600 border border-slate-200">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-medium bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
                 Agent: {currentAgentId.slice(-6)}
               </span>
             )}
           </div>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-xs sm:text-sm text-slate-500">
             Workspace quotas are pooled and shared across all AI agents in your account.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap shrink-0 self-start sm:self-center">
           <button
             type="button"
             onClick={() => setShowGuide(!showGuide)}

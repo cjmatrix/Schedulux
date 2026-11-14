@@ -346,28 +346,28 @@ export function BookingsCalendarView({
   };
 
   return (
-    <div className="bg-white border border-slate-200/90 rounded-2xl shadow-2xs p-5 sm:p-6 flex flex-col gap-5">
+    <div className="bg-white border border-slate-200/90 rounded-2xl shadow-2xs p-3.5 sm:p-5 md:p-6 flex flex-col gap-4 sm:gap-5">
       {/* Calendar Header Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-        <div className="flex items-center gap-3">
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight">{headerTitle}</h2>
-          {isLoading && <Loader2 className="w-4 h-4 animate-spin text-slate-500" />}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 pb-4 border-b border-slate-100">
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <h2 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight">{headerTitle}</h2>
+          {isLoading && <Loader2 className="w-4 h-4 animate-spin text-slate-500 shrink-0" />}
           <button
             type="button"
             onClick={handleToday}
-            className="px-3 py-1 bg-slate-100 hover:bg-slate-200/80 rounded-full text-xs font-semibold text-slate-700 transition cursor-pointer"
+            className="px-2.5 sm:px-3 py-1 bg-slate-100 hover:bg-slate-200/80 rounded-full text-[11px] sm:text-xs font-semibold text-slate-700 transition cursor-pointer shrink-0"
           >
             Today
           </button>
         </div>
 
-        <div className="flex items-center flex-wrap gap-2.5">
+        <div className="flex items-center flex-wrap gap-2 justify-between sm:justify-end w-full sm:w-auto">
           {/* Staff Filter */}
-          <div className="relative">
+          <div className="relative flex-1 sm:flex-initial min-w-[140px]">
             <select
               value={selectedStaffId}
               onChange={(e) => setSelectedStaffId(e.target.value)}
-              className="appearance-none bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 pr-8 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 cursor-pointer"
+              className="w-full sm:w-auto appearance-none bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 pr-8 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 cursor-pointer"
             >
               <option value="all">All Providers / Staff</option>
               {resources.map((res) => (
@@ -380,7 +380,7 @@ export function BookingsCalendarView({
           </div>
 
           {/* Mode Selector */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-xl">
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl shrink-0">
             <button
               type="button"
               onClick={() => setMode('month')}
@@ -406,7 +406,7 @@ export function BookingsCalendarView({
           </div>
 
           {/* Prev/Next arrows */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               type="button"
               onClick={handlePrev}
@@ -426,19 +426,19 @@ export function BookingsCalendarView({
       </div>
 
       {/* Weekday Column Headers */}
-      <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">
-        <div>Mon</div>
-        <div>Tue</div>
-        <div>Wed</div>
-        <div>Thu</div>
-        <div>Fri</div>
-        <div>Sat</div>
-        <div>Sun</div>
+      <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">
+        <div><span className="sm:hidden">M</span><span className="hidden sm:inline">Mon</span></div>
+        <div><span className="sm:hidden">T</span><span className="hidden sm:inline">Tue</span></div>
+        <div><span className="sm:hidden">W</span><span className="hidden sm:inline">Wed</span></div>
+        <div><span className="sm:hidden">T</span><span className="hidden sm:inline">Thu</span></div>
+        <div><span className="sm:hidden">F</span><span className="hidden sm:inline">Fri</span></div>
+        <div><span className="sm:hidden">S</span><span className="hidden sm:inline">Sat</span></div>
+        <div><span className="sm:hidden">S</span><span className="hidden sm:inline">Sun</span></div>
       </div>
 
       {/* Calendar Grid (Month or Week) */}
       {mode === 'month' ? (
-        <div className="grid grid-cols-7 gap-2">
+        <div className="grid grid-cols-7 gap-1 sm:gap-2">
           {monthCells.map((cell) => {
             const dayBookings = bookingsByDate.get(cell.dateStr) || [];
 
@@ -448,11 +448,11 @@ export function BookingsCalendarView({
                 onClick={() => {
                   if (dayBookings.length > 0) {
                     setSelectedDateForDrawer(cell.dateStr);
+                  } else if (onNewBookingForDate && cell.isCurrentMonth) {
+                    onNewBookingForDate(cell.dateStr);
                   }
                 }}
-                className={`min-h-[110px] sm:min-h-[125px] p-2 rounded-2xl border transition-all flex flex-col justify-between group ${
-                  dayBookings.length > 0 ? 'cursor-pointer' : ''
-                } ${
+                className={`min-h-[58px] sm:min-h-[125px] p-1 sm:p-2 rounded-xl sm:rounded-2xl border transition-all flex flex-col justify-between group cursor-pointer ${
                   cell.isToday
                     ? 'bg-slate-50 border-slate-900/30 ring-1 ring-slate-900/10'
                     : cell.isCurrentMonth
@@ -461,9 +461,9 @@ export function BookingsCalendarView({
                 }`}
               >
                 {/* Cell Header: Day Number + Add Button */}
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center justify-between mb-0.5 sm:mb-1.5">
                   <span
-                    className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${
+                    className={`text-[11px] sm:text-xs font-bold w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center ${
                       cell.isToday
                         ? 'bg-slate-900 text-white font-extrabold'
                         : cell.isCurrentMonth
@@ -482,15 +482,24 @@ export function BookingsCalendarView({
                         e.stopPropagation();
                         onNewBookingForDate(cell.dateStr);
                       }}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-md transition cursor-pointer"
+                      className="hidden sm:block opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-md transition cursor-pointer"
                     >
                       <Plus className="w-3 h-3" />
                     </button>
                   )}
                 </div>
 
-                {/* Day Bookings List */}
-                <div className="flex-1 flex flex-col gap-1 overflow-y-auto max-h-[85px] pr-0.5">
+                {/* Mobile-only booking indicator badge */}
+                <div className="sm:hidden flex items-center justify-center py-1">
+                  {dayBookings.length > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-4 px-1 rounded-full text-[9px] font-bold bg-indigo-100 text-indigo-700">
+                      {dayBookings.length}
+                    </span>
+                  )}
+                </div>
+
+                {/* Desktop Day Bookings List */}
+                <div className="hidden sm:flex flex-1 flex-col gap-1 overflow-y-auto max-h-[85px] pr-0.5">
                   {dayBookings.slice(0, 3).map((b) => {
                     const time = formatSlotTime(b.start_time);
                     const svc = getServiceName(b.service_id);
@@ -537,15 +546,15 @@ export function BookingsCalendarView({
           })}
         </div>
       ) : (
-        /* Week View Grid */
-        <div className="grid grid-cols-7 gap-2 min-h-[450px]">
+        /* Week View Grid with Mobile Snap-Scroll */
+        <div className="flex sm:grid sm:grid-cols-7 gap-2 min-h-[450px] overflow-x-auto pb-2 snap-x snap-mandatory -mx-1 px-1 sm:mx-0 sm:px-0">
           {weekDays.map((col) => {
             const dayBookings = bookingsByDate.get(col.dateStr) || [];
 
             return (
               <div
                 key={col.dateStr}
-                className={`p-3 rounded-2xl border flex flex-col gap-2.5 transition ${
+                className={`min-w-[260px] sm:min-w-0 snap-center sm:snap-align-none shrink-0 sm:shrink flex-1 p-3 rounded-2xl border flex flex-col gap-2.5 transition ${
                   col.isToday
                     ? 'bg-slate-50/80 border-slate-900/40 ring-1 ring-slate-900/10'
                     : 'bg-white border-slate-200/80 hover:border-slate-300'
@@ -657,9 +666,9 @@ export function BookingsCalendarView({
           />
 
           {/* Drawer Panel */}
-          <div className="relative w-full max-w-md sm:max-w-lg bg-white shadow-2xl flex flex-col h-full z-10 animate-in slide-in-from-right duration-300 font-sans">
+          <div className="relative w-full max-w-full sm:max-w-md md:max-w-lg bg-white shadow-2xl flex flex-col h-full z-10 animate-in slide-in-from-right duration-300 font-sans">
             {/* Header */}
-            <div className="p-5 border-b border-slate-100 flex items-start justify-between bg-slate-50/70">
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-start justify-between bg-slate-50/70">
               <div>
                 <div className="flex items-center gap-2">
                   <CalendarDays className="w-4 h-4 text-slate-700" />
@@ -719,7 +728,7 @@ export function BookingsCalendarView({
             )}
 
             {/* Drawer Body (Timeline List) */}
-            <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-3">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 flex flex-col gap-3">
               {filteredDrawerBookings.length === 0 ? (
                 <div className="py-16 text-center text-slate-400 text-xs">
                   {drawerSearch ? 'No appointments match your search' : 'No appointments scheduled for this date.'}

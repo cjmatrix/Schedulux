@@ -179,17 +179,17 @@ export default function AppointmentChatWidget() {
 }`;
 
   return (
-    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-8 font-sans">
+    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto flex flex-col gap-6 sm:gap-8 font-sans">
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-              <Code2 className="w-5 h-5" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 sm:pb-6 border-b border-slate-200">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            <div className="p-1.5 sm:p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+              <Code2 className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Embed Chat Widget</h1>
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight">Embed Chat Widget</h1>
           </div>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-xs sm:text-sm text-slate-500">
             Deploy your autonomous AI booking agent directly onto your website with instant client-side isolation and CORS security.
           </p>
         </div>

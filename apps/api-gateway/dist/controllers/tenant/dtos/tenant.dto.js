@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TenantDashboardOverviewDto = exports.TenantDashboardOverviewSchema = exports.ResetPasswordDto = exports.ResetPasswordSchema = exports.ForgotPasswordDto = exports.ForgotPasswordSchema = exports.ListWorkspaceUsersDto = exports.ListWorkspaceUsersSchema = exports.InviteUserDto = exports.InviteUserSchema = exports.LogoutDto = exports.LogoutSchema = exports.RefreshTokenDto = exports.RefreshTokenSchema = exports.VerifyEmailDto = exports.VerifyEmailSchema = exports.TenantLoginDto = exports.TenantLoginSchema = exports.TenantRegisterDto = exports.TenantRegisterSchema = exports.TenantGoogleLoginDto = exports.TenantGoogleLoginSchema = void 0;
+exports.SuspendWorkspaceUserParamDto = exports.SuspendWorkspaceUserParamSchema = exports.TenantDashboardOverviewDto = exports.TenantDashboardOverviewSchema = exports.ResetPasswordDto = exports.ResetPasswordSchema = exports.ForgotPasswordDto = exports.ForgotPasswordSchema = exports.ListWorkspaceUsersDto = exports.ListWorkspaceUsersSchema = exports.InviteUserDto = exports.InviteUserSchema = exports.LogoutDto = exports.LogoutSchema = exports.RefreshTokenDto = exports.RefreshTokenSchema = exports.VerifyEmailDto = exports.VerifyEmailSchema = exports.TenantLoginDto = exports.TenantLoginSchema = exports.TenantRegisterDto = exports.TenantRegisterSchema = exports.TenantGoogleLoginDto = exports.TenantGoogleLoginSchema = void 0;
 const nestjs_zod_1 = require("nestjs-zod");
 const zod_1 = require("zod");
 exports.TenantGoogleLoginSchema = zod_1.z.object({
@@ -59,6 +59,7 @@ class InviteUserDto extends (0, nestjs_zod_1.createZodDto)(exports.InviteUserSch
 exports.InviteUserDto = InviteUserDto;
 exports.ListWorkspaceUsersSchema = zod_1.z.object({
     tenant_id: zod_1.z.string().optional(),
+    agent_id: zod_1.z.string().optional(),
     page: zod_1.z.coerce.number().int().min(1).default(1),
     limit: zod_1.z.coerce.number().int().min(1).max(100).default(10),
     search: zod_1.z.string().optional(),
@@ -86,3 +87,9 @@ exports.TenantDashboardOverviewSchema = zod_1.z.object({
 class TenantDashboardOverviewDto extends (0, nestjs_zod_1.createZodDto)(exports.TenantDashboardOverviewSchema) {
 }
 exports.TenantDashboardOverviewDto = TenantDashboardOverviewDto;
+exports.SuspendWorkspaceUserParamSchema = zod_1.z.object({
+    userId: zod_1.z.string().min(1, 'User ID is required'),
+});
+class SuspendWorkspaceUserParamDto extends (0, nestjs_zod_1.createZodDto)(exports.SuspendWorkspaceUserParamSchema) {
+}
+exports.SuspendWorkspaceUserParamDto = SuspendWorkspaceUserParamDto;

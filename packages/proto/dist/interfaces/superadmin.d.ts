@@ -69,6 +69,51 @@ export interface RevenueDataPoint {
 export interface RevenueChartResponse {
     points: RevenueDataPoint[];
 }
+export interface TierConfigItem {
+    id: string;
+    tier: string;
+    name: string;
+    max_agents: number;
+    max_services: number;
+    max_resources: number;
+    max_kb_docs: number;
+    max_kb_doc_size_mb: number;
+    weekly_token_limit: number;
+    rate_limit_rpm: number;
+    status: string;
+    description: string;
+    created_at: string;
+    updated_at: string;
+}
+export interface ListTierConfigsRequest {
+}
+export interface ListTierConfigsResponse {
+    configs: TierConfigItem[];
+}
+export interface GetTierConfigRequest {
+    tier: string;
+}
+export interface GetTierConfigResponse {
+    config: TierConfigItem | undefined;
+}
+export interface UpdateTierConfigRequest {
+    tier: string;
+    name?: string | undefined;
+    max_agents?: number | undefined;
+    max_services?: number | undefined;
+    max_resources?: number | undefined;
+    max_kb_docs?: number | undefined;
+    max_kb_doc_size_mb?: number | undefined;
+    weekly_token_limit?: number | undefined;
+    rate_limit_rpm?: number | undefined;
+    status?: string | undefined;
+    description?: string | undefined;
+}
+export interface UpdateTierConfigResponse {
+    success: boolean;
+    message: string;
+    config: TierConfigItem | undefined;
+}
 export declare const SUPERADMIN_PACKAGE_NAME = "superadmin";
 export interface SuperAdminAuthServiceClient {
     login(request: LoginRequest, metadata?: Metadata): Observable<LoginResponse>;
@@ -94,4 +139,16 @@ export interface SuperAdminDashboardServiceController {
 }
 export declare function SuperAdminDashboardServiceControllerMethods(): (constructor: Function) => void;
 export declare const SUPER_ADMIN_DASHBOARD_SERVICE_NAME = "SuperAdminDashboardService";
+export interface SuperAdminTierConfigServiceClient {
+    listTierConfigs(request: ListTierConfigsRequest, metadata?: Metadata): Observable<ListTierConfigsResponse>;
+    getTierConfig(request: GetTierConfigRequest, metadata?: Metadata): Observable<GetTierConfigResponse>;
+    updateTierConfig(request: UpdateTierConfigRequest, metadata?: Metadata): Observable<UpdateTierConfigResponse>;
+}
+export interface SuperAdminTierConfigServiceController {
+    listTierConfigs(request: ListTierConfigsRequest, metadata?: Metadata): Promise<ListTierConfigsResponse> | Observable<ListTierConfigsResponse> | ListTierConfigsResponse;
+    getTierConfig(request: GetTierConfigRequest, metadata?: Metadata): Promise<GetTierConfigResponse> | Observable<GetTierConfigResponse> | GetTierConfigResponse;
+    updateTierConfig(request: UpdateTierConfigRequest, metadata?: Metadata): Promise<UpdateTierConfigResponse> | Observable<UpdateTierConfigResponse> | UpdateTierConfigResponse;
+}
+export declare function SuperAdminTierConfigServiceControllerMethods(): (constructor: Function) => void;
+export declare const SUPER_ADMIN_TIER_CONFIG_SERVICE_NAME = "SuperAdminTierConfigService";
 //# sourceMappingURL=superadmin.d.ts.map

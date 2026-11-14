@@ -17,6 +17,7 @@ exports.RedisService = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const ioredis_1 = require("ioredis");
+const tiers_constant_js_1 = require("../constants/tiers.constant.js");
 let RedisService = RedisService_1 = class RedisService {
     _configService;
     _logger = new common_1.Logger(RedisService_1.name);
@@ -130,6 +131,86 @@ let RedisService = RedisService_1 = class RedisService {
             this._logger.error(`Failed to cache tenant tier for ${tenantId}:`, err);
         }
     }
+    async getCachedTierConfig(tier) {
+        const normalized = (tier || tiers_constant_js_1.DEFAULT_TIER).trim().toLowerCase();
+        const fallback = tiers_constant_js_1.STATIC_TIER_CONFIGS[normalized] || tiers_constant_js_1.STATIC_TIER_CONFIGS[tiers_constant_js_1.DEFAULT_TIER];
+        if (!this._client)
+            return fallback;
+        try {
+            const raw = await this._client.get(`tier_config:${normalized}`);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                return {
+                    tier: String(parsed.tier || normalized),
+                    name: String(parsed.name || fallback.name),
+                    max_agents: Number(parsed.max_agents ?? fallback.max_agents),
+                    max_services: Number(parsed.max_services ?? fallback.max_services),
+                    max_resources: Number(parsed.max_resources ?? fallback.max_resources),
+                    max_kb_docs: Number(parsed.max_kb_docs ?? fallback.max_kb_docs),
+                    max_kb_doc_size_mb: Number(parsed.max_kb_doc_size_mb ?? fallback.max_kb_doc_size_mb),
+                    weekly_token_limit: Number(parsed.weekly_token_limit ?? fallback.weekly_token_limit),
+                    rate_limit_rpm: Number(parsed.rate_limit_rpm ?? fallback.rate_limit_rpm),
+                    status: (parsed.status || fallback.status),
+                    description: parsed.description || fallback.description,
+                };
+            }
+        }
+        catch (err) {
+            this._logger.warn(`Failed to read tier_config:${normalized} from Redis, using fallback:`, err);
+        }
+        return fallback;
+    }
+    async getCachedAllTierConfigs() {
+        const fallback = { ...tiers_constant_js_1.STATIC_TIER_CONFIGS };
+        if (!this._client)
+            return fallback;
+        try {
+            const raw = await this._client.get('tier_config:all');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    const result = {};
+                    for (const item of parsed) {
+                        result[item.tier] = {
+                            tier: item.tier,
+                            name: item.name,
+                            max_agents: Number(item.max_agents),
+                            max_services: Number(item.max_services),
+                            max_resources: Number(item.max_resources),
+                            max_kb_docs: Number(item.max_kb_docs),
+                            max_kb_doc_size_mb: Number(item.max_kb_doc_size_mb),
+                            weekly_token_limit: Number(item.weekly_token_limit),
+                            rate_limit_rpm: Number(item.rate_limit_rpm),
+                            status: item.status,
+                            description: item.description,
+                        };
+                    }
+                    return result;
+                }
+                if (typeof parsed === 'object' && parsed !== null) {
+                    return parsed;
+                }
+            }
+        }
+        catch (err) {
+            this._logger.warn('Failed to read tier_config:all from Redis, using fallback:', err);
+        }
+        return fallback;
+    }
+    async invalidateTierConfigCache(tier) {
+        if (!this._client)
+            return;
+        try {
+            const keys = ['tier_config:all'];
+            if (tier) {
+                keys.push(`tier_config:${tier.trim().toLowerCase()}`);
+            }
+            await this._client.del(...keys);
+        }
+        catch (err) {
+            this._logger.error('Failed to invalidate tier config cache in Redis:', err);
+        }
+    }
     async getTenantStatus(tenantId) {
         try {
             return await this._client.get(`tenant:${tenantId}:status`);
@@ -145,6 +226,23 @@ let RedisService = RedisService_1 = class RedisService {
         }
         catch (err) {
             this._logger.error(`Failed to cache tenant status for ${tenantId}:`, err);
+        }
+    }
+    async getDashboardUserStatus(userId) {
+        try {
+            return await this._client.get(`dashboard_user:${userId}:status`);
+        }
+        catch (err) {
+            this._logger.error(`Failed to get cached dashboard user status for ${userId}:`, err);
+            return null;
+        }
+    }
+    async setDashboardUserStatus(userId, status, ttlSeconds = 86400 * 30) {
+        try {
+            await this._client.set(`dashboard_user:${userId}:status`, status, 'EX', ttlSeconds);
+        }
+        catch (err) {
+            this._logger.error(`Failed to cache dashboard user status for ${userId}:`, err);
         }
     }
     _getCurrentIsoWeek() {

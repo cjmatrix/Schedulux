@@ -215,9 +215,9 @@ export default function KnowledgeBasePage() {
   );
 
   return (
-    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-8 font-sans">
+    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto flex flex-col gap-6 sm:gap-8 font-sans">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 tracking-wide">
+      <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-semibold text-slate-400 tracking-wide flex-wrap">
         <button
           onClick={() => navigate('/tenant/agents')}
           className="flex items-center gap-1 hover:text-slate-800 transition cursor-pointer"
@@ -230,28 +230,28 @@ export default function KnowledgeBasePage() {
           <>
             <button
               onClick={() => navigate(`/tenant/agents/${activeAgentId}/dashboard`)}
-              className="text-slate-600 hover:text-slate-800 font-bold truncate max-w-xs cursor-pointer"
+              className="text-slate-600 hover:text-slate-800 font-bold truncate max-w-[140px] sm:max-w-xs cursor-pointer"
             >
               {currentAgent.name}
             </button>
             <ChevronRight className="w-3 h-3 text-slate-300" />
           </>
         )}
-        <span className="text-slate-900 font-bold">Knowledge Base</span>
+        <span className="text-slate-900 font-bold truncate">Knowledge Base</span>
       </div>
 
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-              <BookOpen className="w-5 h-5" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 sm:pb-6 border-b border-slate-200">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            <div className="p-1.5 sm:p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+              <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
               Knowledge Base &amp; FAQ PDFs
             </h1>
           </div>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-xs sm:text-sm text-slate-500">
             Upload PDF documents (pricing matrices, FAQ sheets, policy guides) to train your AI agent.
           </p>
         </div>

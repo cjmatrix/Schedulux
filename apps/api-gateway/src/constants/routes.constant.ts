@@ -19,12 +19,18 @@ export const API_ROUTES = {
       TOKEN_CHART: 'token-chart',
       TOP_TENANTS: 'top-tenants',
     },
+    TIER_CONFIGS: {
+      BASE: 'api/v1/superadmin/tier-configs',
+      ROOT: '',
+      BY_TIER: ':tier',
+    },
   },
   DASHBOARD_USER: {
     AUTH: {
       BASE: 'api/v1/dashboard-user/auth',
       LOGIN: 'login',
       REFRESH_TOKEN: 'refresh-token',
+      LOGOUT: 'logout',
       FORGOT_PASSWORD: 'forgot-password',
       RESET_PASSWORD: 'reset-password',
       ACCEPT_INVITE: 'accept-invite',
@@ -46,6 +52,7 @@ export const API_ROUTES = {
       RESET_PASSWORD: 'reset-password',
       INVITE_USER: 'invite-user',
       WORKSPACE_USERS: 'workspace-users',
+      SUSPEND_WORKSPACE_USER: 'workspace-users/:userId/suspend',
     },
     BILLING: {
       BASE: 'api/v1/tenant/billing',

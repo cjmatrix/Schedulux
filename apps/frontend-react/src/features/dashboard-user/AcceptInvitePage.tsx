@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { dashboardUserAuthApi, type InvitationInfo } from './api/authApi';
-import { useAcceptInvitation } from '../tenant/hooks/useAuth';
+import { useAcceptInvitation } from './hooks/useDashboardAuth';
 
 export default function AcceptInvitePage() {
   const [searchParams] = useSearchParams();

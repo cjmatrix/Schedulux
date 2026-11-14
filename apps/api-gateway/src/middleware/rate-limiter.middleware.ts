@@ -7,7 +7,6 @@ import {
 import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { COOKIE_NAMES } from '../constants/cookies.constant.js';
-import { getTierConfig } from '../constants/tiers.constant.js';
 import { RedisService } from '../services/redis.service.js';
 
 interface DecodedTokenSummary {
@@ -64,8 +63,8 @@ export class RateLimiterMiddleware implements NestMiddleware {
           tenantTier = (await this._redisService.getTenantTier(tenantId)) || undefined;
         }
 
-        const tierConfig = getTierConfig(tenantTier);
-        maxLimit = tierConfig.rate_limit_rpm || 60;
+        const tierConfig = await this._redisService.getCachedTierConfig(tenantTier);
+        maxLimit = tierConfig?.rate_limit_rpm || 60;
         rateLimitKey = `rate_limit:tenant:${tenantId}`;
       } else {
         // Public / Unauthenticated / IP-based
@@ -107,7 +106,7 @@ export class RateLimiterMiddleware implements NestMiddleware {
       return next();
     } catch (err) {
       this._logger.error('Error executing rate limiter middleware:', err);
-      return next(); // Fail open to maintain availability
+      return next(); 
     }
   }
 }

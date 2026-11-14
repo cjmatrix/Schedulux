@@ -353,10 +353,10 @@ export function CreateBookingModal({
         onClick={onClose}
       />
 
-      <div className="fixed inset-y-0 right-0 max-w-2xl w-full flex pl-10">
+      <div className="fixed inset-y-0 right-0 max-w-2xl w-full flex sm:pl-10">
         <div className="w-full bg-white shadow-2xl flex flex-col h-full overflow-hidden border-l border-slate-200">
           {/* Header */}
-          <div className="p-6 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+          <div className="p-4 sm:p-6 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
             <div>
               <div className="flex items-center gap-2">
                 <span className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">

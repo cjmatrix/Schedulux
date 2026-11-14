@@ -1,4 +1,9 @@
-import { ListTenantsRequest, ListTenantsResponse } from '@repo/proto/tenant';
+import {
+  GetTenantByIdResponse,
+  ListTenantsRequest,
+  ListTenantsResponse,
+} from '@repo/proto/tenant';
+import type { TierConfigItem } from '@repo/proto/superadmin';
 
 export interface SuperAdminAuthResult {
   superAdmin: {
@@ -66,6 +71,8 @@ export interface ISuperAdminService {
 
   ListTenants(data: ListTenantsRequest): Promise<ListTenantsResponse>;
 
+  getTenantById(tenantId: string): Promise<GetTenantByIdResponse>;
+
   suspendTenant(tenantId: string): Promise<SuspendTenantResult>;
 
   getOverview(startDate?: string, endDate?: string): Promise<SuperAdminOverviewResult>;
@@ -75,4 +82,10 @@ export interface ISuperAdminService {
     endDate?: string,
     interval?: string,
   ): Promise<RevenueDataPointResult[]>;
+
+  listTierConfigs(): Promise<TierConfigItem[]>;
+
+  getTierConfig(tier: string): Promise<TierConfigItem>;
+
+  updateTierConfig(tier: string, data: Partial<TierConfigItem>): Promise<TierConfigItem>;
 }

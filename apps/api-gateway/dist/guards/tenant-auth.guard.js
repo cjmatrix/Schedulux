@@ -27,22 +27,36 @@ let TenantAuthGuard = class TenantAuthGuard {
     _configService;
     _redisService;
     _client;
+    _dashboardClient;
     _tenantService;
-    constructor(_configService, _redisService, _client) {
+    _dashboardAuthService;
+    constructor(_configService, _redisService, _client, _dashboardClient) {
         this._configService = _configService;
         this._redisService = _redisService;
         this._client = _client;
+        this._dashboardClient = _dashboardClient;
     }
     onModuleInit() {
-        if (this._client) {
-            this._tenantService = this._client.getService('TenantService');
-        }
+        this._tenantService = this._client.getService('TenantService');
+        this._dashboardAuthService =
+            this._dashboardClient.getService('DashboardAuthService');
     }
     async canActivate(context) {
         const request = context.switchToHttp().getRequest();
         const tenantToken = request.cookies?.[cookies_constant_js_1.COOKIE_NAMES.TENANT_ACCESS_TOKEN];
         const dashboardToken = request.cookies?.[cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN];
-        const token = tenantToken || dashboardToken;
+        const isDashboardEndpoint = request.url?.includes('/dashboard-user/');
+        const isTenantAuthEndpoint = request.url?.includes('/tenant/auth/');
+        let token;
+        if (isDashboardEndpoint) {
+            token = dashboardToken;
+        }
+        else if (isTenantAuthEndpoint) {
+            token = tenantToken;
+        }
+        else {
+            token = tenantToken || dashboardToken;
+        }
         if (!token) {
             throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TOKEN_MISSING);
         }
@@ -54,24 +68,14 @@ let TenantAuthGuard = class TenantAuthGuard {
             }
             let status = await this._redisService.getTenantStatus(decoded.tenant_id);
             if (!status) {
-                if (this._tenantService) {
-                    try {
-                        const tenantList = await (0, rxjs_1.lastValueFrom)(this._tenantService.listTenants({
-                            page: 1,
-                            limit: 1,
-                            search: '',
-                            tier: '',
-                            status: '',
-                            tenant_ids: [decoded.tenant_id],
-                        }));
-                        status = tenantList?.tenants?.[0]?.status || 'active';
-                        await this._redisService.setTenantStatus(decoded.tenant_id, status);
-                    }
-                    catch {
-                        status = 'active';
-                    }
+                try {
+                    const tenantResp = await (0, rxjs_1.lastValueFrom)(this._tenantService.getTenantById({
+                        tenant_id: decoded.tenant_id,
+                    }));
+                    status = tenantResp?.tenant?.status || 'active';
+                    await this._redisService.setTenantStatus(decoded.tenant_id, status);
                 }
-                else {
+                catch {
                     status = 'active';
                 }
             }
@@ -88,6 +92,23 @@ let TenantAuthGuard = class TenantAuthGuard {
                 request.tenant = decoded;
             }
             else if (decoded.role === 'manager') {
+                const userId = decoded.user_id || decoded.sub;
+                if (userId) {
+                    let userStatus = await this._redisService.getDashboardUserStatus(userId);
+                    if (!userStatus) {
+                        try {
+                            const profile = await (0, rxjs_1.lastValueFrom)(this._dashboardAuthService.getProfile({ user_id: userId }));
+                            userStatus = profile?.user?.status || 'active';
+                            await this._redisService.setDashboardUserStatus(userId, userStatus);
+                        }
+                        catch {
+                            userStatus = 'active';
+                        }
+                    }
+                    if (userStatus === 'suspended') {
+                        throw new common_1.ForbiddenException('Your account has been suspended. Please contact your workspace administrator.');
+                    }
+                }
                 request.dashboardUser = decoded;
             }
             else {
@@ -108,8 +129,8 @@ exports.TenantAuthGuard = TenantAuthGuard = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, common_1.Inject)(config_1.ConfigService)),
     __param(1, (0, common_1.Inject)(redis_service_js_1.RedisService)),
-    __param(2, (0, common_1.Optional)()),
     __param(2, (0, common_1.Inject)('TENANT_PACKAGE')),
+    __param(3, (0, common_1.Inject)('DASHBOARD_PACKAGE')),
     __metadata("design:paramtypes", [config_1.ConfigService,
-        redis_service_js_1.RedisService, Object])
+        redis_service_js_1.RedisService, Object, Object])
 ], TenantAuthGuard);

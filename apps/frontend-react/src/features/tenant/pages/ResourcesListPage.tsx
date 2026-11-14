@@ -17,16 +17,15 @@ import {
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Pagination } from '../../../components/Pagination';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import useDebounceHook from '../../../shared/hooks/useDebounceHook';
-import { useAuthStore } from '../../../store/useAuthStore';
 import { useTenantAgents } from '../hooks/useKnowledgeDocuments';
 import { useDeleteResource, useResourcesList } from '../hooks/useResources';
 
 export default function ResourcesListPage() {
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId?: string }>();
-  const authUser = useAuthStore((state) => state.user);
-  const isManager = authUser?.system_role === 'manager';
+  const { user: authUser, isManager } = useCurrentUser();
   const { data: agents = [] } = useTenantAgents();
 
   const effectiveAgentId =
@@ -47,7 +46,7 @@ export default function ResourcesListPage() {
     setPage(1);
   }, [debouncedSearch, selectedType, selectedStatus]);
 
-  // Single backend-searched, backend-filtered, and paginated query enriched with summary
+
   const {
     data: resourcesResponse,
     isLoading,
@@ -133,16 +132,16 @@ export default function ResourcesListPage() {
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800 pb-20">
       {/* Top Header */}
-      <div className="max-w-7xl mx-auto px-6 sm:px-8 pt-8 pb-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 pt-4 sm:pt-6 md:pt-8 pb-4">
         {/* Breadcrumb */}
         {isManager ? (
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 tracking-wide mb-3">
+          <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-semibold text-slate-400 tracking-wide mb-3 flex-wrap">
             <span>Operations</span>
             <span>/</span>
             <span className="text-slate-900 font-bold">Resources &amp; Inventory</span>
           </div>
         ) : effectiveAgentId ? (
-          <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3">
+          <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-medium text-slate-500 mb-3 flex-wrap">
             <button
               onClick={() => navigate('/tenant/agents')}
               className="hover:text-slate-900 transition cursor-pointer"
@@ -152,15 +151,15 @@ export default function ResourcesListPage() {
             <span>/</span>
             <button
               onClick={() => navigate(`/tenant/agents/${effectiveAgentId}/dashboard`)}
-              className="hover:text-slate-900 font-bold transition cursor-pointer"
+              className="hover:text-slate-900 font-bold transition cursor-pointer truncate max-w-[140px] sm:max-w-none"
             >
               {effectiveAgentId}
             </button>
             <span>/</span>
-            <span className="text-slate-900 font-semibold">Resources &amp; Inventory</span>
+            <span className="text-slate-900 font-semibold truncate">Resources &amp; Inventory</span>
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3">
+          <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-medium text-slate-500 mb-3 flex-wrap">
             <span>Tenant Workspace</span>
             <span>/</span>
             <span className="text-slate-900 font-semibold">Resources &amp; Inventory</span>
@@ -168,27 +167,27 @@ export default function ResourcesListPage() {
         )}
 
         {/* Header Bar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-                <Package className="w-5 h-5" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 sm:pb-6 border-b border-slate-200">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+              <div className="p-1.5 sm:p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+                <Package className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
                 {effectiveAgentId ? 'Agent Resources & Inventory' : 'Resources & Inventory'}
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold shrink-0">
                 {stats.active} Dispatched
               </span>
             </div>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-xs sm:text-sm text-slate-500">
               {effectiveAgentId
-                ? `Configure team members, rooms, and equipment linked to AI agent: ${effectiveAgentId}`
+                ? 'Configure team members, rooms, and equipment linked to this AI agent.'
                 : 'Configure team members, meeting rooms, stations, and physical equipment available for autonomous AI booking.'}
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
             <button
               onClick={() => refetch()}
               disabled={isRefetching}
@@ -199,15 +198,13 @@ export default function ResourcesListPage() {
             </button>
             <button
               onClick={() => {
-                if (isManager) {
-                  navigate('/dashboarduser/tenant/resources/new');
-                } else if (effectiveAgentId) {
+                if (effectiveAgentId) {
                   navigate(`/tenant/agents/${effectiveAgentId}/resources/new`);
                 } else {
                   navigate('/tenant/inventory/new');
                 }
               }}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-black transition-all shadow-sm cursor-pointer"
+              className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-black transition-all shadow-sm cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Add Resource</span>
@@ -216,41 +213,41 @@ export default function ResourcesListPage() {
         </div>
 
         {/* Stats Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 my-6">
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 my-4 sm:my-6">
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
             <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-xs font-medium">Total Resources</span>
-              <Package className="w-4 h-4 text-slate-400" />
+              <span className="text-[11px] sm:text-xs font-medium truncate">Total Resources</span>
+              <Package className="w-4 h-4 text-slate-400 shrink-0" />
             </div>
-            <div className="text-2xl font-extrabold text-slate-900">{stats.total}</div>
-            <div className="text-[11px] text-slate-400 mt-0.5">Physical & staff assets</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-slate-900">{stats.total}</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">Physical &amp; staff assets</div>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
             <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-xs font-medium">AI Bookable</span>
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              <span className="text-[11px] sm:text-xs font-medium truncate">AI Bookable</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
             </div>
-            <div className="text-2xl font-extrabold text-emerald-600">{stats.active}</div>
-            <div className="text-[11px] text-slate-400 mt-0.5">Active for atomic slot locking</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-emerald-600">{stats.active}</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">Active for slot locking</div>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
             <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-xs font-medium">Staff & Team</span>
-              <Users className="w-4 h-4 text-slate-400" />
+              <span className="text-[11px] sm:text-xs font-medium truncate">Staff &amp; Team</span>
+              <Users className="w-4 h-4 text-slate-400 shrink-0" />
             </div>
-            <div className="text-2xl font-extrabold text-slate-900">{stats.staffCount}</div>
-            <div className="text-[11px] text-slate-400 mt-0.5">Eligible team members</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-slate-900">{stats.staffCount}</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">Eligible team members</div>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
             <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-xs font-medium">Rooms & Equipment</span>
-              <Building2 className="w-4 h-4 text-slate-400" />
+              <span className="text-[11px] sm:text-xs font-medium truncate">Rooms &amp; Equipment</span>
+              <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
             </div>
-            <div className="text-2xl font-extrabold text-slate-900">{stats.physicalCount}</div>
-            <div className="text-[11px] text-slate-400 mt-0.5">Required spaces & equipment</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-slate-900">{stats.physicalCount}</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">Spaces &amp; equipment</div>
           </div>
         </div>
 
@@ -472,9 +469,7 @@ export default function ResourcesListPage() {
                       </button>
                       <button
                         onClick={() => {
-                          if (isManager) {
-                            navigate(`/dashboarduser/tenant/resources/${res.resource_id}`);
-                          } else if (effectiveAgentId) {
+                          if (effectiveAgentId) {
                             navigate(
                               `/tenant/agents/${effectiveAgentId}/resources/${res.resource_id}`,
                             );

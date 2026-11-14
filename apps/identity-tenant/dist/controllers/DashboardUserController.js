@@ -74,6 +74,12 @@ let DashboardUserController = class DashboardUserController {
             throw new Error(RESPONSE_MESSAGES.ERRORS.TENANT_ID_REQUIRED);
         return await this._tenantService.listWorkspaceUsers(data);
     }
+    async suspendWorkspaceUser(data) {
+        if (!data.tenant_id || !data.user_id) {
+            throw new Error(RESPONSE_MESSAGES.ERRORS.MISSING_REQUIRED_FIELDS);
+        }
+        return await this._tenantService.suspendWorkspaceUser(data.tenant_id, data.user_id);
+    }
 };
 __decorate([
     GrpcMethod(GRPC_SERVICES.DASHBOARD_AUTH, GRPC_METHODS.DASHBOARD_AUTH.LOGIN),
@@ -129,6 +135,12 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], DashboardUserController.prototype, "listWorkspaceUsers", null);
+__decorate([
+    GrpcMethod(GRPC_SERVICES.DASHBOARD_USER, GRPC_METHODS.DASHBOARD_USER.SUSPEND_WORKSPACE_USER),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], DashboardUserController.prototype, "suspendWorkspaceUser", null);
 DashboardUserController = __decorate([
     Controller(),
     UseFilters(new AllExceptionsFilter()),

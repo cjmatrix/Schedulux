@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { useAuthStore } from '../../../store/useAuthStore';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import type {
   CreateResourcePayload,
   DaySchedule,
@@ -128,8 +128,7 @@ function normalizeWeeklySchedule(rawJson?: string): WeeklySchedule {
 export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPageProps) {
   const navigate = useNavigate();
   const { id: resourceIdFromParams, agentId } = useParams<{ id: string; agentId?: string }>();
-  const authUser = useAuthStore((state) => state.user);
-  const isManager = authUser?.system_role === 'manager';
+  const { user: authUser, isManager } = useCurrentUser();
   const { data: agents = [] } = useTenantAgents();
 
   const isCreateMode = mode === 'create' || !resourceIdFromParams || resourceIdFromParams === 'new';
@@ -145,9 +144,7 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
     (agents.length > 0 ? agents[0].agent_id : '');
 
   const navigateToResources = () => {
-    if (isManager) {
-      navigate('/dashboarduser/tenant/resources');
-    } else if (effectiveAgentId) {
+    if (effectiveAgentId) {
       navigate(`/tenant/agents/${effectiveAgentId}/resources`);
     } else {
       navigate('/tenant/inventory');
@@ -365,9 +362,7 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
         const created = await createResourceMutation.mutateAsync(payload as CreateResourcePayload);
         setSaveSuccess(true);
         setTimeout(() => {
-          if (isManager) {
-            navigate(`/dashboarduser/tenant/resources/${created.data.resource_id}`);
-          } else if (effectiveAgentId) {
+          if (effectiveAgentId) {
             navigate(`/tenant/agents/${effectiveAgentId}/resources/${created.data.resource_id}`);
           } else {
             navigate(`/tenant/inventory/${created.data.resource_id}`);
@@ -423,7 +418,7 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
       {/* Top Header Bar */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 pb-4">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3">
+        <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-medium text-slate-500 mb-3 flex-wrap">
           <button
             type="button"
             onClick={navigateToResources}
@@ -438,7 +433,7 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
               <button
                 type="button"
                 onClick={() => navigate(`/tenant/agents/${effectiveAgentId}/dashboard`)}
-                className="hover:text-slate-900 font-bold transition-colors cursor-pointer"
+                className="hover:text-slate-900 font-bold transition-colors cursor-pointer truncate max-w-[140px] sm:max-w-none"
               >
                 {effectiveAgentId}
               </button>
@@ -448,22 +443,22 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
           <button
             type="button"
             onClick={navigateToResources}
-            className="hover:text-slate-900 transition-colors cursor-pointer"
+            className="hover:text-slate-900 transition-colors cursor-pointer truncate"
           >
             Resources & Inventory
           </button>
           <span>/</span>
           <span className="capitalize">{resourceType}</span>
           <span>/</span>
-          <span className="text-slate-900 font-semibold truncate max-w-xs">
+          <span className="text-slate-900 font-semibold truncate max-w-[140px] sm:max-w-xs">
             {name || (isCreateMode ? 'New Resource' : 'Resource Profile')}
           </span>
         </div>
 
         {/* Title & Actions Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 sm:pb-6 border-b border-slate-200">
+          <div className="flex items-center gap-3 min-w-0">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight truncate">
               {isCreateMode ? 'Create New Resource' : `Edit Profile: ${name || 'Resource'}`}
             </h1>
           </div>

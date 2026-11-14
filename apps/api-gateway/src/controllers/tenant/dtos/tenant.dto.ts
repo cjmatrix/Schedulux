@@ -66,6 +66,7 @@ export class InviteUserDto extends createZodDto(InviteUserSchema) {}
 
 export const ListWorkspaceUsersSchema = z.object({
   tenant_id: z.string().optional(),
+  agent_id: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(10),
   search: z.string().optional(),
@@ -92,3 +93,9 @@ export const TenantDashboardOverviewSchema = z.object({
 });
 
 export class TenantDashboardOverviewDto extends createZodDto(TenantDashboardOverviewSchema) {}
+
+export const SuspendWorkspaceUserParamSchema = z.object({
+  userId: z.string().min(1, 'User ID is required'),
+});
+
+export class SuspendWorkspaceUserParamDto extends createZodDto(SuspendWorkspaceUserParamSchema) {}

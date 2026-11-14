@@ -28,11 +28,20 @@ message TenantGetProfileResponse {
 
 service TenantService {
   rpc ListTenants (ListTenantsRequest) returns (ListTenantsResponse);
+  rpc GetTenantById (GetTenantByIdRequest) returns (GetTenantByIdResponse);
   rpc SuspendTenant (SuspendTenantRequest) returns (SuspendTenantResponse);
   rpc UpdateTenantSubscription (UpdateTenantSubscriptionRequest) returns (UpdateTenantSubscriptionResponse);
   rpc GetTenantBillingInfo (GetTenantBillingInfoRequest) returns (GetTenantBillingInfoResponse);
   rpc ProcessPaddleWebhook (PaddleWebhookRequest) returns (PaddleWebhookResponse);
   rpc CreatePaddleCheckout (CreatePaddleCheckoutRequest) returns (CreatePaddleCheckoutResponse);
+}
+
+message GetTenantByIdRequest {
+  string tenant_id = 1;
+}
+
+message GetTenantByIdResponse {
+  TenantInfo tenant = 1;
 }
 
 
@@ -187,3 +196,5 @@ message CreatePaddleCheckoutResponse {
   string transaction_id = 2;
   string message = 3;
 }
+
+

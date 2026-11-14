@@ -39,6 +39,24 @@ export async function seedTierConfigs(logger?: Logger | { log: (msg: string, ctx
       const result = await TierConfigModel.bulkWrite(operations);
       log(`Tier configurations synchronized to MongoDB. Upserted: ${result.upsertedCount}, Modified: ${result.modifiedCount}`);
     }
+
+    try {
+      const redisUri = process.env.REDIS_URI || 'redis://localhost:6379';
+      const { Redis } = await import('ioredis');
+      const redis = new Redis(redisUri, { lazyConnect: true, maxRetriesPerRequest: 1 });
+      await redis.connect();
+      const allConfigs = await TierConfigModel.find({}).lean();
+      if (allConfigs.length > 0) {
+        await redis.set('tier_config:all', JSON.stringify(allConfigs), 'EX', 86400 * 7);
+        for (const cfg of allConfigs) {
+          await redis.set(`tier_config:${cfg.tier}`, JSON.stringify(cfg), 'EX', 86400 * 7);
+        }
+        log('Tier configurations pre-warmed into Redis cache.');
+      }
+      await redis.quit();
+    } catch {
+      // Non-blocking Redis cache warm
+    }
   } catch (error) {
     if (logger) {
       (logger as Logger).error?.('Failed to seed tier configs into MongoDB', error);

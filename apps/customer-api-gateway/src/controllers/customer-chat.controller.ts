@@ -53,7 +53,10 @@ export class CustomerChatController implements OnModuleInit {
     let messages: any[] = [];
 
     if (body.token) {
-      const verified = verifySessionToken(body.token);
+      const verified = verifySessionToken(body.token, {
+        expectedTenantId: body.tenant_id,
+        expectedAgentId: body.agent_id,
+      });
       if (verified.valid && verified.sessionId) {
         resolvedSessionId = verified.sessionId;
         resolvedToken = body.token;
@@ -63,7 +66,7 @@ export class CustomerChatController implements OnModuleInit {
         throw new BadRequestException('Sandbox sessions are not allowed in public live chat.');
       }
       resolvedSessionId = body.session_id;
-      resolvedToken = signSessionId(body.session_id);
+      resolvedToken = signSessionId(body.session_id, body.tenant_id, body.agent_id);
     }
 
     if (resolvedSessionId && resolvedToken) {
@@ -95,7 +98,7 @@ export class CustomerChatController implements OnModuleInit {
         messages = [];
       }
     } else {
-      const session = createSignedSession('sess');
+      const session = createSignedSession('sess', body.tenant_id, body.agent_id);
       resolvedSessionId = session.sessionId;
       resolvedToken = session.token;
       isFirstTime = true;
@@ -123,18 +126,27 @@ export class CustomerChatController implements OnModuleInit {
     let token = body.token;
 
     if (token) {
-      const verified = verifySessionToken(token);
+      const verified = verifySessionToken(token, {
+        expectedTenantId: body.tenant_id,
+        expectedAgentId: body.agent_id,
+      });
       if (!verified.valid || !verified.sessionId) {
         throw new UnauthorizedException(RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
       }
       sessionId = verified.sessionId;
+      if (verified.tenantId) {
+        body.tenant_id = verified.tenantId;
+      }
+      if (verified.agentId) {
+        body.agent_id = verified.agentId;
+      }
     } else if (sessionId) {
       if (sessionId.startsWith('sandbox_')) {
         throw new BadRequestException('Sandbox sessions are not allowed in public live chat.');
       }
-      token = signSessionId(sessionId);
+      token = signSessionId(sessionId, body.tenant_id, body.agent_id);
     } else {
-      const session = createSignedSession('sess');
+      const session = createSignedSession('sess', body.tenant_id, body.agent_id);
       sessionId = session.sessionId;
       token = session.token;
     }
@@ -204,11 +216,20 @@ export class CustomerChatController implements OnModuleInit {
     let resolvedSessionId = query.session_id;
 
     if (query.token) {
-      const verified = verifySessionToken(query.token);
+      const verified = verifySessionToken(query.token, {
+        expectedTenantId: query.tenant_id,
+        expectedAgentId: query.agent_id,
+      });
       if (!verified.valid || !verified.sessionId) {
         throw new UnauthorizedException(RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
       }
       resolvedSessionId = verified.sessionId;
+      if (verified.tenantId) {
+        query.tenant_id = verified.tenantId;
+      }
+      if (verified.agentId) {
+        query.agent_id = verified.agentId;
+      }
     }
 
     if (!resolvedSessionId) {

@@ -319,6 +319,8 @@ export interface CreateBookingRequest {
   source?: string | undefined;
   created_by?: string | undefined;
   resource_ids: string[];
+  hold_token?: string | undefined;
+  override_hold?: boolean | undefined;
 }
 
 export interface BookingResponse {
@@ -344,6 +346,8 @@ export interface RescheduleBookingRequest {
   resource_ids: string[];
   rescheduled_by?: string | undefined;
   notes?: string | undefined;
+  hold_token?: string | undefined;
+  override_hold?: boolean | undefined;
 }
 
 export interface UpdateBookingStatusRequest {

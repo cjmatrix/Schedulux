@@ -7,7 +7,14 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
@@ -23,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 _BOOKING_TOOLS = {
     "check_availability",
+    "hold_slot",
     "book_appointment",
     "cancel_appointment",
     "reschedule_appointment",
@@ -196,7 +204,7 @@ Operating Hours & Schedule:
      You are STRICTLY FORBIDDEN from invoking `verify_booking_otp` when any booking, cancellation, rescheduling, or booking history request is in progress!
      Invoke `verify_booking_otp(phone=customer_phone, code=user_code, session_id=..., tenant_id=..., agent_id=...)` ONLY in the rare case of a "Pure Login / Verify First" request (e.g. if a customer explicitly says "Please verify my phone number first / log me in" and has NOT requested any specific booking action yet).
    - If any tool returns `status: "failed"` due to invalid code: inform the customer immediately and do NOT assume verification succeeded.
-4. EXACT TOOL NAMES: You must use the exact registered tool names without typos or extra characters (e.g. `check_availability`, `book_appointment`, `cancel_appointment`, `reschedule_appointment`, `get_customer_bookings`, `send_booking_otp`, `verify_booking_otp`).
+4. EXACT TOOL NAMES: You must use the exact registered tool names without typos or extra characters (e.g. `check_availability`, `hold_slot`, `book_appointment`, `cancel_appointment`, `reschedule_appointment`, `get_customer_bookings`, `send_booking_otp`, `verify_booking_otp`).
 5. SERVICE CHANGEOVER & SPECIALIST RE-BINDING (ZERO SPECIALIST CARRYOVER):
    - When a customer switches or changes the service they want (e.g. from 'Tire Puncture Repair' to 'Car Wash'):
      You MUST IMMEDIATELY CLEAR any previously selected specialist (e.g. Mithul GP)!
@@ -223,19 +231,26 @@ Phase 1 — Service Selection:
   Introduce or list the available services from [Services Catalog] and ask which one they would like.
 - If only one service exists, ask: "Would you like to book our [Service Name]?"
 
-Phase 2 — Date & Time Availability:
+Phase 2 — Date & Time Availability & Provisional Slot Hold:
 - Once the service is determined, ask for their preferred day or time of day (morning, afternoon, evening).
 - When resolving relative days ("next Monday", "tomorrow", "this Friday"), look up the exact date from [Pre-Calculated Local Calendar Reference].
 - Call `check_availability(service_id=..., start_date=..., tenant_id=..., agent_id=...)` using tenant_id and agent_id from [Active Request Context].
 - If no specific staff member was requested for this service, DO NOT pass `resource_id`. Let the system check all available slots.
-- Present available slots with explicit Day of the Week and Date in business timezone ({biz_timezone}) (e.g. "For Monday, Nov 16: 10:00 AM, 02:00 PM").
-- Wait for the customer to confirm which specific time slot they prefer.
+- Present available slots using their explicit local time from `display` (e.g. "09:00 AM IST") along with Day of the Week and Date in business timezone ({biz_timezone}).
+- PROVISIONAL SLOT LOCKING UPON SLOT SELECTION:
+  As soon as the customer selects, chooses, or expresses a clear preference for a specific time slot:
+  Pass the EXACT `start` ISO string returned by `check_availability` for that slot (e.g. '2026-11-16T09:00:00+05:30').
+  NEVER append 'Z' or manually alter the timezone offset!
+  Call `hold_slot(tenant_id=tenant_id, agent_id=agent_id, service_id=service_id, start_time=selected_slot_iso, session_id=session_id)`.
+  This provisionally locks the slot in Redis so no other user can take it while you collect their details or verify their phone!
+  Inform the customer warmly that the slot is temporarily held for them (e.g., "I've placed a temporary hold on Monday, Nov 16 at 09:00 AM IST for you while we confirm your details.").
+- If the customer switches slots or changes their mind, calling `hold_slot` with the new slot will automatically release the previous hold in the background.
 
 Phase 3 — Customer Identification & Assignment:
 - If not already authenticated or collected, ask for the customer's full name and mobile phone number.
 - If the customer requested a specific staff member or specialist:
   Check [Staff & Resources Catalog] and ensure they are a HUMAN STAFF member (`type: staff`) AND that they are eligible for the chosen service.
-  If eligible, pass their `resource_id` to `check_availability` and `book_appointment`.
+  If eligible, pass their `resource_id` to `check_availability`, `hold_slot`, and `book_appointment`.
   If they are NOT eligible for that service (or if they are a physical bay/room):
   Politely explain that they are not assigned to this service, and offer the eligible staff specialist (e.g. "Arun GP handles Car Wash") or proceed without a specific specialist preference.
 
@@ -244,7 +259,7 @@ Phase 4 — Execution & Security Verification:
 - If `book_appointment` returns `status: "requires_verification"`:
   Immediately call `send_booking_otp(phone=customer_phone, session_id=session_id, tenant_id=..., agent_id=...)` and ask the customer to reply with the 6-digit code.
 - ATOMIC CONFIRMATION UPON RECEIVING CODE:
-  Once the customer provides the 6-digit code, immediately re-invoke `book_appointment` with `otp_code="<6-digit code>"`! This verifies the code and confirms the booking in a single atomic call.
+  Once the customer provides the 6-digit code, immediately re-invoke `book_appointment` with `otp_code="<6-digit code>"`! This verifies the code, claims the held slot, and confirms the booking in a single atomic call.
 - If `book_appointment` returns `status: "failed"`:
   Politely explain the issue. If the OTP code was invalid, ask them to re-check the code. If the session was already verified and a system error occurred, re-execute `book_appointment` without re-verifying.
 - Once confirmed: share the booking reference code and present the appointment date and time in the customer's local business timezone using `start_time_local` with full double-confirmation of Day of the Week, Date, and Time (e.g. "Your booking is confirmed for Monday, Nov 16, 2026 at 10:00 AM IST").
@@ -308,7 +323,7 @@ def _build_booking_request_context(
     try:
         tz = ZoneInfo(biz_timezone)
     except Exception:
-        tz = UTC
+        tz = ZoneInfo("UTC")
 
     now_utc = datetime.now(UTC)
     now_local = now_utc.astimezone(tz)
@@ -372,88 +387,123 @@ async def _execute_booking_turn(
     tenant_id: str,
     agent_id: str,
     session_id: str,
+    max_steps: int = 5,
+    config: RunnableConfig | None = None,
 ) -> str:
     model_with_tools = model.bind_tools(booking_tools)
     tool_map = {t.name: t for t in booking_tools}
 
-    conversation = [SystemMessage(content=system_prompt), *langchain_msgs]
-    ai_msg = await model_with_tools.ainvoke(conversation)
+    messages: list[BaseMessage] = [SystemMessage(content=system_prompt), *langchain_msgs]
 
-    if not getattr(ai_msg, "tool_calls", None):
-        return _extract_content(ai_msg)
+    for step in range(max_steps):
+        ai_msg = await model_with_tools.ainvoke(messages, config=config)
+        messages.append(ai_msg)
 
-    tool_call = ai_msg.tool_calls[0]
-    tool_name = tool_call["name"]
-    tool_args = tool_call.get("args") or {}
-    tool = tool_map.get(tool_name)
+        tool_calls = getattr(ai_msg, "tool_calls", None)
+        if not tool_calls:
+            content = _extract_content(ai_msg)
+            if content.strip():
+                return content
+            break
 
-    if not tool:
-        logger.error(
-            "[BookingAgent] Tool '%s' requested by model but not found in tools", tool_name
-        )
-        return "I'm sorry, I encountered an internal configuration issue. Please try again."
+        for tool_call in tool_calls:
+            tool_name = tool_call["name"]
+            tool_args = tool_call.get("args") or {}
+            tool = tool_map.get(tool_name)
 
-    logger.info("[BookingAgent] Executing tool '%s' with args: %s", tool_name, tool_args)
-    raw_output = await tool.ainvoke(tool_args)
-    raw_output_str = str(raw_output)
-
-    _VERIFICATION_TOOLS = {
-        "book_appointment",
-        "cancel_appointment",
-        "reschedule_appointment",
-        "get_customer_bookings",
-    }
-    if tool_name in _VERIFICATION_TOOLS:
-        try:
-            parsed_out = json.loads(raw_output_str)
-            if parsed_out.get("status") == "requires_verification":
-                phone_to_verify = (
-                    parsed_out.get("phone")
-                    or tool_args.get("customer_phone")
-                    or tool_args.get("phone")
+            if not tool:
+                logger.error(
+                    "[BookingAgent] Tool '%s' requested by model but not found in tools", tool_name
                 )
-                if phone_to_verify:
-                    otp_tool = tool_map.get("send_booking_otp")
-                    if otp_tool:
-                        logger.info(
-                            "[BookingAgent:FastPath] %s requires verification -> auto-dispatching OTP for %s",
-                            tool_name,
-                            phone_to_verify,
-                        )
-                        await otp_tool.ainvoke(
-                            {
-                                "tenant_id": tenant_id,
-                                "agent_id": agent_id,
-                                "phone": phone_to_verify,
-                                "session_id": session_id,
-                            }
-                        )
-                        raw_output_str = json.dumps(
-                            {
-                                "status": "sent",
-                                "phone": phone_to_verify,
-                            }
-                        )
-                        tool_name = "send_booking_otp"
-        except Exception as ex:
-            logger.warning("[BookingAgent] Auto-dispatch OTP check exception: %s", ex)
+                raw_output_str = json.dumps(
+                    {"status": "error", "message": f"Tool '{tool_name}' not available."}
+                )
+            else:
+                logger.info(
+                    "[BookingAgent] Executing tool '%s' (step %d) with args: %s",
+                    tool_name,
+                    step + 1,
+                    tool_args,
+                )
+                try:
+                    raw_output = await tool.ainvoke(tool_args, config=config)
+                    raw_output_str = str(raw_output)
+                except Exception as t_err:
+                    logger.error("[BookingAgent] Tool '%s' raised exception: %s", tool_name, t_err)
+                    raw_output_str = json.dumps({"status": "error", "error": str(t_err)})
 
-    fast_path_text = format_deterministic_fast_path(tool_name, raw_output_str, biz_context)
-    if fast_path_text:
-        logger.info(
-            "[BookingAgent:FastPath] Intercepted '%s' with deterministic template (<5ms bypass)",
-            tool_name,
-        )
-        return fast_path_text
+            _VERIFICATION_TOOLS = {
+                "book_appointment",
+                "cancel_appointment",
+                "reschedule_appointment",
+                "get_customer_bookings",
+            }
+            if tool_name in _VERIFICATION_TOOLS:
+                try:
+                    parsed_out = json.loads(raw_output_str)
+                    if parsed_out.get("status") == "requires_verification":
+                        phone_to_verify = (
+                            parsed_out.get("phone")
+                            or tool_args.get("customer_phone")
+                            or tool_args.get("phone")
+                        )
+                        if phone_to_verify:
+                            otp_tool = tool_map.get("send_booking_otp")
+                            if otp_tool:
+                                logger.info(
+                                    "[BookingAgent:FastPath] %s requires verification -> auto-dispatching OTP for %s",
+                                    tool_name,
+                                    phone_to_verify,
+                                )
+                                await otp_tool.ainvoke(
+                                    {
+                                        "tenant_id": tenant_id,
+                                        "agent_id": agent_id,
+                                        "phone": phone_to_verify,
+                                        "session_id": session_id,
+                                    },
+                                    config=config,
+                                )
+                                raw_output_str = json.dumps(
+                                    {
+                                        "status": "sent",
+                                        "phone": phone_to_verify,
+                                    }
+                                )
+                                tool_name = "send_booking_otp"
+                except Exception as ex:
+                    logger.warning("[BookingAgent] Auto-dispatch OTP check exception: %s", ex)
 
-    tool_msg = ToolMessage(
-        content=raw_output_str,
-        tool_call_id=tool_call.get("id", "call_1"),
-        name=tool_name,
-    )
-    follow_up_msgs = [SystemMessage(content=system_prompt), *langchain_msgs, ai_msg, tool_msg]
-    second_ai_msg = await model_with_tools.ainvoke(follow_up_msgs)
-    return _extract_content(second_ai_msg)
+            fast_path_text = format_deterministic_fast_path(tool_name, raw_output_str, biz_context)
+            if fast_path_text:
+                logger.info(
+                    "[BookingAgent:FastPath] Intercepted '%s' with deterministic template (<5ms bypass)",
+                    tool_name,
+                )
+                return fast_path_text
+
+            tool_msg = ToolMessage(
+                content=raw_output_str,
+                tool_call_id=tool_call.get("id", f"call_{step}_{tool_name}"),
+                name=tool_name,
+            )
+            messages.append(tool_msg)
+
+    for msg in reversed(messages):
+        if isinstance(msg, AIMessage):
+            content = _extract_content(msg)
+            if content.strip():
+                return content
+
+    try:
+        final_synth_msg = await model.ainvoke(messages, config=config)
+        final_content = _extract_content(final_synth_msg)
+        if final_content.strip():
+            return final_content
+    except Exception as e:
+        logger.warning("[BookingAgent] Final summary ainvoke failed: %s", e)
+
+    return "I have processed your request. Could you please confirm your preferred time or details so we can complete your booking?"
 
 
 async def run_booking_agent(
@@ -464,6 +514,7 @@ async def run_booking_agent(
     biz_context: dict[str, Any],
     all_tools: list[BaseTool],
     session_id: str = "",
+    config: RunnableConfig | None = None,
 ) -> str:
     booking_tools = [t for t in all_tools if t.name in _BOOKING_TOOLS]
 
@@ -509,6 +560,7 @@ async def run_booking_agent(
             tenant_id=tenant_id,
             agent_id=agent_id,
             session_id=session_id,
+            config=config,
         )
     except Exception as e:
         logger.warning(
@@ -532,6 +584,7 @@ async def run_booking_agent(
                     tenant_id=tenant_id,
                     agent_id=agent_id,
                     session_id=session_id,
+                    config=config,
                 )
             except Exception as fb_err:
                 logger.error(

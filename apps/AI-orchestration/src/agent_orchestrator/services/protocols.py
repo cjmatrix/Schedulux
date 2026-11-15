@@ -151,4 +151,3 @@ class TokenTrackingServiceProtocol(Protocol):
     async def check_weekly_quota(
         self, tenant_id: str, tier: str | None = None
     ) -> tuple[bool, int, int]: ...
-

@@ -5,6 +5,7 @@ import os
 from typing import Any, Literal
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class SupervisorRouting(BaseModel):
     intents: list[Literal["booking", "faq", "handoff"]] = Field(
-        default_factory=lambda: ["booking"],
+        default_factory=lambda: list[Literal["booking", "faq", "handoff"]](["booking"]),
         description="List of specialist agent intents to handle the customer query. Use ['faq', 'booking'] for compound queries.",
     )
 
@@ -94,9 +95,13 @@ No other text.
 """
 
 
-async def _classify_with_model(model: Any, messages: list[BaseMessage]) -> list[str]:
+async def _classify_with_model(
+    model: Any,
+    messages: list[BaseMessage],
+    config: RunnableConfig | None = None,
+) -> list[str]:
     structured = model.with_structured_output(SupervisorRouting)
-    result = await structured.ainvoke(messages)
+    result = await structured.ainvoke(messages, config=config)
     intents = result.intents if isinstance(result, SupervisorRouting) else result.get("intents", [])
     valid = [i for i in intents if i in ("booking", "faq", "handoff")]
     return valid or ["booking"]
@@ -106,6 +111,7 @@ async def classify_intent(
     message: str,
     conversation_history: list[BaseMessage],
     biz_context: dict[str, Any],
+    config: RunnableConfig | None = None,
 ) -> list[str]:
     guardrails = biz_context.get("guardrails") or {}
 
@@ -138,7 +144,7 @@ async def classify_intent(
     ]
 
     try:
-        intents = await _classify_with_model(model, classify_messages)
+        intents = await _classify_with_model(model, classify_messages, config=config)
         logger.info("[Supervisor] Classified intents: %s", intents)
         return intents
     except Exception as e:
@@ -150,7 +156,7 @@ async def classify_intent(
         gemini_model = _get_gemini_model(temperature=0.0)
         if gemini_model and not isinstance(model, ChatGoogleGenerativeAI):
             try:
-                intents = await _classify_with_model(gemini_model, classify_messages)
+                intents = await _classify_with_model(gemini_model, classify_messages, config=config)
                 logger.info("[Supervisor] Classified intents via Gemini fallback: %s", intents)
                 return intents
             except Exception as fb_err:

@@ -1,10 +1,7 @@
 import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreateBookingRequest } from '@repo/proto/scheduling';
 import { RESPONSE_MESSAGES } from '../../../constants/index.js';
-import {
-  BookingEntity,
-  BookingSource,
-} from '../../../domain/entities/booking.entity.js';
+import { BookingEntity, BookingSource } from '../../../domain/entities/booking.entity.js';
 import { CustomerEntity } from '../../../domain/entities/customer.entity.js';
 import { IBookingRepository } from '../../../domain/repositories/booking.repository.interface.js';
 import { ICustomerRepository } from '../../../domain/repositories/customer.repository.interface.js';
@@ -128,6 +125,9 @@ export class CreateBookingUseCase implements ICreateBookingUseCase {
             : [],
         resourceRepository: this._resourceRepository,
         bookingRepository: this._bookingRepository,
+        cacheRepository: this._cacheRepo,
+        holdToken: dto.hold_token,
+        overrideHold: Boolean(dto.override_hold),
         timezone: tenantSchedule?.timezone || 'UTC',
         tenantOperatingHours: tenantSchedule?.operating_hours as unknown as Record<
           string,
@@ -216,6 +216,19 @@ export class CreateBookingUseCase implements ICreateBookingUseCase {
         `Immediate outbox dispatch failed for booking ${createdBooking.id}: ${err}. Recovery sweeper will retry.`,
       );
     });
+
+    
+    void this._cacheRepo
+      .releaseSlotHolds(
+        tenantId,
+        agentId,
+        allocatedResourceIds,
+        interval.startTime.toISOString(),
+        dto.hold_token,
+      )
+      .catch((err: unknown) => {
+        this._logger.warn(`Failed to clean up provisional hold keys after booking: ${err}`);
+      });
 
     return createdBooking;
   }

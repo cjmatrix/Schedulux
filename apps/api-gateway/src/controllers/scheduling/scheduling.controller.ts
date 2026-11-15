@@ -39,17 +39,14 @@ import {
   RescheduleBookingDto,
   UpdateBookingStatusDto,
 } from './dtos/booking.dto.js';
+import { ListCustomersQueryDto } from './dtos/customer.dto.js';
 import {
   CreateResourceDto,
   ListResourcesQueryDto,
   UpdateResourceDto,
 } from './dtos/resource.dto.js';
-import {
-  GetTenantScheduleQueryDto,
-  UpdateTenantScheduleDto,
-} from './dtos/schedule.dto.js';
+import { GetTenantScheduleQueryDto, UpdateTenantScheduleDto } from './dtos/schedule.dto.js';
 import { CreateServiceDto, ListServicesQueryDto, UpdateServiceDto } from './dtos/service.dto.js';
-import { ListCustomersQueryDto } from './dtos/customer.dto.js';
 
 @Controller(API_ROUTES.SCHEDULING.BASE)
 @UseGuards(TenantAuthGuard, RolesGuard)
@@ -345,10 +342,7 @@ export class SchedulingController implements OnModuleInit {
 
   @Get(API_ROUTES.SCHEDULING.BOOKINGS)
   @UsePipes(ZodValidationPipe)
-  async listBookings(
-    @Req() req: AuthenticatedTenantRequest,
-    @Query() query: ListBookingsQueryDto,
-  ) {
+  async listBookings(@Req() req: AuthenticatedTenantRequest, @Query() query: ListBookingsQueryDto) {
     const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
       this._schedulingService.listBookings({
@@ -397,6 +391,8 @@ export class SchedulingController implements OnModuleInit {
         notes: body.notes,
         source: body.source,
         created_by: body.created_by || userId,
+        hold_token: body.hold_token,
+        override_hold: body.override_hold,
       }),
     );
 
@@ -453,6 +449,8 @@ export class SchedulingController implements OnModuleInit {
         resource_ids: body.resource_ids ?? (body.resource_id ? [body.resource_id] : []),
         notes: body.notes,
         rescheduled_by: userId,
+        hold_token: body.hold_token,
+        override_hold: body.override_hold,
       }),
     );
 
@@ -617,5 +615,3 @@ export class SchedulingController implements OnModuleInit {
     };
   }
 }
-
-

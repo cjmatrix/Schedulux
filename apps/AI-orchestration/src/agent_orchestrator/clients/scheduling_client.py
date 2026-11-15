@@ -412,6 +412,8 @@ async def create_booking(
     resource_ids: list[str] | None = None,
     notes: str | None = None,
     source: str = "customer_agent",
+    hold_token: str | None = None,
+    override_hold: bool = False,
 ) -> dict[str, Any]:
     """Execute booking creation in scheduling-inventory service."""
     target_url = SCHEDULING_SERVICE_URL
@@ -429,6 +431,8 @@ async def create_booking(
         source=source or "customer_agent",
         created_by="customer_agent",
         resource_ids=resource_ids or [],
+        hold_token=hold_token or None,
+        override_hold=bool(override_hold),
     )
     try:
         async with grpc.aio.insecure_channel(target_url) as channel:
@@ -519,6 +523,8 @@ async def reschedule_booking(
     resource_ids: list[str] | None = None,
     notes: str | None = None,
     rescheduled_by: str = "customer_agent",
+    hold_token: str | None = None,
+    override_hold: bool = False,
 ) -> dict[str, Any]:
     """Execute booking rescheduling in scheduling-inventory service."""
     target_url = SCHEDULING_SERVICE_URL
@@ -532,6 +538,8 @@ async def reschedule_booking(
         resource_ids=resource_ids or [],
         notes=notes or None,
         rescheduled_by=rescheduled_by,
+        hold_token=hold_token or None,
+        override_hold=bool(override_hold),
     )
     try:
         async with grpc.aio.insecure_channel(target_url) as channel:

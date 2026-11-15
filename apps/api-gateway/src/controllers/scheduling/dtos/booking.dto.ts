@@ -10,10 +10,20 @@ export const CreateBookingDtoSchema = z.object({
   end_time: z.string().optional(),
   customer_name: z.string().min(1, 'customer_name is required').trim(),
   customer_phone: z.string().min(1, 'customer_phone is required').trim(),
-  customer_email: z.string().email('Invalid email address').optional().or(z.literal('')).or(z.null()),
+  customer_email: z
+    .string()
+    .email('Invalid email address')
+    .optional()
+    .or(z.literal(''))
+    .or(z.null()),
   notes: z.string().optional(),
-  source: z.enum(['manual', 'customer_agent', 'web_portal', 'sandbox_simulation']).optional().default('manual'),
+  source: z
+    .enum(['manual', 'customer_agent', 'web_portal', 'sandbox_simulation'])
+    .optional()
+    .default('manual'),
   created_by: z.string().optional(),
+  hold_token: z.string().optional(),
+  override_hold: z.boolean().optional(),
 });
 
 export class CreateBookingDto extends createZodDto(CreateBookingDtoSchema) {}
@@ -32,6 +42,8 @@ export const RescheduleBookingDtoSchema = z.object({
   resource_id: z.string().optional(),
   resource_ids: z.array(z.string()).optional(),
   notes: z.string().optional(),
+  hold_token: z.string().optional(),
+  override_hold: z.boolean().optional(),
 });
 
 export class RescheduleBookingDto extends createZodDto(RescheduleBookingDtoSchema) {}
@@ -64,4 +76,3 @@ export const ListBookingsQuerySchema = z.object({
 });
 
 export class ListBookingsQueryDto extends createZodDto(ListBookingsQuerySchema) {}
-

@@ -18,8 +18,8 @@ load_dotenv(local_env)
 
 logger = logging.getLogger(__name__)
 
-class KafkaTokenProducer(EventPublisher):
 
+class KafkaTokenProducer(EventPublisher):
     def __init__(
         self,
         brokers: str | None = None,
@@ -47,10 +47,10 @@ class KafkaTokenProducer(EventPublisher):
             broker_list = [b.strip() for b in self.brokers.split(",") if b.strip()]
             producer_kwargs: dict[str, Any] = {
                 "bootstrap_servers": broker_list,
-                "linger_ms": 10,            
-                "acks": 1,                   
-                "max_batch_size": 16384,    
-                "retry_backoff_ms": 100,  
+                "linger_ms": 10,
+                "acks": 1,
+                "max_batch_size": 16384,
+                "retry_backoff_ms": 100,
             }
 
             if self.username and self.password:
@@ -81,7 +81,6 @@ class KafkaTokenProducer(EventPublisher):
         async with self._lock:
             if self._producer is not None:
                 try:
-                   
                     await self._producer.flush()
                     await self._producer.stop()
                     logger.info("[KafkaTokenProducer] Stopped Kafka producer.")
@@ -107,19 +106,16 @@ class KafkaTokenProducer(EventPublisher):
         target_topic = topic or self.default_topic
 
         try:
-           
             future = await self._producer.send(target_topic, val_bytes, key=key_bytes)
-            
-        
+
             def on_delivery_callback(fut: Any) -> None:
                 try:
-                    record_metadata = fut.result()
-                 
+                    _ = fut.result()
                 except KafkaError as err:
                     logger.error(
                         "[KafkaTokenProducer] Async message delivery failed to topic %s: %s",
                         target_topic,
-                        err
+                        err,
                     )
 
             future.add_done_callback(on_delivery_callback)
@@ -128,13 +124,16 @@ class KafkaTokenProducer(EventPublisher):
             logger.error("[KafkaTokenProducer] Direct publishing failure: %s", e)
             raise
 
+
 _default_publisher: EventPublisher | None = None
+
 
 def get_event_publisher() -> EventPublisher:
     global _default_publisher
     if _default_publisher is None:
         _default_publisher = KafkaTokenProducer()
     return _default_publisher
+
 
 def set_event_publisher(publisher: EventPublisher) -> None:
     global _default_publisher

@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Redis } from 'ioredis';
-import type { ICacheRepository, SetOptions } from './cache-repository.interface.js';
+import type { ActiveHoldInfo, ICacheRepository, SetOptions } from './cache-repository.interface.js';
 
 @Injectable()
 export class CacheRepository implements ICacheRepository {
@@ -14,6 +14,16 @@ export class CacheRepository implements ICacheRepository {
     } catch (err: unknown) {
       this._logger.error(`Redis get error for key "${key}": ${err}`);
       return null;
+    }
+  }
+
+  async mget(keys: string[]): Promise<(string | null)[]> {
+    if (!keys || keys.length === 0) return [];
+    try {
+      return await this._redisClient.mget(keys);
+    } catch (err: unknown) {
+      this._logger.error(`Redis mget error for ${keys.length} keys: ${err}`);
+      return new Array(keys.length).fill(null);
     }
   }
 
@@ -69,6 +79,100 @@ export class CacheRepository implements ICacheRepository {
     } catch (err: unknown) {
       this._logger.error(`Redis exists error for key "${key}": ${err}`);
       return false;
+    }
+  }
+
+  async scanKeys(pattern: string): Promise<string[]> {
+    try {
+      return await new Promise<string[]>((resolve, reject) => {
+        const stream = this._redisClient.scanStream({
+          match: pattern,
+          count: 100,
+        });
+        const matchedKeys: string[] = [];
+        stream.on('data', (resultKeys: string[]) => {
+          for (const k of resultKeys) {
+            matchedKeys.push(k);
+          }
+        });
+        stream.on('end', () => resolve(matchedKeys));
+        stream.on('error', (err) => reject(err));
+      });
+    } catch (err: unknown) {
+      this._logger.error(`Redis scanKeys error for pattern "${pattern}": ${err}`);
+      return [];
+    }
+  }
+
+  async getActiveHolds(tenantId: string, agentId: string): Promise<ActiveHoldInfo[]> {
+    try {
+      const pattern = `sched:hold:${tenantId}:${agentId}:*`;
+      const keys = await this.scanKeys(pattern);
+      if (keys.length === 0) return [];
+
+      const values = await this._redisClient.mget(keys);
+      const holds: ActiveHoldInfo[] = [];
+
+      for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+        const holdToken = values[i];
+        if (!holdToken) continue;
+
+       
+        const parts = key.split(':');
+        if (parts.length >= 6) {
+          const resourceId = parts[4];
+          const startTimeStr = parts.slice(5).join(':');
+          const startTimeMs = new Date(startTimeStr).getTime();
+          holds.push({
+            key,
+            resourceId,
+            startTime: startTimeStr,
+            startTimeMs,
+            holdToken,
+          });
+        }
+      }
+      return holds;
+    } catch (err: unknown) {
+      this._logger.error(
+        `Failed to get active holds for tenant ${tenantId}, agent ${agentId}: ${err}`,
+      );
+      return [];
+    }
+  }
+
+  async releaseSlotHolds(
+    tenantId: string,
+    agentId: string,
+    resourceIds: string[],
+    startTime: string,
+    holdToken?: string,
+  ): Promise<number> {
+    try {
+      const holds = await this.getActiveHolds(tenantId, agentId);
+      const targetTimeMs = new Date(startTime).getTime();
+      const resIdSet = new Set(resourceIds);
+
+      const keysToDelete: string[] = [];
+      for (const hold of holds) {
+        if (resIdSet.has(hold.resourceId)) {
+          const timeDiff = Math.abs(hold.startTimeMs - targetTimeMs);
+          if (timeDiff < 1000) {
+            if (!holdToken || hold.holdToken === holdToken) {
+              keysToDelete.push(hold.key);
+            }
+          }
+        }
+      }
+
+      if (keysToDelete.length > 0) {
+        return await this.deleteMany(keysToDelete);
+      }
+      return 0;
+    } catch (err: unknown) {
+      this._logger.error(`Failed to release slot holds for tenant ${tenantId}: ${err}`);
+      return 0;
     }
   }
 }

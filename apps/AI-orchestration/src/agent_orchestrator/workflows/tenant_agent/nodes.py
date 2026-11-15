@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from agent_orchestrator.clients.redis_client import get_redis_client
@@ -275,7 +276,7 @@ CRITICAL OUTPUT RULE — QUESTION FIELD IS MANDATORY & MARKDOWN-STRUCTURED:
 STATIC_SYSTEM_PROMPT = _build_tenant_system_prompt()
 
 
-async def node_llm_semantic_review(state: GraphState) -> dict:
+async def node_llm_semantic_review(state: GraphState, config: RunnableConfig) -> dict:
     llm = _get_llm().with_structured_output(SemanticAction)
 
     all_msgs = state.get("messages", [])
@@ -459,7 +460,7 @@ Decide your next action: choose 'update_schema', 'ask_user', or 'finalize' accor
     try:
         resp = cast(
             SemanticAction,
-            await llm.ainvoke(conversation),
+            await llm.ainvoke(conversation, config=config),
         )
     except Exception as e:
         print(f"[Semantic Agent Error] {e}", flush=True)
@@ -477,7 +478,7 @@ Decide your next action: choose 'update_schema', 'ask_user', or 'finalize' accor
                 ).with_structured_output(SemanticAction)
                 resp = cast(
                     SemanticAction,
-                    await fallback_llm.ainvoke(conversation),
+                    await fallback_llm.ainvoke(conversation, config=config),
                 )
                 print("[Semantic Agent] Fallback to Gemini succeeded!", flush=True)
             except Exception as fe:

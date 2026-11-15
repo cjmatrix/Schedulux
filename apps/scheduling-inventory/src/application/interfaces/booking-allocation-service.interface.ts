@@ -3,6 +3,7 @@ import type { ResourceEntity } from '../../domain/entities/resource.entity.js';
 import type { ServiceEntity } from '../../domain/entities/service.entity.js';
 import type { IBookingRepository } from '../../domain/repositories/booking.repository.interface.js';
 import type { IResourceRepository } from '../../domain/repositories/resource.repository.interface.js';
+import type { ICacheRepository } from '../../infrastructure/cache/cache-repository.interface.js';
 
 export interface BookingIntervalResult {
   startTime: Date;
@@ -24,6 +25,9 @@ export interface AllocateResourcesParams {
   excludeBookingId?: string;
   resourceRepository: IResourceRepository;
   bookingRepository: IBookingRepository;
+  cacheRepository?: ICacheRepository;
+  holdToken?: string;
+  overrideHold?: boolean;
   timezone?: string;
   tenantOperatingHours?: Record<string, Array<{ start: string; end: string }>>;
   blackoutDates?: Array<{ date: string; reason?: string; is_closed?: boolean }>;

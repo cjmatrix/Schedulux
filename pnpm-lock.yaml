@@ -193,6 +193,9 @@ importers:
       ioredis:
         specifier: ^6.0.0
         version: 6.0.0(supports-color@10.2.2)
+      jsonwebtoken:
+        specifier: ^9.0.3
+        version: 9.0.3
       nestjs-zod:
         specifier: ^5.5.0
         version: 5.5.0(@nestjs/common@12.1.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(rxjs@7.8.2)(zod@4.6.5)
@@ -212,6 +215,9 @@ importers:
       '@types/express':
         specifier: ^4.17.25
         version: 4.17.25
+      '@types/jsonwebtoken':
+        specifier: ^9.0.10
+        version: 9.0.10
       '@types/node':
         specifier: ^20.19.43
         version: 20.19.43

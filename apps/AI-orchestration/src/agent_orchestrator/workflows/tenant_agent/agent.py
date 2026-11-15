@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.tracers import LangChainTracer
 from langgraph.graph import END, StateGraph
 
 from agent_orchestrator.workflows.tenant_agent.nodes import (
@@ -103,7 +105,19 @@ async def start_onboarding_session(
         print(f"[Start Session Warning] Failed to prime Redis cache: {e}", flush=True)
 
     tracker = TokenUsageTracker()
-    result_state = await _graph.ainvoke(initial, config={"callbacks": [tracker]})
+    run_config: dict[str, Any] = {
+        "callbacks": [tracker, LangChainTracer(project_name="tenant-onboarding-agent")],
+        "run_name": f"TenantOnboarding:Start:{target_agent_id}",
+        "tags": ["tenant_onboarding", "session_start", f"tier:{tier or 'starter'}"],
+        "metadata": {
+            "tenant_id": tenant_id,
+            "agent_id": target_agent_id,
+            "tier": tier or "starter",
+            "session_phase": "start",
+            "thread_id": f"onboarding_{tenant_id}_{target_agent_id}",
+        },
+    }
+    result_state = await _graph.ainvoke(initial, config=run_config)
 
     from datetime import UTC, datetime
 
@@ -242,9 +256,20 @@ async def resume_onboarding_session(
     }
 
     tracker = TokenUsageTracker()
-    result_state = await _graph.ainvoke(initial, config={"callbacks": [tracker]})
+    run_config: dict[str, Any] = {
+        "callbacks": [tracker, LangChainTracer(project_name="tenant-onboarding-agent")],
+        "run_name": f"TenantOnboarding:Resume:{target_agent_id}",
+        "tags": ["tenant_onboarding", "session_resume", f"tier:{tier or 'starter'}"],
+        "metadata": {
+            "tenant_id": tenant_id,
+            "agent_id": target_agent_id,
+            "tier": tier or "starter",
+            "session_phase": "resume",
+            "thread_id": f"onboarding_{tenant_id}_{target_agent_id}",
+        },
+    }
+    result_state = await _graph.ainvoke(initial, config=run_config)
 
-    # Post-flight token tracking
     from datetime import UTC, datetime
 
     semantic_resp = result_state.get("semantic_note") or ""

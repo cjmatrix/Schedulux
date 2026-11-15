@@ -227,14 +227,17 @@ export class KnowledgeController implements OnModuleInit {
     let messages: any[] = [];
 
     if (body.token) {
-      const verified = verifySessionToken(body.token);
+      const verified = verifySessionToken(body.token, {
+        expectedTenantId: tenantId,
+        expectedAgentId: agentId,
+      });
       if (verified.valid && verified.sessionId) {
         resolvedSessionId = verified.sessionId;
         resolvedToken = body.token;
       }
     } else if (body.session_id) {
       resolvedSessionId = body.session_id;
-      resolvedToken = signSessionId(body.session_id);
+      resolvedToken = signSessionId(body.session_id, tenantId, agentId);
     }
 
     if (resolvedSessionId && resolvedToken) {
@@ -266,7 +269,7 @@ export class KnowledgeController implements OnModuleInit {
         messages = [];
       }
     } else {
-      const session = createSignedSession(`sandbox_${tenantId}_${agentId}`);
+      const session = createSignedSession(`sandbox_${tenantId}_${agentId}`, tenantId, agentId);
       resolvedSessionId = session.sessionId;
       resolvedToken = session.token;
       isFirstTime = true;
@@ -333,7 +336,10 @@ export class KnowledgeController implements OnModuleInit {
     let resolvedSessionId = query.session_id;
 
     if (query.token) {
-      const verified = verifySessionToken(query.token);
+      const verified = verifySessionToken(query.token, {
+        expectedTenantId: tenantId,
+        expectedAgentId: agentId,
+      });
       if (!verified.valid || !verified.sessionId) {
         throw new UnauthorizedException(RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
       }
@@ -378,15 +384,18 @@ export class KnowledgeController implements OnModuleInit {
     let token = body.token;
 
     if (token) {
-      const verified = verifySessionToken(token);
+      const verified = verifySessionToken(token, {
+        expectedTenantId: tenantId,
+        expectedAgentId: agentId,
+      });
       if (!verified.valid || !verified.sessionId) {
         throw new UnauthorizedException(RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
       }
       sessionId = verified.sessionId;
     } else if (sessionId) {
-      token = signSessionId(sessionId);
+      token = signSessionId(sessionId, tenantId, agentId);
     } else {
-      const session = createSignedSession(`sandbox_${tenantId}_${agentId}`);
+      const session = createSignedSession(`sandbox_${tenantId}_${agentId}`, tenantId, agentId);
       sessionId = session.sessionId;
       token = session.token;
     }

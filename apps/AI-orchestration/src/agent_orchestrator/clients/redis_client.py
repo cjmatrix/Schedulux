@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any
+import secrets
+from typing import Any, cast
 
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
@@ -251,3 +252,194 @@ async def verify_otp_code(phone: str, code: str) -> tuple[bool, str]:
     except Exception as e:
         print(f"[Redis] Error verifying OTP for {phone}: {e}", flush=True)
         return False, "system_error"
+
+
+# ── Provisional Slot Hold Keys & Distributed Locking ─────────────────────────
+
+
+def get_slot_hold_key(tenant_id: str, agent_id: str, resource_id: str, start_time: str) -> str:
+    return f"sched:hold:{tenant_id}:{agent_id}:{resource_id}:{start_time}"
+
+
+def get_session_active_hold_key(session_id: str) -> str:
+    return f"sched:session:{session_id}:active_hold"
+
+
+def get_hold_token_data_key(hold_token: str) -> str:
+    return f"sched:hold:token:{hold_token}"
+
+
+async def get_active_hold_for_session(session_id: str) -> str | None:
+    """Retrieve active provisional hold_token for a chat session if present."""
+    if not session_id:
+        return None
+    try:
+        client = get_redis_client()
+        key = get_session_active_hold_key(session_id)
+        val = await client.get(key)
+        if val:
+            return str(val).strip()
+    except Exception as e:
+        print(f"[Redis] Error getting active hold for session {session_id}: {e}", flush=True)
+    return None
+
+
+async def get_hold_token_data(hold_token: str) -> dict[str, Any] | None:
+    """Retrieve metadata stored for a given hold_token."""
+    if not hold_token:
+        return None
+    try:
+        client = get_redis_client()
+        key = get_hold_token_data_key(hold_token)
+        val = await client.get(key)
+        if val:
+            return json.loads(val)
+    except Exception as e:
+        print(f"[Redis] Error getting hold token data for {hold_token}: {e}", flush=True)
+    return None
+
+
+_ACQUIRE_HOLDS_LUA = """
+for i = 1, #KEYS do
+    if redis.call('EXISTS', KEYS[i]) == 1 then
+        return 0
+    end
+end
+for i = 1, #KEYS do
+    redis.call('SET', KEYS[i], ARGV[1], 'EX', ARGV[2])
+end
+return 1
+"""
+
+_RELEASE_HOLDS_LUA = """
+local count = 0
+for i = 1, #KEYS do
+    if ARGV[1] == '' or redis.call('GET', KEYS[i]) == ARGV[1] then
+        redis.call('DEL', KEYS[i])
+        count = count + 1
+    end
+end
+return count
+"""
+
+
+async def acquire_slot_holds(
+    tenant_id: str,
+    agent_id: str,
+    resource_ids: list[str],
+    start_time: str,
+    session_id: str | None = None,
+    ttl_seconds: int = 600,
+) -> tuple[bool, str, str]:
+
+    if not resource_ids:
+        return False, "", "No resources specified for hold"
+
+    clamped_ttl = max(60, min(600, ttl_seconds))
+
+    try:
+        client = get_redis_client()
+
+        if session_id:
+            await release_session_hold(session_id)
+
+        hold_token = f"hld_{secrets.token_hex(6)}"
+        slot_keys = [
+            get_slot_hold_key(tenant_id, agent_id, r_id, start_time) for r_id in resource_ids
+        ]
+
+        eval_call = cast(
+            Any,
+            client.eval(_ACQUIRE_HOLDS_LUA, len(slot_keys), *slot_keys, hold_token, clamped_ttl),
+        )
+        result = await eval_call if hasattr(eval_call, "__await__") else eval_call
+        if result != 1:
+            return (
+                False,
+                "",
+                "This time slot is temporarily held by another customer. Please choose another time.",
+            )
+
+        token_meta = {
+            "tenant_id": tenant_id,
+            "agent_id": agent_id,
+            "resource_ids": resource_ids,
+            "start_time": start_time,
+            "session_id": session_id or "",
+        }
+        await client.set(
+            get_hold_token_data_key(hold_token),
+            json.dumps(token_meta),
+            ex=clamped_ttl,
+        )
+
+        if session_id:
+            await client.setex(get_session_active_hold_key(session_id), clamped_ttl, hold_token)
+
+        return True, hold_token, ""
+    except Exception as e:
+        print(f"[Redis] Error acquiring slot holds: {e}", flush=True)
+        return False, "", f"Failed to acquire slot hold: {e}"
+
+
+async def release_slot_holds(
+    tenant_id: str,
+    agent_id: str,
+    resource_ids: list[str],
+    start_time: str,
+    hold_token: str | None = None,
+) -> int:
+
+    if not resource_ids:
+        return 0
+    try:
+        client = get_redis_client()
+        slot_keys = [
+            get_slot_hold_key(tenant_id, agent_id, r_id, start_time) for r_id in resource_ids
+        ]
+        token_arg = hold_token or ""
+        eval_call = cast(
+            Any, client.eval(_RELEASE_HOLDS_LUA, len(slot_keys), *slot_keys, token_arg)
+        )
+        deleted = await eval_call if hasattr(eval_call, "__await__") else eval_call
+        if hold_token:
+            await client.delete(get_hold_token_data_key(hold_token))
+        return int(deleted or 0)
+    except Exception as e:
+        print(f"[Redis] Error releasing slot holds: {e}", flush=True)
+        return 0
+
+
+async def release_session_hold(session_id: str) -> bool:
+
+    if not session_id:
+        return False
+    try:
+        client = get_redis_client()
+        session_key = get_session_active_hold_key(session_id)
+        hold_token = await client.get(session_key)
+        if not hold_token:
+            return False
+
+        token_str = str(hold_token).strip()
+        raw_meta = await client.get(get_hold_token_data_key(token_str))
+        if raw_meta:
+            meta = json.loads(raw_meta)
+            tenant_id = meta.get("tenant_id", "")
+            agent_id = meta.get("agent_id", "")
+            resource_ids = meta.get("resource_ids", [])
+            start_time = meta.get("start_time", "")
+            if tenant_id and resource_ids and start_time:
+                await release_slot_holds(
+                    tenant_id=tenant_id,
+                    agent_id=agent_id,
+                    resource_ids=resource_ids,
+                    start_time=start_time,
+                    hold_token=token_str,
+                )
+
+        await client.delete(session_key, get_hold_token_data_key(token_str))
+        return True
+    except Exception as e:
+        print(f"[Redis] Error releasing session hold for {session_id}: {e}", flush=True)
+        return False

@@ -193,8 +193,6 @@ class EventSubscriber(Protocol):
 
 @runtime_checkable
 class EventPublisher(Protocol):
-    
-
     async def publish(
         self,
         topic: str,
@@ -267,17 +265,12 @@ class OutboxRepository(Protocol):
         payload: dict[str, Any],
     ) -> OutboxEvent: ...
 
-    async def mark_published(
-        self, event_id: str, published_at: datetime | None = None
-    ) -> None: ...
+    async def mark_published(self, event_id: str, published_at: datetime | None = None) -> None: ...
 
-    async def mark_failed(
-        self, event_id: str, error: str, max_retries: int = 5
-    ) -> None: ...
+    async def mark_failed(self, event_id: str, error: str, max_retries: int = 5) -> None: ...
 
     async def get_stuck_pending_events(
         self, older_than: datetime, limit: int = 50
     ) -> list[OutboxEvent]: ...
 
     async def get_by_id(self, event_id: str) -> OutboxEvent | None: ...
-

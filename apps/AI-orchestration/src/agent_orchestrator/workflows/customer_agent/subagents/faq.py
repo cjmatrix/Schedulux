@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
@@ -71,16 +72,20 @@ def _get_gemini_model(temperature: float = 0.1, max_tokens: int = 2048) -> Any |
 
 
 def _extract_response_text(result: dict[str, Any]) -> str:
-    final = result["messages"][-1]
-    if isinstance(final.content, str):
-        return final.content
-    if isinstance(final.content, list):
-        texts = [
-            item["text"] if isinstance(item, dict) and item.get("text") else str(item)
-            for item in final.content
-        ]
-        return "\n".join(texts)
-    return str(final.content)
+    messages = result.get("messages", [])
+    for msg in reversed(messages):
+        content = getattr(msg, "content", "")
+        if isinstance(content, str) and content.strip():
+            return content.strip()
+        if isinstance(content, list):
+            texts = [
+                item["text"] if isinstance(item, dict) and item.get("text") else str(item)
+                for item in content
+            ]
+            joined = "\n".join(texts).strip()
+            if joined:
+                return joined
+    return "I'm happy to help with any questions about our services or hours. What would you like to know?"
 
 
 def _get_chat_model(temperature: float = 0.1) -> Any:
@@ -179,6 +184,7 @@ async def run_faq_agent(
     conversation_history: list[BaseMessage],
     biz_context: dict[str, Any],
     all_tools: list[BaseTool],
+    config: RunnableConfig | None = None,
 ) -> str:
     faq_tools = [t for t in all_tools if t.name in _FAQ_TOOLS]
 
@@ -211,10 +217,12 @@ async def run_faq_agent(
         prompt=SystemMessage(content=system_prompt),
     )
 
+    agent_config: RunnableConfig = {**(config or {}), "recursion_limit": 6}
+
     try:
         result = await agent.ainvoke(
             {"messages": langchain_msgs},
-            config={"recursion_limit": 6},
+            config=agent_config,
         )
         return _extract_response_text(result)
     except Exception as e:
@@ -237,7 +245,7 @@ async def run_faq_agent(
                 )
                 result = await fallback_agent.ainvoke(
                     {"messages": langchain_msgs},
-                    config={"recursion_limit": 6},
+                    config=agent_config,
                 )
                 logger.info("[FaqAgent] Successfully recovered using Gemini fallback!")
                 return _extract_response_text(result)

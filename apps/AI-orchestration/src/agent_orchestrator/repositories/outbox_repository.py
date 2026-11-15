@@ -41,9 +41,7 @@ class MongoOutboxRepository(OutboxRepository):
         await outbox_doc.insert()
         return outbox_doc
 
-    async def mark_published(
-        self, event_id: str, published_at: datetime | None = None
-    ) -> None:
+    async def mark_published(self, event_id: str, published_at: datetime | None = None) -> None:
         event = await OutboxEvent.get(event_id)
         if event:
             event.status = OutboxStatus.PUBLISHED
@@ -51,9 +49,7 @@ class MongoOutboxRepository(OutboxRepository):
             event.error_message = None
             await event.save()
 
-    async def mark_failed(
-        self, event_id: str, error: str, max_retries: int = 5
-    ) -> None:
+    async def mark_failed(self, event_id: str, error: str, max_retries: int = 5) -> None:
         event = await OutboxEvent.get(event_id)
         if event:
             event.retry_count = (event.retry_count or 0) + 1
@@ -77,4 +73,3 @@ class MongoOutboxRepository(OutboxRepository):
 
     async def get_by_id(self, event_id: str) -> OutboxEvent | None:
         return await OutboxEvent.get(event_id)
-

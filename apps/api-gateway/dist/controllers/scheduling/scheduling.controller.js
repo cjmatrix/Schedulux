@@ -25,10 +25,10 @@ const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
 const grpc_metadata_util_js_1 = require("../../utils/grpc-metadata.util.js");
 const availability_dto_js_1 = require("./dtos/availability.dto.js");
 const booking_dto_js_1 = require("./dtos/booking.dto.js");
+const customer_dto_js_1 = require("./dtos/customer.dto.js");
 const resource_dto_js_1 = require("./dtos/resource.dto.js");
 const schedule_dto_js_1 = require("./dtos/schedule.dto.js");
 const service_dto_js_1 = require("./dtos/service.dto.js");
-const customer_dto_js_1 = require("./dtos/customer.dto.js");
 let SchedulingController = class SchedulingController {
     _client;
     _schedulingService;
@@ -276,6 +276,8 @@ let SchedulingController = class SchedulingController {
             notes: body.notes,
             source: body.source,
             created_by: body.created_by || userId,
+            hold_token: body.hold_token,
+            override_hold: body.override_hold,
         }));
         return {
             message: response.message,
@@ -310,6 +312,8 @@ let SchedulingController = class SchedulingController {
             resource_ids: body.resource_ids ?? (body.resource_id ? [body.resource_id] : []),
             notes: body.notes,
             rescheduled_by: userId,
+            hold_token: body.hold_token,
+            override_hold: body.override_hold,
         }));
         return {
             message: response.message,

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
 from typing import Any
@@ -8,6 +7,8 @@ from typing import Any
 from dotenv import load_dotenv
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
+from langchain_core.tracers import LangChainTracer
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
@@ -26,30 +27,12 @@ from agent_orchestrator.workflows.customer_agent.subagents import (
     run_handoff_agent,
 )
 
-try:
-    import toon
-
-    _has_toon = True
-except ImportError:
-    _has_toon = False
-
 logger = logging.getLogger(__name__)
 
 _env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env"))
 load_dotenv(_env_path)
 
 _customer_msg_repo = CustomerMessageRepository()
-
-
-def _format_services_catalog(services: list[dict[str, Any]]) -> str:
-    if _has_toon:
-        try:
-            return toon.encode(services)
-        except Exception as e:
-            logger.warning(
-                "[CustomerAgent] Failed to toonify services, falling back to JSON: %s", e
-            )
-    return json.dumps(services, indent=2)
 
 
 def _get_gemini_model(temperature: float = 0.2, max_tokens: int = 4096) -> BaseChatModel | None:
@@ -94,7 +77,7 @@ def _get_chat_model(temperature: float = 0.2) -> BaseChatModel:
         )
 
 
-async def node_supervisor(state: CustomerGraphState) -> dict[str, Any]:
+async def node_supervisor(state: CustomerGraphState, config: RunnableConfig) -> dict[str, Any]:
     message = state.get("message", "")
     history = state.get("messages", [])
     biz_context = state.get("biz_context", {})
@@ -103,12 +86,13 @@ async def node_supervisor(state: CustomerGraphState) -> dict[str, Any]:
         message=message,
         conversation_history=history,
         biz_context=biz_context,
+        config=config,
     )
     logger.info("[CustomerGraph:SupervisorNode] Classified intents -> %s", intents)
     return {"intents": intents}
 
 
-async def node_booking_agent(state: CustomerGraphState) -> dict[str, Any]:
+async def node_booking_agent(state: CustomerGraphState, config: RunnableConfig) -> dict[str, Any]:
     logger.info("[CustomerGraph:BookingAgentNode] Executing booking specialist")
     response_text = await run_booking_agent(
         tenant_id=state["tenant_id"],
@@ -118,13 +102,14 @@ async def node_booking_agent(state: CustomerGraphState) -> dict[str, Any]:
         biz_context=state["biz_context"],
         all_tools=state["all_tools"],
         session_id=state.get("session_id", ""),
+        config=config,
     )
     return {
         "booking_response": response_text,
     }
 
 
-async def node_faq_agent(state: CustomerGraphState) -> dict[str, Any]:
+async def node_faq_agent(state: CustomerGraphState, config: RunnableConfig) -> dict[str, Any]:
     logger.info("[CustomerGraph:FaqAgentNode] Executing FAQ / RAG specialist")
     response_text = await run_faq_agent(
         tenant_id=state["tenant_id"],
@@ -133,13 +118,14 @@ async def node_faq_agent(state: CustomerGraphState) -> dict[str, Any]:
         conversation_history=state["messages"],
         biz_context=state["biz_context"],
         all_tools=state["all_tools"],
+        config=config,
     )
     return {
         "faq_response": response_text,
     }
 
 
-async def node_handoff_agent(state: CustomerGraphState) -> dict[str, Any]:
+async def node_handoff_agent(state: CustomerGraphState, config: RunnableConfig) -> dict[str, Any]:
     intents = state.get("intents") or ["handoff"]
     is_emergency = "emergency" in intents
     logger.info(
@@ -158,7 +144,7 @@ async def node_handoff_agent(state: CustomerGraphState) -> dict[str, Any]:
     }
 
 
-async def node_synthesizer(state: CustomerGraphState) -> dict[str, Any]:
+async def node_synthesizer(state: CustomerGraphState, config: RunnableConfig) -> dict[str, Any]:
     booking_resp = state.get("booking_response")
     faq_resp = state.get("faq_response")
 
@@ -194,7 +180,7 @@ Your job is to merge specialist agent answers into a single, cohesive, seamless,
         ]
 
         try:
-            synth_result = await model.ainvoke(synth_messages)
+            synth_result = await model.ainvoke(synth_messages, config=config)
             final_text = (
                 synth_result.content
                 if isinstance(synth_result.content, str)
@@ -207,7 +193,7 @@ Your job is to merge specialist agent answers into a single, cohesive, seamless,
             gemini_model = _get_gemini_model(temperature=0.2, max_tokens=4096)
             if gemini_model and not isinstance(model, ChatGoogleGenerativeAI):
                 try:
-                    synth_result = await gemini_model.ainvoke(synth_messages)
+                    synth_result = await gemini_model.ainvoke(synth_messages, config=config)
                     final_text = (
                         synth_result.content
                         if isinstance(synth_result.content, str)
@@ -221,13 +207,13 @@ Your job is to merge specialist agent answers into a single, cohesive, seamless,
                     final_text = f"{faq_resp}\n\n{booking_resp}"
             else:
                 final_text = f"{faq_resp}\n\n{booking_resp}"
-    elif booking_resp:
-        final_text = booking_resp
-    elif faq_resp:
-        final_text = faq_resp
+    elif booking_resp and booking_resp.strip():
+        final_text = booking_resp.strip()
+    elif faq_resp and faq_resp.strip():
+        final_text = faq_resp.strip()
     else:
         final_text = (
-            "I'm sorry, I could not complete your request. Please try again or ask our team."
+            "I'm here to help! Could you please tell me which service and time you would prefer?"
         )
 
     return {
@@ -332,10 +318,9 @@ async def process_customer_chat(
     biz_context = await resolve_business_context(tenant_id, agent_id, is_sandbox=is_sandbox)
     all_tools = get_scheduling_mcp_tools()
 
-    from agent_orchestrator.services.token_service import TokenTrackingService
-
-    
-    is_exceeded, current_tokens, token_limit = await TokenTrackingService.check_weekly_quota(tenant_id, tier=tier)
+    is_exceeded, current_tokens, token_limit = await TokenTrackingService.check_weekly_quota(
+        tenant_id, tier=tier
+    )
     if is_exceeded:
         logger.warning(
             "[CustomerAgent] Tenant %s exceeded weekly token quota (%d/%d). Blocking interaction.",
@@ -355,7 +340,9 @@ async def process_customer_chat(
             content=quota_msg,
         )
         user_msg_id = str(user_msg.id) if user_msg and hasattr(user_msg, "id") else ""
-        agent_msg_id = str(assistant_msg.id) if assistant_msg and hasattr(assistant_msg, "id") else ""
+        agent_msg_id = (
+            str(assistant_msg.id) if assistant_msg and hasattr(assistant_msg, "id") else ""
+        )
         created_at_iso = (
             assistant_msg.created_at.isoformat()
             if assistant_msg and hasattr(assistant_msg, "created_at") and assistant_msg.created_at
@@ -387,10 +374,28 @@ async def process_customer_chat(
     }
 
     tracker = TokenUsageTracker()
+    run_config: dict[str, Any] = {
+        "recursion_limit": 8,
+        "callbacks": [tracker, LangChainTracer(project_name="customer-agent")],
+        "run_name": f"CustomerChat:{agent_id}",
+        "tags": [
+            "customer_chat",
+            f"tier:{tier or 'starter'}",
+            "sandbox" if is_sandbox else "live",
+        ],
+        "metadata": {
+            "tenant_id": tenant_id,
+            "agent_id": agent_id,
+            "session_id": session_id,
+            "tier": tier or "starter",
+            "is_sandbox": is_sandbox,
+            "thread_id": session_id,
+        },
+    }
     try:
         final_state = await customer_orchestration_graph.ainvoke(
             initial_state,
-            config={"recursion_limit": 8, "callbacks": [tracker]},
+            config=run_config,
         )
         response_text = final_state.get("response") or (
             "I'm sorry, I encountered a temporary issue while processing your request. "
@@ -412,7 +417,9 @@ async def process_customer_chat(
     )
 
     fallback_prompt = f"{message} " + " ".join(
-        m.content for m in langchain_messages if hasattr(m, "content") and isinstance(m.content, str)
+        m.content
+        for m in langchain_messages
+        if hasattr(m, "content") and isinstance(m.content, str)
     )
     fallback_inp = max(1, len(fallback_prompt) // 4)
     fallback_out = max(1, len(response_text) // 4)

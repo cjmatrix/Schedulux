@@ -563,6 +563,7 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
     ) -> knowledge_pb2.GetAgentStatsResponse:
         try:
             import asyncio
+
             from agent_orchestrator.models import AgentDraft, AgentRuntimeConfig
 
             active, draft = await asyncio.gather(
@@ -571,7 +572,7 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             )
             total = active + draft
 
-            print(active,draft,flush=True)
+            print(active, draft, flush=True)
             return knowledge_pb2.GetAgentStatsResponse(
                 total_agents=int(total),
                 active_agents=int(active),

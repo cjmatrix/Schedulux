@@ -34,7 +34,6 @@ def extract_tokens_from_response(
     input_tokens = 0
     output_tokens = 0
 
-
     usage = getattr(response, "usage_metadata", None)
     if isinstance(usage, dict):
         input_tokens = int(usage.get("input_tokens") or 0)
@@ -42,7 +41,6 @@ def extract_tokens_from_response(
         if input_tokens > 0 or output_tokens > 0:
             return input_tokens, output_tokens
 
- 
     resp_meta = getattr(response, "response_metadata", None)
     if isinstance(resp_meta, dict):
         tu = resp_meta.get("token_usage") or resp_meta.get("usage")
@@ -52,7 +50,6 @@ def extract_tokens_from_response(
             if input_tokens > 0 or output_tokens > 0:
                 return input_tokens, output_tokens
 
-   
     if fallback_prompt:
         input_tokens = max(1, len(fallback_prompt) // 4)
     if fallback_completion:
@@ -64,8 +61,6 @@ def extract_tokens_from_response(
 
 
 class TokenUsageTracker(BaseCallbackHandler):
-    
-
     def __init__(self) -> None:
         super().__init__()
         self.input_tokens: int = 0
@@ -124,13 +119,15 @@ class TokenUsageTracker(BaseCallbackHandler):
 
         self.input_tokens += call_input
         self.output_tokens += call_output
-        self.total_tokens += (call_input + call_output)
-        self.invocations.append({
-            "call_index": self.call_count,
-            "model": extracted_model or self.model_id,
-            "input_tokens": call_input,
-            "output_tokens": call_output,
-        })
+        self.total_tokens += call_input + call_output
+        self.invocations.append(
+            {
+                "call_index": self.call_count,
+                "model": extracted_model or self.model_id,
+                "input_tokens": call_input,
+                "output_tokens": call_output,
+            }
+        )
 
 
 class TokenTrackingService:
@@ -144,7 +141,7 @@ class TokenTrackingService:
         model_id: str | None = None,
         event_id: str | None = None,
     ) -> int:
-      
+
         if not tenant_id:
             return 0
 
@@ -155,13 +152,11 @@ class TokenTrackingService:
         effective_model = model_id or os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
         redis_key = get_weekly_token_redis_key(tenant_id)
 
-       
         try:
             client = get_redis_client()
             new_val = await client.incrby(redis_key, total_tokens)
             ttl = await client.ttl(redis_key)
             if ttl < 0:
-               
                 await client.expire(redis_key, 35 * 86400)
             logger.info(
                 "[TokenService] Incremented %s by %d (total: %d) for [%s/%s]",
@@ -174,7 +169,6 @@ class TokenTrackingService:
         except Exception as e:
             logger.error("[TokenService] Redis INCRBY error for tenant %s: %s", tenant_id, e)
 
-       
         now_utc = datetime.now(UTC)
         det_event_id = (
             event_id
@@ -194,7 +188,6 @@ class TokenTrackingService:
             "created_at": now_utc.isoformat(),
         }
 
-  
         try:
             from agent_orchestrator.services.outbox_service import get_outbox_service
 
@@ -208,8 +201,7 @@ class TokenTrackingService:
                 partition_key=tenant_id,
                 payload=event_payload,
             )
-        
-            
+
             outbox_service.dispatch_async(outbox_doc)
         except Exception as e:
             logger.error("[TokenService] Outbox save error for tenant %s: %s", tenant_id, e)
@@ -235,7 +227,9 @@ class TokenTrackingService:
                 if cached_tier:
                     resolved_tier = cached_tier.strip().lower()
         except Exception as te:
-            logger.warning("[TokenService] Could not resolve tier from Redis for %s: %s", tenant_id, te)
+            logger.warning(
+                "[TokenService] Could not resolve tier from Redis for %s: %s", tenant_id, te
+            )
 
         tier_cfg = get_tier_config(resolved_tier)
         limit = tier_cfg.get("weekly_token_limit", 100_000)
@@ -251,6 +245,7 @@ class TokenTrackingService:
             is_exceeded = current >= limit
             return is_exceeded, current, limit
         except Exception as e:
-            logger.error("[TokenService] Failed to check weekly quota for tenant %s: %s", tenant_id, e)
+            logger.error(
+                "[TokenService] Failed to check weekly quota for tenant %s: %s", tenant_id, e
+            )
             return False, 0, limit
-

@@ -114,9 +114,7 @@ class OutboxService(OutboxServiceProtocol):
                     )
                 except Exception as err:
                     await self._repository.mark_failed(event.id, str(err))
-                    logger.error(
-                        "[OutboxRecovery] Failed to recover event %s: %s", event.id, err
-                    )
+                    logger.error("[OutboxRecovery] Failed to recover event %s: %s", event.id, err)
         except Exception as e:
             logger.error("[OutboxRecovery] Error in background sweep: %s", e)
 
@@ -152,4 +150,3 @@ async def run_outbox_recovery_loop(interval_seconds: int = 10) -> None:
             break
         except Exception as e:
             logger.error("[OutboxRecovery] Unexpected error in recovery loop: %s", e)
-

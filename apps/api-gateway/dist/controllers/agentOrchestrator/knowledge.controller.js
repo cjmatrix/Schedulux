@@ -143,7 +143,10 @@ let KnowledgeController = class KnowledgeController {
         let isFirstTime = true;
         let messages = [];
         if (body.token) {
-            const verified = (0, session_token_util_js_1.verifySessionToken)(body.token);
+            const verified = (0, session_token_util_js_1.verifySessionToken)(body.token, {
+                expectedTenantId: tenantId,
+                expectedAgentId: agentId,
+            });
             if (verified.valid && verified.sessionId) {
                 resolvedSessionId = verified.sessionId;
                 resolvedToken = body.token;
@@ -151,7 +154,7 @@ let KnowledgeController = class KnowledgeController {
         }
         else if (body.session_id) {
             resolvedSessionId = body.session_id;
-            resolvedToken = (0, session_token_util_js_1.signSessionId)(body.session_id);
+            resolvedToken = (0, session_token_util_js_1.signSessionId)(body.session_id, tenantId, agentId);
         }
         if (resolvedSessionId && resolvedToken) {
             try {
@@ -181,7 +184,7 @@ let KnowledgeController = class KnowledgeController {
             }
         }
         else {
-            const session = (0, session_token_util_js_1.createSignedSession)(`sandbox_${tenantId}_${agentId}`);
+            const session = (0, session_token_util_js_1.createSignedSession)(`sandbox_${tenantId}_${agentId}`, tenantId, agentId);
             resolvedSessionId = session.sessionId;
             resolvedToken = session.token;
             isFirstTime = true;
@@ -230,7 +233,10 @@ let KnowledgeController = class KnowledgeController {
         const agentId = query.agent_id || 'default';
         let resolvedSessionId = query.session_id;
         if (query.token) {
-            const verified = (0, session_token_util_js_1.verifySessionToken)(query.token);
+            const verified = (0, session_token_util_js_1.verifySessionToken)(query.token, {
+                expectedTenantId: tenantId,
+                expectedAgentId: agentId,
+            });
             if (!verified.valid || !verified.sessionId) {
                 throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
             }
@@ -261,17 +267,20 @@ let KnowledgeController = class KnowledgeController {
         let sessionId = body.session_id;
         let token = body.token;
         if (token) {
-            const verified = (0, session_token_util_js_1.verifySessionToken)(token);
+            const verified = (0, session_token_util_js_1.verifySessionToken)(token, {
+                expectedTenantId: tenantId,
+                expectedAgentId: agentId,
+            });
             if (!verified.valid || !verified.sessionId) {
                 throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
             }
             sessionId = verified.sessionId;
         }
         else if (sessionId) {
-            token = (0, session_token_util_js_1.signSessionId)(sessionId);
+            token = (0, session_token_util_js_1.signSessionId)(sessionId, tenantId, agentId);
         }
         else {
-            const session = (0, session_token_util_js_1.createSignedSession)(`sandbox_${tenantId}_${agentId}`);
+            const session = (0, session_token_util_js_1.createSignedSession)(`sandbox_${tenantId}_${agentId}`, tenantId, agentId);
             sessionId = session.sessionId;
             token = session.token;
         }

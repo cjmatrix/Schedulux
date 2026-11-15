@@ -345,6 +345,8 @@ message CreateBookingRequest {
   optional string source = 11;
   optional string created_by = 13;
   repeated string resource_ids = 14;
+  optional string hold_token = 15;
+  optional bool override_hold = 16;
 }
 
 message BookingResponse {
@@ -370,6 +372,8 @@ message RescheduleBookingRequest {
   repeated string resource_ids = 7;
   optional string rescheduled_by = 8;
   optional string notes = 9;
+  optional string hold_token = 10;
+  optional bool override_hold = 11;
 }
 
 message UpdateBookingStatusRequest {

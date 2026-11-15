@@ -1,6 +1,8 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { KnowledgeController } from './controllers/agentOrchestrator/knowledge.controller.js';
 import { BillingController } from './controllers/billing/billing.controller.js';
 import { DashboardUserAuthController } from './controllers/dashboarduser/dashboard-user-auth.controller.js';
@@ -11,18 +13,45 @@ import { SuperAdminTenantController } from './controllers/superadmin/superadmin-
 import { SuperAdminTierConfigController } from './controllers/superadmin/superadmin-tier-config.controller.js';
 import { TenantController } from './controllers/tenant/tenant.controller.js';
 import { TenantDashboardController } from './controllers/tenant/tenant-dashboard.controller.js';
+import { AppThrottlerGuard } from './guards/app-throttler.guard.js';
 import { PaddleWebhookGuard } from './guards/paddle-webhook.guard.js';
 import { RolesGuard } from './guards/roles.guard.js';
 import { TenantAuthGuard } from './guards/tenant-auth.guard.js';
-import { RateLimiterMiddleware } from './middleware/rate-limiter.middleware.js';
-import { OpenSearchAnalyticsService } from './services/opensearch-analytics.service.js';
-import { RedisService } from './services/redis.service.js';
+import { RedisModule } from './modules/redis.module.js';
+import { ThrottlerStorageRedisService } from './services/throttler-storage-redis.service.js';
 import { SchemaGateway } from './websockets/schema.gateway.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    RedisModule,
+    ThrottlerModule.forRootAsync({
+      imports: [RedisModule],
+      inject: [ThrottlerStorageRedisService],
+      useFactory: (storage: ThrottlerStorageRedisService) => ({
+        throttlers: [
+          {
+            name: 'short',
+            ttl: 1000,
+            limit: 30,
+          },
+          {
+            name: 'default',
+            ttl: 60000,
+            limit: 100,
+          },
+          {
+            name: 'long',
+            ttl: 900000,
+            limit: 1000,
+          },
+        ],
+        storage,
+        errorMessage: (_context, detail) =>
+          `Rate limit of ${detail.limit} requests exceeded. Please try again in ${detail.timeToBlockExpire} seconds.`,
+      }),
     }),
     ClientsModule.register([
       {
@@ -120,25 +149,14 @@ import { SchemaGateway } from './websockets/schema.gateway.js';
     SchedulingController,
   ],
   providers: [
-    RedisService,
-    OpenSearchAnalyticsService,
-    {
-      provide: 'ISchemaEventSubscriber',
-      useExisting: RedisService,
-    },
-    {
-      provide: 'ISchemaCacheService',
-      useExisting: RedisService,
-    },
     SchemaGateway,
     RolesGuard,
     TenantAuthGuard,
     PaddleWebhookGuard,
-    RateLimiterMiddleware,
+    {
+      provide: APP_GUARD,
+      useClass: AppThrottlerGuard,
+    },
   ],
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer.apply(RateLimiterMiddleware).forRoutes('*');
-  }
-}
+export class AppModule {}

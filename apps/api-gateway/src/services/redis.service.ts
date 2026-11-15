@@ -137,9 +137,13 @@ export class RedisService
     }
   }
 
-  async setTenantTier(tenantId: string, tier: string, ttlSeconds = 3600): Promise<void> {
+  async setTenantTier(tenantId: string, tier: string, ttlSeconds?: number): Promise<void> {
     try {
-      await this._client.set(`tenant:${tenantId}:tier`, tier, 'EX', ttlSeconds);
+      if (ttlSeconds && ttlSeconds > 0) {
+        await this._client.set(`tenant:${tenantId}:tier`, tier, 'EX', ttlSeconds);
+      } else {
+        await this._client.set(`tenant:${tenantId}:tier`, tier);
+      }
     } catch (err) {
       this._logger.error(`Failed to cache tenant tier for ${tenantId}:`, err);
     }

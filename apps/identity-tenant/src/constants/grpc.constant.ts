@@ -29,6 +29,8 @@ export const GRPC_METHODS = {
   SUPERADMIN_DASHBOARD: {
     GET_OVERVIEW: 'GetSuperAdminOverview',
     GET_REVENUE_CHART: 'GetRevenueChart',
+    GET_TOKEN_CHART: 'GetTokenChart',
+    GET_TOP_TENANTS: 'GetTopTenants',
   },
   SUPERADMIN_TIER_CONFIG: {
     LIST_TIER_CONFIGS: 'ListTierConfigs',

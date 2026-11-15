@@ -114,6 +114,7 @@ export class SuperAdminAuthController {
       total_revenue: result.totalRevenue,
       currency: result.currency,
       tenants_by_tier: result.tenantsByTier,
+      total_tokens: result.totalTokens ?? 0,
     };
   }
 
@@ -130,6 +131,35 @@ export class SuperAdminAuthController {
         amount: p.amount,
         transaction_count: p.transactionCount,
       })),
+    };
+  }
+
+  @GrpcMethod(GRPC_SERVICES.SUPERADMIN_DASHBOARD, GRPC_METHODS.SUPERADMIN_DASHBOARD.GET_TOKEN_CHART)
+  async getTokenChart(data: SuperAdminProto.TokenChartRequest) {
+    const points = await this._superAdminService.getTokenChart(
+      data.start_date,
+      data.end_date,
+      data.interval,
+    );
+    return {
+      points: points.map((p) => ({
+        date: p.date,
+        total_tokens: p.total_tokens,
+        input_tokens: p.input_tokens,
+        output_tokens: p.output_tokens,
+      })),
+    };
+  }
+
+  @GrpcMethod(GRPC_SERVICES.SUPERADMIN_DASHBOARD, GRPC_METHODS.SUPERADMIN_DASHBOARD.GET_TOP_TENANTS)
+  async getTopTenants(data: SuperAdminProto.TopTenantsRequest) {
+    const tenants = await this._superAdminService.getTopTenants(
+      data.start_date,
+      data.end_date,
+      data.limit,
+    );
+    return {
+      tenants,
     };
   }
 

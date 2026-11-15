@@ -9,7 +9,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
+const core_1 = require("@nestjs/core");
 const microservices_1 = require("@nestjs/microservices");
+const throttler_1 = require("@nestjs/throttler");
 const knowledge_controller_js_1 = require("./controllers/agentOrchestrator/knowledge.controller.js");
 const billing_controller_js_1 = require("./controllers/billing/billing.controller.js");
 const dashboard_user_auth_controller_js_1 = require("./controllers/dashboarduser/dashboard-user-auth.controller.js");
@@ -20,17 +22,14 @@ const superadmin_tenant_controller_js_1 = require("./controllers/superadmin/supe
 const superadmin_tier_config_controller_js_1 = require("./controllers/superadmin/superadmin-tier-config.controller.js");
 const tenant_controller_js_1 = require("./controllers/tenant/tenant.controller.js");
 const tenant_dashboard_controller_js_1 = require("./controllers/tenant/tenant-dashboard.controller.js");
+const app_throttler_guard_js_1 = require("./guards/app-throttler.guard.js");
 const paddle_webhook_guard_js_1 = require("./guards/paddle-webhook.guard.js");
 const roles_guard_js_1 = require("./guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("./guards/tenant-auth.guard.js");
-const rate_limiter_middleware_js_1 = require("./middleware/rate-limiter.middleware.js");
-const opensearch_analytics_service_js_1 = require("./services/opensearch-analytics.service.js");
-const redis_service_js_1 = require("./services/redis.service.js");
+const redis_module_js_1 = require("./modules/redis.module.js");
+const throttler_storage_redis_service_js_1 = require("./services/throttler-storage-redis.service.js");
 const schema_gateway_js_1 = require("./websockets/schema.gateway.js");
 let AppModule = class AppModule {
-    configure(consumer) {
-        consumer.apply(rate_limiter_middleware_js_1.RateLimiterMiddleware).forRoutes('*');
-    }
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
@@ -38,6 +37,32 @@ exports.AppModule = AppModule = __decorate([
         imports: [
             config_1.ConfigModule.forRoot({
                 isGlobal: true,
+            }),
+            redis_module_js_1.RedisModule,
+            throttler_1.ThrottlerModule.forRootAsync({
+                imports: [redis_module_js_1.RedisModule],
+                inject: [throttler_storage_redis_service_js_1.ThrottlerStorageRedisService],
+                useFactory: (storage) => ({
+                    throttlers: [
+                        {
+                            name: 'short',
+                            ttl: 1000,
+                            limit: 30,
+                        },
+                        {
+                            name: 'default',
+                            ttl: 60000,
+                            limit: 100,
+                        },
+                        {
+                            name: 'long',
+                            ttl: 900000,
+                            limit: 1000,
+                        },
+                    ],
+                    storage,
+                    errorMessage: (_context, detail) => `Rate limit of ${detail.limit} requests exceeded. Please try again in ${detail.timeToBlockExpire} seconds.`,
+                }),
             }),
             microservices_1.ClientsModule.register([
                 {
@@ -135,21 +160,14 @@ exports.AppModule = AppModule = __decorate([
             scheduling_controller_js_1.SchedulingController,
         ],
         providers: [
-            redis_service_js_1.RedisService,
-            opensearch_analytics_service_js_1.OpenSearchAnalyticsService,
-            {
-                provide: 'ISchemaEventSubscriber',
-                useExisting: redis_service_js_1.RedisService,
-            },
-            {
-                provide: 'ISchemaCacheService',
-                useExisting: redis_service_js_1.RedisService,
-            },
             schema_gateway_js_1.SchemaGateway,
             roles_guard_js_1.RolesGuard,
             tenant_auth_guard_js_1.TenantAuthGuard,
             paddle_webhook_guard_js_1.PaddleWebhookGuard,
-            rate_limiter_middleware_js_1.RateLimiterMiddleware,
+            {
+                provide: core_1.APP_GUARD,
+                useClass: app_throttler_guard_js_1.AppThrottlerGuard,
+            },
         ],
     })
 ], AppModule);

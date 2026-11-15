@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ClientGrpc } from '@nestjs/microservices';
+import { SkipThrottle } from '@nestjs/throttler';
 import { TenantServiceClient } from '@repo/proto/tenant';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { lastValueFrom } from 'rxjs';
@@ -120,6 +121,7 @@ export class BillingController implements OnModuleInit {
     };
   }
 
+  @SkipThrottle()
   @Post(API_ROUTES.TENANT.BILLING.WEBHOOK)
   @UseGuards(PaddleWebhookGuard)
   @UsePipes(ZodValidationPipe)

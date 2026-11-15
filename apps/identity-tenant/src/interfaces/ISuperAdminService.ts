@@ -43,6 +43,7 @@ export interface SuperAdminOverviewResult {
   totalRevenue: number;
   currency: string;
   tenantsByTier: Record<string, number>;
+  totalTokens?: number;
 }
 
 export interface RevenueDataPointResult {
@@ -82,6 +83,33 @@ export interface ISuperAdminService {
     endDate?: string,
     interval?: string,
   ): Promise<RevenueDataPointResult[]>;
+
+  getTokenChart(
+    startDate?: string,
+    endDate?: string,
+    interval?: string,
+  ): Promise<
+    Array<{
+      date: string;
+      total_tokens: number;
+      input_tokens: number;
+      output_tokens: number;
+    }>
+  >;
+
+  getTopTenants(
+    startDate?: string,
+    endDate?: string,
+    limit?: number,
+  ): Promise<
+    Array<{
+      tenant_id: string;
+      business_name: string;
+      email: string;
+      tier: string;
+      total_tokens: number;
+    }>
+  >;
 
   listTierConfigs(): Promise<TierConfigItem[]>;
 

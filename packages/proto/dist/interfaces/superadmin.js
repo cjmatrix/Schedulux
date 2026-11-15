@@ -31,7 +31,7 @@ function SuperAdminAuthServiceControllerMethods() {
 exports.SUPER_ADMIN_AUTH_SERVICE_NAME = "SuperAdminAuthService";
 function SuperAdminDashboardServiceControllerMethods() {
     return function (constructor) {
-        const grpcMethods = ["getSuperAdminOverview", "getRevenueChart"];
+        const grpcMethods = ["getSuperAdminOverview", "getRevenueChart", "getTokenChart", "getTopTenants"];
         for (const method of grpcMethods) {
             const descriptor = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
             (0, microservices_1.GrpcMethod)("SuperAdminDashboardService", method)(constructor.prototype[method], method, descriptor);

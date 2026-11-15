@@ -13,18 +13,6 @@ export interface TierConfig {
 }
 
 export const STATIC_TIER_CONFIGS: Record<string, TierConfig> = {
-  free: {
-    tier: 'free',
-    name: 'Free Starter',
-    max_agents: 1,
-    max_services: 2,
-    max_resources: 2,
-    max_kb_docs: 3,
-    max_kb_doc_size_mb: 5,
-    weekly_token_limit: 100_000,
-    rate_limit_rpm: 60,
-    status: 'active',
-  },
   starter: {
     tier: 'starter',
     name: 'Starter',

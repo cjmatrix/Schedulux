@@ -215,7 +215,9 @@ def _format_draft_toon(draft: dict) -> str:
                 lines.append(f"  {day[:3]}: {', '.join(slot_strs)}")
         blackouts = oh.get("blackout_dates")
         if isinstance(blackouts, list) and blackouts:
-            b_strs = [b.get("date") for b in blackouts if isinstance(b, dict) and b.get("date")]
+            b_strs = [
+                str(b.get("date")) for b in blackouts if isinstance(b, dict) and b.get("date")
+            ]
             if b_strs:
                 lines.append(f"  blackouts: [{', '.join(b_strs)}]")
 
@@ -248,7 +250,7 @@ def _format_draft_toon(draft: dict) -> str:
             buf = f"{s.get('buffer_minutes', 0)}m"
             price = s.get("price") or {}
             price_str = f"${price.get('amount', 0)} {price.get('currency', 'USD')}"
-            r_ids = []
+            r_ids: list[str] = []
             for req in s.get("resource_requirements") or []:
                 if isinstance(req, dict):
                     r_ids.extend(req.get("eligible_resource_ids") or [])

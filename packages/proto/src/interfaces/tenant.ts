@@ -58,6 +58,9 @@ export interface TenantInfo {
   paddle_customer_id?: string | undefined;
   paddle_subscription_id?: string | undefined;
   subscription_status?: string | undefined;
+  weekly_token_limit?: number | undefined;
+  weekly_token_usage?: number | undefined;
+  weekly_token_remaining?: number | undefined;
 }
 
 export interface ListTenantsRequest {
@@ -69,9 +72,16 @@ export interface ListTenantsRequest {
   tenant_ids: string[];
 }
 
+export interface TenantStats {
+  total: number;
+  active: number;
+  suspended: number;
+}
+
 export interface ListTenantsResponse {
   tenants: TenantInfo[];
   total_count: number;
+  stats?: TenantStats | undefined;
 }
 
 export interface SuspendTenantRequest {

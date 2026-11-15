@@ -65,9 +65,12 @@ let TenantRepository = class TenantRepository extends BaseRepository {
                 { _id: searchRegex },
             ];
         }
-        const [docs, totalCount] = await Promise.all([
+        const [docs, totalCount, activeCount, suspendedCount, allCount] = await Promise.all([
             this.model.find(query).skip(skip).limit(limit).select('-password_hash').lean().exec(),
             this.model.countDocuments(query).exec(),
+            this.model.countDocuments({ status: 'active' }).exec(),
+            this.model.countDocuments({ status: 'suspended' }).exec(),
+            this.model.countDocuments({}).exec(),
         ]);
         const tenants = docs.map((t) => ({
             tenant_id: t._id.toString(),
@@ -76,7 +79,15 @@ let TenantRepository = class TenantRepository extends BaseRepository {
             tier: t.tier,
             status: t.status,
         }));
-        return { tenants, total_count: totalCount };
+        return {
+            tenants,
+            total_count: totalCount,
+            stats: {
+                total: allCount,
+                active: activeCount,
+                suspended: suspendedCount,
+            },
+        };
     }
 };
 TenantRepository = __decorate([

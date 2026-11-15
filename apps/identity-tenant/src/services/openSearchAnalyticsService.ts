@@ -1,20 +1,15 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type {
+  ITokenAnalyticsService,
+  RawTopTenantTokenUsage,
+  TokenDatePoint,
+} from '../interfaces/ITokenAnalyticsService.js';
 
-export interface TokenDatePoint {
-  date: string;
-  total_tokens: number;
-  input_tokens: number;
-  output_tokens: number;
-}
-
-export interface TopTenantTokenUsage {
-  tenant_id: string;
-  total_tokens: number;
-}
+export type { RawTopTenantTokenUsage, TokenDatePoint };
 
 @Injectable()
-export class OpenSearchAnalyticsService implements OnModuleInit {
+export class OpenSearchAnalyticsService implements ITokenAnalyticsService, OnModuleInit {
   private readonly _logger = new Logger(OpenSearchAnalyticsService.name);
   private _cleanUrl = '';
   private _authHeader = '';
@@ -151,7 +146,7 @@ export class OpenSearchAnalyticsService implements OnModuleInit {
     startDate?: string,
     endDate?: string,
     limit = 5,
-  ): Promise<TopTenantTokenUsage[]> {
+  ): Promise<RawTopTenantTokenUsage[]> {
     const rangeFilter: Record<string, string> = {};
     if (startDate) rangeFilter.gte = startDate;
     if (endDate) rangeFilter.lte = endDate;
@@ -186,3 +181,4 @@ export class OpenSearchAnalyticsService implements OnModuleInit {
     }));
   }
 }
+

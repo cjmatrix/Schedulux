@@ -58,6 +58,8 @@ message GetProfileResponse {
 service SuperAdminDashboardService {
   rpc GetSuperAdminOverview (SuperAdminOverviewRequest) returns (SuperAdminOverviewResponse);
   rpc GetRevenueChart (RevenueChartRequest) returns (RevenueChartResponse);
+  rpc GetTokenChart (TokenChartRequest) returns (TokenChartResponse);
+  rpc GetTopTenants (TopTenantsRequest) returns (TopTenantsResponse);
 }
 
 message SuperAdminOverviewRequest {
@@ -72,6 +74,7 @@ message SuperAdminOverviewResponse {
   double total_revenue = 4;
   string currency = 5;
   map<string, int32> tenants_by_tier = 6;
+  int64 total_tokens = 7;
 }
 
 message RevenueChartRequest {
@@ -88,6 +91,41 @@ message RevenueDataPoint {
 
 message RevenueChartResponse {
   repeated RevenueDataPoint points = 1;
+}
+
+message TokenChartRequest {
+  string start_date = 1;
+  string end_date = 2;
+  string interval = 3;
+}
+
+message TokenDatePoint {
+  string date = 1;
+  int64 total_tokens = 2;
+  int64 input_tokens = 3;
+  int64 output_tokens = 4;
+}
+
+message TokenChartResponse {
+  repeated TokenDatePoint points = 1;
+}
+
+message TopTenantsRequest {
+  string start_date = 1;
+  string end_date = 2;
+  int32 limit = 3;
+}
+
+message TopTenantTokenUsage {
+  string tenant_id = 1;
+  string business_name = 2;
+  string email = 3;
+  string tier = 4;
+  int64 total_tokens = 5;
+}
+
+message TopTenantsResponse {
+  repeated TopTenantTokenUsage tenants = 1;
 }
 
 service SuperAdminTierConfigService {

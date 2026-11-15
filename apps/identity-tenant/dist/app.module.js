@@ -25,6 +25,7 @@ import { BcryptPasswordHasher } from './services/bcryptPasswordHasher.js';
 import { BillingService } from './services/billingService.js';
 import { DashboardUserService } from './services/dashboardUserService.js';
 import { JwtTokenService } from './services/jwtTokenService.js';
+import { OpenSearchAnalyticsService } from './services/openSearchAnalyticsService.js';
 import { SuperAdminService } from './services/superAdminService.js';
 import { TenantService } from './services/tenantService.js';
 const require = createRequire(import.meta.url);
@@ -75,6 +76,7 @@ AppModule = __decorate([
             { provide: 'IBillingService', useClass: BillingService },
             { provide: 'ISuperAdminService', useClass: SuperAdminService },
             { provide: 'IDashboardUserService', useClass: DashboardUserService },
+            { provide: 'ITokenAnalyticsService', useClass: OpenSearchAnalyticsService },
         ],
     })
 ], AppModule);

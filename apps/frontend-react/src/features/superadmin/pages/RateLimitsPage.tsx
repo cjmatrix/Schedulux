@@ -22,41 +22,33 @@ import { toast } from 'sonner';
 import { type TierConfigData, type UpdateTierConfigPayload } from '../api/tierConfigApi';
 import { useTierConfigs, useUpdateTierConfig } from '../hooks/useTierConfigs';
 
-const TIER_STYLES: Record<
-  string,
-  { badge: string; border: string; accent: string; glow: string }
-> = {
-  free: {
-    badge: 'bg-slate-800 text-slate-300 border-slate-700',
-    border: 'border-slate-800',
-    accent: 'text-slate-400',
-    glow: 'from-slate-500/10 to-transparent',
-  },
-  starter: {
-    badge: 'bg-slate-800 text-slate-300 border-slate-700',
-    border: 'border-slate-800',
-    accent: 'text-slate-400',
-    glow: 'from-slate-500/10 to-transparent',
-  },
-  pro: {
-    badge: 'bg-indigo-900/40 text-indigo-300 border-indigo-500/30',
-    border: 'border-indigo-500/20',
-    accent: 'text-indigo-400',
-    glow: 'from-indigo-500/10 to-transparent',
-  },
-  business: {
-    badge: 'bg-sky-900/40 text-sky-300 border-sky-500/30',
-    border: 'border-sky-500/20',
-    accent: 'text-sky-400',
-    glow: 'from-sky-500/10 to-transparent',
-  },
-  enterprise: {
-    badge: 'bg-amber-900/30 text-amber-300 border-amber-500/30',
-    border: 'border-amber-500/20',
-    accent: 'text-amber-400',
-    glow: 'from-amber-500/10 to-transparent',
-  },
-};
+const TIER_STYLES: Record<string, { badge: string; border: string; accent: string; glow: string }> =
+  {
+    starter: {
+      badge: 'bg-slate-800 text-slate-300 border-slate-700',
+      border: 'border-slate-800',
+      accent: 'text-slate-400',
+      glow: 'from-slate-500/10 to-transparent',
+    },
+    pro: {
+      badge: 'bg-indigo-900/40 text-indigo-300 border-indigo-500/30',
+      border: 'border-indigo-500/20',
+      accent: 'text-indigo-400',
+      glow: 'from-indigo-500/10 to-transparent',
+    },
+    business: {
+      badge: 'bg-sky-900/40 text-sky-300 border-sky-500/30',
+      border: 'border-sky-500/20',
+      accent: 'text-sky-400',
+      glow: 'from-sky-500/10 to-transparent',
+    },
+    enterprise: {
+      badge: 'bg-amber-900/30 text-amber-300 border-amber-500/30',
+      border: 'border-amber-500/20',
+      accent: 'text-amber-400',
+      glow: 'from-amber-500/10 to-transparent',
+    },
+  };
 
 const STATUS_CONFIG: Record<string, { label: string; dot: string; text: string }> = {
   active: {
@@ -81,12 +73,38 @@ function formatLimit(val: number, unit = ''): string {
   return `${val.toLocaleString()} ${unit}`.trim();
 }
 
+interface FormState {
+  name: string;
+  rate_limit_rpm: number | '';
+  max_agents: number | '';
+  max_services: number | '';
+  max_resources: number | '';
+  max_kb_docs: number | '';
+  max_kb_doc_size_mb: number | '';
+  weekly_token_limit: number | '';
+  status: 'active' | 'deprecated' | 'inactive';
+  description: string;
+}
+
+const INITIAL_FORM_STATE: FormState = {
+  name: '',
+  rate_limit_rpm: 60,
+  max_agents: 1,
+  max_services: 5,
+  max_resources: 3,
+  max_kb_docs: 3,
+  max_kb_doc_size_mb: 5,
+  weekly_token_limit: 100000,
+  status: 'active',
+  description: '',
+};
+
 export default function RateLimitsPage() {
   const { data: tierConfigs = [], isLoading, isError, refetch } = useTierConfigs();
   const updateMutation = useUpdateTierConfig();
 
   const [editingTier, setEditingTier] = useState<TierConfigData | null>(null);
-  const [formData, setFormData] = useState<UpdateTierConfigPayload>({});
+  const [formData, setFormData] = useState<FormState>(INITIAL_FORM_STATE);
 
   const handleOpenEdit = (tier: TierConfigData) => {
     setEditingTier(tier);
@@ -106,17 +124,44 @@ export default function RateLimitsPage() {
 
   const handleCloseEdit = () => {
     setEditingTier(null);
-    setFormData({});
+    setFormData(INITIAL_FORM_STATE);
+  };
+
+  const handleNumberChange = (field: keyof FormState, val: string) => {
+    if (val === '') {
+      setFormData((prev) => ({ ...prev, [field]: '' }));
+      return;
+    }
+    const parsed = parseInt(val, 10);
+    setFormData((prev) => ({
+      ...prev,
+      [field]: Number.isNaN(parsed) ? '' : parsed,
+    }));
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTier) return;
 
+    const payload: UpdateTierConfigPayload = {
+      name: formData.name.trim(),
+      status: formData.status,
+      description: formData.description.trim(),
+      rate_limit_rpm: formData.rate_limit_rpm === '' ? 60 : Number(formData.rate_limit_rpm),
+      max_agents: formData.max_agents === '' ? -1 : Number(formData.max_agents),
+      max_services: formData.max_services === '' ? -1 : Number(formData.max_services),
+      max_resources: formData.max_resources === '' ? -1 : Number(formData.max_resources),
+      max_kb_docs: formData.max_kb_docs === '' ? -1 : Number(formData.max_kb_docs),
+      max_kb_doc_size_mb:
+        formData.max_kb_doc_size_mb === '' ? 5 : Number(formData.max_kb_doc_size_mb),
+      weekly_token_limit:
+        formData.weekly_token_limit === '' ? -1 : Number(formData.weekly_token_limit),
+    };
+
     try {
       await updateMutation.mutateAsync({
         tier: editingTier.tier,
-        payload: formData,
+        payload,
       });
       toast.success(
         `Tier "${editingTier.name}" updated successfully. Changes synchronized with Redis cache.`,
@@ -193,7 +238,9 @@ export default function RateLimitsPage() {
             <Zap className="w-4 h-4 text-amber-400" />
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-3xl font-light text-amber-400">{maxPeakRpm.toLocaleString()}</span>
+            <span className="text-3xl font-light text-amber-400">
+              {maxPeakRpm.toLocaleString()}
+            </span>
             <span className="text-xs text-slate-500 font-mono">RPM</span>
           </div>
         </div>
@@ -223,7 +270,7 @@ export default function RateLimitsPage() {
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {tierConfigs.map((config) => {
-            const style = TIER_STYLES[config.tier.toLowerCase()] ?? TIER_STYLES.free;
+            const style = TIER_STYLES[config.tier.toLowerCase()] ?? TIER_STYLES.starter;
             const status = STATUS_CONFIG[config.status] ?? STATUS_CONFIG.active;
 
             return (
@@ -290,7 +337,9 @@ export default function RateLimitsPage() {
                     </div>
 
                     <div className="text-right">
-                      <span className="text-[10px] text-slate-500 font-mono block">Window: 60s</span>
+                      <span className="text-[10px] text-slate-500 font-mono block">
+                        Window: 60s
+                      </span>
                       <span className="text-[10px] text-emerald-400 flex items-center gap-1 justify-end">
                         <Zap className="w-3 h-3" /> Redis Enforced
                       </span>
@@ -439,17 +488,15 @@ export default function RateLimitsPage() {
                     <Zap className="w-4 h-4 text-indigo-400" /> Rate Limit (Requests Per Minute)
                   </label>
                   <span className="text-[11px] font-mono text-indigo-400">
-                    {formData.rate_limit_rpm} RPM
+                    {formData.rate_limit_rpm === '' ? 0 : formData.rate_limit_rpm} RPM
                   </span>
                 </div>
                 <input
                   type="number"
                   min={1}
                   max={100000}
-                  value={formData.rate_limit_rpm || 60}
-                  onChange={(e) =>
-                    setFormData({ ...formData, rate_limit_rpm: parseInt(e.target.value, 10) || 60 })
-                  }
+                  value={formData.rate_limit_rpm}
+                  onChange={(e) => handleNumberChange('rate_limit_rpm', e.target.value)}
                   required
                   className="w-full px-3 py-2 bg-[#141416] border border-slate-700 rounded-lg text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
                 />
@@ -466,74 +513,128 @@ export default function RateLimitsPage() {
                   <h4 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
                     Resource Ceilings & Limits
                   </h4>
-                  <span className="text-[11px] text-slate-500 font-mono">Enter -1 for Unlimited</span>
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    Enter -1 for Unlimited
+                  </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Max AI Agents
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-slate-300">
+                        Max AI Agents
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            max_agents: prev.max_agents === -1 ? 1 : -1,
+                          }))
+                        }
+                        className={`text-[10px] px-1.5 py-0.5 rounded transition ${
+                          formData.max_agents === -1
+                            ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {formData.max_agents === -1 ? 'Unlimited' : 'Set Unlimited (-1)'}
+                      </button>
+                    </div>
                     <input
                       type="number"
-                      value={formData.max_agents ?? 1}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          max_agents: parseInt(e.target.value, 10) || -1,
-                        })
-                      }
+                      value={formData.max_agents}
+                      onChange={(e) => handleNumberChange('max_agents', e.target.value)}
                       className="w-full px-3 py-2 bg-[#141416] border border-slate-700 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Max Services
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-slate-300">
+                        Max Services
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            max_services: prev.max_services === -1 ? 5 : -1,
+                          }))
+                        }
+                        className={`text-[10px] px-1.5 py-0.5 rounded transition ${
+                          formData.max_services === -1
+                            ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {formData.max_services === -1 ? 'Unlimited' : 'Set Unlimited (-1)'}
+                      </button>
+                    </div>
                     <input
                       type="number"
-                      value={formData.max_services ?? 5}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          max_services: parseInt(e.target.value, 10) || -1,
-                        })
-                      }
+                      value={formData.max_services}
+                      onChange={(e) => handleNumberChange('max_services', e.target.value)}
                       className="w-full px-3 py-2 bg-[#141416] border border-slate-700 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Max Resources
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-slate-300">
+                        Max Resources
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            max_resources: prev.max_resources === -1 ? 3 : -1,
+                          }))
+                        }
+                        className={`text-[10px] px-1.5 py-0.5 rounded transition ${
+                          formData.max_resources === -1
+                            ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {formData.max_resources === -1 ? 'Unlimited' : 'Set Unlimited (-1)'}
+                      </button>
+                    </div>
                     <input
                       type="number"
-                      value={formData.max_resources ?? 3}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          max_resources: parseInt(e.target.value, 10) || -1,
-                        })
-                      }
+                      value={formData.max_resources}
+                      onChange={(e) => handleNumberChange('max_resources', e.target.value)}
                       className="w-full px-3 py-2 bg-[#141416] border border-slate-700 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Max Knowledge Base Documents
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-slate-300">
+                        Max Knowledge Base Documents
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            max_kb_docs: prev.max_kb_docs === -1 ? 3 : -1,
+                          }))
+                        }
+                        className={`text-[10px] px-1.5 py-0.5 rounded transition ${
+                          formData.max_kb_docs === -1
+                            ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {formData.max_kb_docs === -1 ? 'Unlimited' : 'Set Unlimited (-1)'}
+                      </button>
+                    </div>
                     <input
                       type="number"
-                      value={formData.max_kb_docs ?? 3}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          max_kb_docs: parseInt(e.target.value, 10) || -1,
-                        })
-                      }
+                      value={formData.max_kb_docs}
+                      onChange={(e) => handleNumberChange('max_kb_docs', e.target.value)}
                       className="w-full px-3 py-2 bg-[#141416] border border-slate-700 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
@@ -545,30 +646,38 @@ export default function RateLimitsPage() {
                     <input
                       type="number"
                       min={1}
-                      value={formData.max_kb_doc_size_mb ?? 5}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          max_kb_doc_size_mb: parseInt(e.target.value, 10) || 5,
-                        })
-                      }
+                      value={formData.max_kb_doc_size_mb}
+                      onChange={(e) => handleNumberChange('max_kb_doc_size_mb', e.target.value)}
                       className="w-full px-3 py-2 bg-[#141416] border border-slate-700 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Weekly AI Token Limit
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-slate-300">
+                        Weekly AI Token Limit
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            weekly_token_limit: prev.weekly_token_limit === -1 ? 100000 : -1,
+                          }))
+                        }
+                        className={`text-[10px] px-1.5 py-0.5 rounded transition ${
+                          formData.weekly_token_limit === -1
+                            ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {formData.weekly_token_limit === -1 ? 'Unlimited' : 'Set Unlimited (-1)'}
+                      </button>
+                    </div>
                     <input
                       type="number"
-                      value={formData.weekly_token_limit ?? 100000}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          weekly_token_limit: parseInt(e.target.value, 10) || -1,
-                        })
-                      }
+                      value={formData.weekly_token_limit}
+                      onChange={(e) => handleNumberChange('weekly_token_limit', e.target.value)}
                       className="w-full px-3 py-2 bg-[#141416] border border-slate-700 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>

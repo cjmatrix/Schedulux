@@ -51,6 +51,7 @@ export interface SuperAdminOverviewResponse {
     tenants_by_tier: {
         [key: string]: number;
     };
+    total_tokens: number;
 }
 export interface SuperAdminOverviewResponse_TenantsByTierEntry {
     key: string;
@@ -68,6 +69,35 @@ export interface RevenueDataPoint {
 }
 export interface RevenueChartResponse {
     points: RevenueDataPoint[];
+}
+export interface TokenChartRequest {
+    start_date: string;
+    end_date: string;
+    interval: string;
+}
+export interface TokenDatePoint {
+    date: string;
+    total_tokens: number;
+    input_tokens: number;
+    output_tokens: number;
+}
+export interface TokenChartResponse {
+    points: TokenDatePoint[];
+}
+export interface TopTenantsRequest {
+    start_date: string;
+    end_date: string;
+    limit: number;
+}
+export interface TopTenantTokenUsage {
+    tenant_id: string;
+    business_name: string;
+    email: string;
+    tier: string;
+    total_tokens: number;
+}
+export interface TopTenantsResponse {
+    tenants: TopTenantTokenUsage[];
 }
 export interface TierConfigItem {
     id: string;
@@ -132,10 +162,14 @@ export declare const SUPER_ADMIN_AUTH_SERVICE_NAME = "SuperAdminAuthService";
 export interface SuperAdminDashboardServiceClient {
     getSuperAdminOverview(request: SuperAdminOverviewRequest, metadata?: Metadata): Observable<SuperAdminOverviewResponse>;
     getRevenueChart(request: RevenueChartRequest, metadata?: Metadata): Observable<RevenueChartResponse>;
+    getTokenChart(request: TokenChartRequest, metadata?: Metadata): Observable<TokenChartResponse>;
+    getTopTenants(request: TopTenantsRequest, metadata?: Metadata): Observable<TopTenantsResponse>;
 }
 export interface SuperAdminDashboardServiceController {
     getSuperAdminOverview(request: SuperAdminOverviewRequest, metadata?: Metadata): Promise<SuperAdminOverviewResponse> | Observable<SuperAdminOverviewResponse> | SuperAdminOverviewResponse;
     getRevenueChart(request: RevenueChartRequest, metadata?: Metadata): Promise<RevenueChartResponse> | Observable<RevenueChartResponse> | RevenueChartResponse;
+    getTokenChart(request: TokenChartRequest, metadata?: Metadata): Promise<TokenChartResponse> | Observable<TokenChartResponse> | TokenChartResponse;
+    getTopTenants(request: TopTenantsRequest, metadata?: Metadata): Promise<TopTenantsResponse> | Observable<TopTenantsResponse> | TopTenantsResponse;
 }
 export declare function SuperAdminDashboardServiceControllerMethods(): (constructor: Function) => void;
 export declare const SUPER_ADMIN_DASHBOARD_SERVICE_NAME = "SuperAdminDashboardService";

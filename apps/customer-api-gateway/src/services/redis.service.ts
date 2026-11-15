@@ -8,6 +8,12 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
+import {
+  DEFAULT_TIER,
+  resolveTierConfigWithCache,
+  STATIC_TIER_CONFIGS,
+  TierConfig,
+} from '../constants/tiers.constant.js';
 
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
@@ -111,6 +117,41 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       await this._client.del(...keys);
     } catch (err) {
       this._logger.warn(`Redis DEL failed: ${(err as Error).message}`);
+    }
+  }
+
+  getClient(): Redis | null {
+    return this._client;
+  }
+
+  async getTenantTier(tenantId: string): Promise<string> {
+    try {
+      const tier = await this.get(`tenant:${tenantId}:tier`);
+      return tier ? tier.trim().toLowerCase() : DEFAULT_TIER;
+    } catch (err) {
+      this._logger.warn(`Failed to resolve tenant tier for ${tenantId}:`, err);
+      return DEFAULT_TIER;
+    }
+  }
+
+  async getCachedTierConfig(tier?: string | null): Promise<TierConfig> {
+    return resolveTierConfigWithCache(this, tier);
+  }
+
+  async getTierRateLimit(tenantId: string): Promise<number> {
+    try {
+      const tier = await this.getTenantTier(tenantId);
+      const tierConfig = await this.getCachedTierConfig(tier);
+      return (
+        Number(tierConfig.rate_limit_rpm) ||
+        STATIC_TIER_CONFIGS[DEFAULT_TIER].rate_limit_rpm
+      );
+    } catch (err) {
+      this._logger.warn(
+        `Failed to resolve rate limit RPM for tenant ${tenantId}, using fallback:`,
+        err,
+      );
+      return STATIC_TIER_CONFIGS[DEFAULT_TIER].rate_limit_rpm;
     }
   }
 }

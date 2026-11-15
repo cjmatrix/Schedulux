@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, StateGraph
 
@@ -64,7 +66,9 @@ async def start_onboarding_session(
 ) -> dict:
     from agent_orchestrator.services.token_service import TokenTrackingService, TokenUsageTracker
 
-    is_exceeded, current_tokens, token_limit = await TokenTrackingService.check_weekly_quota(tenant_id, tier=tier)
+    is_exceeded, current_tokens, token_limit = await TokenTrackingService.check_weekly_quota(
+        tenant_id, tier=tier
+    )
     if is_exceeded:
         return {
             "error": "Weekly AI token limit exceeded",
@@ -101,7 +105,6 @@ async def start_onboarding_session(
     tracker = TokenUsageTracker()
     result_state = await _graph.ainvoke(initial, config={"callbacks": [tracker]})
 
-    # Post-flight token tracking
     from datetime import UTC, datetime
 
     semantic_resp = result_state.get("semantic_note") or ""
@@ -118,7 +121,9 @@ async def start_onboarding_session(
         out_tokens = max(1, len(semantic_resp) // 4)
         model_name = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
 
-    det_event_id = f"evt_tok_{tenant_id}_{target_agent_id}_start_{int(datetime.now(UTC).timestamp() * 1000)}"
+    det_event_id = (
+        f"evt_tok_{tenant_id}_{target_agent_id}_start_{int(datetime.now(UTC).timestamp() * 1000)}"
+    )
 
     await TokenTrackingService.record_tokens(
         tenant_id=tenant_id,
@@ -138,7 +143,9 @@ async def resume_onboarding_session(
 ) -> dict:
     from agent_orchestrator.services.token_service import TokenTrackingService, TokenUsageTracker
 
-    is_exceeded, current_tokens, token_limit = await TokenTrackingService.check_weekly_quota(tenant_id, tier=tier)
+    is_exceeded, current_tokens, token_limit = await TokenTrackingService.check_weekly_quota(
+        tenant_id, tier=tier
+    )
     if is_exceeded:
         return {
             "error": "Weekly AI token limit exceeded",
@@ -155,11 +162,7 @@ async def resume_onboarding_session(
 
             ad = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
             if ad and ad.current_draft:
-                draft = (
-                    ad.current_draft.model_dump()
-                    if hasattr(ad.current_draft, "model_dump")
-                    else ad.current_draft
-                )
+                draft = ad.current_draft.model_dump()
             else:
                 cfg = await AgentRuntimeConfig.find_one(
                     {"tenant_id": tenant_id, "agent_id": agent_id}
@@ -258,7 +261,9 @@ async def resume_onboarding_session(
         out_tokens = max(1, len(semantic_resp) // 4)
         model_name = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
 
-    det_event_id = f"evt_tok_{tenant_id}_{target_agent_id}_resume_{int(datetime.now(UTC).timestamp() * 1000)}"
+    det_event_id = (
+        f"evt_tok_{tenant_id}_{target_agent_id}_resume_{int(datetime.now(UTC).timestamp() * 1000)}"
+    )
 
     await TokenTrackingService.record_tokens(
         tenant_id=tenant_id,

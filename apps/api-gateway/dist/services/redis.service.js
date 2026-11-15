@@ -123,9 +123,14 @@ let RedisService = RedisService_1 = class RedisService {
             return null;
         }
     }
-    async setTenantTier(tenantId, tier, ttlSeconds = 3600) {
+    async setTenantTier(tenantId, tier, ttlSeconds) {
         try {
-            await this._client.set(`tenant:${tenantId}:tier`, tier, 'EX', ttlSeconds);
+            if (ttlSeconds && ttlSeconds > 0) {
+                await this._client.set(`tenant:${tenantId}:tier`, tier, 'EX', ttlSeconds);
+            }
+            else {
+                await this._client.set(`tenant:${tenantId}:tier`, tier);
+            }
         }
         catch (err) {
             this._logger.error(`Failed to cache tenant tier for ${tenantId}:`, err);

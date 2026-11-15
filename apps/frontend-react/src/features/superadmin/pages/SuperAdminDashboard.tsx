@@ -55,9 +55,9 @@ function formatCurrency(amount: number, currency = 'USD'): string {
 }
 
 const TIER_COLORS: Record<string, string> = {
-  free: 'bg-slate-700/60 text-slate-300 border-slate-600/40',
   starter: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
   pro: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+  business: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
   enterprise: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
   unknown: 'bg-slate-800 text-slate-400 border-slate-700',
 };

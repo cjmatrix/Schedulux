@@ -9,6 +9,8 @@ import { AppModule } from './app.module.js';
 
 const require = createRequire(import.meta.url);
 
+
+
 async function bootstrap() {
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule, {
     bufferLogs: true,

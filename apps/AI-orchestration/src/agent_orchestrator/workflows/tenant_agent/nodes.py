@@ -51,13 +51,7 @@ async def node_load_draft(state: GraphState) -> dict:
     }
 
 
-def _build_tenant_system_prompt(
-    tier_cfg: dict[str, Any],
-    svc_limit_str: str,
-    res_limit_str: str,
-    summary_block: str = "",
-    facts_block: str = "",
-) -> str:
+def _build_tenant_system_prompt(*_args: Any, **_kwargs: Any) -> str:
     optional_features_block = """
 OPTIONAL FEATURES YOU CAN SUGGEST (Not required to go live, but proactively mention them when relevant):
 These features are fully configurable and can dramatically improve the user's booking experience. Suggest them naturally in conversation at the right moment — don't dump them all at once.
@@ -96,23 +90,10 @@ SUGGESTION TIMING RULES:
 - Only suggest optional features AFTER the immediate context/action is resolved (e.g. don't suggest policies mid-flow while the user is still naming their services).
 """
 
-    tier_quota_block = f"""
-SUBSCRIPTION TIER & CAPACITY CONSTRAINTS:
-- Tenant Subscription Plan: {tier_cfg["name"]} ({tier_cfg["tier"]})
-- Services Quota: Max {svc_limit_str} active services allowed
-- Resources Quota: Max {res_limit_str} active resources allowed
-CRITICAL TIER ENFORCEMENT RULES:
-1. You MUST NEVER add more services than {svc_limit_str} or more resources than {res_limit_str}.
-2. If the user asks to add a service or resource that would exceed their quota:
-   - DO NOT emit an 'update_schema' action that exceeds the limit!
-   - Choose 'ask_user' and politely explain that their current {tier_cfg["name"]} plan allows a maximum of {svc_limit_str} services and {res_limit_str} resources.
-   - Advise them to either replace/remove an existing entity or upgrade their subscription to unlock higher limits.
-"""
-
     return f"""You are the Schedulux Lead Booking Architect & Business Mentor.
 Your mission is to collaborate with business owners (doctors, tailors, salon owners, mechanics, hoteliers, consultants) to design, configure, and refine their automated AI booking receptionist.
 You are NOT a bureaucratic form-filler; you are an experienced operations partner who understands how appointments and client workflows operate in the real world.
-{summary_block}{facts_block}{tier_quota_block}{optional_features_block}
+{optional_features_block}
 
 CONVERSATIONAL GUIDANCE & BEST PRACTICES:
 - You are holding a natural, consultative setup conversation with the user as their Lead Operations Architect and Business Mentor.
@@ -291,10 +272,12 @@ CRITICAL OUTPUT RULE — QUESTION FIELD IS MANDATORY & MARKDOWN-STRUCTURED:
 - FAILURE TO FILL `question` WILL BREAK THE FRONTEND — the user will see a blank message."""
 
 
+STATIC_SYSTEM_PROMPT = _build_tenant_system_prompt()
+
+
 async def node_llm_semantic_review(state: GraphState) -> dict:
     llm = _get_llm().with_structured_output(SemanticAction)
 
-  
     all_msgs = state.get("messages", [])
     last_msg = all_msgs[-1] if all_msgs else None
     is_system_feedback = isinstance(last_msg, SystemMessage)
@@ -339,7 +322,6 @@ CRITICAL RULES FOR RECOVERY:
 
     facts_block = ""
     if agent_id and all_msgs:
-       
         raw_user_msg = ""
         for m in reversed(all_msgs):
             if isinstance(m, HumanMessage):
@@ -368,8 +350,7 @@ CRITICAL RULES FOR RECOVERY:
                             + "\n".join([f"- {f}" for f in facts])
                             + "\n"
                         )
-                    
-                    
+
             except Exception as qe:
                 print(
                     f"[node_llm_semantic_review] Warning retrieving long-term facts: {qe}",
@@ -390,7 +371,7 @@ CRITICAL RULES FOR RECOVERY:
         tenant_tier = "starter"
 
     tier_cfg = get_tier_config(tenant_tier)
-    print(tier_cfg, "hereeeeee", flush=True)
+
     max_services = tier_cfg["max_services"]
     max_resources = tier_cfg["max_resources"]
 
@@ -419,13 +400,18 @@ CRITICAL RULES FOR RECOVERY:
 {gap_lines}
 """
 
-    system_prompt = _build_tenant_system_prompt(
-        tier_cfg=tier_cfg,
-        svc_limit_str=svc_limit_str,
-        res_limit_str=res_limit_str,
-        summary_block=summary_block,
-        facts_block=facts_block,
-    )
+    tier_quota_block = f"""
+SUBSCRIPTION TIER & CAPACITY CONSTRAINTS:
+- Tenant Subscription Plan: {tier_cfg["name"]} ({tier_cfg["tier"]})
+- Services Quota: Max {svc_limit_str} active services allowed (Current Active: {svc_count} / {svc_limit_str})
+- Resources Quota: Max {res_limit_str} active resources allowed (Current Active: {res_count} / {res_limit_str})
+CRITICAL TIER ENFORCEMENT RULES:
+1. You MUST NEVER add more services than {svc_limit_str} or more resources than {res_limit_str}.
+2. If the user asks to add a service or resource that would exceed their quota:
+   - DO NOT emit an 'update_schema' action that exceeds the limit!
+   - Choose 'ask_user' and politely explain that their current {tier_cfg["name"]} plan allows a maximum of {svc_limit_str} services and {res_limit_str} resources.
+   - Advise them to either replace/remove an existing entity or upgrade their subscription to unlock higher limits.
+"""
 
     # l3
     prior_raw = all_msgs[:-1] if len(all_msgs) > 1 else []
@@ -457,19 +443,15 @@ CRITICAL RULES FOR RECOVERY:
         raw_user_content = "Hello, I want to set up my booking agent."
 
     dynamic_user_tail = f"""{raw_user_content}
-
+{summary_block}{facts_block}
 [Current Draft Canvas State (Ground Truth)]
 {_format_draft_toon(draft)}
-
-[Active Quota Usage]
-- Services: {svc_count} / {svc_limit_str}
-- Resources: {res_count} / {res_limit_str}
-{gaps_block}{obs_block}{post_patch_instruction}
+{tier_quota_block}{gaps_block}{obs_block}{post_patch_instruction}
 Decide your next action: choose 'update_schema', 'ask_user', or 'finalize' according to the Action Selection Rules. Output valid JSON adhering to SemanticAction."""
 
     current_human_msg = HumanMessage(content=dynamic_user_tail)
     conversation: list[BaseMessage] = [
-        SystemMessage(content=system_prompt),
+        SystemMessage(content=STATIC_SYSTEM_PROMPT),
         *prior_history,
         current_human_msg,
     ]

@@ -69,6 +69,7 @@ export interface SuperAdminOverviewResponse {
   total_revenue: number;
   currency: string;
   tenants_by_tier: { [key: string]: number };
+  total_tokens: number;
 }
 
 export interface SuperAdminOverviewResponse_TenantsByTierEntry {
@@ -90,6 +91,41 @@ export interface RevenueDataPoint {
 
 export interface RevenueChartResponse {
   points: RevenueDataPoint[];
+}
+
+export interface TokenChartRequest {
+  start_date: string;
+  end_date: string;
+  interval: string;
+}
+
+export interface TokenDatePoint {
+  date: string;
+  total_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+
+export interface TokenChartResponse {
+  points: TokenDatePoint[];
+}
+
+export interface TopTenantsRequest {
+  start_date: string;
+  end_date: string;
+  limit: number;
+}
+
+export interface TopTenantTokenUsage {
+  tenant_id: string;
+  business_name: string;
+  email: string;
+  tier: string;
+  total_tokens: number;
+}
+
+export interface TopTenantsResponse {
+  tenants: TopTenantTokenUsage[];
 }
 
 export interface TierConfigItem {
@@ -201,6 +237,10 @@ export interface SuperAdminDashboardServiceClient {
   ): Observable<SuperAdminOverviewResponse>;
 
   getRevenueChart(request: RevenueChartRequest, metadata?: Metadata): Observable<RevenueChartResponse>;
+
+  getTokenChart(request: TokenChartRequest, metadata?: Metadata): Observable<TokenChartResponse>;
+
+  getTopTenants(request: TopTenantsRequest, metadata?: Metadata): Observable<TopTenantsResponse>;
 }
 
 export interface SuperAdminDashboardServiceController {
@@ -213,11 +253,21 @@ export interface SuperAdminDashboardServiceController {
     request: RevenueChartRequest,
     metadata?: Metadata,
   ): Promise<RevenueChartResponse> | Observable<RevenueChartResponse> | RevenueChartResponse;
+
+  getTokenChart(
+    request: TokenChartRequest,
+    metadata?: Metadata,
+  ): Promise<TokenChartResponse> | Observable<TokenChartResponse> | TokenChartResponse;
+
+  getTopTenants(
+    request: TopTenantsRequest,
+    metadata?: Metadata,
+  ): Promise<TopTenantsResponse> | Observable<TopTenantsResponse> | TopTenantsResponse;
 }
 
 export function SuperAdminDashboardServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ["getSuperAdminOverview", "getRevenueChart"];
+    const grpcMethods: string[] = ["getSuperAdminOverview", "getRevenueChart", "getTokenChart", "getTopTenants"];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
       GrpcMethod("SuperAdminDashboardService", method)(constructor.prototype[method], method, descriptor);

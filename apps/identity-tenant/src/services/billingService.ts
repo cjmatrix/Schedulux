@@ -220,7 +220,7 @@ export class BillingService implements IBillingService {
           }
         });
 
-        await this._cacheRepo.set(`tenant:${tenant._id}:tier`, tier, { EX: 86400 * 30 });
+        await this._cacheRepo.set(`tenant:${tenant._id}:tier`, tier);
         break;
       }
 
@@ -262,7 +262,7 @@ export class BillingService implements IBillingService {
           }
         });
 
-        await this._cacheRepo.set(`tenant:${tenant._id}:tier`, effectiveTier, { EX: 86400 * 30 });
+        await this._cacheRepo.set(`tenant:${tenant._id}:tier`, effectiveTier);
         break;
       }
 
@@ -293,7 +293,7 @@ export class BillingService implements IBillingService {
           }
         });
 
-        await this._cacheRepo.set(`tenant:${tenant._id}:tier`, 'starter', { EX: 86400 * 30 });
+        await this._cacheRepo.set(`tenant:${tenant._id}:tier`, 'starter');
         break;
       }
 
@@ -416,9 +416,7 @@ export class BillingService implements IBillingService {
       return up;
     });
 
-    await this._cacheRepo.set(`tenant:${tenant._id}:tier`, normalizedTier, {
-      EX: 86400 * 30,
-    });
+    await this._cacheRepo.set(`tenant:${tenant._id}:tier`, normalizedTier);
 
     return {
       success: true,
@@ -444,9 +442,7 @@ export class BillingService implements IBillingService {
       throw new Error(`Tenant not found for id ${request.tenant_id}`);
     }
 
-    await this._cacheRepo.set(`tenant:${tenant._id}:tier`, tenant.tier || 'starter', {
-      EX: 86400 * 30,
-    });
+    await this._cacheRepo.set(`tenant:${tenant._id}:tier`, tenant.tier || 'starter');
 
     return {
       tenant_id: tenant._id,

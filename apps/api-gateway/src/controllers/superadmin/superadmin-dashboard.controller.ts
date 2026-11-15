@@ -11,13 +11,11 @@ import {
 import { ClientGrpc } from '@nestjs/microservices';
 import { KnowledgeServiceClient } from '@repo/proto/knowledge';
 import { SuperAdminDashboardServiceClient } from '@repo/proto/superadmin';
-import { TenantServiceClient } from '@repo/proto/tenant';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { catchError, lastValueFrom, of } from 'rxjs';
 import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
 import { API_ROUTES } from '../../constants/routes.constant.js';
 import { SuperAdminAuthGuard } from '../../guards/superadmin-auth.guard.js';
-import { OpenSearchAnalyticsService } from '../../services/opensearch-analytics.service.js';
 import {
   DashboardDateQueryDto,
   RevenueChartQueryDto,
@@ -31,14 +29,10 @@ export class SuperAdminDashboardController implements OnModuleInit {
   private readonly _logger = new Logger(SuperAdminDashboardController.name);
   private _dashboardClient!: SuperAdminDashboardServiceClient;
   private _knowledgeClient!: KnowledgeServiceClient;
-  private _tenantClient!: TenantServiceClient;
 
   constructor(
     @Inject('SUPERADMIN_PACKAGE') private readonly _superadminClient: ClientGrpc,
     @Inject('KNOWLEDGE_PACKAGE') private readonly _knowledgeClientGrpc: ClientGrpc,
-    @Inject('TENANT_PACKAGE') private readonly _tenantClientGrpc: ClientGrpc,
-    @Inject(OpenSearchAnalyticsService)
-    private readonly _openSearchAnalyticsService: OpenSearchAnalyticsService,
   ) {}
 
   onModuleInit() {
@@ -48,8 +42,6 @@ export class SuperAdminDashboardController implements OnModuleInit {
       );
     this._knowledgeClient =
       this._knowledgeClientGrpc.getService<KnowledgeServiceClient>('KnowledgeService');
-    this._tenantClient =
-      this._tenantClientGrpc.getService<TenantServiceClient>('TenantService');
   }
 
   @Get(API_ROUTES.SUPERADMIN.DASHBOARD.OVERVIEW)
@@ -58,8 +50,7 @@ export class SuperAdminDashboardController implements OnModuleInit {
     const startDate = query.startDate || '';
     const endDate = query.endDate || '';
 
-    
-    const [overviewResult, agentStatsResult, totalTokensResult] = await Promise.all([
+    const [overviewResult, agentStatsResult] = await Promise.all([
       lastValueFrom(
         this._dashboardClient
           .getSuperAdminOverview({
@@ -76,6 +67,7 @@ export class SuperAdminDashboardController implements OnModuleInit {
                 total_revenue: 0,
                 currency: 'USD',
                 tenants_by_tier: {},
+                total_tokens: 0,
               });
             }),
           ),
@@ -94,12 +86,6 @@ export class SuperAdminDashboardController implements OnModuleInit {
             }),
           ),
       ),
-      this._openSearchAnalyticsService
-        .getTotalTokens(startDate, endDate)
-        .catch((err) => {
-          this._logger.error('Failed to get total tokens from OpenSearch:', err);
-          return 0;
-        }),
     ]);
 
     return {
@@ -121,7 +107,7 @@ export class SuperAdminDashboardController implements OnModuleInit {
           currency: overviewResult.currency,
         },
         tokens: {
-          total: totalTokensResult,
+          total: Number(overviewResult.total_tokens) || 0,
         },
       },
     };
@@ -147,75 +133,45 @@ export class SuperAdminDashboardController implements OnModuleInit {
   @Get(API_ROUTES.SUPERADMIN.DASHBOARD.TOKEN_CHART)
   @UsePipes(ZodValidationPipe)
   async getTokenChart(@Query() query: TokenChartQueryDto) {
-    const points = await this._openSearchAnalyticsService.getTokenDateHistogram(
-      query.startDate,
-      query.endDate,
-      query.interval,
+    const res = await lastValueFrom(
+      this._dashboardClient.getTokenChart({
+        start_date: query.startDate || '',
+        end_date: query.endDate || '',
+        interval: query.interval || 'day',
+      }),
     );
 
     return {
       message: RESPONSE_MESSAGES.DASHBOARD.TOKEN_CHART_RETRIEVED,
-      data: points,
+      data: (res.points || []).map((p) => ({
+        date: p.date,
+        total_tokens: Number(p.total_tokens) || 0,
+        input_tokens: Number(p.input_tokens) || 0,
+        output_tokens: Number(p.output_tokens) || 0,
+      })),
     };
   }
 
   @Get(API_ROUTES.SUPERADMIN.DASHBOARD.TOP_TENANTS)
   @UsePipes(ZodValidationPipe)
   async getTopTenants(@Query() query: TopTenantsQueryDto) {
-    const topTenants = await this._openSearchAnalyticsService.getTopTenantsByTokens(
-      query.startDate,
-      query.endDate,
-      query.limit,
+    const res = await lastValueFrom(
+      this._dashboardClient.getTopTenants({
+        start_date: query.startDate || '',
+        end_date: query.endDate || '',
+        limit: query.limit || 5,
+      }),
     );
-
-    if (topTenants.length === 0) {
-      return {
-        message: RESPONSE_MESSAGES.DASHBOARD.TOP_TENANTS_RETRIEVED,
-        data: [],
-      };
-    }
-
-  
-    const tenantIds = topTenants.map((item) => item.tenant_id).filter(Boolean);
-    const tenantMap = new Map<string, { business_name: string; email: string; tier: string }>();
-
-    if (tenantIds.length > 0) {
-      try {
-        const tenantList = await lastValueFrom(
-          this._tenantClient.listTenants({
-            page: 1,
-            limit: tenantIds.length,
-            tenant_ids: tenantIds,
-          }),
-        );
-        if (tenantList?.tenants) {
-          for (const t of tenantList.tenants) {
-            tenantMap.set(t.tenant_id, {
-              business_name: t.business_name || '',
-              email: t.contact_email || '',
-              tier: t.tier || '',
-            });
-          }
-        }
-      } catch (err) {
-        this._logger.warn('Failed to bulk resolve tenant names for top tenants by IDs:', err);
-      }
-    }
-
-    const enriched = topTenants.map((item) => {
-      const info = tenantMap.get(item.tenant_id);
-      return {
-        tenant_id: item.tenant_id,
-        business_name: info?.business_name || item.tenant_id,
-        email: info?.email || '',
-        tier: info?.tier || 'unknown',
-        total_tokens: item.total_tokens,
-      };
-    });
 
     return {
       message: RESPONSE_MESSAGES.DASHBOARD.TOP_TENANTS_RETRIEVED,
-      data: enriched,
+      data: (res.tenants || []).map((t) => ({
+        tenant_id: t.tenant_id,
+        business_name: t.business_name,
+        email: t.email,
+        tier: t.tier,
+        total_tokens: Number(t.total_tokens) || 0,
+      })),
     };
   }
 }

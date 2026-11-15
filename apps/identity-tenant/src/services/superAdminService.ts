@@ -17,6 +17,7 @@ import {
 } from '../interfaces/ISuperAdminService.js';
 import { ITenantRepository } from '../interfaces/ITenantRepository.js';
 import { ITierConfigRepository } from '../interfaces/ITierConfigRepository.js';
+import type { ITokenAnalyticsService } from '../interfaces/ITokenAnalyticsService.js';
 import { BillingLedgerModel } from '../model/BillingLedger.js';
 import { ITierConfigDoc } from '../model/TierConfig.js';
 import { Tenent } from '../model/Tenent.js';
@@ -37,6 +38,8 @@ export class SuperAdminService implements ISuperAdminService {
     @Inject('IPasswordHasher') private readonly _passwordHasher: IPasswordHasher,
     @Inject('IJwtService') private readonly _jwtService: IJwtService,
     @Inject(ConfigService) private readonly _configService: ConfigService,
+    @Inject('ITokenAnalyticsService')
+    private readonly _tokenAnalyticsService: ITokenAnalyticsService,
   ) {
     const globalSecret = this._configService.get<string>('JWT_SECRET');
     const globalRefreshSecret = this._configService.get<string>('JWT_REFRESH_SECRET');
@@ -241,8 +244,73 @@ export class SuperAdminService implements ISuperAdminService {
     };
   }
 
+  private _getCurrentIsoWeek(): string {
+    const now = new Date();
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+  }
+
   async ListTenants(data: ListTenantsRequest) {
-    return this._tenantRepo.listTenants(data);
+    const lists = await this._tenantRepo.listTenants(data);
+    if (!lists.tenants || lists.tenants.length === 0) {
+      return lists;
+    }
+
+    try {
+      const tierConfigs = await this.listTierConfigs();
+      const tierMap = new Map<string, TierConfigItem>(
+        tierConfigs.map((cfg) => [cfg.tier.toLowerCase(), cfg]),
+      );
+      const isoWeek = this._getCurrentIsoWeek();
+      const keys = lists.tenants.map(
+        (t) => `tenant:${t.tenant_id}:tokens:${isoWeek}`,
+      );
+
+      const usages = await this._cacheRepo.mget(...keys);
+
+      const enrichedTenants = lists.tenants.map((t, idx) => {
+        const tier = (t.tier || DEFAULT_TIER).toLowerCase();
+        const tierCfg = tierMap.get(tier) || STATIC_TIER_CONFIGS[DEFAULT_TIER];
+        const limit = Number(tierCfg.weekly_token_limit) ?? 100_000;
+        const usage = Number(usages[idx]) || 0;
+        const remaining = limit === -1 ? -1 : Math.max(0, limit - usage);
+
+        return {
+          ...t,
+          weekly_token_limit: limit,
+          weekly_token_usage: usage,
+          weekly_token_remaining: remaining,
+        };
+      });
+
+      return {
+        tenants: enrichedTenants,
+        total_count: lists.total_count,
+        stats: lists.stats,
+      };
+    } catch {
+      const fallbackTenants = lists.tenants.map((t) => {
+        const tier = (t.tier || DEFAULT_TIER).toLowerCase();
+        const limit =
+          Number(STATIC_TIER_CONFIGS[tier]?.weekly_token_limit) ?? 100_000;
+        return {
+          ...t,
+          weekly_token_limit: limit,
+          weekly_token_usage: 0,
+          weekly_token_remaining: limit,
+        };
+      });
+
+      return {
+        tenants: fallbackTenants,
+        total_count: lists.total_count,
+        stats: lists.stats,
+      };
+    }
   }
 
   async getTenantById(tenantId: string): Promise<GetTenantByIdResponse> {
@@ -294,30 +362,36 @@ export class SuperAdminService implements ISuperAdminService {
     const from = startDate ? new Date(startDate) : new Date(0);
     const to = endDate ? new Date(endDate) : new Date();
 
-    
-    const [totalTenants, activeTenants, suspendedTenants, tierGroups, revenueAggregate] =
-      await Promise.all([
-        Tenent.countDocuments({}),
-        Tenent.countDocuments({ status: 'active' }),
-        Tenent.countDocuments({ status: 'suspended' }),
-        Tenent.aggregate<{ _id: string; count: number }>([
-          { $group: { _id: '$tier', count: { $sum: 1 } } },
-        ]),
-        BillingLedgerModel.aggregate<{ _id: null; total: number }>([
-          {
-            $match: {
-              created_at: { $gte: from, $lte: to },
-              status: { $in: ['completed', 'activated', 'paid'] },
-            },
+    const [
+      totalTenants,
+      activeTenants,
+      suspendedTenants,
+      tierGroups,
+      revenueAggregate,
+      totalTokens,
+    ] = await Promise.all([
+      Tenent.countDocuments({}),
+      Tenent.countDocuments({ status: 'active' }),
+      Tenent.countDocuments({ status: 'suspended' }),
+      Tenent.aggregate<{ _id: string; count: number }>([
+        { $group: { _id: '$tier', count: { $sum: 1 } } },
+      ]),
+      BillingLedgerModel.aggregate<{ _id: null; total: number }>([
+        {
+          $match: {
+            created_at: { $gte: from, $lte: to },
+            status: { $in: ['completed', 'activated', 'paid'] },
           },
-          {
-            $group: {
-              _id: null,
-              total: { $sum: '$amount' },
-            },
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' },
           },
-        ]),
-      ]);
+        },
+      ]),
+      this._tokenAnalyticsService.getTotalTokens(startDate, endDate).catch(() => 0),
+    ]);
 
     const tenantsByTier: Record<string, number> = {};
     for (const group of tierGroups) {
@@ -335,6 +409,7 @@ export class SuperAdminService implements ISuperAdminService {
       totalRevenue,
       currency: 'USD',
       tenantsByTier,
+      totalTokens,
     };
   }
 
@@ -376,6 +451,50 @@ export class SuperAdminService implements ISuperAdminService {
       amount: p.amount,
       transactionCount: p.transaction_count,
     }));
+  }
+
+  async getTokenChart(
+    startDate?: string,
+    endDate?: string,
+    interval = 'day',
+  ) {
+    return this._tokenAnalyticsService.getTokenDateHistogram(startDate, endDate, interval);
+  }
+
+  async getTopTenants(
+    startDate?: string,
+    endDate?: string,
+    limit = 5,
+  ) {
+    const rawTop = await this._tokenAnalyticsService.getTopTenantsByTokens(startDate, endDate, limit);
+    if (!rawTop || rawTop.length === 0) {
+      return [];
+    }
+
+    const tenantIds = rawTop.map((item) => item.tenant_id).filter(Boolean);
+    const tenantDocs = await Tenent.find({ _id: { $in: tenantIds } })
+      .select('business_name contact_email tier')
+      .lean();
+
+    const tenantMap = new Map<string, { business_name: string; email: string; tier: string }>();
+    for (const t of tenantDocs) {
+      tenantMap.set(t._id.toString(), {
+        business_name: t.business_name || '',
+        email: t.contact_email || '',
+        tier: t.tier || '',
+      });
+    }
+
+    return rawTop.map((item) => {
+      const info = tenantMap.get(item.tenant_id);
+      return {
+        tenant_id: item.tenant_id,
+        business_name: info?.business_name || item.tenant_id,
+        email: info?.email || '',
+        tier: info?.tier || 'unknown',
+        total_tokens: item.total_tokens,
+      };
+    });
   }
 
   private _mapDocToItem(doc: Partial<ITierConfigDoc> | TierConfig): TierConfigItem {
@@ -420,9 +539,9 @@ export class SuperAdminService implements ISuperAdminService {
 
     const items = docs.map((doc) => this._mapDocToItem(doc));
     try {
-      await this._cacheRepo.set(cacheKey, JSON.stringify(items), { ttlSeconds: 86400 * 7 });
+      await this._cacheRepo.set(cacheKey, JSON.stringify(items));
       for (const item of items) {
-        await this._cacheRepo.set(`tier_config:${item.tier}`, JSON.stringify(item), { ttlSeconds: 86400 * 7 });
+        await this._cacheRepo.set(`tier_config:${item.tier}`, JSON.stringify(item));
       }
     } catch {
       
@@ -450,7 +569,7 @@ export class SuperAdminService implements ISuperAdminService {
 
     const item = this._mapDocToItem(doc);
     try {
-      await this._cacheRepo.set(cacheKey, JSON.stringify(item), { ttlSeconds: 86400 * 7 });
+      await this._cacheRepo.set(cacheKey, JSON.stringify(item));
     } catch {
       // Non-blocking cache error
     }
@@ -480,7 +599,7 @@ export class SuperAdminService implements ISuperAdminService {
     const item = this._mapDocToItem(updatedDoc);
 
     try {
-      await this._cacheRepo.set(`tier_config:${normalized}`, JSON.stringify(item), { ttlSeconds: 86400 * 7 });
+      await this._cacheRepo.set(`tier_config:${normalized}`, JSON.stringify(item));
       await this._cacheRepo.delete('tier_config:all');
     } catch {
    

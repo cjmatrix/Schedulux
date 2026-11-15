@@ -13,10 +13,6 @@ import {
 import { useState } from 'react';
 import useDebounceHook from '../../../shared/hooks/useDebounceHook';
 import { useSuperAdminTenants, useSuspendTenant } from '../hooks/useSuperAdmin';
-import {
-  useSuperAdminOverview,
-  useSuperAdminTopTenants,
-} from '../hooks/useSuperAdminDashboard';
 
 const TIER_COLOR: Record<string, string> = {
   Starter: 'bg-slate-800 text-slate-300 border border-slate-700',
@@ -55,9 +51,6 @@ export default function TenantListPage() {
 
   const suspendTenantMutation = useSuspendTenant();
 
-  const { data: overviewData, refetch: refetchOverview } = useSuperAdminOverview();
-  const { data: topTenants = [] } = useSuperAdminTopTenants({ limit: 100 });
-
   const {
     data: tenantsData,
     isLoading,
@@ -74,14 +67,10 @@ export default function TenantListPage() {
   const rawTenants = tenantsData?.data?.tenants ?? [];
   const totalCount = tenantsData?.data?.total_count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / limit));
-
-  const tokensMap = new Map<string, number>(
-    topTenants.map((t) => [t.tenant_id, t.total_tokens]),
-  );
+  const stats = tenantsData?.data?.stats;
 
   const handleSync = () => {
     void refetchTenants();
-    void refetchOverview();
   };
 
   return (
@@ -153,7 +142,7 @@ export default function TenantListPage() {
           </div>
           <div className="flex items-end justify-between">
             <span className="text-3xl font-light text-white">
-              {overviewData?.tenants?.total ?? totalCount}
+              {stats?.total ?? totalCount}
             </span>
           </div>
         </div>
@@ -167,7 +156,7 @@ export default function TenantListPage() {
           </div>
           <div className="flex items-end justify-between">
             <span className="text-3xl font-light text-emerald-400">
-              {overviewData?.tenants?.active ?? rawTenants.filter((t) => t.status === 'active').length}
+              {stats?.active ?? rawTenants.filter((t) => t.status === 'active').length}
             </span>
           </div>
         </div>
@@ -181,7 +170,7 @@ export default function TenantListPage() {
           </div>
           <div className="flex items-end justify-between">
             <span className="text-3xl font-light text-rose-400">
-              {overviewData?.tenants?.suspended ?? rawTenants.filter((t) => t.status === 'suspended').length}
+              {stats?.suspended ?? rawTenants.filter((t) => t.status === 'suspended').length}
             </span>
           </div>
         </div>
@@ -230,7 +219,7 @@ export default function TenantListPage() {
                   </th>
                   <th className="px-5 py-3 font-semibold uppercase tracking-wider">Plan Tier</th>
                   <th className="px-5 py-3 font-semibold uppercase tracking-wider">
-                    AI Usage (30D)
+                    Weekly Tokens
                   </th>
                   <th className="px-5 py-3 font-semibold uppercase tracking-wider">Status</th>
                   <th className="px-5 py-3 font-semibold uppercase tracking-wider text-right">
@@ -243,7 +232,10 @@ export default function TenantListPage() {
                   const statusInfo =
                     STATUS_CONFIG[tenant.status.toLowerCase()] ?? STATUS_CONFIG.pending;
                   const tierStyle = TIER_COLOR[tenant.tier] ?? TIER_COLOR.Starter;
-                  const tokenCount = tokensMap.get(tenant.tenant_id) ?? 0;
+                  const isUnlimited = tenant.weekly_token_limit === -1;
+                  const remaining =
+                    tenant.weekly_token_remaining ?? tenant.weekly_token_limit ?? 0;
+                  const limit = tenant.weekly_token_limit ?? 0;
 
                   return (
                     <tr
@@ -279,17 +271,26 @@ export default function TenantListPage() {
                         </span>
                       </td>
 
-                      {/* AI Usage */}
+                      {/* Weekly Tokens (Limit / Remaining) */}
                       <td className="px-5 py-3.5">
-                        {tokenCount > 0 ? (
+                        {isUnlimited ? (
                           <div className="flex items-baseline gap-1.5">
-                            <span className="font-mono text-xs font-medium text-slate-200">
-                              {tokenCount.toLocaleString()}
+                            <span className="font-mono text-xs font-medium text-emerald-400">
+                              Unlimited
                             </span>
-                            <span className="text-[10px] text-slate-500">tokens</span>
+                            <span className="text-[10px] text-slate-500">
+                              ({(tenant.weekly_token_usage ?? 0).toLocaleString()} used)
+                            </span>
                           </div>
                         ) : (
-                          <span className="text-xs text-slate-500 font-mono">0 tokens</span>
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="font-mono text-xs font-medium text-slate-200">
+                              {remaining.toLocaleString()}
+                            </span>
+                            <span className="text-[10px] text-slate-500">
+                              / {limit.toLocaleString()} left
+                            </span>
+                          </div>
                         )}
                       </td>
 

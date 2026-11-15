@@ -20,6 +20,7 @@
     "@nestjs/microservices": "^12.1.0",
     "@nestjs/platform-express": "^12.1.0",
     "@nestjs/platform-socket.io": "^12.1.2",
+    "@nestjs/throttler": "^6.7.1",
     "@nestjs/websockets": "^12.1.2",
     "@repo/proto": "workspace:*",
     "cookie-parser": "^1.4.7",

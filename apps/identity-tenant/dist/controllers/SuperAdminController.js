@@ -93,6 +93,7 @@ let SuperAdminAuthController = class SuperAdminAuthController {
             total_revenue: result.totalRevenue,
             currency: result.currency,
             tenants_by_tier: result.tenantsByTier,
+            total_tokens: result.totalTokens ?? 0,
         };
     }
     async getRevenueChart(data) {
@@ -103,6 +104,23 @@ let SuperAdminAuthController = class SuperAdminAuthController {
                 amount: p.amount,
                 transaction_count: p.transactionCount,
             })),
+        };
+    }
+    async getTokenChart(data) {
+        const points = await this._superAdminService.getTokenChart(data.start_date, data.end_date, data.interval);
+        return {
+            points: points.map((p) => ({
+                date: p.date,
+                total_tokens: p.total_tokens,
+                input_tokens: p.input_tokens,
+                output_tokens: p.output_tokens,
+            })),
+        };
+    }
+    async getTopTenants(data) {
+        const tenants = await this._superAdminService.getTopTenants(data.start_date, data.end_date, data.limit);
+        return {
+            tenants,
         };
     }
     async listTierConfigs(_data) {
@@ -176,6 +194,18 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], SuperAdminAuthController.prototype, "getRevenueChart", null);
+__decorate([
+    GrpcMethod(GRPC_SERVICES.SUPERADMIN_DASHBOARD, GRPC_METHODS.SUPERADMIN_DASHBOARD.GET_TOKEN_CHART),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], SuperAdminAuthController.prototype, "getTokenChart", null);
+__decorate([
+    GrpcMethod(GRPC_SERVICES.SUPERADMIN_DASHBOARD, GRPC_METHODS.SUPERADMIN_DASHBOARD.GET_TOP_TENANTS),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], SuperAdminAuthController.prototype, "getTopTenants", null);
 __decorate([
     GrpcMethod(GRPC_SERVICES.SUPERADMIN_TIER_CONFIG, GRPC_METHODS.SUPERADMIN_TIER_CONFIG.LIST_TIER_CONFIGS),
     __metadata("design:type", Function),

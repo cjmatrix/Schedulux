@@ -165,9 +165,7 @@ export class TenantService implements ITenantService {
       this._cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, {
         EX: this._refreshTokenTtlSeconds,
       }),
-      this._cacheRepo.set(`tenant:${tenant._id}:tier`, tenant.tier || 'starter', {
-        EX: 86400 * 30,
-      }),
+      this._cacheRepo.set(`tenant:${tenant._id}:tier`, tenant.tier || 'starter'),
       this._cacheRepo.set(`tenant:${tenant._id}:status`, tenant.status, {
         EX: 86400 * 30,
       }),
@@ -262,9 +260,7 @@ export class TenantService implements ITenantService {
       this._cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, {
         EX: this._refreshTokenTtlSeconds,
       }),
-      this._cacheRepo.set(`tenant:${tenant._id}:tier`, tenant.tier || 'starter', {
-        EX: 86400 * 30,
-      }),
+      this._cacheRepo.set(`tenant:${tenant._id}:tier`, tenant.tier || 'starter'),
       this._cacheRepo.set(`tenant:${tenant._id}:status`, tenant.status, {
         EX: 86400 * 30,
       }),
@@ -360,6 +356,7 @@ export class TenantService implements ITenantService {
       this._cacheRepo.set(`tenant_refresh_token:${tenant._id}:${newTokenId}`, newRefreshToken, {
         EX: this._refreshTokenTtlSeconds,
       }),
+      this._cacheRepo.set(`tenant:${tenant._id}:tier`, tenant.tier || 'starter'),
       this._cacheRepo.set(`tenant:${tenant._id}:status`, tenant.status, {
         EX: 86400 * 30,
       }),

@@ -119,33 +119,42 @@ async def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) ->
             }
         }
 
+    def _create_llm(provider: str):
+        if provider == "gemini" and gemini_api_key:
+            model_name = os.environ.get("GEMINI_MODEL") or "gemini-3.5-flash"
+            if "gemma" in model_name.lower():
+                model_name = "gemini-2.5-flash"
+            print(f"[Schema Generator] Initializing ChatGoogleGenerativeAI with model '{model_name}'.", flush=True)
+            return ChatGoogleGenerativeAI(
+                model=model_name,
+                google_api_key=gemini_api_key,
+                temperature=0,
+            )
+        elif provider == "groq" and groq_api_key:
+            groq_model = os.environ.get("GROQ_MODEL") or "openai/gpt-oss-120b"
+            if ChatGroq is not None:
+                print(f"[Schema Generator] Initializing ChatGroq with model '{groq_model}'.", flush=True)
+                return ChatGroq(
+                    model_name=groq_model,
+                    groq_api_key=groq_api_key,
+                    temperature=0,
+                )
+            else:
+                print(f"[Schema Generator] Initializing ChatOpenAI (Groq endpoint) with model '{groq_model}'.", flush=True)
+                return ChatOpenAI(
+                    model=groq_model,
+                    api_key=groq_api_key,
+                    base_url="https://api.groq.com/openai/v1",
+                    temperature=0,
+                )
+        return None
+
+  
+    providers = []
+    if gemini_api_key:
+        providers.append("gemini")
     if groq_api_key:
-        groq_model = os.environ.get("GROQ_MODEL") or "openai/gpt-oss-120b"
-        if ChatGroq is not None:
-            print(f"[Schema Generator] Initializing ChatGroq with model '{groq_model}'.", flush=True)
-            llm = ChatGroq(
-                model_name=groq_model,
-                groq_api_key=groq_api_key,
-                temperature=0,
-            )
-        else:
-            print(f"[Schema Generator] Initializing ChatOpenAI (Groq endpoint) with model '{groq_model}'.", flush=True)
-            llm = ChatOpenAI(
-                model=groq_model,
-                api_key=groq_api_key,
-                base_url="https://api.groq.com/openai/v1",
-                temperature=0,
-            )
-    else:
-        model_name = os.environ.get("GEMINI_MODEL") or "gemini-3.8-flash"
-        if "gemma" in model_name.lower():
-            model_name = "gemini-3.6-flash"
-        print(f"[Schema Generator] Initializing ChatGoogleGenerativeAI with model '{model_name}'.", flush=True)
-        llm = ChatGoogleGenerativeAI(
-            model=model_name,
-            google_api_key=gemini_api_key,
-            temperature=0,
-        )
+        providers.append("groq")
 
     prompt = PromptTemplate(
         template="""You are an expert AI system architect for Schedulux AI.
@@ -204,37 +213,63 @@ Crawled Data:
         input_variables=["tenant_id", "url", "crawled_data"],
     )
 
-    crawl_text = json.dumps(crawled_data)[:25000]
+    if isinstance(crawled_data, dict):
+        formatted_pages = []
+        for page_url, markdown in crawled_data.items():
+            clean_md = (markdown or "").strip()
+            if clean_md:
+                formatted_pages.append(f"=== PAGE: {page_url} ===\n{clean_md}")
+        crawl_text = "\n\n".join(formatted_pages)[:25000]
+    else:
+        crawl_text = str(crawled_data)[:25000]
 
-    structured_llm = llm.with_structured_output(GeneratedAgentDraftSchema)
-    chain = prompt | structured_llm
+    structured_result = None
+    last_err = None
 
-    try:
-        structured_result = await chain.ainvoke({
-            "tenant_id": tenant_id,
-            "url": url,
-            "crawled_data": crawl_text,
-        })
+    for provider in providers:
+        llm = _create_llm(provider)
+        if not llm:
+            continue
 
-        if isinstance(structured_result, BaseModel):
-            schema_dict = structured_result.model_dump(mode="json", exclude_none=True)
-        elif isinstance(structured_result, dict):
-            schema_dict = structured_result
-        else:
-            schema_dict = dict(structured_result)
+        try:
+            active_crawl_text = crawl_text[:12000] if provider == "groq" else crawl_text
+            print(f"[Schema Generator] Attempting structured synthesis with provider '{provider}'...", flush=True)
 
-        schema_dict["schema_ref"] = "https://schedulux.ai/schema/v2/agent_runtime_config.json"
-        schema_dict["schema_version"] = "2.4"
-        schema_dict["tenant_id"] = tenant_id
-        schema_dict["status"] = "draft"
-        if not schema_dict.get("agent_id"):
-            schema_dict["agent_id"] = f"agent_{tenant_id}_v1"
+            structured_llm = llm.with_structured_output(GeneratedAgentDraftSchema)
+            chain = prompt | structured_llm
 
-        print(f"[Schema Generator] Generated valid schema via with_structured_output.", flush=True)
-        return schema_dict
-    except Exception as e:
-        print(f"[Schema Generator] Error generating structured schema: {e}", flush=True)
-        raise
+            structured_result = await chain.ainvoke({
+                "tenant_id": tenant_id,
+                "url": url,
+                "crawled_data": active_crawl_text,
+            })
+
+            if structured_result:
+                print(f"[Schema Generator] Successfully synthesized schema using provider '{provider}'.", flush=True)
+                break
+        except Exception as e:
+            last_err = e
+            print(f"[Schema Generator] Provider '{provider}' failed ({e}). Attempting next provider...", flush=True)
+
+    if not structured_result:
+        raise last_err or RuntimeError("No LLM provider was able to synthesize the schema.")
+
+    if isinstance(structured_result, BaseModel):
+        schema_dict = structured_result.model_dump(mode="json", exclude_none=True)
+    elif isinstance(structured_result, dict):
+        schema_dict = structured_result
+    else:
+        schema_dict = dict(structured_result)
+
+    schema_dict["schema_ref"] = "https://schedulux.ai/schema/v2/agent_runtime_config.json"
+    schema_dict["schema_version"] = "2.4"
+    schema_dict["tenant_id"] = tenant_id
+    schema_dict["status"] = "draft"
+    if not schema_dict.get("agent_id"):
+        schema_dict["agent_id"] = f"agent_{tenant_id}_v1"
+
+    print(f"[Schema Generator] Generated valid schema via with_structured_output.", flush=True)
+    return schema_dict
 
 
 async def process_schema_generation(job_or_data, token=None):
@@ -295,8 +330,8 @@ async def process_schema_generation(job_or_data, token=None):
 
         if "503" in raw_err or "high demand" in raw_err.lower():
             friendly_err = "The AI model is temporarily experiencing high demand (503). Please wait a moment and try again."
-        elif "429" in raw_err or "quota" in raw_err.lower() or "rate_limit" in raw_err.lower() or "rate limit" in raw_err.lower():
-            friendly_err = "API rate limit reached. Please wait a minute and retry."
+        elif "429" in raw_err or "413" in raw_err or "quota" in raw_err.lower() or "rate_limit" in raw_err.lower() or "rate limit" in raw_err.lower() or "too large" in raw_err.lower():
+            friendly_err = "API rate limit or message size limit reached. Please wait a minute and retry."
         else:
             friendly_err = f"AI schema synthesis failed: {raw_err}"
 

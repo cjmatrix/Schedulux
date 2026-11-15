@@ -72,6 +72,9 @@ message TenantInfo {
   optional string paddle_customer_id = 6;
   optional string paddle_subscription_id = 7;
   optional string subscription_status = 8;
+  optional int64 weekly_token_limit = 9;
+  optional int64 weekly_token_usage = 10;
+  optional int64 weekly_token_remaining = 11;
 }
 
 message ListTenantsRequest {
@@ -83,9 +86,16 @@ message ListTenantsRequest {
   repeated string tenant_ids = 6;
 }
 
+message TenantStats {
+  int32 total = 1;
+  int32 active = 2;
+  int32 suspended = 3;
+}
+
 message ListTenantsResponse {
   repeated TenantInfo tenants = 1;
   int32 total_count = 2; 
+  optional TenantStats stats = 3;
 }
 
 message SuspendTenantRequest {

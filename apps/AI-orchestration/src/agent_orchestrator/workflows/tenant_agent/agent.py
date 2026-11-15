@@ -66,7 +66,7 @@ _graph = build_tenant_onboarding_graph()
 async def start_onboarding_session(
     tenant_id: str, draft: dict, agent_id: str = "", tier: str | None = None
 ) -> dict:
-    from agent_orchestrator.services.token_service import TokenTrackingService, TokenUsageTracker
+    from agent_orchestrator.services.token_service import TokenTrackingService
 
     is_exceeded, current_tokens, token_limit = await TokenTrackingService.check_weekly_quota(
         tenant_id, tier=tier
@@ -81,22 +81,6 @@ async def start_onboarding_session(
     target_agent_id = agent_id or draft.get("agent_id") or f"agent_{tenant_id}_v1"
     draft["agent_id"] = target_agent_id
 
-    initial: GraphState = {
-        "tenant_id": tenant_id,
-        "agent_id": target_agent_id,
-        "draft": draft,
-        "messages": [],
-        "structural_gaps": [],
-        "pending_field": None,
-        "semantic_note": None,
-        "decision": None,
-        "pending_draft_update": None,
-        "status": "onboarding",
-        "patch_retries": 0,
-        "react_step_count": 0,
-        "tier": tier or "starter",
-    }
-
     try:
         from agent_orchestrator.clients.redis_client import set_cached_draft
 
@@ -104,52 +88,27 @@ async def start_onboarding_session(
     except Exception as e:
         print(f"[Start Session Warning] Failed to prime Redis cache: {e}", flush=True)
 
-    tracker = TokenUsageTracker()
-    run_config: dict[str, Any] = {
-        "callbacks": [tracker, LangChainTracer(project_name="tenant-onboarding-agent")],
-        "run_name": f"TenantOnboarding:Start:{target_agent_id}",
-        "tags": ["tenant_onboarding", "session_start", f"tier:{tier or 'starter'}"],
-        "metadata": {
-            "tenant_id": tenant_id,
-            "agent_id": target_agent_id,
-            "tier": tier or "starter",
-            "session_phase": "start",
-            "thread_id": f"onboarding_{tenant_id}_{target_agent_id}",
-        },
+    from agent_orchestrator.workflows.tenant_agent.utils import (
+        _compute_structural_gaps,
+        generate_deterministic_onboarding_greeting,
+    )
+
+    gaps = _compute_structural_gaps(draft)
+    greeting = generate_deterministic_onboarding_greeting(draft, gaps)
+    first_gap_field = gaps[0]["field"] if gaps else ""
+
+    print(
+        f"[TenantAgent:StartSession] Deterministic greeting initialized for agent '{target_agent_id}' "
+        f"(source='{draft.get('creation_source')}', gaps={len(gaps)}, latency=<2ms, tokens=0)",
+        flush=True,
+    )
+
+    return {
+        "status": "awaiting_input",
+        "question": greeting,
+        "field": first_gap_field,
+        "type": "semantic_review",
     }
-    result_state = await _graph.ainvoke(initial, config=run_config)
-
-    from datetime import UTC, datetime
-
-    semantic_resp = result_state.get("semantic_note") or ""
-    if tracker.total_tokens > 0:
-        inp_tokens = tracker.input_tokens
-        out_tokens = tracker.output_tokens
-        model_name = tracker.model_id or os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
-        print(
-            f"[TenantAgent] Recorded {tracker.call_count} LLM calls (In: {inp_tokens}, Out: {out_tokens}, Total: {tracker.total_tokens}, Model: {model_name})",
-            flush=True,
-        )
-    else:
-        inp_tokens = max(1, 500 // 4)
-        out_tokens = max(1, len(semantic_resp) // 4)
-        model_name = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
-
-    det_event_id = (
-        f"evt_tok_{tenant_id}_{target_agent_id}_start_{int(datetime.now(UTC).timestamp() * 1000)}"
-    )
-
-    await TokenTrackingService.record_tokens(
-        tenant_id=tenant_id,
-        agent_id=target_agent_id,
-        source="tenant_agent",
-        input_tokens=inp_tokens,
-        output_tokens=out_tokens,
-        model_id=model_name,
-        event_id=det_event_id,
-    )
-
-    return _extract_payload(result_state)
 
 
 async def resume_onboarding_session(

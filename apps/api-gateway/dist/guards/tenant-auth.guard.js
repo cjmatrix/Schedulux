@@ -18,6 +18,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TenantAuthGuard = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
+const api_1 = require("@opentelemetry/api");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const rxjs_1 = require("rxjs");
 const cookies_constant_js_1 = require("../constants/cookies.constant.js");
@@ -113,6 +114,20 @@ let TenantAuthGuard = class TenantAuthGuard {
             }
             else {
                 throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.UNRECOGNIZED_ROLE);
+            }
+            const activeSpan = api_1.trace.getActiveSpan();
+            if (activeSpan) {
+                if (decoded.tenant_id)
+                    activeSpan.setAttribute('tenant.id', decoded.tenant_id);
+                if (decoded.tier)
+                    activeSpan.setAttribute('tenant.tier', decoded.tier);
+                if (decoded.role)
+                    activeSpan.setAttribute('tenant.role', decoded.role);
+                if (decoded.user_id || decoded.sub) {
+                    activeSpan.setAttribute('user.id', (decoded.user_id || decoded.sub));
+                }
+                if (decoded.agent_id)
+                    activeSpan.setAttribute('agent.id', decoded.agent_id);
             }
             return true;
         }

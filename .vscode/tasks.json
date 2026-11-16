@@ -4,7 +4,6 @@
     {
       "label": "Start All Services (Separate Terminals)",
       "dependsOn": [
-        "RabbitMQ",
         "API Gateway",
         "Customer API Gateway",
         "Identity & Tenant",

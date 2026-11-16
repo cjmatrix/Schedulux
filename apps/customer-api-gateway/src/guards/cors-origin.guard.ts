@@ -7,6 +7,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
+import { trace } from '@opentelemetry/api';
 import { KnowledgeServiceClient } from '@repo/proto/knowledge';
 import type { Request, Response } from 'express';
 import { lastValueFrom } from 'rxjs';
@@ -44,7 +45,6 @@ export class CorsOriginGuard implements CanActivate, OnModuleInit {
 
     const host = this.normalizeHostname(requestHost);
 
-
     if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
       return true;
     }
@@ -63,7 +63,6 @@ export class CorsOriginGuard implements CanActivate, OnModuleInit {
   private async getWhitelistedDomains(tenantId: string, agentId: string): Promise<string[]> {
     const redisKey = `agent:${tenantId}:${agentId}:whitelist`;
 
-   
     try {
       const redisCached = await this._redisService.get(redisKey);
       if (redisCached) {
@@ -76,7 +75,6 @@ export class CorsOriginGuard implements CanActivate, OnModuleInit {
       console.warn(`[CorsOriginGuard] Redis lookup failed for ${redisKey}:`, err);
     }
 
-    
     try {
       const response = await lastValueFrom(
         this._knowledgeService.getWidgetConfig({
@@ -91,20 +89,20 @@ export class CorsOriginGuard implements CanActivate, OnModuleInit {
         try {
           const parsed = JSON.parse(response.widget_config_json);
           if (Array.isArray(parsed.whitelisted_domains)) {
-            domains = parsed.whitelisted_domains.map((d: string) =>
-              String(d).trim().toLowerCase(),
-            );
+            domains = parsed.whitelisted_domains.map((d: string) => String(d).trim().toLowerCase());
           }
         } catch {
           domains = [];
         }
       }
 
-  
       await this._redisService.set(redisKey, JSON.stringify(domains), 300);
       return domains;
     } catch (err) {
-      console.warn(`[CorsOriginGuard] Failed to fetch widget config via gRPC for ${redisKey}:`, err);
+      console.warn(
+        `[CorsOriginGuard] Failed to fetch widget config via gRPC for ${redisKey}:`,
+        err,
+      );
       return [];
     }
   }
@@ -131,12 +129,20 @@ export class CorsOriginGuard implements CanActivate, OnModuleInit {
       return true;
     }
 
-    const tenantId = (req.body?.tenant_id ||
-      req.query?.tenant_id ||
-      req.headers['x-tenant-id']) as string | undefined;
-    const agentId = (req.body?.agent_id ||
-      req.query?.agent_id ||
-      req.headers['x-agent-id']) as string | undefined;
+    const tenantId = (req.body?.tenant_id || req.query?.tenant_id || req.headers['x-tenant-id']) as
+      | string
+      | undefined;
+    const agentId = (req.body?.agent_id || req.query?.agent_id || req.headers['x-agent-id']) as
+      | string
+      | undefined;
+    const sessionId = (req.body?.session_id || req.query?.session_id) as string | undefined;
+
+    const activeSpan = trace.getActiveSpan();
+    if (activeSpan) {
+      if (tenantId) activeSpan.setAttribute('tenant.id', tenantId);
+      if (agentId) activeSpan.setAttribute('agent.id', agentId);
+      if (sessionId) activeSpan.setAttribute('session.id', sessionId);
+    }
 
     if (!tenantId || !agentId) {
       return true;
@@ -151,7 +157,6 @@ export class CorsOriginGuard implements CanActivate, OnModuleInit {
       );
     }
 
-   
     res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');

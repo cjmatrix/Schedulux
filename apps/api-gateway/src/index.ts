@@ -1,3 +1,4 @@
+import './tracing.js';
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';

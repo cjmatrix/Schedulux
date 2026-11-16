@@ -1,3 +1,4 @@
+import './tracing.js';
 import 'reflect-metadata';
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';

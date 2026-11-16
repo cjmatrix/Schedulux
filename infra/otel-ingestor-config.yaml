@@ -1,0 +1,63 @@
+extensions:
+  basicauth/opensearch:
+    client_auth:
+      username: "${env:OPENSEARCH_USERNAME}"
+      password: "${env:OPENSEARCH_PASSWORD}"
+
+receivers:
+  kafka:
+    brokers:
+      - "${env:KAFKA_BROKERS}"
+    protocol_version: "2.1.0"
+    group_id: "schedulux-otel-ingestor"
+    traces:
+      topics:
+        - "otel-traces"
+      encoding: "otlp_json"
+    auth:
+      sasl:
+        mechanism: "SCRAM-SHA-256"
+        username: "${env:KAFKA_USERNAME}"
+        password: "${env:KAFKA_PASSWORD}"
+    tls:
+      insecure: false
+      insecure_skip_verify: true
+
+processors:
+  # Memory limiter to ensure high-throughput batching never crashes container
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+
+  # High-concurrency bulk batching before pushing to OpenSearch
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+
+exporters:
+  opensearch:
+    http:
+      endpoint: "${env:OPENSEARCH_ENDPOINT}"
+      auth:
+        authenticator: basicauth/opensearch
+    traces_index: "otel-traces"
+    mapping:
+      mode: "otel-v1"
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 5m
+    sending_queue:
+      enabled: true
+      num_consumers: 3
+      queue_size: 1000
+
+service:
+  extensions: [basicauth/opensearch]
+  pipelines:
+    traces:
+      receivers: [kafka]
+      processors: [memory_limiter, batch]
+      exporters: [opensearch]

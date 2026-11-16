@@ -1,3 +1,4 @@
+import './tracing.js';
 import 'reflect-metadata';
 import { createRequire } from 'node:module';
 import { ConfigService } from '@nestjs/config';

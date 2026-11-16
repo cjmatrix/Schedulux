@@ -1,0 +1,84 @@
+extensions:
+  basicauth/grafana:
+    client_auth:
+      username: "${env:GRAFANA_CLOUD_INSTANCE_ID}"
+      password: "${env:GRAFANA_CLOUD_API_KEY}"
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Memory limiter to ensure buffering telemetry never crashes container
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 400
+    spike_limit_mib: 100
+
+  tail_sampling:
+    # Wait 5 seconds after the first span arrives so all downstream gRPC/DB spans finish
+    decision_wait: 5s
+    # Max concurrent traces buffered in RAM
+    num_traces: 10000
+    expected_new_traces_per_sec: 50
+
+    policies:
+      # Rule 1 (Errors): Keep 100% if ANY span in the trace has status ERROR (5xx or unhandled exception)
+      - name: keep-all-errors
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+
+      # Rule 2 (Latency): Keep 100% if total trace duration exceeds 2000ms (2 seconds)
+      - name: keep-slow-traces
+        type: latency
+        latency:
+          threshold_ms: 2000
+
+      # Rule 3 (Normal Traffic): Keep only 5% of everything else
+      - name: sample-normal-traffic
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 5
+
+  # Batch surviving telemetry before pushing upstream
+  batch:
+    timeout: 2s
+    send_batch_size: 512
+
+exporters:
+  kafka:
+    brokers: ["${env:KAFKA_BROKERS}"]
+    protocol_version: "2.1.0"
+    traces:
+      topic: "otel-traces"
+      encoding: "otlp_json"
+    auth:
+      sasl:
+        mechanism: "SCRAM-SHA-256"
+        username: "${env:KAFKA_USERNAME}"
+        password: "${env:KAFKA_PASSWORD}"
+    tls:
+      insecure: false
+      insecure_skip_verify: true
+
+  otlphttp/grafana:
+    endpoint: "${env:GRAFANA_CLOUD_OTLP_ENDPOINT}"
+    auth:
+      authenticator: basicauth/grafana
+
+service:
+  extensions: [basicauth/grafana]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, tail_sampling, batch]
+      exporters: [kafka]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp/grafana]

@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ClientGrpc } from '@nestjs/microservices';
+import { trace } from '@opentelemetry/api';
 import { DashboardAuthServiceClient } from '@repo/proto/dashboard';
 import { TenantServiceClient } from '@repo/proto/tenant';
 import { Request } from 'express';
@@ -75,7 +76,7 @@ export class TenantAuthGuard implements CanActivate, OnModuleInit {
     const dashboardToken = request.cookies?.[COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN];
 
     const isDashboardEndpoint = request.url?.includes('/dashboard-user/');
-    
+
     const isTenantAuthEndpoint = request.url?.includes('/tenant/auth/');
 
     let token: string | undefined;
@@ -155,6 +156,17 @@ export class TenantAuthGuard implements CanActivate, OnModuleInit {
         throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.UNRECOGNIZED_ROLE);
       }
 
+      const activeSpan = trace.getActiveSpan();
+      if (activeSpan) {
+        if (decoded.tenant_id) activeSpan.setAttribute('tenant.id', decoded.tenant_id);
+        if (decoded.tier) activeSpan.setAttribute('tenant.tier', decoded.tier);
+        if (decoded.role) activeSpan.setAttribute('tenant.role', decoded.role);
+        if (decoded.user_id || decoded.sub) {
+          activeSpan.setAttribute('user.id', (decoded.user_id || decoded.sub) as string);
+        }
+        if (decoded.agent_id) activeSpan.setAttribute('agent.id', decoded.agent_id);
+      }
+
       return true;
     } catch (err: unknown) {
       if (err instanceof UnauthorizedException || err instanceof ForbiddenException) {
@@ -164,4 +176,3 @@ export class TenantAuthGuard implements CanActivate, OnModuleInit {
     }
   }
 }
-

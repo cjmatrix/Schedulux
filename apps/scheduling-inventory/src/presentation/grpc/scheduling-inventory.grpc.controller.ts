@@ -335,6 +335,17 @@ export class SchedulingInventoryGrpcController {
       total: result.total,
       page: result.page,
       limit: result.limit,
+      summary: result.summary
+        ? {
+            total_count: result.summary.totalCount,
+            confirmed_count: result.summary.confirmedCount,
+            pending_count: result.summary.pendingCount,
+            cancelled_count: result.summary.cancelledCount,
+            completed_count: result.summary.completedCount,
+            ai_inbound_count: result.summary.aiInboundCount,
+            ai_inbound_percent: result.summary.aiInboundPercent,
+          }
+        : undefined,
     };
   }
 

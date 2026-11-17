@@ -373,11 +373,22 @@ export interface ListBookingsRequest {
   customer_phone?: string | undefined;
 }
 
+export interface BookingSummaryInfo {
+  total_count: number;
+  confirmed_count: number;
+  pending_count: number;
+  cancelled_count: number;
+  completed_count: number;
+  ai_inbound_count: number;
+  ai_inbound_percent: number;
+}
+
 export interface ListBookingsResponse {
   bookings: BookingInfo[];
   total: number;
   page: number;
   limit: number;
+  summary?: BookingSummaryInfo | undefined;
 }
 
 export interface GetAvailabilityRequest {
@@ -458,12 +469,19 @@ export interface CustomerDetails {
   updated_at: string;
 }
 
+export interface CustomerSummaryInfo {
+  total_count: number;
+  verified_count: number;
+  guest_count: number;
+}
+
 export interface ListCustomersResponse {
   customers: CustomerDetails[];
   total: number;
   page: number;
   limit: number;
   total_pages: number;
+  summary?: CustomerSummaryInfo | undefined;
 }
 
 export interface TenantScheduleInfo {

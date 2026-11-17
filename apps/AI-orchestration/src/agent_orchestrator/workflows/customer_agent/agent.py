@@ -27,6 +27,7 @@ from agent_orchestrator.workflows.customer_agent.subagents import (
     run_faq_agent,
     run_handoff_agent,
 )
+from agent_orchestrator.workflows.customer_agent.text_util import extract_text_content
 
 logger = logging.getLogger(__name__)
 
@@ -182,11 +183,7 @@ Your job is to merge specialist agent answers into a single, cohesive, seamless,
 
         try:
             synth_result = await model.ainvoke(synth_messages, config=config)
-            final_text = (
-                synth_result.content
-                if isinstance(synth_result.content, str)
-                else str(synth_result.content)
-            )
+            final_text = extract_text_content(synth_result)
         except Exception as e:
             logger.warning(
                 "[CustomerGraph:SynthesizerNode] Primary LLM error (%s) → trying Gemini fallback", e
@@ -195,27 +192,25 @@ Your job is to merge specialist agent answers into a single, cohesive, seamless,
             if gemini_model and not isinstance(model, ChatGoogleGenerativeAI):
                 try:
                     synth_result = await gemini_model.ainvoke(synth_messages, config=config)
-                    final_text = (
-                        synth_result.content
-                        if isinstance(synth_result.content, str)
-                        else str(synth_result.content)
-                    )
+                    final_text = extract_text_content(synth_result)
                 except Exception as fb_err:
                     logger.error(
                         "[CustomerGraph:SynthesizerNode] Gemini synthesis fallback failed (%s) → fallback join",
                         fb_err,
                     )
-                    final_text = f"{faq_resp}\n\n{booking_resp}"
+                    final_text = f"{extract_text_content(faq_resp)}\n\n{extract_text_content(booking_resp)}"
             else:
-                final_text = f"{faq_resp}\n\n{booking_resp}"
-    elif booking_resp and booking_resp.strip():
-        final_text = booking_resp.strip()
-    elif faq_resp and faq_resp.strip():
-        final_text = faq_resp.strip()
+                final_text = f"{extract_text_content(faq_resp)}\n\n{extract_text_content(booking_resp)}"
+    elif booking_resp and extract_text_content(booking_resp).strip():
+        final_text = extract_text_content(booking_resp).strip()
+    elif faq_resp and extract_text_content(faq_resp).strip():
+        final_text = extract_text_content(faq_resp).strip()
     else:
         final_text = (
             "I'm here to help! Could you please tell me which service and time you would prefer?"
         )
+
+    final_text = extract_text_content(final_text)
 
     return {
         "response": final_text,
@@ -311,10 +306,11 @@ async def process_customer_chat(
 
     langchain_messages: list[BaseMessage] = []
     for m in recent_messages:
+        clean_history_text = extract_text_content(m.content)
         if m.role == "user":
-            langchain_messages.append(HumanMessage(content=m.content))
+            langchain_messages.append(HumanMessage(content=clean_history_text))
         elif m.role == "assistant":
-            langchain_messages.append(AIMessage(content=m.content))
+            langchain_messages.append(AIMessage(content=clean_history_text))
 
     biz_context = await resolve_business_context(tenant_id, agent_id, is_sandbox=is_sandbox)
     all_tools = get_scheduling_mcp_tools()
@@ -414,7 +410,8 @@ async def process_customer_chat(
             initial_state,
             config=run_config,
         )
-        response_text = final_state.get("response") or (
+        raw_response = final_state.get("response")
+        response_text = extract_text_content(raw_response) if raw_response else (
             "I'm sorry, I encountered a temporary issue while processing your request. "
             "Please try again in a moment."
         )

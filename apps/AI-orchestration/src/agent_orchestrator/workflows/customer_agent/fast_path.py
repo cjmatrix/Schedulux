@@ -12,12 +12,7 @@ def format_deterministic_fast_path(
     raw_output: str,
     biz_context: dict[str, Any] | None = None,
 ) -> str | None:
-    """Evaluate tool execution results and return an instant deterministic response
 
-    Returns a formatted string if the action succeeded on the happy path, bypassing
-    the second LLM round-trip. Returns None if the tool output requires conversational
-    LLM reasoning or explanation (e.g. error, slot selection, or clarification).
-    """
     if not raw_output or not isinstance(raw_output, str):
         return None
 

@@ -44,6 +44,16 @@ export interface ListBookingsParams {
   search?: string;
 }
 
+export interface BookingSummaryInfo {
+  total_count: number;
+  confirmed_count: number;
+  pending_count: number;
+  cancelled_count: number;
+  completed_count: number;
+  ai_inbound_count: number;
+  ai_inbound_percent: number;
+}
+
 export interface ListBookingsResponseData {
   message: string;
   data: BookingInfo[];
@@ -52,6 +62,7 @@ export interface ListBookingsResponseData {
     page: number;
     limit: number;
   };
+  summary?: BookingSummaryInfo;
 }
 
 export interface GetAvailabilityParams {

@@ -367,6 +367,7 @@ export class SchedulingController implements OnModuleInit {
         page: response.page,
         limit: response.limit,
       },
+      summary: response.summary,
     };
   }
 
@@ -612,6 +613,7 @@ export class SchedulingController implements OnModuleInit {
         limit: response.limit,
         total_pages: response.total_pages,
       },
+      summary: response.summary,
     };
   }
 }

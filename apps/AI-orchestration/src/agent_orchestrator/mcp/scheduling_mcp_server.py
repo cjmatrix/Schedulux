@@ -27,9 +27,18 @@ from agent_orchestrator.clients.scheduling_client import (
 )
 from agent_orchestrator.queues.sms_queue import get_sms_queue
 from agent_orchestrator.repositories.customer_message_repository import CustomerMessageRepository
-from agent_orchestrator.workflows.customer_agent.context import resolve_business_context
 
 logger = logging.getLogger(__name__)
+
+
+async def _resolve_business_context(
+    tenant_id: str,
+    agent_id: str,
+    is_sandbox: bool = False,
+) -> dict[str, Any]:
+    from agent_orchestrator.workflows.customer_agent.context import resolve_business_context
+
+    return await resolve_business_context(tenant_id, agent_id, is_sandbox=is_sandbox)
 
 
 _TZ_ALIASES: dict[str, str] = {
@@ -129,6 +138,7 @@ async def check_availability(
     start_date: str,
     end_date: str | None = None,
     resource_id: str | None = None,
+    resource_ids: list[str] | None = None,
     timezone: str | None = None,
 ) -> str:
     """Check available appointment time slots for a given service.
@@ -140,22 +150,24 @@ async def check_availability(
         start_date: Start date in YYYY-MM-DD format.
         end_date: Optional end date in YYYY-MM-DD format (for range lookup).
         resource_id: Optional specific staff or resource ID requested by customer.
+        resource_ids: Optional list of specific resource IDs if multiple resources are requested.
         timezone: Optional customer timezone string (e.g. 'UTC', 'America/New_York').
 
     Returns:
         JSON string containing available dates, operating hours, and open time slots.
     """
     logger.info(
-        "[MCP Tool: check_availability] Invoked with arguments: tenant_id=%s, agent_id=%s, service_id=%s, start_date=%s, end_date=%s, resource_id=%s, timezone=%s",
+        "[MCP Tool: check_availability] Invoked with arguments: tenant_id=%s, agent_id=%s, service_id=%s, start_date=%s, end_date=%s, resource_id=%s, resource_ids=%s, timezone=%s",
         tenant_id,
         agent_id,
         service_id,
         start_date,
         end_date,
         resource_id,
+        resource_ids,
         timezone,
     )
-    biz_ctx = await resolve_business_context(tenant_id, agent_id)
+    biz_ctx = await _resolve_business_context(tenant_id, agent_id)
     if not biz_ctx or not biz_ctx.get("business_name"):
         return json.dumps(
             {
@@ -164,13 +176,20 @@ async def check_availability(
             }
         )
 
+    target_resource_ids: list[str] = []
+    if resource_ids:
+        target_resource_ids.extend([r.strip() for r in resource_ids if r and r.strip()])
+    if resource_id and resource_id.strip() and resource_id.strip() not in target_resource_ids:
+        target_resource_ids.append(resource_id.strip())
+
     result = await get_availability(
         tenant_id=tenant_id,
         agent_id=agent_id,
         service_id=service_id,
         start_date=start_date,
         end_date=end_date,
-        resource_id=resource_id,
+        resource_id=resource_id or (target_resource_ids[0] if target_resource_ids else None),
+        resource_ids=target_resource_ids or None,
         timezone=timezone,
     )
 
@@ -265,7 +284,7 @@ async def hold_slot(
         resource_id,
         resource_ids,
     )
-    biz_ctx = await resolve_business_context(tenant_id, agent_id)
+    biz_ctx = await _resolve_business_context(tenant_id, agent_id)
     if not biz_ctx or not biz_ctx.get("business_name"):
         return json.dumps(
             {
@@ -587,6 +606,7 @@ async def book_appointment(
     customer_email: str | None = None,
     end_time: str | None = None,
     resource_id: str | None = None,
+    resource_ids: list[str] | None = None,
     notes: str | None = None,
     session_id: str | None = None,
     otp_code: str | None = None,
@@ -612,6 +632,7 @@ async def book_appointment(
         customer_email: Optional email address.
         end_time: Optional appointment end time (required for date_range bookings).
         resource_id: Optional specific staff or resource ID requested.
+        resource_ids: Optional list of resource IDs if multiple resources/assets are selected (e.g. room + VIP card).
         notes: Optional customer requests or notes.
         session_id: Optional active chat session ID for session verification check.
         otp_code: Optional 6-digit verification code provided by the customer to verify phone and confirm booking atomically in one step.
@@ -620,7 +641,7 @@ async def book_appointment(
         JSON string containing the booking confirmation, booking reference code, and status.
     """
     logger.info(
-        "[MCP Tool: book_appointment] Invoked with arguments: tenant_id=%s, agent_id=%s, service_id=%s, start_time=%s, customer_name=%s, customer_phone=%s, customer_email=%s, end_time=%s, resource_id=%s, notes=%s, session_id=%s, has_otp=%s",
+        "[MCP Tool: book_appointment] Invoked with arguments: tenant_id=%s, agent_id=%s, service_id=%s, start_time=%s, customer_name=%s, customer_phone=%s, customer_email=%s, end_time=%s, resource_id=%s, resource_ids=%s, notes=%s, session_id=%s, has_otp=%s",
         tenant_id,
         agent_id,
         service_id,
@@ -630,6 +651,7 @@ async def book_appointment(
         customer_email,
         end_time,
         resource_id,
+        resource_ids,
         notes,
         session_id,
         bool(otp_code),
@@ -656,7 +678,7 @@ async def book_appointment(
             )
 
     is_sandbox = bool(session_id and session_id.startswith("sandbox_"))
-    biz_ctx = await resolve_business_context(tenant_id, agent_id, is_sandbox=is_sandbox)
+    biz_ctx = await _resolve_business_context(tenant_id, agent_id, is_sandbox=is_sandbox)
     if not biz_ctx or not biz_ctx.get("business_name"):
         return json.dumps(
             {
@@ -714,6 +736,12 @@ async def book_appointment(
     if session_id:
         active_hold_token = await get_active_hold_for_session(session_id)
 
+    target_resource_ids: list[str] = []
+    if resource_ids:
+        target_resource_ids.extend([r.strip() for r in resource_ids if r and r.strip()])
+    if resource_id and resource_id.strip() and resource_id.strip() not in target_resource_ids:
+        target_resource_ids.append(resource_id.strip())
+
     result = await create_booking(
         tenant_id=tenant_id,
         service_id=service_id,
@@ -722,7 +750,8 @@ async def book_appointment(
         customer_phone=customer_phone,
         customer_email=customer_email,
         end_time=end_time,
-        resource_id=resource_id,
+        resource_id=resource_id or (target_resource_ids[0] if target_resource_ids else None),
+        resource_ids=target_resource_ids or None,
         notes=notes,
         agent_id=agent_id,
         source=booking_source,
@@ -992,7 +1021,7 @@ async def reschedule_appointment(
                 "message": "Rescheduling strictly requires phone verification. Please provide your phone number so we can text you a 6-digit verification code.",
             }
         )
-    biz_ctx = await resolve_business_context(tenant_id, agent_id)
+    biz_ctx = await _resolve_business_context(tenant_id, agent_id)
     tz_str = (biz_ctx.get("timezone") if biz_ctx else None) or "UTC"
 
     new_start_time = _sanitize_start_time(new_start_time, tz_str)
@@ -1157,8 +1186,22 @@ async def get_customer_bookings(
         if not bk.get("customer_phone") or last10 in bk.get("customer_phone", "")
     ]
 
-    biz_ctx = await resolve_business_context(tenant_id, agent_id)
+    biz_ctx = await _resolve_business_context(tenant_id, agent_id)
     tz_str = (biz_ctx.get("timezone") if biz_ctx else None) or "UTC"
+
+    services_list = biz_ctx.get("services", []) if biz_ctx else []
+    resources_list = biz_ctx.get("resources", []) if biz_ctx else []
+
+    service_name_map = {
+        (s.get("id") or s.get("service_id")): s.get("name")
+        for s in services_list
+        if (s.get("id") or s.get("service_id"))
+    }
+    resource_name_map = {
+        (r.get("id") or r.get("resource_id")): r.get("name")
+        for r in resources_list
+        if (r.get("id") or r.get("resource_id"))
+    }
 
     enriched_bookings = []
     for bk in matched:
@@ -1170,6 +1213,31 @@ async def get_customer_bookings(
         b_dict["start_time_local"] = _format_local_datetime(s_utc, tz_str)
         b_dict["end_time_local"] = _format_local_datetime(e_utc, tz_str)
         b_dict["timezone"] = tz_str
+
+        svc_name = service_name_map.get(bk.get("service_id")) or "Scheduled Service"
+        b_dict["service_name"] = svc_name
+
+        primary_res_id = bk.get("resource_id") or (
+            bk.get("resource_ids", [])[0] if bk.get("resource_ids") else None
+        )
+        res_name = resource_name_map.get(primary_res_id) or "Auto-Assigned Unit"
+        b_dict["resource_name"] = res_name
+
+        all_res_ids = bk.get("resource_ids") or ([primary_res_id] if primary_res_id else [])
+        b_dict["assigned_resources"] = [
+            resource_name_map.get(rid, rid) for rid in all_res_ids if rid
+        ]
+
+        b_mode = bk.get("booking_mode", "time_slot")
+        if b_mode == "date_range" and s_utc and e_utc:
+            try:
+                s_dt = datetime.fromisoformat(s_utc.replace("Z", "+00:00"))
+                e_dt = datetime.fromisoformat(e_utc.replace("Z", "+00:00"))
+                nights = max(1, round((e_dt - s_dt).total_seconds() / 86400))
+                b_dict["stay_duration"] = f"{nights} night(s)"
+            except Exception:
+                b_dict["stay_duration"] = "Date Range Stay"
+
         enriched_bookings.append(b_dict)
 
     return json.dumps(
@@ -1198,7 +1266,7 @@ async def _load_tenant_resources(
 
     Returns None if the agent has not been published yet.
     """
-    biz_ctx = await resolve_business_context(tenant_id, agent_id, is_sandbox=is_sandbox)
+    biz_ctx = await _resolve_business_context(tenant_id, agent_id, is_sandbox=is_sandbox)
     if not biz_ctx or not biz_ctx.get("business_name"):
         return None
 
@@ -1329,7 +1397,7 @@ async def _load_tenant_services(
 
     Returns None if the agent has not been published yet.
     """
-    biz_ctx = await resolve_business_context(tenant_id, agent_id, is_sandbox=is_sandbox)
+    biz_ctx = await _resolve_business_context(tenant_id, agent_id, is_sandbox=is_sandbox)
     if not biz_ctx or not biz_ctx.get("business_name"):
         return None
 

@@ -14,6 +14,8 @@ from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from pydantic import SecretStr
 
+from agent_orchestrator.workflows.customer_agent.text_util import extract_text_content
+
 logger = logging.getLogger(__name__)
 
 _FAQ_TOOLS = {"search_knowledge_base", "search_services", "search_resources"}
@@ -22,10 +24,11 @@ _FAQ_TOOLS = {"search_knowledge_base", "search_services", "search_resources"}
 def _format_services_catalog(services: list[dict[str, Any]]) -> str:
     if not services:
         return "No services listed."
-    lines = [f"services[{len(services)}]{{id, name, staff_requirements}}:"]
+    lines = [f"services[{len(services)}]{{id, name, mode, staff_requirements}}:"]
     for s in services:
         sid = s.get("id") or s.get("service_id") or "unassigned"
         name = s.get("name") or "Unnamed"
+        mode = s.get("booking_mode") or "time_slot"
         reqs = s.get("resource_requirements") or s.get("requirements") or []
         staff_roles = []
         for r in reqs:
@@ -38,7 +41,7 @@ def _format_services_catalog(services: list[dict[str, Any]]) -> str:
                 else:
                     staff_roles.append(f"{role}")
         staff_str = f"staff: [{', '.join(staff_roles)}]" if staff_roles else "general service"
-        lines.append(f"  {sid} | {name} | {staff_str}")
+        lines.append(f"  {sid} | {name} | {mode} | {staff_str}")
     return "\n".join(lines)
 
 
@@ -74,17 +77,9 @@ def _get_gemini_model(temperature: float = 0.1, max_tokens: int = 2048) -> Any |
 def _extract_response_text(result: dict[str, Any]) -> str:
     messages = result.get("messages", [])
     for msg in reversed(messages):
-        content = getattr(msg, "content", "")
-        if isinstance(content, str) and content.strip():
-            return content.strip()
-        if isinstance(content, list):
-            texts = [
-                item["text"] if isinstance(item, dict) and item.get("text") else str(item)
-                for item in content
-            ]
-            joined = "\n".join(texts).strip()
-            if joined:
-                return joined
+        text = extract_text_content(msg)
+        if text.strip():
+            return text.strip()
     return "I'm happy to help with any questions about our services or hours. What would you like to know?"
 
 
@@ -143,7 +138,7 @@ Address: {address}
 Operating Hours & Schedule:
 {formatted_hours}
 
-[Services & Offerings Catalog (Compact TOON: id, name, staff_requirements)]
+[Services & Offerings Catalog (Compact TOON: id, name, mode, staff_requirements)]
 {services_catalog}
 
 [Staff & Resources Catalog (Compact TOON: id, name, type, role)]

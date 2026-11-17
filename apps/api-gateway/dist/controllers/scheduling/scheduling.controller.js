@@ -257,6 +257,7 @@ let SchedulingController = class SchedulingController {
                 page: response.page,
                 limit: response.limit,
             },
+            summary: response.summary,
         };
     }
     async createBooking(req, body) {
@@ -415,6 +416,7 @@ let SchedulingController = class SchedulingController {
                 limit: response.limit,
                 total_pages: response.total_pages,
             },
+            summary: response.summary,
         };
     }
 };

@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { BookingEntity } from '../../../domain/entities/booking.entity.js';
 import {
   ActiveBookingInterval,
+  BookingSummary,
   FindBookingsFilter,
   IBookingRepository,
 } from '../../../domain/repositories/booking.repository.interface.js';
@@ -190,7 +191,7 @@ export class MongoBookingRepository implements IBookingRepository {
   async findAll(
     tenantId: string,
     filter: FindBookingsFilter,
-  ): Promise<{ bookings: BookingEntity[]; total: number }> {
+  ): Promise<{ bookings: BookingEntity[]; total: number; summary?: BookingSummary }> {
     const query: Record<string, unknown> = {
       tenant_id: tenantId,
       is_deleted: { $ne: true },
@@ -237,10 +238,24 @@ export class MongoBookingRepository implements IBookingRepository {
       ];
     }
 
+    const baseMatch: Record<string, unknown> = {
+      tenant_id: tenantId,
+      is_deleted: { $ne: true },
+    };
+    if (filter.agentId?.trim()) {
+      baseMatch.agent_id = filter.agentId.trim();
+    }
+    if (filter.startDate || filter.endDate) {
+      const timeFilter: Record<string, unknown> = {};
+      if (filter.startDate) timeFilter.$gte = filter.startDate;
+      if (filter.endDate) timeFilter.$lte = filter.endDate;
+      baseMatch.start_time = timeFilter;
+    }
+
     const skip = Math.max(0, (filter.page - 1) * filter.limit);
     const sort: Record<string, 1 | -1> =
       filter.startDate || filter.endDate ? { start_time: 1 } : { created_at: -1 };
-    const [docs, total] = await Promise.all([
+    const [docs, total, statsResult] = await Promise.all([
       BookingModel.find(query)
         .sort(sort)
         .skip(skip)
@@ -248,11 +263,68 @@ export class MongoBookingRepository implements IBookingRepository {
         .lean()
         .exec(),
       BookingModel.countDocuments(query).exec(),
+      BookingModel.aggregate([
+        { $match: baseMatch },
+        {
+          $group: {
+            _id: null,
+            totalCount: { $sum: 1 },
+            confirmedCount: {
+              $sum: { $cond: [{ $eq: ['$status', 'confirmed'] }, 1, 0] },
+            },
+            pendingCount: {
+              $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] },
+            },
+            cancelledCount: {
+              $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] },
+            },
+            completedCount: {
+              $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] },
+            },
+            aiInboundCount: {
+              $sum: {
+                $cond: [
+                  {
+                    $in: ['$source', ['customer_agent', 'voice_agent', 'ai_inbound', 'agent']],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
+          },
+        },
+      ]).exec(),
     ]);
+
+    const stat = (statsResult[0] as {
+      totalCount?: number;
+      confirmedCount?: number;
+      pendingCount?: number;
+      cancelledCount?: number;
+      completedCount?: number;
+      aiInboundCount?: number;
+    }) || {};
+
+    const summaryTotal = stat.totalCount ?? total;
+    const aiInboundCount = stat.aiInboundCount ?? 0;
+    const aiInboundPercent =
+      summaryTotal > 0 ? Math.round((aiInboundCount / summaryTotal) * 100) : 0;
+
+    const summary: BookingSummary = {
+      totalCount: summaryTotal,
+      confirmedCount: stat.confirmedCount ?? 0,
+      pendingCount: stat.pendingCount ?? 0,
+      cancelledCount: stat.cancelledCount ?? 0,
+      completedCount: stat.completedCount ?? 0,
+      aiInboundCount,
+      aiInboundPercent,
+    };
 
     return {
       bookings: docs.map((doc) => BookingMapper.toDomain(doc as unknown as IBookingDoc)),
       total,
+      summary,
     };
   }
 

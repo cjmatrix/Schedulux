@@ -79,6 +79,76 @@ export function BookingsTableView({
     }
   };
 
+  const formatPrice = (price?: { amount?: number; currency?: string }) => {
+    if (!price?.amount) return '';
+    const currency = price.currency || '$';
+    if (currency === 'INR' || currency === '₹') return `₹${price.amount}`;
+    if (currency === 'USD' || currency === '$') return `$${price.amount}`;
+    if (currency === 'EUR' || currency === '€') return `€${price.amount}`;
+    return `${currency} ${price.amount}`;
+  };
+
+  const formatSchedule = (booking: BookingInfo) => {
+    const matchedService = services.find((s) => s.service_id === booking.service_id);
+    const isDateRange =
+      booking.booking_mode === 'date_range' || matchedService?.booking_mode === 'date_range';
+
+    if (isDateRange) {
+      try {
+        const startDate = new Date(booking.start_time);
+        const startStr = startDate.toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        });
+
+        if (!booking.end_time) {
+          return {
+            primaryDate: startStr,
+            secondaryDetails: '1 Night / Day',
+            durationLabel: '1 Night',
+            isDateRange: true,
+          };
+        }
+
+        const endDate = new Date(booking.end_time);
+        const endStr = endDate.toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        });
+
+        const diffDays = Math.max(
+          1,
+          Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)),
+        );
+        const durationLabel = diffDays === 1 ? '1 Night' : `${diffDays} Nights`;
+
+        return {
+          primaryDate: startStr === endStr ? startStr : `${startStr} – ${endStr}`,
+          secondaryDetails: `${durationLabel} stay`,
+          durationLabel,
+          isDateRange: true,
+        };
+      } catch {
+        return {
+          primaryDate: booking.start_time,
+          secondaryDetails: '',
+          durationLabel: `${booking.duration_minutes || 60} mins`,
+          isDateRange: true,
+        };
+      }
+    }
+
+    const { date, time } = formatDate(booking.start_time);
+    return {
+      primaryDate: date,
+      secondaryDetails: time,
+      durationLabel: `${booking.duration_minutes || 60} mins`,
+      isDateRange: false,
+    };
+  };
+
   const formatSource = (source?: string) => {
     switch (source) {
       case 'customer_agent':
@@ -129,7 +199,7 @@ export function BookingsTableView({
           </div>
         ) : (
           bookings.map((booking) => {
-            const { date, time } = formatDate(booking.start_time);
+            const sched = formatSchedule(booking);
             const source = formatSource(booking.source);
             const serviceName = getServiceName(booking.service_id);
             const staffName = getResourceName(booking);
@@ -194,15 +264,18 @@ export function BookingsTableView({
                   <div className="flex items-center justify-between font-semibold text-slate-800">
                     <span className="truncate">{serviceName}</span>
                     <span className="font-mono text-emerald-700 shrink-0">
-                      {booking.price?.amount ? `$${booking.price.amount}` : ''}
+                      {formatPrice(booking.price)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-[11px] text-slate-500">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3 text-slate-400" />
-                      {date} at {time}
+                      {sched.primaryDate} {sched.secondaryDetails ? `• ${sched.secondaryDetails}` : ''}
                     </span>
-                    <span className="truncate">Staff: {staffName}</span>
+                    <span className="truncate">
+                      {sched.isDateRange ? 'Unit: ' : 'Staff: '}
+                      {staffName}
+                    </span>
                   </div>
                 </div>
 
@@ -271,7 +344,7 @@ export function BookingsTableView({
               <th className="py-3.5 px-5">Booking Ref & Customer</th>
               <th className="py-3.5 px-5">Service</th>
               <th className="py-3.5 px-5">Scheduled For</th>
-              <th className="py-3.5 px-5">Staff / Provider</th>
+              <th className="py-3.5 px-5">Staff / Resource</th>
               <th className="py-3.5 px-5">Source</th>
               <th className="py-3.5 px-5">Status</th>
               <th className="py-3.5 px-5 text-right">Actions</th>
@@ -305,7 +378,7 @@ export function BookingsTableView({
               </tr>
             ) : (
               bookings.map((booking) => {
-                const { date, time } = formatDate(booking.start_time);
+                const sched = formatSchedule(booking);
                 const source = formatSource(booking.source);
                 const serviceName = getServiceName(booking.service_id);
                 const staffName = getResourceName(booking);
@@ -347,19 +420,28 @@ export function BookingsTableView({
                     <td className="py-4 px-5">
                       <div className="font-semibold text-slate-800">{serviceName}</div>
                       <div className="text-[11px] text-slate-400">
-                        {booking.duration_minutes || 60} mins
-                        {booking.price?.amount ? ` • $${booking.price.amount}` : ''}
+                        {sched.durationLabel}
+                        {booking.price?.amount ? ` • ${formatPrice(booking.price)}` : ''}
                       </div>
                     </td>
 
                     {/* Date & Time */}
                     <td className="py-4 px-5">
-                      <div className="font-medium text-slate-800">{date}</div>
-                      <div className="text-[11px] text-slate-500 font-mono">{time}</div>
+                      <div className="font-medium text-slate-800">{sched.primaryDate}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">
+                        {sched.secondaryDetails}
+                      </div>
                     </td>
 
                     {/* Staff / Resource */}
-                    <td className="py-4 px-5 font-medium text-slate-700">{staffName}</td>
+                    <td className="py-4 px-5 font-medium text-slate-700">
+                      <div className="flex flex-col">
+                        <span>{staffName}</span>
+                        {sched.isDateRange && (
+                          <span className="text-[10px] text-slate-400">Reserved Unit</span>
+                        )}
+                      </div>
+                    </td>
 
                     {/* Channel Source */}
                     <td className="py-4 px-5">

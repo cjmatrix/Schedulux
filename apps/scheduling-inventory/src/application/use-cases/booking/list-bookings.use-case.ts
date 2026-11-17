@@ -1,7 +1,7 @@
 import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import type { ListBookingsRequest } from '@repo/proto/scheduling';
 import { BookingEntity } from '../../../domain/entities/booking.entity.js';
-import type { IBookingRepository } from '../../../domain/repositories/booking.repository.interface.js';
+import type { IBookingRepository, BookingSummary } from '../../../domain/repositories/booking.repository.interface.js';
 import { BOOKING_REPOSITORY } from '../../../domain/tokens.js';
 import type { IListBookingsUseCase } from '../../interfaces/booking-use-cases.interface.js';
 
@@ -19,6 +19,7 @@ export class ListBookingsUseCase implements IListBookingsUseCase {
     total: number;
     page: number;
     limit: number;
+    summary?: BookingSummary;
   }> {
     if (!dto.tenant_id?.trim()) {
       throw new BadRequestException('tenant_id is required');
@@ -59,6 +60,7 @@ export class ListBookingsUseCase implements IListBookingsUseCase {
       total: result.total,
       page,
       limit,
+      summary: result.summary,
     };
   }
 }

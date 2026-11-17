@@ -69,6 +69,12 @@ def build_embedded_services(raw_services: list[dict[str, Any]]) -> list[ServiceE
                         resource_type=req.get("resource_type", "staff"),
                         count=int(req.get("count") or 1),
                         eligible_resource_ids=req.get("eligible_resource_ids", []),
+                        selection_mode=req.get("selection_mode")
+                        or (
+                            "user_selectable"
+                            if (req.get("resource_type") or "").lower() == "staff"
+                            else "auto_assign"
+                        ),
                     )
                     for req in (svc.get("resource_requirements") or [])
                 ],
@@ -278,6 +284,7 @@ async def sync_agent_inventory(
                         "resource_type": req.resource_type,
                         "count": req.count,
                         "eligible_resource_ids": list(req.eligible_resource_ids),
+                        "selection_mode": req.selection_mode or "auto_assign",
                     }
                     for req in proto_svc.resource_requirements
                 ]
@@ -609,6 +616,15 @@ async def list_bookings(
             c_name = bk.customer.name if bk.HasField("customer") else ""
             c_phone = bk.customer.phone if bk.HasField("customer") else ""
             c_email = bk.customer.email if (bk.HasField("customer") and bk.customer.email) else None
+            price_info = (
+                {
+                    "amount": bk.price.amount,
+                    "currency": bk.price.currency,
+                    "type": bk.price.type,
+                }
+                if bk.HasField("price")
+                else None
+            )
             items.append(
                 {
                     "booking_id": bk.booking_id,
@@ -617,11 +633,16 @@ async def list_bookings(
                     "agent_id": bk.agent_id,
                     "service_id": bk.service_id,
                     "resource_id": bk.resource_id if bk.resource_id else None,
+                    "resource_ids": list(bk.resource_ids) if bk.resource_ids else [],
+                    "booking_mode": bk.booking_mode or "time_slot",
+                    "duration_minutes": bk.duration_minutes,
+                    "price": price_info,
                     "start_time": bk.start_time,
                     "end_time": bk.end_time,
                     "customer_name": c_name,
                     "customer_phone": c_phone,
                     "customer_email": c_email,
+                    "notes": bk.notes if bk.notes else None,
                     "status": bk.status,
                 }
             )

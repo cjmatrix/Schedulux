@@ -12,6 +12,7 @@ import {
   VerifyCustomerResponse,
 } from '@repo/proto/scheduling';
 import { BookingEntity } from '../../domain/entities/booking.entity.js';
+import type { BookingSummary } from '../../domain/repositories/booking.repository.interface.js';
 
 export const CREATE_BOOKING_USE_CASE = 'ICreateBookingUseCase';
 export const CANCEL_BOOKING_USE_CASE = 'ICancelBookingUseCase';
@@ -48,6 +49,7 @@ export interface IListBookingsUseCase {
     total: number;
     page: number;
     limit: number;
+    summary?: BookingSummary;
   }>;
 }
 

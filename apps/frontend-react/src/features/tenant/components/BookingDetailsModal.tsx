@@ -39,6 +39,8 @@ export function BookingDetailsModal({
 
   const matchedService = services.find((s) => s.service_id === booking.service_id);
   const serviceName = matchedService?.name || 'Scheduled Service';
+  const isDateRange =
+    booking.booking_mode === 'date_range' || matchedService?.booking_mode === 'date_range';
 
   const resId = booking.resource_id || (booking.resource_ids && booking.resource_ids[0]);
   const matchedResource = resId ? resources.find((r) => r.resource_id === resId) : undefined;
@@ -66,6 +68,57 @@ export function BookingDetailsModal({
 
   const startFormatted = formatDate(booking.start_time);
   const endFormatted = formatDate(booking.end_time);
+
+  const dateRangeSchedule = () => {
+    if (!isDateRange) return null;
+    try {
+      const sDate = new Date(booking.start_time);
+      const sFormatted = sDate.toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+      if (!booking.end_time) {
+        return {
+          checkIn: sFormatted,
+          checkOut: sFormatted,
+          nights: 1,
+          label: `${sFormatted} (1 Night stay)`,
+        };
+      }
+      const eDate = new Date(booking.end_time);
+      const eFormatted = eDate.toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+      const diffDays = Math.max(
+        1,
+        Math.round((eDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24)),
+      );
+      return {
+        checkIn: sFormatted,
+        checkOut: eFormatted,
+        nights: diffDays,
+        label: `${sFormatted} – ${eFormatted} (${diffDays === 1 ? '1 Night stay' : `${diffDays} Nights stay`})`,
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  const schedInfo = dateRangeSchedule();
+
+  const formatPrice = (price?: { amount?: number; currency?: string }) => {
+    if (!price?.amount) return 'Free / Included';
+    const currency = price.currency || '$';
+    if (currency === 'INR' || currency === '₹') return `₹${price.amount} INR`;
+    if (currency === 'USD' || currency === '$') return `$${price.amount} USD`;
+    if (currency === 'EUR' || currency === '€') return `€${price.amount} EUR`;
+    return `${currency} ${price.amount}`;
+  };
 
   const formatSource = (source?: string) => {
     switch (source) {
@@ -139,11 +192,30 @@ export function BookingDetailsModal({
             <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
               <span>
-                {startFormatted.date} • {startFormatted.time} – {endFormatted.time} (
-                {booking.duration_minutes || 60} mins)
+                {isDateRange && schedInfo
+                  ? schedInfo.label
+                  : `${startFormatted.date} • ${startFormatted.time} – ${endFormatted.time} (${booking.duration_minutes || 60} mins)`}
               </span>
             </p>
           </div>
+
+          {/* Date Range Check-in / Check-out banner */}
+          {isDateRange && schedInfo && (
+            <div className="grid grid-cols-2 gap-3 p-3 bg-indigo-50/40 border border-indigo-100/80 rounded-2xl text-xs">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 block mb-0.5">
+                  Check-in
+                </span>
+                <span className="font-semibold text-slate-800">{schedInfo.checkIn}</span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 block mb-0.5">
+                  Check-out
+                </span>
+                <span className="font-semibold text-slate-800">{schedInfo.checkOut}</span>
+              </div>
+            </div>
+          )}
 
           {/* Customer Card */}
           <div className="bg-slate-50/80 rounded-2xl p-4 space-y-2 text-xs border border-slate-100">
@@ -172,7 +244,7 @@ export function BookingDetailsModal({
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className="p-3 border border-slate-100 rounded-xl bg-white shadow-2xs">
               <span className="block text-[10px] font-bold text-slate-400 uppercase">
-                Staff / Provider
+                {isDateRange ? 'Assigned Room / Unit' : 'Staff / Provider'}
               </span>
               <span className="font-semibold text-slate-800 mt-0.5 block">{staffName}</span>
             </div>
@@ -192,9 +264,7 @@ export function BookingDetailsModal({
           <div className="p-3 border border-slate-100 rounded-xl bg-white shadow-2xs text-xs">
             <span className="block text-[10px] font-bold text-slate-400 uppercase">Pricing</span>
             <span className="font-semibold text-slate-800 mt-0.5 block">
-              {booking.price?.amount
-                ? `$${booking.price.amount} ${booking.price.currency || 'USD'}`
-                : 'Free / Included'}
+              {formatPrice(booking.price)}
             </span>
           </div>
 

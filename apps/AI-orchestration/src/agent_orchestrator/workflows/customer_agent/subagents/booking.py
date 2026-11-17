@@ -25,6 +25,7 @@ from agent_orchestrator.clients.redis_client import get_session_auth
 from agent_orchestrator.workflows.customer_agent.fast_path import (
     format_deterministic_fast_path,
 )
+from agent_orchestrator.workflows.customer_agent.text_util import extract_text_content
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +44,11 @@ _BOOKING_TOOLS = {
 def _format_services_catalog(services: list[dict[str, Any]]) -> str:
     if not services:
         return "No services listed."
-    lines = [f"services[{len(services)}]{{id, name, staff_requirements}}:"]
+    lines = [f"services[{len(services)}]{{id, name, mode, staff_requirements}}:"]
     for s in services:
         sid = s.get("id") or s.get("service_id") or "unassigned"
         name = s.get("name") or "Unnamed"
+        mode = s.get("booking_mode") or "time_slot"
         reqs = s.get("resource_requirements") or s.get("requirements") or []
         staff_roles = []
         for r in reqs:
@@ -59,7 +61,7 @@ def _format_services_catalog(services: list[dict[str, Any]]) -> str:
                 else:
                     staff_roles.append(f"{role}")
         staff_str = f"staff: [{', '.join(staff_roles)}]" if staff_roles else "general service"
-        lines.append(f"  {sid} | {name} | {staff_str}")
+        lines.append(f"  {sid} | {name} | {mode} | {staff_str}")
     return "\n".join(lines)
 
 
@@ -93,18 +95,7 @@ def _get_gemini_model(temperature: float = 0.0, max_tokens: int = 4096) -> Any |
 
 
 def _extract_content(msg: Any) -> str:
-    if isinstance(msg, str):
-        return msg
-    content = getattr(msg, "content", "")
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        texts = [
-            item["text"] if isinstance(item, dict) and item.get("text") else str(item)
-            for item in content
-        ]
-        return "\n".join(texts)
-    return str(content)
+    return extract_text_content(msg)
 
 
 def _get_chat_model(temperature: float = 0.0) -> Any:
@@ -165,7 +156,7 @@ Business Timezone: {biz_timezone}
 Operating Hours & Schedule:
 {formatted_hours}
 
-[Services Catalog (Compact TOON: id, name, staff_requirements)]
+[Services Catalog (Compact TOON: id, name, mode, staff_requirements)]
 {services_catalog}
 
 [Staff & Resources Catalog (Compact TOON: id, name, type, role)]
@@ -232,27 +223,45 @@ Phase 1 — Service Selection:
 - If only one service exists, ask: "Would you like to book our [Service Name]?"
 
 Phase 2 — Date & Time Availability & Provisional Slot Hold:
-- Once the service is determined, ask for their preferred day or time of day (morning, afternoon, evening).
-- When resolving relative days ("next Monday", "tomorrow", "this Friday"), look up the exact date from [Pre-Calculated Local Calendar Reference].
-- Call `check_availability(service_id=..., start_date=..., tenant_id=..., agent_id=...)` using tenant_id and agent_id from [Active Request Context].
-- If no specific staff member was requested for this service, DO NOT pass `resource_id`. Let the system check all available slots.
-- Present available slots using their explicit local time from `display` (e.g. "09:00 AM IST") along with Day of the Week and Date in business timezone ({biz_timezone}).
-- PROVISIONAL SLOT LOCKING UPON SLOT SELECTION:
-  As soon as the customer selects, chooses, or expresses a clear preference for a specific time slot:
-  Pass the EXACT `start` ISO string returned by `check_availability` for that slot (e.g. '2026-11-16T09:00:00+05:30').
-  NEVER append 'Z' or manually alter the timezone offset!
-  Call `hold_slot(tenant_id=tenant_id, agent_id=agent_id, service_id=service_id, start_time=selected_slot_iso, session_id=session_id)`.
-  This provisionally locks the slot in Redis so no other user can take it while you collect their details or verify their phone!
-  Inform the customer warmly that the slot is temporarily held for them (e.g., "I've placed a temporary hold on Monday, Nov 16 at 09:00 AM IST for you while we confirm your details.").
-- If the customer switches slots or changes their mind, calling `hold_slot` with the new slot will automatically release the previous hold in the background.
+- Once the service is determined, check the service's `mode` from [Services Catalog]:
+
+  A. IF MODE IS "date_range" (e.g. Room / Accommodation Stay, Daily/Multi-Day Rental):
+     * NEVER ask for time of day (morning, afternoon, evening) or hour slots!
+     * MANDATORY STAY QUESTIONS:
+       1. Ask the customer for their Check-in date (arrival date).
+       2. Ask the customer how many days / nights they need (e.g. "How many nights will you be staying?" or "What is your check-out date?").
+     * When resolving relative days ("next Monday", "tomorrow"), look up the exact date from [Pre-Calculated Local Calendar Reference].
+     * Calculate or confirm the Check-out date (e.g. Check-in Sunday, Nov 22 for 2 nights = Check-out Tuesday, Nov 24).
+     * Call `check_availability(service_id=..., start_date=check_in_date, end_date=check_out_date, tenant_id=..., agent_id=...)`.
+     * Check if rooms/units are available. If available, call `hold_slot(tenant_id=..., agent_id=..., service_id=..., start_time=check_in_date + "T00:00:00Z", session_id=...)`.
+     * Inform the customer warmly of availability and total stay pricing (e.g. "We have AC Rooms available from Sunday, Nov 22 to Tuesday, Nov 24 (2 nights). The rate is 2500 INR/night, totaling 5000 INR. Would you like me to reserve this for you?").
+     * When executing `book_appointment`, pass `start_time` (check-in ISO) AND `end_time` (check-out ISO)!
+
+  B. IF MODE IS "time_slot" (e.g. Consultation, Haircut, Appointment, Clinic):
+     * Ask for their preferred day or time of day (morning, afternoon, evening).
+     * When resolving relative days ("next Monday", "tomorrow", "this Friday"), look up the exact date from [Pre-Calculated Local Calendar Reference].
+     * Call `check_availability(service_id=..., start_date=..., tenant_id=..., agent_id=...)` using tenant_id and agent_id from [Active Request Context].
+     * If no specific staff member was requested for this service, DO NOT pass `resource_id`. Let the system check all available slots.
+     * Present available slots using their explicit local time from `display` (e.g. "09:00 AM IST") along with Day of the Week and Date in business timezone ({biz_timezone}).
+     * PROVISIONAL SLOT LOCKING UPON SLOT SELECTION:
+       As soon as the customer selects, chooses, or expresses a clear preference for a specific time slot:
+       Pass the EXACT `start` ISO string returned by `check_availability` for that slot (e.g. '2026-11-16T09:00:00+05:30').
+       NEVER append 'Z' or manually alter the timezone offset!
+       Call `hold_slot(tenant_id=tenant_id, agent_id=agent_id, service_id=service_id, start_time=selected_slot_iso, session_id=session_id)`.
+       This provisionally locks the slot in Redis so no other user can take it while you collect their details or verify their phone!
+       Inform the customer warmly that the slot is temporarily held for them (e.g., "I've placed a temporary hold on Monday, Nov 16 at 09:00 AM IST for you while we confirm your details.").
+     * If the customer switches slots or changes their mind, calling `hold_slot` with the new slot will automatically release the previous hold in the background.
 
 Phase 3 — Customer Identification & Assignment:
 - If not already authenticated or collected, ask for the customer's full name and mobile phone number.
-- If the customer requested a specific staff member or specialist:
-  Check [Staff & Resources Catalog] and ensure they are a HUMAN STAFF member (`type: staff`) AND that they are eligible for the chosen service.
-  If eligible, pass their `resource_id` to `check_availability`, `hold_slot`, and `book_appointment`.
-  If they are NOT eligible for that service (or if they are a physical bay/room):
-  Politely explain that they are not assigned to this service, and offer the eligible staff specialist (e.g. "Arun GP handles Car Wash") or proceed without a specific specialist preference.
+- Resource / Staff / Unit Selection:
+  * Check [Staff & Resources Catalog] and ensure the selected staff or physical unit is eligible for the chosen service.
+  * If the service requires staff or specific physical resources (e.g. room, VIP card, equipment):
+    - When the customer expresses a preference (e.g. "Blue VIP Card", "Room 301", "Stylist John"):
+      Pass their ID in `resource_id` (or in `resource_ids` if multiple resources are selected) to `check_availability`, `hold_slot`, and `book_appointment`.
+    - If multiple resource requirements are specified for a service (e.g. Room + VIP card):
+      Pass all selected resource IDs in `resource_ids: [id1, id2, ...]` to `check_availability`, `hold_slot`, and `book_appointment`.
+  * If a requested specialist or resource is NOT eligible for that service, politely explain and offer the eligible options.
 
 Phase 4 — Execution & Security Verification:
 - Always pass the `session_id`, `tenant_id`, and `agent_id` from [Active Request Context] into `book_appointment`.
@@ -261,7 +270,13 @@ Phase 4 — Execution & Security Verification:
 - ATOMIC CONFIRMATION UPON RECEIVING CODE:
   Once the customer provides the 6-digit code, immediately re-invoke `book_appointment` with `otp_code="<6-digit code>"`! This verifies the code, claims the held slot, and confirms the booking in a single atomic call.
 - If `book_appointment` returns `status: "failed"`:
-  Politely explain the issue. If the OTP code was invalid, ask them to re-check the code. If the session was already verified and a system error occurred, re-execute `book_appointment` without re-verifying.
+  * RESOURCE / SLOT CONFLICT (ALREADY BOOKED):
+    If the error indicates that a resource, card, or time slot is already booked or conflicting (e.g. "already booked for this time slot", "ALREADY_EXISTS", "Conflict"):
+    DO NOT retry calling `book_appointment` with the exact same conflicting parameters!
+    Immediately inform the customer politely that their requested resource or slot (e.g. "Blue VIP Card" or room) is already booked for those dates.
+    Offer available alternatives (e.g. "The Blue VIP Card is currently booked for Nov 18–20. Would you like to reserve with the Pink VIP Card instead, or consider different dates?").
+  * If the OTP code was invalid, ask them to re-check the code.
+  * If the session was already verified and an unexpected transient network error occurred, re-execute `book_appointment` without re-verifying.
 - Once confirmed: share the booking reference code and present the appointment date and time in the customer's local business timezone using `start_time_local` with full double-confirmation of Day of the Week, Date, and Time (e.g. "Your booking is confirmed for Monday, Nov 16, 2026 at 10:00 AM IST").
 
 [Scheduling Engine Rules]
@@ -297,11 +312,24 @@ Phase 4 — Execution & Security Verification:
    - Available services and staff are listed in [Services Catalog] and [Staff & Resources Catalog] above.
    - Answer questions about available services, pricing, or specialists directly from these catalogs without invoking tools, and guide the customer to choose a service or appointment time.
    - If the customer asks detailed questions about business policies, procedures, or in-depth descriptions, address their scheduling needs directly.
-2. Checking Existing Bookings:
+2. Checking Existing Bookings & Full Details:
    - Ask for customer's phone number if not yet known.
    - Call `get_customer_bookings(phone=customer_phone, session_id=..., tenant_id=..., agent_id=...)`.
    - If the tool returns `status: "requires_verification"`, call `send_booking_otp`. Once the user shares their 6-digit code, immediately re-invoke `get_customer_bookings(..., otp_code=user_code)`!
-   - Display ONLY real appointments returned by `get_customer_bookings`. ALWAYS present appointment dates and times using the pre-calculated `start_time_local` (e.g. "03 Nov 2026, 03:00 PM IST"). NEVER display raw UTC strings (ending in 'Z') as the customer's local appointment time!
+   - PRESENTING BOOKING DETAILS (Zero Lazy 1-Liners):
+     When the customer asks to see their bookings, view details, or asks "give me full details":
+     NEVER output a lazy 1-line reference and stop!
+     Provide a clear, detailed, and beautifully structured booking card using the enriched fields returned by `get_customer_bookings`:
+     * 📋 **Booking Reference**: `<booking_reference>` (Status: `<status>`)
+     * 🏷️ **Service**: `<service_name>`
+     * 📅 **Schedule / Stay Dates**:
+       - For date_range: Check-in: `<start_time_local>` — Check-out: `<end_time_local>` (`<stay_duration>`)
+       - For time_slot: `<start_time_local>`
+     * 🚪 **Assigned Unit / Specialist**: `<resource_name>`
+     * 💰 **Pricing**: `<price.amount> <price.currency>`
+     * 👤 **Customer**: `<customer_name>` (`<customer_phone>`)
+     * 📝 **Special Notes**: `<notes>` (only if provided)
+     Then offer next steps warmly: "Would you like to modify, reschedule, or cancel this booking?"
 3. Cancellation:
    - Ask for booking reference and customer's phone number.
    - Pass `session_id` and `customer_phone` into `cancel_appointment`.
@@ -387,17 +415,20 @@ async def _execute_booking_turn(
     tenant_id: str,
     agent_id: str,
     session_id: str,
-    max_steps: int = 5,
+    max_steps: int = 10,
     config: RunnableConfig | None = None,
 ) -> str:
     model_with_tools = model.bind_tools(booking_tools)
     tool_map = {t.name: t for t in booking_tools}
 
     messages: list[BaseMessage] = [SystemMessage(content=system_prompt), *langchain_msgs]
+    current_turn_ai_messages: list[AIMessage] = []
 
     for step in range(max_steps):
         ai_msg = await model_with_tools.ainvoke(messages, config=config)
         messages.append(ai_msg)
+        if isinstance(ai_msg, AIMessage):
+            current_turn_ai_messages.append(ai_msg)
 
         tool_calls = getattr(ai_msg, "tool_calls", None)
         if not tool_calls:
@@ -489,12 +520,13 @@ async def _execute_booking_turn(
             )
             messages.append(tool_msg)
 
-    for msg in reversed(messages):
-        if isinstance(msg, AIMessage):
-            content = _extract_content(msg)
-            if content.strip():
-                return content
+    
+    for msg in reversed(current_turn_ai_messages):
+        content = _extract_content(msg)
+        if content.strip():
+            return content
 
+   
     try:
         final_synth_msg = await model.ainvoke(messages, config=config)
         final_content = _extract_content(final_synth_msg)

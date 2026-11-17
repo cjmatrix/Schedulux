@@ -70,8 +70,9 @@ export default function CustomersPage() {
     return true;
   });
 
-  const verifiedCount = rawCustomers.filter((c) => !c.is_guest).length;
-  const guestCount = rawCustomers.filter((c) => c.is_guest).length;
+  const summary = customersResponse?.summary;
+  const verifiedCount = summary?.verified_count ?? rawCustomers.filter((c) => !c.is_guest).length;
+  const guestCount = summary?.guest_count ?? rawCustomers.filter((c) => c.is_guest).length;
 
   const handleCopyPhone = (phone: string, e: React.MouseEvent) => {
     e.stopPropagation();

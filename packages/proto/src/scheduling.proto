@@ -399,11 +399,22 @@ message ListBookingsRequest {
   optional string customer_phone = 11;
 }
 
+message BookingSummaryInfo {
+  int32 total_count = 1;
+  int32 confirmed_count = 2;
+  int32 pending_count = 3;
+  int32 cancelled_count = 4;
+  int32 completed_count = 5;
+  int32 ai_inbound_count = 6;
+  int32 ai_inbound_percent = 7;
+}
+
 message ListBookingsResponse {
   repeated BookingInfo bookings = 1;
   int32 total = 2;
   int32 page = 3;
   int32 limit = 4;
+  optional BookingSummaryInfo summary = 5;
 }
 
 message GetAvailabilityRequest {
@@ -484,12 +495,19 @@ message CustomerDetails {
   string updated_at = 11;
 }
 
+message CustomerSummaryInfo {
+  int32 total_count = 1;
+  int32 verified_count = 2;
+  int32 guest_count = 3;
+}
+
 message ListCustomersResponse {
   repeated CustomerDetails customers = 1;
   int32 total = 2;
   int32 page = 3;
   int32 limit = 4;
   int32 total_pages = 5;
+  optional CustomerSummaryInfo summary = 6;
 }
 
 message TenantScheduleInfo {

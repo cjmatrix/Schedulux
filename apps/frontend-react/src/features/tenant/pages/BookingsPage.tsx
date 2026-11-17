@@ -140,13 +140,20 @@ export default function BookingsPage() {
   const services = useMemo(() => servicesResponse?.data || [], [servicesResponse]);
   const resources = useMemo(() => resourcesResponse?.data || [], [resourcesResponse]);
 
-  const metrics = useMemo(() => {
-    const total = pagination.total;
-    const confirmedCount = bookings.filter((b) => b.status === 'confirmed').length;
-    const pendingCount = bookings.filter((b) => b.status === 'pending').length;
-    const aiBookedCount = bookings.filter((b) => b.source === 'customer_agent').length;
+  const summary = bookingsResponse?.summary;
 
-    const aiPercent = bookings.length > 0 ? Math.round((aiBookedCount / bookings.length) * 100) : 0;
+  const metrics = useMemo(() => {
+    const total = summary?.total_count ?? pagination.total;
+    const confirmedCount =
+      summary?.confirmed_count ?? bookings.filter((b) => b.status === 'confirmed').length;
+    const pendingCount =
+      summary?.pending_count ?? bookings.filter((b) => b.status === 'pending').length;
+    const aiBookedCount =
+      summary?.ai_inbound_count ?? bookings.filter((b) => b.source === 'customer_agent').length;
+
+    const aiPercent =
+      summary?.ai_inbound_percent ??
+      (bookings.length > 0 ? Math.round((aiBookedCount / bookings.length) * 100) : 0);
 
     return {
       total,
@@ -155,7 +162,7 @@ export default function BookingsPage() {
       aiBookedCount,
       aiPercent,
     };
-  }, [pagination.total, bookings]);
+  }, [summary, pagination.total, bookings]);
 
   const handleBookingCreated = (created: BookingInfo) => {
     const ref = created.booking_reference || created.booking_id.slice(-6).toUpperCase();

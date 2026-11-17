@@ -258,7 +258,12 @@ class ResourceRequirementEmbed(TolerantBaseModel):
     @classmethod
     def set_default_selection_mode(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            if not data.get("selection_mode"):
+            raw_mode = data.get("selection_mode")
+            if raw_mode:
+                str_mode = str(raw_mode).lower().strip()
+                if str_mode in ("user_selectable", "auto_assign"):
+                    data["selection_mode"] = SelectionMode(str_mode)
+            else:
                 r_type = str(data.get("resource_type") or "").lower()
                 data["selection_mode"] = (
                     SelectionMode.USER_SELECTABLE

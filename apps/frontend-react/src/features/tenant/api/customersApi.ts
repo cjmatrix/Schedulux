@@ -21,6 +21,12 @@ export interface ListCustomersParams {
   agent_id?: string;
 }
 
+export interface CustomerSummaryInfo {
+  total_count: number;
+  verified_count: number;
+  guest_count: number;
+}
+
 export interface ListCustomersResponseData {
   message: string;
   data: CustomerItem[];
@@ -30,6 +36,7 @@ export interface ListCustomersResponseData {
     limit: number;
     total_pages: number;
   };
+  summary?: CustomerSummaryInfo;
 }
 
 export const customersApi = {

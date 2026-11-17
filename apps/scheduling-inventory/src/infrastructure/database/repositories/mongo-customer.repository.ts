@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { CustomerEntity } from '../../../domain/entities/customer.entity.js';
 import {
+  CustomerSummary,
   FindCustomersFilter,
   ICustomerRepository,
 } from '../../../domain/repositories/customer.repository.interface.js';
@@ -153,7 +154,7 @@ export class MongoCustomerRepository implements ICustomerRepository {
   async findAll(
     tenantId: string,
     filter: FindCustomersFilter,
-  ): Promise<{ customers: CustomerEntity[]; total: number }> {
+  ): Promise<{ customers: CustomerEntity[]; total: number; summary?: CustomerSummary }> {
     const query: Record<string, unknown> = {
       tenant_id: tenantId,
       is_deleted: { $ne: true },
@@ -171,15 +172,47 @@ export class MongoCustomerRepository implements ICustomerRepository {
       query.$or = [{ name: searchRegex }, { phone: searchRegex }, { email: searchRegex }];
     }
 
+    const baseMatch: Record<string, unknown> = {
+      tenant_id: tenantId,
+      is_deleted: { $ne: true },
+    };
+    if (filter.agentId) {
+      baseMatch.agent_id = filter.agentId;
+    }
+
     const skip = Math.max(0, (filter.page - 1) * filter.limit);
-    const [docs, total] = await Promise.all([
-      CustomerModel.find(query).sort({ created_at: -1 }).skip(skip).limit(filter.limit).exec(),
+    const [docs, total, statsResult] = await Promise.all([
+      CustomerModel.find(query).sort({ created_at: -1 }).skip(skip).limit(filter.limit).lean().exec(),
       CustomerModel.countDocuments(query).exec(),
+      CustomerModel.aggregate([
+        { $match: baseMatch },
+        {
+          $group: {
+            _id: null,
+            totalCount: { $sum: 1 },
+            verifiedCount: { $sum: { $cond: [{ $eq: ['$is_guest', false] }, 1, 0] } },
+            guestCount: { $sum: { $cond: [{ $eq: ['$is_guest', true] }, 1, 0] } },
+          },
+        },
+      ]).exec(),
     ]);
+
+    const stat = (statsResult[0] as {
+      totalCount?: number;
+      verifiedCount?: number;
+      guestCount?: number;
+    }) || {};
+
+    const summary: CustomerSummary = {
+      totalCount: stat.totalCount ?? total,
+      verifiedCount: stat.verifiedCount ?? 0,
+      guestCount: stat.guestCount ?? 0,
+    };
 
     return {
       customers: docs.map((doc) => CustomerMapper.toDomain(doc)),
       total,
+      summary,
     };
   }
 }

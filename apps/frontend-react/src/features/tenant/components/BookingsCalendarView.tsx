@@ -78,6 +78,13 @@ export function BookingsCalendarView({
     return r?.name || 'Staff';
   };
 
+  const isDateRangeBooking = (booking: BookingInfo) => {
+    const matchedService = services.find((s) => s.service_id === booking.service_id);
+    return (
+      booking.booking_mode === 'date_range' || matchedService?.booking_mode === 'date_range'
+    );
+  };
+
   const displayedBookings = useMemo(() => {
     if (selectedStaffId === 'all') return bookings;
     return bookings.filter((b) => {
@@ -90,10 +97,36 @@ export function BookingsCalendarView({
     const map = new Map<string, BookingInfo[]>();
     displayedBookings.forEach((b) => {
       if (!b.start_time) return;
-      const dateKey = b.start_time.split('T')[0];
-      const list = map.get(dateKey) || [];
+      const startDateStr = b.start_time.split('T')[0];
+      const isDateRange = isDateRangeBooking(b);
+
+      if (isDateRange && b.end_time) {
+        const endDateStr = b.end_time.split('T')[0];
+        try {
+          const [sy, sm, sd] = startDateStr.split('-').map(Number);
+          const [ey, em, ed] = endDateStr.split('-').map(Number);
+          const startD = new Date(Date.UTC(sy, sm - 1, sd));
+          const endD = new Date(Date.UTC(ey, em - 1, ed));
+
+          let cur = new Date(startD);
+          let daysCount = 0;
+          while (cur <= endD && daysCount < 60) {
+            const dateKey = cur.toISOString().split('T')[0];
+            const list = map.get(dateKey) || [];
+            list.push(b);
+            map.set(dateKey, list);
+            cur.setUTCDate(cur.getUTCDate() + 1);
+            daysCount++;
+          }
+          return;
+        } catch {
+          // fallback to single day
+        }
+      }
+
+      const list = map.get(startDateStr) || [];
       list.push(b);
-      map.set(dateKey, list);
+      map.set(startDateStr, list);
     });
 
     map.forEach((list) => {
@@ -101,7 +134,7 @@ export function BookingsCalendarView({
     });
 
     return map;
-  }, [displayedBookings]);
+  }, [displayedBookings, services]);
 
   const handlePrev = () => {
     if (mode === 'month') {
@@ -369,7 +402,7 @@ export function BookingsCalendarView({
               onChange={(e) => setSelectedStaffId(e.target.value)}
               className="w-full sm:w-auto appearance-none bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 pr-8 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 cursor-pointer"
             >
-              <option value="all">All Providers / Staff</option>
+              <option value="all">All Providers / Units</option>
               {resources.map((res) => (
                 <option key={res.resource_id} value={res.resource_id}>
                   {res.name}
@@ -501,7 +534,19 @@ export function BookingsCalendarView({
                 {/* Desktop Day Bookings List */}
                 <div className="hidden sm:flex flex-1 flex-col gap-1 overflow-y-auto max-h-[85px] pr-0.5">
                   {dayBookings.slice(0, 3).map((b) => {
-                    const time = formatSlotTime(b.start_time);
+                    const isDateRange = isDateRangeBooking(b);
+                    let timeOrBadge = formatSlotTime(b.start_time);
+                    if (isDateRange) {
+                      const startDateStr = b.start_time?.split('T')[0];
+                      const endDateStr = b.end_time?.split('T')[0];
+                      if (startDateStr && endDateStr && startDateStr !== endDateStr) {
+                        if (cell.dateStr === startDateStr) timeOrBadge = 'Check-in';
+                        else if (cell.dateStr === endDateStr) timeOrBadge = 'Check-out';
+                        else timeOrBadge = 'Stay';
+                      } else {
+                        timeOrBadge = 'Stay';
+                      }
+                    }
                     const svc = getServiceName(b.service_id);
                     const cust = b.customer?.name || 'Customer';
 
@@ -512,13 +557,13 @@ export function BookingsCalendarView({
                           e.stopPropagation();
                           onSelectBooking(b);
                         }}
-                        title={`${time} - ${cust} (${svc})`}
+                        title={`${timeOrBadge} - ${cust} (${svc})`}
                         className={`text-[11px] p-1.5 rounded-lg border font-medium truncate cursor-pointer transition shadow-2xs flex items-center justify-between gap-1 ${getStatusStyle(
                           b.status,
                         )}`}
                       >
                         <div className="truncate flex items-center gap-1">
-                          <span className="font-bold shrink-0">{time}</span>
+                          <span className="font-bold shrink-0">{timeOrBadge}</span>
                           <span className="truncate">{cust}</span>
                         </div>
                         <span className="text-[9px] uppercase font-bold shrink-0 opacity-70">
@@ -589,6 +634,7 @@ export function BookingsCalendarView({
                     </div>
                   ) : (
                     dayBookings.map((b) => {
+                      const isDateRange = isDateRangeBooking(b);
                       const time = formatSlotTime(b.start_time);
                       const svc = getServiceName(b.service_id);
                       const staff = getResourceName(b);
@@ -609,7 +655,7 @@ export function BookingsCalendarView({
                           <div className="flex items-center justify-between font-bold">
                             <span className="flex items-center gap-1">
                               <Clock className="w-3 h-3 shrink-0" />
-                              {time}
+                              {isDateRange ? 'Stay / Date Range' : time}
                             </span>
                             <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded-full bg-white/70">
                               {b.status}
@@ -619,7 +665,7 @@ export function BookingsCalendarView({
                           <div className="font-semibold truncate text-slate-900">{cust}</div>
                           <div className="text-[11px] truncate opacity-80">{svc}</div>
                           <div className="text-[10px] text-slate-500 font-medium truncate">
-                            Staff: {staff}
+                            {isDateRange ? 'Room / Unit' : 'Staff'}: {staff}
                           </div>
 
                           {canModify && (
@@ -735,6 +781,7 @@ export function BookingsCalendarView({
                 </div>
               ) : (
                 filteredDrawerBookings.map((b) => {
+                  const isDateRange = isDateRangeBooking(b);
                   const time = formatSlotTime(b.start_time);
                   const endTime = b.end_time ? formatSlotTime(b.end_time) : '';
                   const svc = getServiceName(b.service_id);
@@ -744,6 +791,33 @@ export function BookingsCalendarView({
                   const isCancelled = b.status === 'cancelled';
                   const isCompleted = b.status === 'completed';
                   const canModify = !isCancelled && !isCompleted;
+
+                  let timeDisplay = `${time}${endTime ? ` – ${endTime}` : ''}`;
+                  if (isDateRange) {
+                    try {
+                      const sDate = new Date(b.start_time);
+                      const sStr = sDate.toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                      });
+                      if (b.end_time) {
+                        const eDate = new Date(b.end_time);
+                        const eStr = eDate.toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                        });
+                        const diffDays = Math.max(
+                          1,
+                          Math.round((eDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24)),
+                        );
+                        timeDisplay = `${sStr} – ${eStr} (${diffDays === 1 ? '1 Night' : `${diffDays} Nights`})`;
+                      } else {
+                        timeDisplay = `${sStr} (1 Night)`;
+                      }
+                    } catch {
+                      // fallback
+                    }
+                  }
 
                   return (
                     <div
@@ -758,10 +832,7 @@ export function BookingsCalendarView({
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900">
                           <Clock className="w-3.5 h-3.5 text-slate-500" />
-                          <span>
-                            {time}
-                            {endTime ? ` – ${endTime}` : ''}
-                          </span>
+                          <span>{timeDisplay}</span>
                         </div>
                         <span
                           className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${getStatusBadgeStyle(
@@ -779,7 +850,9 @@ export function BookingsCalendarView({
 
                       <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-slate-600">Staff: {staff}</span>
+                          <span className="font-medium text-slate-600">
+                            {isDateRange ? 'Room / Unit' : 'Staff'}: {staff}
+                          </span>
                           {phone && (
                             <span className="text-slate-400 font-mono text-[11px]">• {phone}</span>
                           )}

@@ -11,6 +11,7 @@ import {
   Search,
 } from 'lucide-react';
 import { useState } from 'react';
+import { ConfirmationModal } from '../../../components/ConfirmationModal.js';
 import useDebounceHook from '../../../shared/hooks/useDebounceHook';
 import { useSuperAdminTenants, useSuspendTenant } from '../hooks/useSuperAdmin';
 
@@ -48,6 +49,11 @@ export default function TenantListPage() {
   const [debouncedSearch] = useDebounceHook(searchTerm);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [tierFilter, setTierFilter] = useState<string>('all tiers');
+  const [actionTenant, setActionTenant] = useState<{
+    id: string;
+    name: string;
+    type: 'suspend' | 'reactivate';
+  } | null>(null);
 
   const suspendTenantMutation = useSuspendTenant();
 
@@ -306,17 +312,15 @@ export default function TenantListPage() {
                       <td className="px-5 py-3.5 text-right">
                         {tenant.status === 'active' ? (
                           <button
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  `Are you sure you want to suspend tenant "${tenant.business_name}"?`,
-                                )
-                              ) {
-                                suspendTenantMutation.mutate(tenant.tenant_id);
-                              }
-                            }}
+                            onClick={() =>
+                              setActionTenant({
+                                id: tenant.tenant_id,
+                                name: tenant.business_name,
+                                type: 'suspend',
+                              })
+                            }
                             disabled={suspendTenantMutation.isPending}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-rose-300 hover:text-white bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/50 rounded transition-colors disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-rose-300 hover:text-white bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/50 rounded transition-colors disabled:opacity-50 cursor-pointer"
                           >
                             {suspendTenantMutation.isPending &&
                             suspendTenantMutation.variables === tenant.tenant_id ? (
@@ -328,17 +332,15 @@ export default function TenantListPage() {
                           </button>
                         ) : tenant.status === 'suspended' ? (
                           <button
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  `Are you sure you want to reactivate tenant "${tenant.business_name}"?`,
-                                )
-                              ) {
-                                suspendTenantMutation.mutate(tenant.tenant_id);
-                              }
-                            }}
+                            onClick={() =>
+                              setActionTenant({
+                                id: tenant.tenant_id,
+                                name: tenant.business_name,
+                                type: 'reactivate',
+                              })
+                            }
                             disabled={suspendTenantMutation.isPending}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-emerald-300 hover:text-white bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/50 rounded transition-colors disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-emerald-300 hover:text-white bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/50 rounded transition-colors disabled:opacity-50 cursor-pointer"
                           >
                             {suspendTenantMutation.isPending &&
                             suspendTenantMutation.variables === tenant.tenant_id ? (
@@ -392,6 +394,34 @@ export default function TenantListPage() {
           </div>
         </div>
       </div>
+
+      {/* Confirmation Modal for Suspend / Reactivate */}
+      <ConfirmationModal
+        isOpen={Boolean(actionTenant)}
+        onClose={() => setActionTenant(null)}
+        onConfirm={() => {
+          if (actionTenant) {
+            suspendTenantMutation.mutate(actionTenant.id, {
+              onSuccess: () => setActionTenant(null),
+            });
+          }
+        }}
+        title={actionTenant?.type === 'suspend' ? 'Suspend Tenant?' : 'Reactivate Tenant?'}
+        description={
+          actionTenant?.type === 'suspend' ? (
+            <span>
+              Are you sure you want to suspend tenant <strong className="text-slate-800">{actionTenant.name}</strong>? Their autonomous agents and API access will be temporarily halted.
+            </span>
+          ) : (
+            <span>
+              Are you sure you want to reactivate tenant <strong className="text-slate-800">{actionTenant?.name}</strong>? Their autonomous agents and API access will be restored.
+            </span>
+          )
+        }
+        variant={actionTenant?.type === 'suspend' ? 'warn' : 'confirm'}
+        confirmText={actionTenant?.type === 'suspend' ? 'Suspend Tenant' : 'Reactivate'}
+        isLoading={suspendTenantMutation.isPending}
+      />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import type { ApiResponse } from '../../../api/axiosClient';
 import {
   type AgentSummaryInfo,
@@ -23,6 +24,27 @@ export function useTenantAgents() {
       return res.data;
     },
     staleTime: 60 * 1000,
+  });
+}
+
+export function useDeleteAgent() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    ApiResponse<{ success: boolean; agent_id: string }>,
+    Error,
+    string
+  >({
+    mutationFn: async (agentId: string) => {
+      return knowledgeApi.deleteAgent(agentId);
+    },
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: KNOWLEDGE_KEYS.agentsList });
+      toast.success(res.message || 'Agent deleted successfully');
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to delete agent');
+    },
   });
 }
 

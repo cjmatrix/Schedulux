@@ -103,6 +103,17 @@ export interface ListTenantAgentsResponse {
   agents: AgentSummaryInfo[];
 }
 
+export interface DeleteAgentRequest {
+  tenant_id: string;
+  agent_id: string;
+}
+
+export interface DeleteAgentResponse {
+  success: boolean;
+  message: string;
+  agent_id: string;
+}
+
 export interface ChatMessageInfo {
   id: string;
   tenant_id: string;
@@ -272,6 +283,8 @@ export interface KnowledgeServiceClient {
 
   listTenantAgents(request: ListTenantAgentsRequest, metadata?: Metadata): Observable<ListTenantAgentsResponse>;
 
+  deleteAgent(request: DeleteAgentRequest, metadata?: Metadata): Observable<DeleteAgentResponse>;
+
   getAgentMessages(request: GetAgentMessagesRequest, metadata?: Metadata): Observable<GetAgentMessagesResponse>;
 
   customerChat(request: CustomerChatRequest, metadata?: Metadata): Observable<CustomerChatResponse>;
@@ -333,6 +346,11 @@ export interface KnowledgeServiceController {
     metadata?: Metadata,
   ): Promise<ListTenantAgentsResponse> | Observable<ListTenantAgentsResponse> | ListTenantAgentsResponse;
 
+  deleteAgent(
+    request: DeleteAgentRequest,
+    metadata?: Metadata,
+  ): Promise<DeleteAgentResponse> | Observable<DeleteAgentResponse> | DeleteAgentResponse;
+
   getAgentMessages(
     request: GetAgentMessagesRequest,
     metadata?: Metadata,
@@ -393,6 +411,7 @@ export function KnowledgeServiceControllerMethods() {
       "resumeOnboardingSession",
       "saveInitialAgentDraft",
       "listTenantAgents",
+      "deleteAgent",
       "getAgentMessages",
       "customerChat",
       "getCustomerMessages",

@@ -18,6 +18,7 @@ from agent_orchestrator.services.protocols import (
     DocumentServiceProtocol,
     OnboardingServiceProtocol,
 )
+from agent_orchestrator.tracing import set_span_attributes
 
 
 class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
@@ -91,6 +92,11 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
         try:
             metadata_dict = dict(context.invocation_metadata()) if context else {}
             tier = metadata_dict.get("x-tenant-tier")
+            set_span_attributes(
+                tenant_id=request.tenant_id,
+                agent_id=agent_id,
+                tier=tier,
+            )
             print(
                 f"[gRPC] StartOnboardingSession for tenant: {request.tenant_id}, agent: {agent_id}, tier: {tier}",
                 flush=True,
@@ -127,6 +133,11 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
         try:
             metadata_dict = dict(context.invocation_metadata()) if context else {}
             tier = metadata_dict.get("x-tenant-tier")
+            set_span_attributes(
+                tenant_id=request.tenant_id,
+                agent_id=agent_id,
+                tier=tier,
+            )
             res = await self.onboarding_service.resume_session(
                 tenant_id=request.tenant_id,
                 agent_id=agent_id,
@@ -159,6 +170,10 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
         try:
             metadata_dict = dict(context.invocation_metadata()) if context else {}
             tier = metadata_dict.get("x-tenant-tier")
+            set_span_attributes(
+                tenant_id=request.tenant_id,
+                tier=tier,
+            )
             print(f"[gRPC] tier: {tier}")
             agent_id, status = await self.agent_service.save_initial_draft(
                 tenant_id=request.tenant_id,
@@ -211,6 +226,42 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             context.set_details(f"LIST_AGENTS_ERROR: {str(e)}")
             return knowledge_pb2.ListTenantAgentsResponse()
 
+    async def DeleteAgent(
+        self, request: knowledge_pb2.DeleteAgentRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.DeleteAgentResponse:
+        print(
+            f"[gRPC] DeleteAgent for tenant: {request.tenant_id}, agent: {request.agent_id}",
+            flush=True,
+        )
+        set_span_attributes(tenant_id=request.tenant_id, agent_id=request.agent_id)
+        try:
+            success, message = await self.agent_service.delete_agent(
+                tenant_id=request.tenant_id,
+                agent_id=request.agent_id,
+            )
+            if not success:
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                context.set_details(message)
+                return knowledge_pb2.DeleteAgentResponse(
+                    success=False,
+                    message=message,
+                    agent_id=request.agent_id,
+                )
+            return knowledge_pb2.DeleteAgentResponse(
+                success=True,
+                message=message,
+                agent_id=request.agent_id,
+            )
+        except Exception as e:
+            print(f"[gRPC Error] DeleteAgent failed: {e}", flush=True)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"DELETE_AGENT_ERROR: {str(e)}")
+            return knowledge_pb2.DeleteAgentResponse(
+                success=False,
+                message=str(e),
+                agent_id=request.agent_id,
+            )
+
     async def CustomerChat(
         self, request: knowledge_pb2.CustomerChatRequest, context: grpc.aio.ServicerContext
     ) -> knowledge_pb2.CustomerChatResponse:
@@ -223,6 +274,14 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             metadata_dict = dict(context.invocation_metadata()) if context else {}
             tier = metadata_dict.get("x-tenant-tier")
             mode = getattr(request, "mode", None) or None
+            is_sandbox = mode == "sandbox" or (bool(request.session_id) and request.session_id.startswith("sandbox_"))
+            set_span_attributes(
+                tenant_id=request.tenant_id,
+                agent_id=request.agent_id,
+                session_id=request.session_id,
+                tier=tier,
+                is_sandbox=is_sandbox,
+            )
             result = await process_customer_chat(
                 tenant_id=request.tenant_id,
                 agent_id=request.agent_id,
@@ -253,6 +312,11 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
     async def GetCustomerMessages(
         self, request: knowledge_pb2.GetCustomerMessagesRequest, context: grpc.aio.ServicerContext
     ) -> knowledge_pb2.GetCustomerMessagesResponse:
+        set_span_attributes(
+            tenant_id=request.tenant_id,
+            agent_id=request.agent_id,
+            session_id=request.session_id,
+        )
         try:
             from datetime import datetime
 
@@ -334,7 +398,7 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                 if runtime_cfg and runtime_cfg.widget_config:
                     widget_config = runtime_cfg.widget_config.model_dump()
                 else:
-                    # Fallback to draft if live runtime not yet finalized
+
                     agent_draft = await AgentDraft.find_one(
                         {"tenant_id": request.tenant_id, "agent_id": request.agent_id}
                     )

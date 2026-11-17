@@ -65,5 +65,5 @@ class RabbitMQMemoryQueue(MemoryQueue):
             pass
 
 
-# Backwards compatibility alias
+
 BullMQMemoryQueue = RabbitMQMemoryQueue

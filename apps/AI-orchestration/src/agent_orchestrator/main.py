@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 import asyncio
 import os
 
@@ -6,14 +7,18 @@ from dotenv import load_dotenv
 _env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 load_dotenv(_env_path)
 
-from agent_orchestrator.adapters import KafkaEventSubscriber, RabbitMQEventSubscriber  
-from agent_orchestrator.api.grpc_server import serve  
-from agent_orchestrator.models import init_db  
-from agent_orchestrator.repositories.document_repository import MongoDocumentRepository 
-from agent_orchestrator.services.outbox_service import run_outbox_recovery_loop  
-from agent_orchestrator.workers.document_status_consumer import DocumentStatusConsumer 
+from agent_orchestrator.tracing import flush_telemetry, init_telemetry
+
+init_telemetry()
+
+from agent_orchestrator.adapters import KafkaEventSubscriber, RabbitMQEventSubscriber
+from agent_orchestrator.api.grpc_server import serve
+from agent_orchestrator.models import init_db
+from agent_orchestrator.repositories.document_repository import MongoDocumentRepository
+from agent_orchestrator.services.outbox_service import run_outbox_recovery_loop
+from agent_orchestrator.workers.document_status_consumer import DocumentStatusConsumer
 from agent_orchestrator.workers.memory_worker import run_memory_worker  # noqa: E402
-from agent_orchestrator.workers.scheduling_consumer import SchedulingConsumer  
+from agent_orchestrator.workers.scheduling_consumer import SchedulingConsumer
 
 
 def main():
@@ -25,6 +30,8 @@ def main():
         asyncio.run(_run_all())
     except KeyboardInterrupt:
         print("[AI Orchestrator Service] Shutting down gracefully.", flush=True)
+    finally:
+        flush_telemetry()
 
 
 async def _run_all():

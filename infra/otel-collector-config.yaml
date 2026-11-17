@@ -57,6 +57,9 @@ exporters:
     traces:
       topic: "otel-traces"
       encoding: "otlp_json"
+    logs:
+      topic: "otel-logs"
+      encoding: "otlp_json"
     auth:
       sasl:
         mechanism: "SCRAM-SHA-256"
@@ -82,3 +85,7 @@ service:
       receivers: [otlp]
       processors: [memory_limiter, batch]
       exporters: [otlphttp/grafana]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [kafka]

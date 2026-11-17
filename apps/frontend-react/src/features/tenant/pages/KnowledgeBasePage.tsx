@@ -17,6 +17,7 @@ import {
 import React, { useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import type { KnowledgeDocumentInfo } from '../../../api/knowledgeApi';
+import { ConfirmationModal } from '../../../components/ConfirmationModal.js';
 import {
   useDeleteDocument,
   useKnowledgeDocuments,
@@ -66,6 +67,7 @@ export default function KnowledgeBasePage() {
 
   const uploadMutation = useUploadDocument(activeAgentId);
   const deleteMutation = useDeleteDocument(activeAgentId);
+  const [docToDelete, setDocToDelete] = useState<KnowledgeDocumentInfo | null>(null);
 
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -198,9 +200,16 @@ export default function KnowledgeBasePage() {
   };
 
   const handleDelete = (doc: KnowledgeDocumentInfo) => {
-    if (confirm(`Are you sure you want to delete "${doc.file_name}"?`)) {
-      deleteMutation.mutate(doc.id);
-    }
+    setDocToDelete(doc);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!docToDelete) return;
+    deleteMutation.mutate(docToDelete.id, {
+      onSuccess: () => {
+        setDocToDelete(null);
+      },
+    });
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -545,6 +554,24 @@ export default function KnowledgeBasePage() {
           </div>
         )}
       </div>
+
+      {/* Delete Document Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={Boolean(docToDelete)}
+        onClose={() => setDocToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Knowledge Document"
+        description={
+          docToDelete ? (
+            <span>
+              Are you sure you want to delete <strong className="text-slate-800">{docToDelete.file_name}</strong>? This document will be permanently removed from the agent's knowledge base and vector index.
+            </span>
+          ) : undefined
+        }
+        variant="delete"
+        confirmText="Delete Document"
+        isLoading={deleteMutation.isPending}
+      />
     </div>
   );
 }

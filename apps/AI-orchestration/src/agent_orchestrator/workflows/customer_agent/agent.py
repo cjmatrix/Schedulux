@@ -18,6 +18,7 @@ from pydantic import SecretStr
 from agent_orchestrator.mcp.scheduling_mcp_server import get_scheduling_mcp_tools
 from agent_orchestrator.repositories.customer_message_repository import CustomerMessageRepository
 from agent_orchestrator.services.token_service import TokenTrackingService, TokenUsageTracker
+from agent_orchestrator.tracing import get_current_trace_id, set_span_attributes
 from agent_orchestrator.workflows.customer_agent.context import resolve_business_context
 from agent_orchestrator.workflows.customer_agent.state import CustomerGraphState
 from agent_orchestrator.workflows.customer_agent.subagents import (
@@ -373,24 +374,40 @@ async def process_customer_chat(
         "is_sandbox": is_sandbox,
     }
 
+    otel_trace_id = get_current_trace_id()
+    set_span_attributes(
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        session_id=session_id,
+        tier=tier or "starter",
+        is_sandbox=is_sandbox,
+    )
+
+    metadata: dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "agent_id": agent_id,
+        "session_id": session_id,
+        "tier": tier or "starter",
+        "is_sandbox": is_sandbox,
+        "thread_id": session_id,
+    }
+    if otel_trace_id:
+        metadata["otel_trace_id"] = otel_trace_id
+
+    tags = [
+        "customer_chat",
+        f"tier:{tier or 'starter'}",
+        "sandbox" if is_sandbox else "live",
+        f"tenant:{tenant_id}",
+    ]
+
     tracker = TokenUsageTracker()
     run_config: dict[str, Any] = {
         "recursion_limit": 8,
         "callbacks": [tracker, LangChainTracer(project_name="customer-agent")],
         "run_name": f"CustomerChat:{agent_id}",
-        "tags": [
-            "customer_chat",
-            f"tier:{tier or 'starter'}",
-            "sandbox" if is_sandbox else "live",
-        ],
-        "metadata": {
-            "tenant_id": tenant_id,
-            "agent_id": agent_id,
-            "session_id": session_id,
-            "tier": tier or "starter",
-            "is_sandbox": is_sandbox,
-            "thread_id": session_id,
-        },
+        "tags": tags,
+        "metadata": metadata,
     }
     try:
         final_state = await customer_orchestration_graph.ainvoke(

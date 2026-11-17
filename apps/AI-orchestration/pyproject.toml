@@ -33,6 +33,12 @@ dependencies = [
     "rank-bm25>=0.2.2",
     "fastembed>=0.4.1",
     "pymupdf4llm>=2.0",
+    "opentelemetry-api>=1.45.2",
+    "opentelemetry-sdk>=1.45.2",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.45.2",
+    "opentelemetry-instrumentation-grpc>=0.66b2",
+    "opentelemetry-instrumentation-logging>=0.66b2",
+    "opentelemetry-instrumentation-system-metrics>=0.66b2",
 ]
 
 [project.scripts]

@@ -8,14 +8,14 @@ from agent_orchestrator.repositories.outbox_repository import MongoOutboxReposit
 from agent_orchestrator.repositories.runtime_config_repository import MongoRuntimeConfigRepository
 
 __all__ = [
-    # Repositories (Persistence)
+
     "CustomerMessageRepository",
     "MongoDocumentRepository",
     "MongoMessageRepository",
     "MongoDraftRepository",
     "MongoOutboxRepository",
     "MongoRuntimeConfigRepository",
-    # Deprecated aliases
+
     "RabbitMQCrawlerQueue",
     "BullMQCrawlerQueue",
     "RabbitMQMemoryQueue",

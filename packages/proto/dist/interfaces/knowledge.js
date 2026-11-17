@@ -19,6 +19,7 @@ function KnowledgeServiceControllerMethods() {
             "resumeOnboardingSession",
             "saveInitialAgentDraft",
             "listTenantAgents",
+            "deleteAgent",
             "getAgentMessages",
             "customerChat",
             "getCustomerMessages",

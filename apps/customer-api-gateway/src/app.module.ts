@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { LoggerModule } from 'nestjs-pino';
 import { CustomerChatController } from './controllers/customer-chat.controller.js';
 import { CorsOriginGuard } from './guards/cors-origin.guard.js';
 import { CustomerThrottlerGuard } from './guards/customer-throttler.guard.js';
@@ -10,10 +11,28 @@ import { RedisModule } from './modules/redis.module.js';
 import { RedisService } from './services/redis.service.js';
 import { ThrottlerStorageRedisService } from './services/throttler-storage-redis.service.js';
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    LoggerModule.forRoot({
+      pinoHttp: {
+        name: 'customer-api-gateway',
+        level: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
+        transport: isProduction
+          ? undefined
+          : {
+              target: require.resolve('pino-pretty'),
+              options: {
+                colorize: true,
+                translateTime: 'SYS:standard',
+                ignore: 'pid,hostname',
+              },
+            },
+      },
     }),
     RedisModule,
     ThrottlerModule.forRootAsync({

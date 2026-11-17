@@ -344,6 +344,22 @@ let KnowledgeController = class KnowledgeController {
             data: agents,
         };
     }
+    async deleteAgent(req, agentId) {
+        const tenantId = this._getTenantId(req);
+        const tier = this._getTenantTier(req);
+        const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
+        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.deleteAgent({
+            tenant_id: tenantId,
+            agent_id: agentId,
+        }, metadata));
+        return {
+            message: response.message || messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.AGENT_DELETED,
+            data: {
+                success: response.success,
+                agent_id: response.agent_id || agentId,
+            },
+        };
+    }
     async getAgentMessages(req, agentId, query) {
         const tenantId = this._getTenantId(req);
         const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getAgentMessages({
@@ -594,6 +610,15 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "listAgents", null);
+__decorate([
+    (0, common_1.Delete)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.AGENT_BY_ID),
+    (0, roles_decorator_js_1.Roles)('tenant_owner'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('agentId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "deleteAgent", null);
 __decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.AGENT_MESSAGES),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),

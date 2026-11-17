@@ -186,3 +186,21 @@ class AgentManagementService(AgentManagementServiceProtocol):
             key=lambda x: x.updated_at or x.created_at,
             reverse=True,
         )
+
+    async def delete_agent(self, tenant_id: str, agent_id: str) -> tuple[bool, str]:
+        deleted_draft = await self.draft_repo.delete_draft(tenant_id, agent_id)
+        deleted_runtime = await self.runtime_repo.delete_runtime_config(tenant_id, agent_id)
+
+        try:
+            await self.cache_repo.delete_cached_draft(tenant_id, agent_id)
+            await self.cache_repo.delete_cached_biz_context(tenant_id, agent_id)
+        except Exception as ce:
+            print(
+                f"[AgentManagementService] Warning: Failed to clear Redis cache for agent '{agent_id}': {ce}",
+                flush=True,
+            )
+
+        if not deleted_draft and not deleted_runtime:
+            return False, f"Agent '{agent_id}' not found"
+
+        return True, f"Agent '{agent_id}' deleted successfully"

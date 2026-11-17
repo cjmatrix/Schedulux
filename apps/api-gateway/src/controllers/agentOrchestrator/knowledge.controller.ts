@@ -489,6 +489,35 @@ export class KnowledgeController implements OnModuleInit {
     };
   }
 
+  @Delete(API_ROUTES.KNOWLEDGE.AGENT_BY_ID)
+  @Roles('tenant_owner')
+  async deleteAgent(
+    @Req() req: AuthenticatedTenantRequest,
+    @Param('agentId') agentId: string,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const tier = this._getTenantTier(req);
+    const metadata = createTenantGrpcMetadata(tenantId, tier);
+
+    const response = await lastValueFrom(
+      this._knowledgeService.deleteAgent(
+        {
+          tenant_id: tenantId,
+          agent_id: agentId,
+        },
+        metadata,
+      ),
+    );
+
+    return {
+      message: response.message || RESPONSE_MESSAGES.KNOWLEDGE.AGENT_DELETED,
+      data: {
+        success: response.success,
+        agent_id: response.agent_id || agentId,
+      },
+    };
+  }
+
   @Get(API_ROUTES.KNOWLEDGE.AGENT_MESSAGES)
   @UsePipes(ZodValidationPipe)
   async getAgentMessages(

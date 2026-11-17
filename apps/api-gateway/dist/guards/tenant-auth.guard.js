@@ -128,6 +128,15 @@ let TenantAuthGuard = class TenantAuthGuard {
                 }
                 if (decoded.agent_id)
                     activeSpan.setAttribute('agent.id', decoded.agent_id);
+                const sessionId = (request.body?.session_id ||
+                    request.query?.session_id ||
+                    request.headers?.['x-session-id']);
+                if (sessionId) {
+                    activeSpan.setAttribute('session.id', sessionId);
+                    if (sessionId.startsWith('sandbox_')) {
+                        activeSpan.setAttribute('session.is_sandbox', true);
+                    }
+                }
             }
             return true;
         }

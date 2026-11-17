@@ -16,6 +16,7 @@ import {
 import { useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useAuthStore } from '../../../store/useAuthStore';
+import { TenantDashboardSkeleton } from '../components/TenantDashboardSkeleton.js';
 import {
   TENANT_DASHBOARD_KEYS,
   useTenantDashboardOverview,
@@ -95,18 +96,20 @@ export default function TenantDashboardPage() {
           </button>
           <button
             onClick={handleRefresh}
-            disabled={isRefetching}
+            disabled={isLoading || isRefetching}
             className="p-2 rounded-xl border border-slate-200 hover:border-slate-300 bg-white text-slate-600 hover:text-slate-900 transition-all disabled:opacity-50 cursor-pointer shadow-2xs"
             title="Refresh dashboard"
           >
             <RefreshCw
-              className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-indigo-600' : ''}`}
+              className={`w-3.5 h-3.5 ${isLoading || isRefetching ? 'animate-spin text-indigo-600' : ''}`}
             />
           </button>
         </div>
       </div>
 
-      {!isLoading && !activeAgent && (
+      {isLoading ? (
+        <TenantDashboardSkeleton />
+      ) : !activeAgent ? (
         <div className="rounded-2xl border border-dashed border-indigo-300 bg-indigo-50/50 p-8 text-center space-y-3">
           <div className="w-12 h-12 rounded-2xl bg-indigo-100 border border-indigo-200 flex items-center justify-center mx-auto text-indigo-600">
             <Bot className="w-6 h-6" />
@@ -123,9 +126,7 @@ export default function TenantDashboardPage() {
             Create AI Agent
           </button>
         </div>
-      )}
-
-      {activeAgent && (
+      ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <div className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between hover:border-slate-300 transition-all shadow-xs">

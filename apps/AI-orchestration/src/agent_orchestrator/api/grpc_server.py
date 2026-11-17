@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 from __future__ import annotations
 
 import asyncio
@@ -35,6 +36,11 @@ from agent_orchestrator.services.protocols import CrawlerServiceProtocol
 
 local_env = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env"))
 load_dotenv(local_env)
+
+from agent_orchestrator.tracing import flush_telemetry, init_telemetry
+
+init_telemetry()
+
 
 
 def build_knowledge_servicer() -> tuple[
@@ -114,6 +120,7 @@ async def serve():
         await crawler_service.close()
         await memory_queue.close()
         await indexing_queue.close()
+        flush_telemetry()
 
 
 if __name__ == "__main__":

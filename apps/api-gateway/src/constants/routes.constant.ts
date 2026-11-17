@@ -101,6 +101,7 @@ export const API_ROUTES = {
     ONBOARDING_SANDBOX_CONFIG: 'onboarding/sandbox/config',
     AGENTS_DRAFT: 'agents/draft',
     AGENTS: 'agents',
+    AGENT_BY_ID: 'agents/:agentId',
     AGENT_MESSAGES: 'agents/:agentId/messages',
     ONBOARDING_MESSAGES: 'onboarding/messages',
     DOCUMENTS_UPLOAD_URL: 'documents/upload-url',

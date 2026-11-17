@@ -78,6 +78,15 @@ export interface AgentSummaryInfo {
 export interface ListTenantAgentsResponse {
     agents: AgentSummaryInfo[];
 }
+export interface DeleteAgentRequest {
+    tenant_id: string;
+    agent_id: string;
+}
+export interface DeleteAgentResponse {
+    success: boolean;
+    message: string;
+    agent_id: string;
+}
 export interface ChatMessageInfo {
     id: string;
     tenant_id: string;
@@ -216,6 +225,7 @@ export interface KnowledgeServiceClient {
     resumeOnboardingSession(request: ResumeOnboardingRequest, metadata?: Metadata): Observable<OnboardingResponse>;
     saveInitialAgentDraft(request: SaveInitialAgentDraftRequest, metadata?: Metadata): Observable<SaveInitialAgentDraftResponse>;
     listTenantAgents(request: ListTenantAgentsRequest, metadata?: Metadata): Observable<ListTenantAgentsResponse>;
+    deleteAgent(request: DeleteAgentRequest, metadata?: Metadata): Observable<DeleteAgentResponse>;
     getAgentMessages(request: GetAgentMessagesRequest, metadata?: Metadata): Observable<GetAgentMessagesResponse>;
     customerChat(request: CustomerChatRequest, metadata?: Metadata): Observable<CustomerChatResponse>;
     getCustomerMessages(request: GetCustomerMessagesRequest, metadata?: Metadata): Observable<GetCustomerMessagesResponse>;
@@ -234,6 +244,7 @@ export interface KnowledgeServiceController {
     resumeOnboardingSession(request: ResumeOnboardingRequest, metadata?: Metadata): Promise<OnboardingResponse> | Observable<OnboardingResponse> | OnboardingResponse;
     saveInitialAgentDraft(request: SaveInitialAgentDraftRequest, metadata?: Metadata): Promise<SaveInitialAgentDraftResponse> | Observable<SaveInitialAgentDraftResponse> | SaveInitialAgentDraftResponse;
     listTenantAgents(request: ListTenantAgentsRequest, metadata?: Metadata): Promise<ListTenantAgentsResponse> | Observable<ListTenantAgentsResponse> | ListTenantAgentsResponse;
+    deleteAgent(request: DeleteAgentRequest, metadata?: Metadata): Promise<DeleteAgentResponse> | Observable<DeleteAgentResponse> | DeleteAgentResponse;
     getAgentMessages(request: GetAgentMessagesRequest, metadata?: Metadata): Promise<GetAgentMessagesResponse> | Observable<GetAgentMessagesResponse> | GetAgentMessagesResponse;
     customerChat(request: CustomerChatRequest, metadata?: Metadata): Promise<CustomerChatResponse> | Observable<CustomerChatResponse> | CustomerChatResponse;
     getCustomerMessages(request: GetCustomerMessagesRequest, metadata?: Metadata): Promise<GetCustomerMessagesResponse> | Observable<GetCustomerMessagesResponse> | GetCustomerMessagesResponse;

@@ -7,6 +7,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.tracers import LangChainTracer
 from langgraph.graph import END, StateGraph
 
+from agent_orchestrator.tracing import get_current_trace_id, set_span_attributes
 from agent_orchestrator.workflows.tenant_agent.nodes import (
     node_apply_draft_update,
     node_ask_human_semantic,
@@ -214,18 +215,34 @@ async def resume_onboarding_session(
         "tier": tier or "starter",
     }
 
+    otel_trace_id = get_current_trace_id()
+    set_span_attributes(
+        tenant_id=tenant_id,
+        agent_id=target_agent_id,
+        tier=tier or "starter",
+    )
+
+    metadata: dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "agent_id": target_agent_id,
+        "tier": tier or "starter",
+        "session_phase": "resume",
+        "thread_id": f"onboarding_{tenant_id}_{target_agent_id}",
+    }
+    if otel_trace_id:
+        metadata["otel_trace_id"] = otel_trace_id
+
     tracker = TokenUsageTracker()
     run_config: dict[str, Any] = {
         "callbacks": [tracker, LangChainTracer(project_name="tenant-onboarding-agent")],
         "run_name": f"TenantOnboarding:Resume:{target_agent_id}",
-        "tags": ["tenant_onboarding", "session_resume", f"tier:{tier or 'starter'}"],
-        "metadata": {
-            "tenant_id": tenant_id,
-            "agent_id": target_agent_id,
-            "tier": tier or "starter",
-            "session_phase": "resume",
-            "thread_id": f"onboarding_{tenant_id}_{target_agent_id}",
-        },
+        "tags": [
+            "tenant_onboarding",
+            "session_resume",
+            f"tier:{tier or 'starter'}",
+            f"tenant:{tenant_id}",
+        ],
+        "metadata": metadata,
     }
     result_state = await _graph.ainvoke(initial, config=run_config)
 

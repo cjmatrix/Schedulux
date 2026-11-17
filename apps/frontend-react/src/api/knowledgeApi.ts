@@ -97,6 +97,15 @@ export const knowledgeApi = {
     return response.data;
   },
 
+  deleteAgent: async (
+    agentId: string,
+  ): Promise<ApiResponse<{ success: boolean; agent_id: string }>> => {
+    const response = await axiosClient.delete<ApiResponse<{ success: boolean; agent_id: string }>>(
+      `/api/v1/tenant/knowledge/agents/${encodeURIComponent(agentId)}`,
+    );
+    return response.data;
+  },
+
   getDocumentUploadUrl: async (payload: {
     agent_id: string;
     file_name: string;

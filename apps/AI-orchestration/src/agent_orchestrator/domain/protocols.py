@@ -54,6 +54,8 @@ class DraftRepository(Protocol):
         draft_dict: dict[str, Any],
     ) -> AgentDraft: ...
 
+    async def delete_draft(self, tenant_id: str, agent_id: str) -> bool: ...
+
 
 class RuntimeConfigRepository(Protocol):
     async def get_runtime_config(
@@ -61,6 +63,8 @@ class RuntimeConfigRepository(Protocol):
     ) -> AgentRuntimeConfig | None: ...
 
     async def list_runtime_configs(self, tenant_id: str) -> list[AgentRuntimeConfig]: ...
+
+    async def delete_runtime_config(self, tenant_id: str, agent_id: str) -> bool: ...
 
 
 @runtime_checkable

@@ -47,6 +47,7 @@ export const RESPONSE_MESSAGES = {
     MESSAGE_PROCESSED: 'Message processed',
     SANDBOX_CHAT_PROCESSED: 'Sandbox chat processed successfully',
     AGENTS_RETRIEVED: 'Agents retrieved successfully',
+    AGENT_DELETED: 'Agent deleted successfully',
   },
   WEBSOCKET: {
     JOINED: 'joined',

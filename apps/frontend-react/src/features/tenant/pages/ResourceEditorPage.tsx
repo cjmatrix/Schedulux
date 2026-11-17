@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { ConfirmationModal } from '../../../components/ConfirmationModal.js';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import type {
   CreateResourcePayload,
@@ -975,39 +976,16 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
       </div>
 
       {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
-            <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
-              <Trash2 className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900">Delete "{name || 'Resource'}"?</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Are you sure you want to permanently delete this resource? Services assigned to this
-                resource will no longer be able to book slots with it.
-              </p>
-            </div>
-            <div className="flex items-center justify-end gap-2.5 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowDeleteModal(false)}
-                className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleteResourceMutation.isPending}
-                className="px-4 py-2 rounded-full bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors shadow-2xs cursor-pointer disabled:opacity-60"
-              >
-                {deleteResourceMutation.isPending ? 'Deleting...' : 'Confirm Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDelete}
+        title={`Delete "${name || 'Resource'}"?`}
+        description="Are you sure you want to permanently delete this resource? Services assigned to this resource will no longer be able to book slots with it."
+        variant="delete"
+        confirmText="Confirm Delete"
+        isLoading={deleteResourceMutation.isPending}
+      />
     </div>
   );
 }

@@ -165,6 +165,16 @@ export class TenantAuthGuard implements CanActivate, OnModuleInit {
           activeSpan.setAttribute('user.id', (decoded.user_id || decoded.sub) as string);
         }
         if (decoded.agent_id) activeSpan.setAttribute('agent.id', decoded.agent_id);
+
+        const sessionId = (request.body?.session_id ||
+          request.query?.session_id ||
+          request.headers?.['x-session-id']) as string | undefined;
+        if (sessionId) {
+          activeSpan.setAttribute('session.id', sessionId);
+          if (sessionId.startsWith('sandbox_')) {
+            activeSpan.setAttribute('session.is_sandbox', true);
+          }
+        }
       }
 
       return true;

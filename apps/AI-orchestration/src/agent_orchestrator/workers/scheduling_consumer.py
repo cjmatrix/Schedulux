@@ -323,7 +323,7 @@ async def handle_schedule_event(payload: dict[str, Any]) -> None:
         )
     )
 
-    # 1. Update live AgentRuntimeConfig
+
     query: dict[str, Any] = {"agent_id": agent_id} if agent_id else {"tenant_id": tenant_id}
     config = await AgentRuntimeConfig.find_one(query)
     if config:
@@ -352,7 +352,7 @@ async def handle_schedule_event(payload: dict[str, Any]) -> None:
             config.tenant_id,
         )
 
-    # 2. Update AgentDraft
+
     agent_draft = await AgentDraft.find_one(query)
     if agent_draft:
         cd = agent_draft.current_draft

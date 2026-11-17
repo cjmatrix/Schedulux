@@ -14,6 +14,10 @@ receivers:
       topics:
         - "otel-traces"
       encoding: "otlp_json"
+    logs:
+      topics:
+        - "otel-logs"
+      encoding: "otlp_json"
     auth:
       sasl:
         mechanism: "SCRAM-SHA-256"
@@ -42,6 +46,7 @@ exporters:
       auth:
         authenticator: basicauth/opensearch
     traces_index: "otel-traces"
+    logs_index: "otel-logs"
     mapping:
       mode: "otel-v1"
     retry_on_failure:
@@ -58,6 +63,10 @@ service:
   extensions: [basicauth/opensearch]
   pipelines:
     traces:
+      receivers: [kafka]
+      processors: [memory_limiter, batch]
+      exporters: [opensearch]
+    logs:
       receivers: [kafka]
       processors: [memory_limiter, batch]
       exporters: [opensearch]

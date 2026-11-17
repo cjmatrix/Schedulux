@@ -135,13 +135,10 @@ export class CorsOriginGuard implements CanActivate, OnModuleInit {
     const agentId = (req.body?.agent_id || req.query?.agent_id || req.headers['x-agent-id']) as
       | string
       | undefined;
-    const sessionId = (req.body?.session_id || req.query?.session_id) as string | undefined;
-
     const activeSpan = trace.getActiveSpan();
     if (activeSpan) {
       if (tenantId) activeSpan.setAttribute('tenant.id', tenantId);
       if (agentId) activeSpan.setAttribute('agent.id', agentId);
-      if (sessionId) activeSpan.setAttribute('session.id', sessionId);
     }
 
     if (!tenantId || !agentId) {

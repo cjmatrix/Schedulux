@@ -10,3 +10,10 @@ class MongoRuntimeConfigRepository(RuntimeConfigRepository):
 
     async def list_runtime_configs(self, tenant_id: str) -> list[AgentRuntimeConfig]:
         return await AgentRuntimeConfig.find({"tenant_id": tenant_id}).to_list()
+
+    async def delete_runtime_config(self, tenant_id: str, agent_id: str) -> bool:
+        cfg = await AgentRuntimeConfig.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
+        if cfg:
+            await cfg.delete()
+            return True
+        return False

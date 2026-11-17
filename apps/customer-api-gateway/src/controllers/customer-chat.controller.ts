@@ -9,12 +9,15 @@ import {
   OnModuleInit,
   Post,
   Query,
+  Req,
   UnauthorizedException,
   UseGuards,
   UsePipes,
 } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
+import { trace } from '@opentelemetry/api';
 import { KnowledgeServiceClient } from '@repo/proto/knowledge';
+import type { Request } from 'express';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { lastValueFrom } from 'rxjs';
 import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
@@ -26,14 +29,14 @@ import {
   PublicChatMessagesQueryDto,
 } from '../dtos/customer-chat.dto.js';
 import { CorsOriginGuard } from '../guards/cors-origin.guard.js';
+import { CustomerSessionGuard } from '../guards/customer-session.guard.js';
 import {
   createSignedSession,
   signSessionId,
-  verifySessionToken,
 } from '../utils/session-token.util.js';
 
 @Controller(API_ROUTES.PUBLIC_CHAT.BASE)
-@UseGuards(CorsOriginGuard)
+@UseGuards(CorsOriginGuard, CustomerSessionGuard)
 export class CustomerChatController implements OnModuleInit {
   private _knowledgeService!: KnowledgeServiceClient;
 
@@ -46,22 +49,13 @@ export class CustomerChatController implements OnModuleInit {
   @Post(API_ROUTES.PUBLIC_CHAT.INIT)
   @HttpCode(HttpStatus.OK)
   @UsePipes(ZodValidationPipe)
-  async init(@Body() body: InitCustomerChatDto) {
-    let resolvedSessionId: string | undefined;
-    let resolvedToken: string | undefined;
+  async init(@Req() req: Request, @Body() body: InitCustomerChatDto) {
+    let resolvedSessionId = req.customerSession?.sessionId;
+    let resolvedToken = req.customerSession?.token;
     let isFirstTime = true;
     let messages: any[] = [];
 
-    if (body.token) {
-      const verified = verifySessionToken(body.token, {
-        expectedTenantId: body.tenant_id,
-        expectedAgentId: body.agent_id,
-      });
-      if (verified.valid && verified.sessionId) {
-        resolvedSessionId = verified.sessionId;
-        resolvedToken = body.token;
-      }
-    } else if (body.session_id) {
+    if (!resolvedSessionId && body.session_id) {
       if (body.session_id.startsWith('sandbox_')) {
         throw new BadRequestException('Sandbox sessions are not allowed in public live chat.');
       }
@@ -103,6 +97,11 @@ export class CustomerChatController implements OnModuleInit {
       resolvedToken = session.token;
       isFirstTime = true;
       messages = [];
+
+      const activeSpan = trace.getActiveSpan();
+      if (activeSpan) {
+        activeSpan.setAttribute('session.id', resolvedSessionId);
+      }
     }
 
     return {
@@ -121,34 +120,21 @@ export class CustomerChatController implements OnModuleInit {
   @Post(API_ROUTES.PUBLIC_CHAT.ROOT)
   @HttpCode(HttpStatus.OK)
   @UsePipes(ZodValidationPipe)
-  async chat(@Body() body: CustomerChatDto) {
-    let sessionId = body.session_id;
-    let token = body.token;
+  async chat(@Req() req: Request, @Body() body: CustomerChatDto) {
+    let sessionId = req.customerSession?.sessionId || body.session_id;
+    let token = req.customerSession?.token || body.token;
 
-    if (token) {
-      const verified = verifySessionToken(token, {
-        expectedTenantId: body.tenant_id,
-        expectedAgentId: body.agent_id,
-      });
-      if (!verified.valid || !verified.sessionId) {
-        throw new UnauthorizedException(RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
-      }
-      sessionId = verified.sessionId;
-      if (verified.tenantId) {
-        body.tenant_id = verified.tenantId;
-      }
-      if (verified.agentId) {
-        body.agent_id = verified.agentId;
-      }
-    } else if (sessionId) {
-      if (sessionId.startsWith('sandbox_')) {
-        throw new BadRequestException('Sandbox sessions are not allowed in public live chat.');
-      }
-      token = signSessionId(sessionId, body.tenant_id, body.agent_id);
-    } else {
+    if (!sessionId) {
       const session = createSignedSession('sess', body.tenant_id, body.agent_id);
       sessionId = session.sessionId;
       token = session.token;
+
+      const activeSpan = trace.getActiveSpan();
+      if (activeSpan) {
+        activeSpan.setAttribute('session.id', sessionId);
+      }
+    } else if (!token) {
+      token = signSessionId(sessionId, body.tenant_id, body.agent_id);
     }
 
     const response = await lastValueFrom(
@@ -212,25 +198,8 @@ export class CustomerChatController implements OnModuleInit {
 
   @Get(API_ROUTES.PUBLIC_CHAT.MESSAGES)
   @UsePipes(ZodValidationPipe)
-  async getMessages(@Query() query: PublicChatMessagesQueryDto) {
-    let resolvedSessionId = query.session_id;
-
-    if (query.token) {
-      const verified = verifySessionToken(query.token, {
-        expectedTenantId: query.tenant_id,
-        expectedAgentId: query.agent_id,
-      });
-      if (!verified.valid || !verified.sessionId) {
-        throw new UnauthorizedException(RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
-      }
-      resolvedSessionId = verified.sessionId;
-      if (verified.tenantId) {
-        query.tenant_id = verified.tenantId;
-      }
-      if (verified.agentId) {
-        query.agent_id = verified.agentId;
-      }
-    }
+  async getMessages(@Req() req: Request, @Query() query: PublicChatMessagesQueryDto) {
+    const resolvedSessionId = req.customerSession?.sessionId || query.session_id;
 
     if (!resolvedSessionId) {
       throw new BadRequestException('session_id or valid token is required');
@@ -238,8 +207,8 @@ export class CustomerChatController implements OnModuleInit {
 
     const response = await lastValueFrom(
       this._knowledgeService.getCustomerMessages({
-        tenant_id: query.tenant_id,
-        agent_id: query.agent_id,
+        tenant_id: req.customerSession?.tenantId || query.tenant_id,
+        agent_id: req.customerSession?.agentId || query.agent_id,
         session_id: resolvedSessionId,
         limit: query.limit,
         before: query.before,

@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   ArrowRight,
   Bot,
   Calendar,
@@ -17,27 +18,41 @@ import {
   Search,
   Settings2,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
+import type { AgentSummaryInfo } from '../../../api/knowledgeApi.js';
+import { ConfirmationModal } from '../../../components/ConfirmationModal.js';
 import { useAuthStore } from '../../../store/useAuthStore.js';
 import { useLogout, useTenantProfile } from '../hooks/useAuth.js';
-import { useTenantAgents } from '../hooks/useKnowledgeDocuments.js';
+import { useDeleteAgent, useTenantAgents } from '../hooks/useKnowledgeDocuments.js';
 
 export default function TenantAgentsPage() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'created' | 'pending'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [agentToDelete, setAgentToDelete] = useState<AgentSummaryInfo | null>(null);
 
   const { data: profileData } = useTenantProfile();
   const authUser = useAuthStore((state) => state.user);
   const logoutMutation = useLogout();
+  const deleteAgentMutation = useDeleteAgent();
 
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
       onSuccess: () => navigate('/login'),
       onError: () => navigate('/login'),
+    });
+  };
+
+  const handleDeleteAgent = () => {
+    if (!agentToDelete) return;
+    deleteAgentMutation.mutate(agentToDelete.agent_id, {
+      onSuccess: () => {
+        setAgentToDelete(null);
+      },
     });
   };
 
@@ -378,27 +393,42 @@ export default function TenantAgentsPage() {
                   </div>
 
                   {/* Bottom Action Buttons */}
-                  <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
-                    {/* Edit button: calls resume agent onboarding querying agent draft */}
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/tenant/agent-setup/${agent.agent_id}`)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
-                      title="Resume onboarding and edit draft schema"
-                    >
-                      <Settings2 className="w-3.5 h-3.5" />
-                      <span>{isCreated ? 'Edit Config' : 'Resume Setup'}</span>
-                    </button>
+                  <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      {/* Edit button: calls resume agent onboarding querying agent draft */}
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/tenant/agent-setup/${agent.agent_id}`)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
+                        title="Resume onboarding and edit draft schema"
+                      >
+                        <Settings2 className="w-3.5 h-3.5" />
+                        <span>{isCreated ? 'Edit Config' : 'Resume'}</span>
+                      </button>
+
+                      {/* Delete button: opens confirmation modal */}
+                      {currentUserRole !== 'Operations Manager' && (
+                        <button
+                          type="button"
+                          onClick={() => setAgentToDelete(agent)}
+                          className="inline-flex items-center justify-center p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer border border-transparent hover:border-rose-100"
+                          title="Delete agent"
+                          aria-label={`Delete agent ${agent.name}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
 
                     {/* Go to Dashboard button: enters TenantLayout for this agent */}
                     <button
                       type="button"
                       onClick={() => navigate(`/tenant/agents/${agent.agent_id}/dashboard`)}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-neutral-950 text-white hover:bg-neutral-800 shadow-2xs transition active:scale-98 cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-neutral-950 text-white hover:bg-neutral-800 shadow-2xs transition active:scale-98 cursor-pointer"
                       title="Open operational dashboard for this agent"
                     >
                       <LayoutDashboard className="w-3.5 h-3.5" />
-                      <span>Go to Dashboard</span>
+                      <span>Dashboard</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -408,6 +438,47 @@ export default function TenantAgentsPage() {
           </div>
         )}
       </main>
+
+      {/* Confirmation Modal for Agent Deletion */}
+      <ConfirmationModal
+        isOpen={Boolean(agentToDelete)}
+        onClose={() => setAgentToDelete(null)}
+        onConfirm={handleDeleteAgent}
+        title="Delete AI Agent"
+        description="Are you sure you want to permanently delete this agent? This action cannot be undone."
+        variant="delete"
+        confirmText="Delete Agent"
+        isLoading={deleteAgentMutation.isPending}
+      >
+        {agentToDelete && (
+          <div className="space-y-3">
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold text-slate-900 text-sm truncate">{agentToDelete.name}</span>
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                    agentToDelete.status === 'created'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}
+                >
+                  {agentToDelete.status === 'created' ? 'Live' : 'Draft'}
+                </span>
+              </div>
+              <div className="mt-2 font-mono text-[11px] text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-slate-200/60 truncate">
+                {agentToDelete.agent_id}
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 bg-rose-50/70 border border-rose-100 rounded-2xl p-3 text-[11px] text-rose-800 leading-relaxed">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span>
+                Deleting this agent will remove its draft schema, runtime configuration, cached knowledge, and active chat widget sessions.
+              </span>
+            </div>
+          </div>
+        )}
+      </ConfirmationModal>
     </div>
   );
 }

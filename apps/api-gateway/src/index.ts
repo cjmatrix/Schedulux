@@ -2,11 +2,15 @@ import './tracing.js';
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module.js';
 import { GlobalExceptionFilter } from './utils/global-error.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
+
+  const logger = app.get(Logger);
+  app.useLogger(logger);
 
   app.enableCors({
     origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5000'],

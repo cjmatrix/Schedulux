@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { LoggerModule } from 'nestjs-pino';
 import { KnowledgeController } from './controllers/agentOrchestrator/knowledge.controller.js';
 import { BillingController } from './controllers/billing/billing.controller.js';
 import { DashboardUserAuthController } from './controllers/dashboarduser/dashboard-user-auth.controller.js';
@@ -21,10 +22,28 @@ import { RedisModule } from './modules/redis.module.js';
 import { ThrottlerStorageRedisService } from './services/throttler-storage-redis.service.js';
 import { SchemaGateway } from './websockets/schema.gateway.js';
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    LoggerModule.forRoot({
+      pinoHttp: {
+        name: 'api-gateway',
+        level: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
+        transport: isProduction
+          ? undefined
+          : {
+              target: require.resolve('pino-pretty'),
+              options: {
+                colorize: true,
+                translateTime: 'SYS:standard',
+                ignore: 'pid,hostname',
+              },
+            },
+      },
     }),
     RedisModule,
     ThrottlerModule.forRootAsync({

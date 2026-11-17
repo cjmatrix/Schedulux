@@ -9,6 +9,7 @@ service KnowledgeService {
   rpc ResumeOnboardingSession (ResumeOnboardingRequest) returns (OnboardingResponse);
   rpc SaveInitialAgentDraft (SaveInitialAgentDraftRequest) returns (SaveInitialAgentDraftResponse);
   rpc ListTenantAgents (ListTenantAgentsRequest) returns (ListTenantAgentsResponse);
+  rpc DeleteAgent (DeleteAgentRequest) returns (DeleteAgentResponse);
   rpc GetAgentMessages (GetAgentMessagesRequest) returns (GetAgentMessagesResponse);
   rpc CustomerChat (CustomerChatRequest) returns (CustomerChatResponse);
   rpc GetCustomerMessages (GetCustomerMessagesRequest) returns (GetCustomerMessagesResponse);
@@ -111,6 +112,17 @@ message AgentSummaryInfo {
 
 message ListTenantAgentsResponse {
   repeated AgentSummaryInfo agents = 1;
+}
+
+message DeleteAgentRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+}
+
+message DeleteAgentResponse {
+  bool success = 1;
+  string message = 2;
+  string agent_id = 3;
 }
 
 message ChatMessageInfo {

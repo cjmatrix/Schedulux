@@ -10,6 +10,7 @@ export const UpdateTierConfigSchema = z.object({
   max_kb_doc_size_mb: z.coerce.number().int().positive().optional(),
   weekly_token_limit: z.coerce.number().int().optional(),
   rate_limit_rpm: z.coerce.number().int().min(1).max(100000).optional(),
+  weekly_crawl_limit: z.coerce.number().int().optional(),
   status: z.enum(['active', 'deprecated', 'inactive']).optional(),
   description: z.string().max(500).optional(),
 });

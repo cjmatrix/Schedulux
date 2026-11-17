@@ -69,12 +69,17 @@ export class SuperAdminTierConfigController implements OnModuleInit {
         max_kb_doc_size_mb: body.max_kb_doc_size_mb,
         weekly_token_limit: body.weekly_token_limit,
         rate_limit_rpm: body.rate_limit_rpm,
+        weekly_crawl_limit: body.weekly_crawl_limit,
         status: body.status,
         description: body.description,
       }),
     );
 
-    await this._redisService.invalidateTierConfigCache(tier);
+    if (res.config) {
+      await this._redisService.setCachedTierConfig(tier, res.config as any);
+    } else {
+      await this._redisService.invalidateTierConfigCache(tier);
+    }
 
     return {
       message: RESPONSE_MESSAGES.TIER_CONFIG.UPDATED,

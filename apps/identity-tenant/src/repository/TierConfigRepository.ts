@@ -23,7 +23,11 @@ export class TierConfigRepository extends BaseRepository<ITierConfigDoc> impleme
     const normalized = tier.trim().toLowerCase();
     const session = this.unitOfWork?.getSession();
     return await this.model
-      .findOneAndUpdate({ tier: normalized }, { $set: data }, { returnDocument: 'after', session, lean: true })
+      .findOneAndUpdate(
+        { tier: normalized },
+        { $set: data, $setOnInsert: { _id: `tier_${normalized}`, tier: normalized } },
+        { returnDocument: 'after', session, lean: true, upsert: true, setDefaultsOnInsert: true },
+      )
       .exec() as unknown as ITierConfigDoc | null;
   }
 

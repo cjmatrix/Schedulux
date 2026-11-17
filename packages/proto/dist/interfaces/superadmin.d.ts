@@ -114,6 +114,7 @@ export interface TierConfigItem {
     description: string;
     created_at: string;
     updated_at: string;
+    weekly_crawl_limit?: number | undefined;
 }
 export interface ListTierConfigsRequest {
 }
@@ -138,6 +139,7 @@ export interface UpdateTierConfigRequest {
     rate_limit_rpm?: number | undefined;
     status?: string | undefined;
     description?: string | undefined;
+    weekly_crawl_limit?: number | undefined;
 }
 export interface UpdateTierConfigResponse {
     success: boolean;

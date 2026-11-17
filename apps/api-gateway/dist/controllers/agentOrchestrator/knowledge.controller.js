@@ -50,10 +50,38 @@ let KnowledgeController = class KnowledgeController {
     }
     async crawlSite(req, body) {
         const tenantId = this._getTenantId(req);
+        const tenantTier = this._getTenantTier(req);
+        // 1. In-flight Crawl Lock check
+        const activeJobId = await this._redisService.getActiveCrawlJob(tenantId);
+        if (activeJobId) {
+            throw new common_1.HttpException({
+                statusCode: common_1.HttpStatus.CONFLICT,
+                message: `A website crawl is currently in progress for your workspace (Job ID: ${activeJobId}). Please wait for it to complete.`,
+                error: 'Conflict',
+            }, common_1.HttpStatus.CONFLICT);
+        }
+        // 2. Weekly Crawl Quota check
+        const tierConfig = await this._redisService.getCachedTierConfig(tenantTier);
+        const weeklyLimit = tierConfig.weekly_crawl_limit ?? (tenantTier.toLowerCase() === 'enterprise' ? -1 : 5);
+        if (weeklyLimit !== -1) {
+            const currentUsage = await this._redisService.getWeeklyCrawlUsage(tenantId);
+            if (currentUsage >= weeklyLimit) {
+                throw new common_1.HttpException({
+                    statusCode: common_1.HttpStatus.TOO_MANY_REQUESTS,
+                    message: `Weekly website crawl quota exceeded (${currentUsage}/${weeklyLimit} crawls used). Quota resets next week.`,
+                    error: 'Too Many Requests',
+                }, common_1.HttpStatus.TOO_MANY_REQUESTS);
+            }
+        }
         const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.crawlSite({
             tenant_id: tenantId,
             url: body.url,
         }));
+        // 3. Acquire in-flight lock & record crawl usage upon successful enqueue
+        if (response.job_id) {
+            await this._redisService.acquireCrawlLock(tenantId, response.job_id, 900);
+            await this._redisService.recordCrawlUsage(tenantId, weeklyLimit);
+        }
         return {
             message: response.message,
             data: {
@@ -68,6 +96,11 @@ let KnowledgeController = class KnowledgeController {
             tenant_id: tenantId,
             job_id: query.job_id,
         }));
+        // Release in-flight crawl lock when job finishes or fails
+        const normalizedStatus = (response.status || '').toLowerCase();
+        if (['completed', 'failed', 'error', 'finished'].includes(normalizedStatus)) {
+            await this._redisService.releaseCrawlLock(tenantId);
+        }
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.CRAWL_STATUS_RETRIEVED,
             data: response,

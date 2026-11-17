@@ -11,6 +11,7 @@ export interface TierConfigData {
   max_kb_doc_size_mb: number;
   weekly_token_limit: number;
   rate_limit_rpm: number;
+  weekly_crawl_limit?: number;
   status: 'active' | 'deprecated' | 'inactive';
   description?: string;
   created_at?: string;
@@ -26,6 +27,7 @@ export interface UpdateTierConfigPayload {
   max_kb_doc_size_mb?: number;
   weekly_token_limit?: number;
   rate_limit_rpm?: number;
+  weekly_crawl_limit?: number;
   status?: 'active' | 'deprecated' | 'inactive';
   description?: string;
 }

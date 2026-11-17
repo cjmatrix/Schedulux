@@ -169,6 +169,11 @@ export class RedisService
           max_kb_doc_size_mb: Number(parsed.max_kb_doc_size_mb ?? fallback.max_kb_doc_size_mb),
           weekly_token_limit: Number(parsed.weekly_token_limit ?? fallback.weekly_token_limit),
           rate_limit_rpm: Number(parsed.rate_limit_rpm ?? fallback.rate_limit_rpm),
+          weekly_crawl_limit: Number(
+            parsed.weekly_crawl_limit ??
+              fallback.weekly_crawl_limit ??
+              (normalized === 'enterprise' ? -1 : 5),
+          ),
           status: (parsed.status || fallback.status) as TierConfig['status'],
           description: parsed.description || fallback.description,
         };
@@ -200,6 +205,9 @@ export class RedisService
               max_kb_doc_size_mb: Number(item.max_kb_doc_size_mb),
               weekly_token_limit: Number(item.weekly_token_limit),
               rate_limit_rpm: Number(item.rate_limit_rpm),
+              weekly_crawl_limit: Number(
+                item.weekly_crawl_limit ?? (item.tier === 'enterprise' ? -1 : 5),
+              ),
               status: item.status,
               description: item.description,
             };
@@ -226,6 +234,20 @@ export class RedisService
       await this._client.del(...keys);
     } catch (err) {
       this._logger.error('Failed to invalidate tier config cache in Redis:', err);
+    }
+  }
+
+  async setCachedTierConfig(
+    tier: string,
+    config: TierConfig | Record<string, unknown>,
+  ): Promise<void> {
+    if (!this._client) return;
+    try {
+      const normalized = tier.trim().toLowerCase();
+      await this._client.set(`tier_config:${normalized}`, JSON.stringify(config));
+      await this._client.del('tier_config:all');
+    } catch (err) {
+      this._logger.error(`Failed to cache tier_config:${tier} in Redis:`, err);
     }
   }
 
@@ -323,6 +345,86 @@ export class RedisService
     } catch (err) {
       this._logger.error(`Failed to record token usage for ${tenantId}:`, err);
       return { current: tokens, limit: weeklyLimit, exceeded: false };
+    }
+  }
+
+  async acquireCrawlLock(tenantId: string, jobId: string, ttlSeconds = 900): Promise<boolean> {
+    if (!this._client) return true;
+    try {
+      const key = `tenant:${tenantId}:crawl:active`;
+      const res = await this._client.set(key, jobId, 'EX', ttlSeconds, 'NX');
+      return res === 'OK';
+    } catch (err) {
+      this._logger.error(`Failed to acquire crawl lock for tenant ${tenantId}:`, err);
+      return true;
+    }
+  }
+
+  async releaseCrawlLock(tenantId: string): Promise<void> {
+    if (!this._client) return;
+    try {
+      const key = `tenant:${tenantId}:crawl:active`;
+      await this._client.del(key);
+    } catch (err) {
+      this._logger.error(`Failed to release crawl lock for tenant ${tenantId}:`, err);
+    }
+  }
+
+  async getActiveCrawlJob(tenantId: string): Promise<string | null> {
+    if (!this._client) return null;
+    try {
+      const key = `tenant:${tenantId}:crawl:active`;
+      return await this._client.get(key);
+    } catch (err) {
+      this._logger.error(`Failed to get active crawl lock for tenant ${tenantId}:`, err);
+      return null;
+    }
+  }
+
+  async getWeeklyCrawlUsage(tenantId: string): Promise<number> {
+    if (!this._client) return 0;
+    try {
+      const isoWeek = this._getCurrentIsoWeek();
+      const isoKey = `tenant:${tenantId}:crawls:${isoWeek}`;
+      const raw = await this._client.get(isoKey);
+      return raw ? parseInt(raw, 10) || 0 : 0;
+    } catch (err) {
+      this._logger.error(`Failed to get weekly crawl usage for ${tenantId}:`, err);
+      return 0;
+    }
+  }
+
+  async recordCrawlUsage(
+    tenantId: string,
+    weeklyLimit: number,
+  ): Promise<{ current: number; limit: number; exceeded: boolean }> {
+    if (!this._client) return { current: 1, limit: weeklyLimit, exceeded: false };
+    const isoWeek = this._getCurrentIsoWeek();
+    const key = `tenant:${tenantId}:crawls:${isoWeek}`;
+    try {
+      const multi = this._client.multi();
+      multi.incr(key);
+      multi.ttl(key);
+      const results = await multi.exec();
+
+      let current = 1;
+      let ttl = -1;
+      if (results && results[0] && !results[0][0]) {
+        current = Number(results[0][1]);
+      }
+      if (results && results[1] && !results[1][0]) {
+        ttl = Number(results[1][1]);
+      }
+
+      if (ttl < 0) {
+        await this._client.expire(key, 35 * 24 * 3600);
+      }
+
+      const exceeded = weeklyLimit !== -1 && current > weeklyLimit;
+      return { current, limit: weeklyLimit, exceeded };
+    } catch (err) {
+      this._logger.error(`Failed to record crawl usage for tenant ${tenantId}:`, err);
+      return { current: 0, limit: weeklyLimit, exceeded: false };
     }
   }
 

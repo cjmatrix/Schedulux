@@ -9,7 +9,7 @@ from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.outputs import LLMResult
 
 from agent_orchestrator.clients.redis_client import get_redis_client
-from agent_orchestrator.config.tier_constants import get_tier_config
+from agent_orchestrator.config.tier_constants import get_cached_tier_config
 
 logger = logging.getLogger(__name__)
 
@@ -231,7 +231,7 @@ class TokenTrackingService:
                 "[TokenService] Could not resolve tier from Redis for %s: %s", tenant_id, te
             )
 
-        tier_cfg = get_tier_config(resolved_tier)
+        tier_cfg = await get_cached_tier_config(resolved_tier, client)
         limit = tier_cfg.get("weekly_token_limit", 100_000)
         if limit == -1:
             return False, 0, -1

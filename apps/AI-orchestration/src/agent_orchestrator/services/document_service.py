@@ -4,7 +4,7 @@ import re
 import secrets
 
 from agent_orchestrator.clients.redis_client import get_redis_client
-from agent_orchestrator.config.tier_constants import get_tier_config
+from agent_orchestrator.config.tier_constants import get_cached_tier_config
 from agent_orchestrator.domain.exceptions import TierQuotaExceededException
 from agent_orchestrator.domain.protocols import (
     DocumentIndexingQueue,
@@ -38,10 +38,10 @@ class DocumentService(DocumentServiceProtocol):
         Generates presigned upload URL and creates pending KnowledgeDocument entity.
         Returns: (upload_url, document_id, s3_key, expires_in)
         """
+        redis_client = get_redis_client()
         if not tier:
-            redis_client = get_redis_client()
             tier = await redis_client.get(f"tenant:{tenant_id}:tier")
-        tier_cfg = get_tier_config(tier)
+        tier_cfg = await get_cached_tier_config(tier, redis_client)
         max_docs = tier_cfg["max_kb_docs"]
 
         if max_docs != -1:

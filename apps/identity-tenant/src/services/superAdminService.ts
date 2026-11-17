@@ -510,6 +510,7 @@ export class SuperAdminService implements ISuperAdminService {
       max_kb_doc_size_mb: Number(doc.max_kb_doc_size_mb ?? 5),
       weekly_token_limit: Number(doc.weekly_token_limit ?? 100000),
       rate_limit_rpm: Number(doc.rate_limit_rpm ?? 60),
+      weekly_crawl_limit: Number((raw.weekly_crawl_limit ?? (doc as any).weekly_crawl_limit) ?? (doc.tier === 'enterprise' ? -1 : 5)),
       status: String(doc.status || 'active'),
       description: String(doc.description || ''),
       created_at: raw.created_at ? new Date(String(raw.created_at)).toISOString() : new Date().toISOString(),
@@ -588,6 +589,7 @@ export class SuperAdminService implements ISuperAdminService {
     if (data.max_kb_doc_size_mb !== undefined) updatePayload.max_kb_doc_size_mb = Number(data.max_kb_doc_size_mb);
     if (data.weekly_token_limit !== undefined) updatePayload.weekly_token_limit = Number(data.weekly_token_limit);
     if (data.rate_limit_rpm !== undefined) updatePayload.rate_limit_rpm = Number(data.rate_limit_rpm);
+    if (data.weekly_crawl_limit !== undefined) updatePayload.weekly_crawl_limit = Number(data.weekly_crawl_limit);
     if (data.status !== undefined) updatePayload.status = data.status;
     if (data.description !== undefined) updatePayload.description = data.description;
 

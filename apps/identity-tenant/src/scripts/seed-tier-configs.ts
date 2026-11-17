@@ -16,7 +16,7 @@ export async function seedTierConfigs(logger?: Logger | { log: (msg: string, ctx
       updateOne: {
         filter: { tier: config.tier },
         update: {
-          $set: {
+          $setOnInsert: {
             _id: `tier_${config.tier}`,
             tier: config.tier,
             name: config.name,
@@ -27,6 +27,7 @@ export async function seedTierConfigs(logger?: Logger | { log: (msg: string, ctx
             max_kb_doc_size_mb: config.max_kb_doc_size_mb,
             weekly_token_limit: config.weekly_token_limit,
             rate_limit_rpm: config.rate_limit_rpm,
+            weekly_crawl_limit: config.weekly_crawl_limit ?? (config.tier === 'enterprise' ? -1 : 5),
             status: config.status,
             description: config.description || '',
           },
@@ -37,7 +38,7 @@ export async function seedTierConfigs(logger?: Logger | { log: (msg: string, ctx
 
     if (operations.length > 0) {
       const result = await TierConfigModel.bulkWrite(operations);
-      log(`Tier configurations synchronized to MongoDB. Upserted: ${result.upsertedCount}, Modified: ${result.modifiedCount}`);
+      log(`Tier configurations checked in MongoDB. Upserted: ${result.upsertedCount}, Modified: ${result.modifiedCount}`);
     }
 
     try {
@@ -47,11 +48,11 @@ export async function seedTierConfigs(logger?: Logger | { log: (msg: string, ctx
       await redis.connect();
       const allConfigs = await TierConfigModel.find({}).lean();
       if (allConfigs.length > 0) {
-        await redis.set('tier_config:all', JSON.stringify(allConfigs), 'EX', 86400 * 7);
+        await redis.set('tier_config:all', JSON.stringify(allConfigs));
         for (const cfg of allConfigs) {
-          await redis.set(`tier_config:${cfg.tier}`, JSON.stringify(cfg), 'EX', 86400 * 7);
+          await redis.set(`tier_config:${cfg.tier}`, JSON.stringify(cfg));
         }
-        log('Tier configurations pre-warmed into Redis cache.');
+        log('Tier configurations pre-warmed into Redis cache from MongoDB.');
       }
       await redis.quit();
     } catch {

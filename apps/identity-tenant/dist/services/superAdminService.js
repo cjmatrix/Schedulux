@@ -400,6 +400,7 @@ let SuperAdminService = class SuperAdminService {
             max_kb_doc_size_mb: Number(doc.max_kb_doc_size_mb ?? 5),
             weekly_token_limit: Number(doc.weekly_token_limit ?? 100000),
             rate_limit_rpm: Number(doc.rate_limit_rpm ?? 60),
+            weekly_crawl_limit: Number((raw.weekly_crawl_limit ?? doc.weekly_crawl_limit) ?? (doc.tier === 'enterprise' ? -1 : 5)),
             status: String(doc.status || 'active'),
             description: String(doc.description || ''),
             created_at: raw.created_at ? new Date(String(raw.created_at)).toISOString() : new Date().toISOString(),
@@ -479,6 +480,8 @@ let SuperAdminService = class SuperAdminService {
             updatePayload.weekly_token_limit = Number(data.weekly_token_limit);
         if (data.rate_limit_rpm !== undefined)
             updatePayload.rate_limit_rpm = Number(data.rate_limit_rpm);
+        if (data.weekly_crawl_limit !== undefined)
+            updatePayload.weekly_crawl_limit = Number(data.weekly_crawl_limit);
         if (data.status !== undefined)
             updatePayload.status = data.status;
         if (data.description !== undefined)

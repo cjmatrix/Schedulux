@@ -12,7 +12,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from agent_orchestrator.clients.redis_client import get_redis_client
-from agent_orchestrator.config.tier_constants import get_tier_config
+from agent_orchestrator.config.tier_constants import get_cached_tier_config
 from agent_orchestrator.domain.exceptions import TierQuotaExceededException
 from agent_orchestrator.models import StrictDraftPatchValidator
 from agent_orchestrator.workflows.tenant_agent.state import GraphState, SemanticAction
@@ -371,7 +371,7 @@ CRITICAL RULES FOR RECOVERY:
     if not tenant_tier:
         tenant_tier = "starter"
 
-    tier_cfg = get_tier_config(tenant_tier)
+    tier_cfg = await get_cached_tier_config(tenant_tier)
 
     max_services = tier_cfg["max_services"]
     max_resources = tier_cfg["max_resources"]
@@ -569,7 +569,7 @@ async def node_apply_draft_update(state: GraphState) -> dict:
         if not tenant_tier:
             tenant_tier = "starter"
 
-        tier_cfg = get_tier_config(tenant_tier)
+        tier_cfg = await get_cached_tier_config(tenant_tier)
         max_services = tier_cfg["max_services"]
         max_resources = tier_cfg["max_resources"]
 
@@ -783,7 +783,7 @@ async def node_finalize_and_save(state: GraphState) -> dict:
     if not tenant_tier:
         tenant_tier = "starter"
 
-    tier_cfg = get_tier_config(tenant_tier)
+    tier_cfg = await get_cached_tier_config(tenant_tier)
     max_services = tier_cfg["max_services"]
     max_resources = tier_cfg["max_resources"]
 

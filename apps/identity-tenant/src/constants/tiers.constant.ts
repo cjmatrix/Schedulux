@@ -8,6 +8,7 @@ export interface TierConfig {
   max_kb_doc_size_mb: number;
   weekly_token_limit: number;
   rate_limit_rpm: number;
+  weekly_crawl_limit: number;
   status: 'active' | 'deprecated' | 'inactive';
   description?: string;
 }
@@ -23,6 +24,7 @@ export const STATIC_TIER_CONFIGS: Record<string, TierConfig> = {
     max_kb_doc_size_mb: 5,
     weekly_token_limit: 100_000,
     rate_limit_rpm: 60,
+    weekly_crawl_limit: 5,
     status: 'active',
     description: 'Starter tier for individual operators and evaluation.',
   },
@@ -36,6 +38,7 @@ export const STATIC_TIER_CONFIGS: Record<string, TierConfig> = {
     max_kb_doc_size_mb: 25,
     weekly_token_limit: 500_000,
     rate_limit_rpm: 120,
+    weekly_crawl_limit: 20,
     status: 'active',
     description: 'Professional tier for growing businesses with multiple services.',
   },
@@ -49,6 +52,7 @@ export const STATIC_TIER_CONFIGS: Record<string, TierConfig> = {
     max_kb_doc_size_mb: 100,
     weekly_token_limit: 2_500_000,
     rate_limit_rpm: 300,
+    weekly_crawl_limit: 50,
     status: 'active',
     description: 'High-capacity tier for established multi-location practices.',
   },
@@ -62,6 +66,7 @@ export const STATIC_TIER_CONFIGS: Record<string, TierConfig> = {
     max_kb_doc_size_mb: 250,
     weekly_token_limit: -1,
     rate_limit_rpm: 1000,
+    weekly_crawl_limit: -1,
     status: 'active',
     description: 'Unlimited enterprise capability with bespoke rate limits.',
   },

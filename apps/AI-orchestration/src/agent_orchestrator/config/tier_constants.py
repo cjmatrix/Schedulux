@@ -13,6 +13,7 @@ STATIC_TIER_CONFIGS: dict[str, dict[str, Any]] = {
         "max_kb_doc_size_mb": 5,
         "weekly_token_limit": 100_000,
         "rate_limit_rpm": 60,
+        "weekly_crawl_limit": 5,
         "status": "active",
     },
     "pro": {
@@ -25,6 +26,7 @@ STATIC_TIER_CONFIGS: dict[str, dict[str, Any]] = {
         "max_kb_doc_size_mb": 25,
         "weekly_token_limit": 500_000,
         "rate_limit_rpm": 120,
+        "weekly_crawl_limit": 20,
         "status": "active",
     },
     "business": {
@@ -37,6 +39,7 @@ STATIC_TIER_CONFIGS: dict[str, dict[str, Any]] = {
         "max_kb_doc_size_mb": 100,
         "weekly_token_limit": 2_500_000,
         "rate_limit_rpm": 300,
+        "weekly_crawl_limit": 50,
         "status": "active",
     },
     "enterprise": {
@@ -49,6 +52,7 @@ STATIC_TIER_CONFIGS: dict[str, dict[str, Any]] = {
         "max_kb_doc_size_mb": 250,
         "weekly_token_limit": -1,
         "rate_limit_rpm": 1000,
+        "weekly_crawl_limit": -1,
         "status": "active",
     },
 }
@@ -61,3 +65,31 @@ def get_tier_config(tier: str | None = None) -> dict[str, Any]:
         return STATIC_TIER_CONFIGS[DEFAULT_TIER]
     normalized = tier.strip().lower()
     return STATIC_TIER_CONFIGS.get(normalized, STATIC_TIER_CONFIGS[DEFAULT_TIER])
+
+
+async def get_cached_tier_config(
+    tier: str | None = None, redis_client: Any = None
+) -> dict[str, Any]:
+    fallback = get_tier_config(tier)
+    if not tier:
+        return fallback
+    normalized = tier.strip().lower()
+    try:
+        if redis_client is None:
+            from agent_orchestrator.clients.redis_client import get_redis_client
+
+            redis_client = get_redis_client()
+        raw = await redis_client.get(f"tier_config:{normalized}")
+        if raw:
+            import json
+
+            data = json.loads(raw)
+            if isinstance(data, dict):
+                return {**fallback, **data}
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "[TierConfig] Failed to read tier_config:%s from Redis: %s", normalized, e
+        )
+    return fallback

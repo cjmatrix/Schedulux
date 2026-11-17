@@ -7,6 +7,7 @@ import {
   Edit2,
   FileText,
   Gauge,
+  Globe,
   HardDrive,
   Info,
   Layers,
@@ -82,6 +83,7 @@ interface FormState {
   max_kb_docs: number | '';
   max_kb_doc_size_mb: number | '';
   weekly_token_limit: number | '';
+  weekly_crawl_limit: number | '';
   status: 'active' | 'deprecated' | 'inactive';
   description: string;
 }
@@ -95,6 +97,7 @@ const INITIAL_FORM_STATE: FormState = {
   max_kb_docs: 3,
   max_kb_doc_size_mb: 5,
   weekly_token_limit: 100000,
+  weekly_crawl_limit: 5,
   status: 'active',
   description: '',
 };
@@ -117,6 +120,7 @@ export default function RateLimitsPage() {
       max_kb_docs: tier.max_kb_docs,
       max_kb_doc_size_mb: tier.max_kb_doc_size_mb,
       weekly_token_limit: tier.weekly_token_limit,
+      weekly_crawl_limit: tier.weekly_crawl_limit ?? (tier.tier === 'enterprise' ? -1 : 5),
       status: tier.status,
       description: tier.description || '',
     });
@@ -156,6 +160,8 @@ export default function RateLimitsPage() {
         formData.max_kb_doc_size_mb === '' ? 5 : Number(formData.max_kb_doc_size_mb),
       weekly_token_limit:
         formData.weekly_token_limit === '' ? -1 : Number(formData.weekly_token_limit),
+      weekly_crawl_limit:
+        formData.weekly_crawl_limit === '' ? -1 : Number(formData.weekly_crawl_limit),
     };
 
     try {
@@ -399,6 +405,17 @@ export default function RateLimitsPage() {
                       </span>
                       <span className="text-sm font-semibold text-slate-200 font-mono">
                         {formatLimit(config.weekly_token_limit)}
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-[#141416]/60 rounded-lg border border-slate-800/60">
+                      <span className="flex items-center gap-1.5 text-slate-400 text-[11px] mb-1">
+                        <Globe className="w-3.5 h-3.5 text-blue-400" /> Weekly Crawls
+                      </span>
+                      <span className="text-sm font-semibold text-slate-200 font-mono">
+                        {formatLimit(
+                          config.weekly_crawl_limit ?? (config.tier === 'enterprise' ? -1 : 5),
+                        )}
                       </span>
                     </div>
                   </div>
@@ -678,6 +695,36 @@ export default function RateLimitsPage() {
                       type="number"
                       value={formData.weekly_token_limit}
                       onChange={(e) => handleNumberChange('weekly_token_limit', e.target.value)}
+                      className="w-full px-3 py-2 bg-[#141416] border border-slate-700 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-medium text-slate-300">
+                        Weekly Web Crawl Quota
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            weekly_crawl_limit: prev.weekly_crawl_limit === -1 ? 5 : -1,
+                          }))
+                        }
+                        className={`text-[10px] px-1.5 py-0.5 rounded transition ${
+                          formData.weekly_crawl_limit === -1
+                            ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {formData.weekly_crawl_limit === -1 ? 'Unlimited' : 'Set Unlimited (-1)'}
+                      </button>
+                    </div>
+                    <input
+                      type="number"
+                      value={formData.weekly_crawl_limit}
+                      onChange={(e) => handleNumberChange('weekly_crawl_limit', e.target.value)}
                       className="w-full px-3 py-2 bg-[#141416] border border-slate-700 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>

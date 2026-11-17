@@ -11,6 +11,7 @@ export interface ITierConfigDoc extends Document<string> {
   max_kb_doc_size_mb: number;
   weekly_token_limit: number;
   rate_limit_rpm: number;
+  weekly_crawl_limit?: number;
   status: string;
   description?: string;
   created_at: Date;
@@ -29,6 +30,7 @@ const tierConfigSchema = new Schema<ITierConfigDoc>(
     max_kb_doc_size_mb: { type: Number, required: true, default: 5 },
     weekly_token_limit: { type: Number, required: true, default: 100000 },
     rate_limit_rpm: { type: Number, required: true, default: 60 },
+    weekly_crawl_limit: { type: Number, required: false, default: 5 },
     status: { type: String, required: true, default: 'active' },
     description: { type: String, default: '' },
   },

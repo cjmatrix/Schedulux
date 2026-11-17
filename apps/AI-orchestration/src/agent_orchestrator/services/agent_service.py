@@ -5,7 +5,7 @@ import secrets
 from typing import Any
 
 from agent_orchestrator.clients.redis_client import get_redis_client
-from agent_orchestrator.config.tier_constants import get_tier_config
+from agent_orchestrator.config.tier_constants import get_cached_tier_config
 from agent_orchestrator.domain.exceptions import (
     InvalidDraftException,
     TierQuotaExceededException,
@@ -41,10 +41,10 @@ class AgentManagementService(AgentManagementServiceProtocol):
         name: str | None,
         tier: str | None = None,
     ) -> tuple[str, str]:
+        redis_client = get_redis_client()
         if not tier:
-            redis_client = get_redis_client()
             tier = await redis_client.get(f"tenant:{tenant_id}:tier")
-        tier_cfg = get_tier_config(tier)
+        tier_cfg = await get_cached_tier_config(tier, redis_client)
         max_agents = tier_cfg["max_agents"]
 
         if max_agents != -1:

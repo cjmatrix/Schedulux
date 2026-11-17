@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   HttpCode,
+  HttpException,
   HttpStatus,
   Inject,
   OnModuleInit,
@@ -86,12 +87,52 @@ export class KnowledgeController implements OnModuleInit {
   @UsePipes(ZodValidationPipe)
   async crawlSite(@Req() req: AuthenticatedTenantRequest, @Body() body: CrawlSiteDto) {
     const tenantId = this._getTenantId(req);
+    const tenantTier = this._getTenantTier(req);
+
+   
+    const activeJobId = await this._redisService.getActiveCrawlJob(tenantId);
+    if (activeJobId) {
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.CONFLICT,
+          message: `A website crawl is currently in progress for your workspace (Job ID: ${activeJobId}). Please wait for it to complete.`,
+          error: 'Conflict',
+        },
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    
+    const tierConfig = await this._redisService.getCachedTierConfig(tenantTier);
+    const weeklyLimit =
+      tierConfig.weekly_crawl_limit ?? (tenantTier.toLowerCase() === 'enterprise' ? -1 : 5);
+    if (weeklyLimit !== -1) {
+      const currentUsage = await this._redisService.getWeeklyCrawlUsage(tenantId);
+      if (currentUsage >= weeklyLimit) {
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.TOO_MANY_REQUESTS,
+            message: `Weekly website crawl quota exceeded (${currentUsage}/${weeklyLimit} crawls used). Quota resets next week.`,
+            error: 'Too Many Requests',
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+    }
+
     const response = await lastValueFrom(
       this._knowledgeService.crawlSite({
         tenant_id: tenantId,
         url: body.url,
       }),
     );
+
+    
+    if (response.job_id) {
+      await this._redisService.acquireCrawlLock(tenantId, response.job_id, 900);
+      await this._redisService.recordCrawlUsage(tenantId, weeklyLimit);
+    }
+
     return {
       message: response.message,
       data: {
@@ -114,6 +155,13 @@ export class KnowledgeController implements OnModuleInit {
         job_id: query.job_id,
       }),
     );
+
+   
+    const normalizedStatus = (response.status || '').toLowerCase();
+    if (['completed', 'failed', 'error', 'finished'].includes(normalizedStatus)) {
+      await this._redisService.releaseCrawlLock(tenantId);
+    }
+
     return {
       message: RESPONSE_MESSAGES.KNOWLEDGE.CRAWL_STATUS_RETRIEVED,
       data: response,

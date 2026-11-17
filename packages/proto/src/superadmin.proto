@@ -149,6 +149,7 @@ message TierConfigItem {
   string description = 12;
   string created_at = 13;
   string updated_at = 14;
+  optional int32 weekly_crawl_limit = 15;
 }
 
 message ListTierConfigsRequest {}
@@ -177,6 +178,7 @@ message UpdateTierConfigRequest {
   optional int32 rate_limit_rpm = 9;
   optional string status = 10;
   optional string description = 11;
+  optional int32 weekly_crawl_limit = 12;
 }
 
 message UpdateTierConfigResponse {

@@ -6,7 +6,6 @@ import {
   Cpu,
   CreditCard,
   ExternalLink,
-  HelpCircle,
   Loader2,
   type LucideIcon,
   RefreshCw,
@@ -320,14 +319,7 @@ export default function BillingPage() {
         </div>
 
         <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap shrink-0 self-start sm:self-center">
-          <button
-            type="button"
-            onClick={() => setShowGuide(!showGuide)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition shadow-xs cursor-pointer"
-          >
-            <HelpCircle className="w-4 h-4 text-blue-600" />
-            Paddle Setup Guide
-          </button>
+         
           <button
             type="button"
             onClick={() => refetch()}

@@ -15,9 +15,11 @@ import { SuperAdminTierConfigController } from './controllers/superadmin/superad
 import { TenantController } from './controllers/tenant/tenant.controller.js';
 import { TenantDashboardController } from './controllers/tenant/tenant-dashboard.controller.js';
 import { AppThrottlerGuard } from './guards/app-throttler.guard.js';
+import { CrawlQuotaGuard } from './guards/crawl-quota.guard.js';
 import { PaddleWebhookGuard } from './guards/paddle-webhook.guard.js';
 import { RolesGuard } from './guards/roles.guard.js';
 import { TenantAuthGuard } from './guards/tenant-auth.guard.js';
+import { TenantTokenQuotaGuard } from './guards/tenant-token-quota.guard.js';
 import { RedisModule } from './modules/redis.module.js';
 import { ThrottlerStorageRedisService } from './services/throttler-storage-redis.service.js';
 import { SchemaGateway } from './websockets/schema.gateway.js';
@@ -172,6 +174,8 @@ const isProduction = process.env.NODE_ENV === 'production';
     RolesGuard,
     TenantAuthGuard,
     PaddleWebhookGuard,
+    CrawlQuotaGuard,
+    TenantTokenQuotaGuard,
     {
       provide: APP_GUARD,
       useClass: AppThrottlerGuard,

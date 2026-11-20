@@ -20,10 +20,10 @@ processors:
     spike_limit_mib: 100
 
   tail_sampling:
-    # Wait 5 seconds after the first span arrives so all downstream gRPC/DB spans finish
-    decision_wait: 5s
+    # Wait 15 seconds after the first span arrives so long LLM streaming spans and tool calls complete
+    decision_wait: 15s
     # Max concurrent traces buffered in RAM
-    num_traces: 10000
+    num_traces: 20000
     expected_new_traces_per_sec: 50
 
     policies:
@@ -33,13 +33,54 @@ processors:
         status_code:
           status_codes: [ERROR]
 
-      # Rule 2 (Latency): Keep 100% if total trace duration exceeds 2000ms (2 seconds)
-      - name: keep-slow-traces
-        type: latency
-        latency:
-          threshold_ms: 2000
+      # Rule 2 (Slow LLM / Agent Endpoints): Keep 100% if duration exceeds 10000ms (10 seconds)
+      - name: keep-slow-llm-traces
+        type: and
+        and:
+          and_sub_policy:
+            - name: is-llm-endpoint
+              type: string_attribute
+              string_attribute:
+                key: http.route
+                values:
+                  - /api/v1/public/chat
+                  - api/v1/public/chat
+                  - /api/v1/tenant/knowledge/onboarding/start
+                  - api/v1/tenant/knowledge/onboarding/start
+                  - /api/v1/tenant/knowledge/onboarding/message
+                  - api/v1/tenant/knowledge/onboarding/message
+                  - /api/v1/tenant/knowledge/onboarding/sandbox
+                  - api/v1/tenant/knowledge/onboarding/sandbox
+            - name: llm-latency-threshold
+              type: latency
+              latency:
+                threshold_ms: 10000
 
-      # Rule 3 (Normal Traffic): Keep only 5% of everything else
+      # Rule 3 (Slow Standard CRUD Endpoints): Keep 100% if duration exceeds 1000ms (1 second)
+      - name: keep-slow-crud-traces
+        type: and
+        and:
+          and_sub_policy:
+            - name: not-llm-endpoint
+              type: string_attribute
+              string_attribute:
+                key: http.route
+                values:
+                  - /api/v1/public/chat
+                  - api/v1/public/chat
+                  - /api/v1/tenant/knowledge/onboarding/start
+                  - api/v1/tenant/knowledge/onboarding/start
+                  - /api/v1/tenant/knowledge/onboarding/message
+                  - api/v1/tenant/knowledge/onboarding/message
+                  - /api/v1/tenant/knowledge/onboarding/sandbox
+                  - api/v1/tenant/knowledge/onboarding/sandbox
+                invert_match: true
+            - name: crud-latency-threshold
+              type: latency
+              latency:
+                threshold_ms: 1000
+
+      # Rule 4 (Normal Traffic): Keep only 5% of everything else
       - name: sample-normal-traffic
         type: probabilistic
         probabilistic:

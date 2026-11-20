@@ -1609,7 +1609,6 @@ async def search_knowledge_base(
             query=query,
             tenant_id=tenant_id,
             agent_id=agent_id,
-            top_k=4,
         )
         if not results:
             return json.dumps(

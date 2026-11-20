@@ -25,8 +25,10 @@ import { lastValueFrom } from 'rxjs';
 import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
 import { API_ROUTES } from '../../constants/routes.constant.js';
 import { Roles } from '../../decorators/roles.decorator.js';
+import { CrawlQuotaGuard } from '../../guards/crawl-quota.guard.js';
 import { RolesGuard } from '../../guards/roles.guard.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
+import { TenantTokenQuotaGuard } from '../../guards/tenant-token-quota.guard.js';
 import { ISchemaCacheService } from '../../interfaces/ISchemaEventSubscriber.js';
 import { RedisService } from '../../services/redis.service.js';
 import {
@@ -84,41 +86,14 @@ export class KnowledgeController implements OnModuleInit {
 
   @Post(API_ROUTES.KNOWLEDGE.CRAWL)
   @HttpCode(HttpStatus.ACCEPTED)
+  @UseGuards(CrawlQuotaGuard)
   @UsePipes(ZodValidationPipe)
-  async crawlSite(@Req() req: AuthenticatedTenantRequest, @Body() body: CrawlSiteDto) {
+  async crawlSite(
+    @Req() req: AuthenticatedTenantRequest & { crawlQuota?: { tenantId: string; weeklyLimit: number } },
+    @Body() body: CrawlSiteDto,
+  ) {
     const tenantId = this._getTenantId(req);
-    const tenantTier = this._getTenantTier(req);
-
-   
-    const activeJobId = await this._redisService.getActiveCrawlJob(tenantId);
-    if (activeJobId) {
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.CONFLICT,
-          message: `A website crawl is currently in progress for your workspace (Job ID: ${activeJobId}). Please wait for it to complete.`,
-          error: 'Conflict',
-        },
-        HttpStatus.CONFLICT,
-      );
-    }
-
-    
-    const tierConfig = await this._redisService.getCachedTierConfig(tenantTier);
-    const weeklyLimit =
-      tierConfig.weekly_crawl_limit ?? (tenantTier.toLowerCase() === 'enterprise' ? -1 : 5);
-    if (weeklyLimit !== -1) {
-      const currentUsage = await this._redisService.getWeeklyCrawlUsage(tenantId);
-      if (currentUsage >= weeklyLimit) {
-        throw new HttpException(
-          {
-            statusCode: HttpStatus.TOO_MANY_REQUESTS,
-            message: `Weekly website crawl quota exceeded (${currentUsage}/${weeklyLimit} crawls used). Quota resets next week.`,
-            error: 'Too Many Requests',
-          },
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
-      }
-    }
+    const weeklyLimit = req.crawlQuota?.weeklyLimit ?? 5;
 
     const response = await lastValueFrom(
       this._knowledgeService.crawlSite({
@@ -127,7 +102,6 @@ export class KnowledgeController implements OnModuleInit {
       }),
     );
 
-    
     if (response.job_id) {
       await this._redisService.acquireCrawlLock(tenantId, response.job_id, 900);
       await this._redisService.recordCrawlUsage(tenantId, weeklyLimit);
@@ -196,6 +170,7 @@ export class KnowledgeController implements OnModuleInit {
 
   @Post(API_ROUTES.KNOWLEDGE.ONBOARDING_START)
   @HttpCode(HttpStatus.OK)
+  @UseGuards(TenantTokenQuotaGuard)
   @UsePipes(ZodValidationPipe)
   async startOnboarding(
     @Req() req: AuthenticatedTenantRequest,
@@ -230,6 +205,7 @@ export class KnowledgeController implements OnModuleInit {
 
   @Post(API_ROUTES.KNOWLEDGE.ONBOARDING_MESSAGE)
   @HttpCode(HttpStatus.OK)
+  @UseGuards(TenantTokenQuotaGuard)
   @UsePipes(ZodValidationPipe)
   async resumeOnboarding(
     @Req() req: AuthenticatedTenantRequest,
@@ -420,6 +396,7 @@ export class KnowledgeController implements OnModuleInit {
 
   @Post(API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX)
   @HttpCode(HttpStatus.OK)
+  @UseGuards(TenantTokenQuotaGuard)
   @UsePipes(ZodValidationPipe)
   async sandboxChat(
     @Req() req: AuthenticatedTenantRequest,

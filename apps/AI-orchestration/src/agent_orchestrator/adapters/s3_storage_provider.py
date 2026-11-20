@@ -49,6 +49,7 @@ class S3StorageProvider(StorageService):
         key: str,
         content_type: str = "application/pdf",
         expires_in: int = 900,
+        max_allowed_bytes: int | None = None,
     ) -> str:
         url: str = self._s3_client.generate_presigned_url(
             ClientMethod="put_object",

@@ -35,7 +35,8 @@ class VoyageDenseEmbedder(DenseEmbedder):
             print(
                 "[VoyageDenseEmbedder] VOYAGE_API_KEY not set — returning zero vectors.", flush=True
             )
-            return [[0.0] * 512 for _ in texts]
+            dim = int(os.getenv("QDRANT_VECTOR_SIZE", "1024"))
+            return [[0.0] * dim for _ in texts]
 
         response = await self.client.embed(
             texts=texts,

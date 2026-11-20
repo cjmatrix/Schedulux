@@ -273,8 +273,11 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
 
             metadata_dict = dict(context.invocation_metadata()) if context else {}
             tier = metadata_dict.get("x-tenant-tier")
+            is_quota_verified = metadata_dict.get("x-quota-verified") == "true"
             mode = getattr(request, "mode", None) or None
-            is_sandbox = mode == "sandbox" or (bool(request.session_id) and request.session_id.startswith("sandbox_"))
+            is_sandbox = mode == "sandbox" or (
+                bool(request.session_id) and request.session_id.startswith("sandbox_")
+            )
             set_span_attributes(
                 tenant_id=request.tenant_id,
                 agent_id=request.agent_id,
@@ -292,6 +295,7 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                 customer_name=request.customer_name if request.customer_name else None,
                 mode=mode,
                 tier=tier,
+                is_quota_verified=is_quota_verified,
             )
             return knowledge_pb2.CustomerChatResponse(
                 session_id=result["session_id"],
@@ -398,7 +402,6 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                 if runtime_cfg and runtime_cfg.widget_config:
                     widget_config = runtime_cfg.widget_config.model_dump()
                 else:
-
                     agent_draft = await AgentDraft.find_one(
                         {"tenant_id": request.tenant_id, "agent_id": request.agent_id}
                     )

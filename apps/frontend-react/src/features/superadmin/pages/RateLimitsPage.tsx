@@ -343,9 +343,7 @@ export default function RateLimitsPage() {
                     </div>
 
                     <div className="text-right">
-                      <span className="text-[10px] text-slate-500 font-mono block">
-                        Window: 60s
-                      </span>
+                      
                       <span className="text-[10px] text-emerald-400 flex items-center gap-1 justify-end">
                         <Zap className="w-3 h-3" /> Redis Enforced
                       </span>

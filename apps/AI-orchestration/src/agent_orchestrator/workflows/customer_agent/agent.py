@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+import uuid
 from typing import Any
 
 from dotenv import load_dotenv
@@ -198,9 +200,13 @@ Your job is to merge specialist agent answers into a single, cohesive, seamless,
                         "[CustomerGraph:SynthesizerNode] Gemini synthesis fallback failed (%s) → fallback join",
                         fb_err,
                     )
-                    final_text = f"{extract_text_content(faq_resp)}\n\n{extract_text_content(booking_resp)}"
+                    final_text = (
+                        f"{extract_text_content(faq_resp)}\n\n{extract_text_content(booking_resp)}"
+                    )
             else:
-                final_text = f"{extract_text_content(faq_resp)}\n\n{extract_text_content(booking_resp)}"
+                final_text = (
+                    f"{extract_text_content(faq_resp)}\n\n{extract_text_content(booking_resp)}"
+                )
     elif booking_resp and extract_text_content(booking_resp).strip():
         final_text = extract_text_content(booking_resp).strip()
     elif faq_resp and extract_text_content(faq_resp).strip():
@@ -276,6 +282,7 @@ async def process_customer_chat(
     customer_name: str | None = None,
     mode: str | None = None,
     tier: str | None = None,
+    is_quota_verified: bool = False,
 ) -> dict[str, Any]:
     if mode == "sandbox":
         is_sandbox = True
@@ -284,74 +291,82 @@ async def process_customer_chat(
     else:
         is_sandbox = bool(session_id and session_id.startswith("sandbox_"))
 
-    await _customer_msg_repo.get_or_create_conversation(session_id, tenant_id, agent_id)
-
-    if customer_id or customer_phone or customer_name:
-        await _customer_msg_repo.update_conversation_customer(
+   
+    pre_tasks: list[Any] = [
+        _customer_msg_repo.save_message(
             session_id=session_id,
+            tenant_id=tenant_id,
+            agent_id=agent_id,
+            role="user",
+            content=message,
             customer_id=customer_id,
             customer_name=customer_name,
             customer_phone=customer_phone,
-        )
+        ),
+        _customer_msg_repo.get_recent_messages(session_id, limit=20),
+        resolve_business_context(tenant_id, agent_id, is_sandbox=is_sandbox),
+    ]
 
-    user_msg = await _customer_msg_repo.save_message(
-        session_id=session_id,
-        tenant_id=tenant_id,
-        agent_id=agent_id,
-        role="user",
-        content=message,
-    )
+    check_quota = not is_quota_verified
+    if check_quota:
+        pre_tasks.append(TokenTrackingService.check_weekly_quota(tenant_id, tier=tier))
 
-    recent_messages = await _customer_msg_repo.get_recent_messages(session_id, limit=20)
+    pre_results = await asyncio.gather(*pre_tasks)
+    user_msg = pre_results[0]
+    recent_messages = pre_results[1]
+    biz_context = pre_results[2]
+
+    if check_quota:
+        is_exceeded, current_tokens, token_limit = pre_results[3]
+        if is_exceeded:
+            logger.warning(
+                "[CustomerAgent] Tenant %s exceeded weekly token quota (%d/%d). Blocking interaction.",
+                tenant_id,
+                current_tokens,
+                token_limit,
+            )
+            quota_msg = (
+                "This workspace has reached its weekly AI token usage limit. "
+                "Please contact the administrator or upgrade your subscription plan to continue."
+            )
+            assistant_msg = await _customer_msg_repo.save_message(
+                session_id=session_id,
+                tenant_id=tenant_id,
+                agent_id=agent_id,
+                role="assistant",
+                content=quota_msg,
+            )
+            user_msg_id = str(user_msg.id) if user_msg and hasattr(user_msg, "id") else ""
+            agent_msg_id = (
+                str(assistant_msg.id) if assistant_msg and hasattr(assistant_msg, "id") else ""
+            )
+            created_at_iso = (
+                assistant_msg.created_at.isoformat()
+                if assistant_msg
+                and hasattr(assistant_msg, "created_at")
+                and assistant_msg.created_at
+                else ""
+            )
+            return {
+                "session_id": session_id,
+                "response": quota_msg,
+                "user_message_id": user_msg_id,
+                "agent_message_id": agent_msg_id,
+                "created_at": created_at_iso,
+            }
+
+    all_tools = get_scheduling_mcp_tools()
 
     langchain_messages: list[BaseMessage] = []
     for m in recent_messages:
+        
+        if user_msg and hasattr(user_msg, "id") and hasattr(m, "id") and m.id == user_msg.id:
+            continue
         clean_history_text = extract_text_content(m.content)
         if m.role == "user":
             langchain_messages.append(HumanMessage(content=clean_history_text))
         elif m.role == "assistant":
             langchain_messages.append(AIMessage(content=clean_history_text))
-
-    biz_context = await resolve_business_context(tenant_id, agent_id, is_sandbox=is_sandbox)
-    all_tools = get_scheduling_mcp_tools()
-
-    is_exceeded, current_tokens, token_limit = await TokenTrackingService.check_weekly_quota(
-        tenant_id, tier=tier
-    )
-    if is_exceeded:
-        logger.warning(
-            "[CustomerAgent] Tenant %s exceeded weekly token quota (%d/%d). Blocking interaction.",
-            tenant_id,
-            current_tokens,
-            token_limit,
-        )
-        quota_msg = (
-            "This workspace has reached its weekly AI token usage limit. "
-            "Please contact the administrator or upgrade your subscription plan to continue."
-        )
-        assistant_msg = await _customer_msg_repo.save_message(
-            session_id=session_id,
-            tenant_id=tenant_id,
-            agent_id=agent_id,
-            role="assistant",
-            content=quota_msg,
-        )
-        user_msg_id = str(user_msg.id) if user_msg and hasattr(user_msg, "id") else ""
-        agent_msg_id = (
-            str(assistant_msg.id) if assistant_msg and hasattr(assistant_msg, "id") else ""
-        )
-        created_at_iso = (
-            assistant_msg.created_at.isoformat()
-            if assistant_msg and hasattr(assistant_msg, "created_at") and assistant_msg.created_at
-            else ""
-        )
-        return {
-            "session_id": session_id,
-            "response": quota_msg,
-            "user_message_id": user_msg_id,
-            "agent_message_id": agent_msg_id,
-            "created_at": created_at_iso,
-        }
 
     initial_state: CustomerGraphState = {
         "session_id": session_id,
@@ -405,30 +420,38 @@ async def process_customer_chat(
         "tags": tags,
         "metadata": metadata,
     }
-    try:
-        final_state = await customer_orchestration_graph.ainvoke(
-            initial_state,
-            config=run_config,
-        )
-        raw_response = final_state.get("response")
-        response_text = extract_text_content(raw_response) if raw_response else (
-            "I'm sorry, I encountered a temporary issue while processing your request. "
-            "Please try again in a moment."
-        )
-    except Exception as e:
-        logger.error("[CustomerAgent] StateGraph orchestration error: %s", e, exc_info=True)
-        response_text = (
-            "I'm sorry, I encountered a temporary issue while processing your request. "
-            "Please try again in a moment."
-        )
 
-    assistant_msg = await _customer_msg_repo.save_message(
-        session_id=session_id,
-        tenant_id=tenant_id,
-        agent_id=agent_id,
-        role="assistant",
-        content=response_text,
-    )
+   
+    if os.getenv("MOCK_LLM", "").strip().lower() in ("true", "1", "yes"):
+        response_text = (
+            "Thank you for reaching out. I am your automated AI assistant and can help you "
+            "with scheduling appointments, checking availability, and answering questions."
+        )
+        tracker.input_tokens = max(15, len(message) // 4)
+        tracker.output_tokens = max(25, len(response_text) // 4)
+        tracker.call_count = 1
+        tracker.model_id = "mock-llm-fast"
+    else:
+        try:
+            final_state = await customer_orchestration_graph.ainvoke(
+                initial_state,
+                config=run_config,
+            )
+            raw_response = final_state.get("response")
+            response_text = (
+                extract_text_content(raw_response)
+                if raw_response
+                else (
+                    "I'm sorry, I encountered a temporary issue while processing your request. "
+                    "Please try again in a moment."
+                )
+            )
+        except Exception as e:
+            logger.error("[CustomerAgent] StateGraph orchestration error: %s", e, exc_info=True)
+            response_text = (
+                "I'm sorry, I encountered a temporary issue while processing your request. "
+                "Please try again in a moment."
+            )
 
     fallback_prompt = f"{message} " + " ".join(
         m.content
@@ -456,9 +479,17 @@ async def process_customer_chat(
         out_tokens = fallback_out
         model_name = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
 
-    det_event_id = f"evt_tok_{tenant_id}_{agent_id}_{assistant_msg.id}"
+    det_event_id = f"evt_tok_{tenant_id}_{agent_id}_{uuid.uuid4().hex[:16]}"
 
-    await TokenTrackingService.record_tokens(
+  
+    assistant_msg_task = _customer_msg_repo.save_message(
+        session_id=session_id,
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        role="assistant",
+        content=response_text,
+    )
+    token_task = TokenTrackingService.record_tokens(
         tenant_id=tenant_id,
         agent_id=agent_id,
         source="customer_agent",
@@ -467,6 +498,7 @@ async def process_customer_chat(
         model_id=model_name,
         event_id=det_event_id,
     )
+    assistant_msg, _ = await asyncio.gather(assistant_msg_task, token_task)
 
     user_msg_id = str(user_msg.id) if user_msg and hasattr(user_msg, "id") else ""
     agent_msg_id = str(assistant_msg.id) if assistant_msg and hasattr(assistant_msg, "id") else ""

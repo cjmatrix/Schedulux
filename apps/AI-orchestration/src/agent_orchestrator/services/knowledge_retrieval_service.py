@@ -6,14 +6,17 @@ from typing import Any
 
 import voyageai
 
-from agent_orchestrator.config import VOYAGE_API_KEY
+from agent_orchestrator.config import (
+    RETRIEVAL_CANDIDATE_POOL_SIZE,
+    RETRIEVAL_TOP_K,
+    VOYAGE_API_KEY,
+    VOYAGE_RERANK_MODEL,
+)
 from agent_orchestrator.domain.protocols import (
     DenseEmbedder,
     KnowledgeVectorStore,
     SparseEmbedder,
 )
-
-VOYAGE_RERANK_MODEL = os.getenv("VOYAGE_RERANK_MODEL", "rerank-2-lite")
 
 
 class KnowledgeRetrievalService:
@@ -35,12 +38,21 @@ class KnowledgeRetrievalService:
         query: str,
         tenant_id: str,
         agent_id: str | None = None,
-        top_k: int = 5,
-        candidate_pool_size: int = 20,
+        top_k: int | None = None,
+        candidate_pool_size: int | None = None,
     ) -> list[dict[str, Any]]:
 
         if not query.strip() or not tenant_id:
             return []
+
+        resolved_top_k = (
+            top_k if top_k is not None else int(os.getenv("RETRIEVAL_TOP_K", str(RETRIEVAL_TOP_K)))
+        )
+        resolved_pool_size = (
+            candidate_pool_size
+            if candidate_pool_size is not None
+            else int(os.getenv("RETRIEVAL_CANDIDATE_POOL_SIZE", str(RETRIEVAL_CANDIDATE_POOL_SIZE)))
+        )
 
         dense_vector, (sparse_indices, sparse_values) = await asyncio.gather(
             self.dense_embedder.embed_query(query),
@@ -53,13 +65,13 @@ class KnowledgeRetrievalService:
             sparse_values=sparse_values,
             tenant_id=tenant_id,
             agent_id=agent_id,
-            limit=candidate_pool_size,
+            limit=resolved_pool_size,
         )
 
         if not candidates:
             return []
 
-        if len(candidates) <= top_k:
+        if len(candidates) <= resolved_top_k:
             return candidates
 
         try:
@@ -68,7 +80,7 @@ class KnowledgeRetrievalService:
                 query=query,
                 documents=texts,
                 model=VOYAGE_RERANK_MODEL,
-                top_k=top_k,
+                top_k=resolved_top_k,
             )
             reranked: list[dict[str, Any]] = []
             for r in rerank_resp.results:
@@ -78,4 +90,4 @@ class KnowledgeRetrievalService:
             return reranked
         except Exception as e:
             print(f"[KnowledgeRetrievalService] Reranking warning: {e}", flush=True)
-            return candidates[:top_k]
+            return candidates[:resolved_top_k]

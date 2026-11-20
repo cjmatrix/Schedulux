@@ -22,9 +22,9 @@ dotenv_path = Path(__file__).resolve().parents[5] / ".env"
 load_dotenv(dotenv_path)
 
 KNOWLEDGE_COLLECTION_NAME = os.getenv("KNOWLEDGE_COLLECTION_NAME", "knowledge_documents")
-VOYAGE_EMBEDDING_MODEL = os.getenv("VOYAGE_EMBEDDING_MODEL", "voyage-3-lite")
+VOYAGE_EMBEDDING_MODEL = os.getenv("VOYAGE_EMBEDDING_MODEL", "voyage-4")
 SPARSE_MODEL_NAME = os.getenv("SPARSE_EMBEDDING_MODEL", "Qdrant/bm25")
-DENSE_VECTOR_SIZE = 512  
+DENSE_VECTOR_SIZE = int(os.getenv("QDRANT_VECTOR_SIZE", "1024"))
 
 _qdrant_client: AsyncQdrantClient | None = None
 _sparse_model: SparseTextEmbedding | None = None
@@ -59,8 +59,26 @@ async def ensure_qdrant_knowledge_collection(client: AsyncQdrantClient) -> None:
         collections = await client.get_collections()
         existing = [c.name for c in collections.collections]
 
+        if KNOWLEDGE_COLLECTION_NAME in existing:
+            col_info = await client.get_collection(KNOWLEDGE_COLLECTION_NAME)
+            vectors_cfg = getattr(col_info.config.params, "vectors", None)
+            current_dim = None
+            if isinstance(vectors_cfg, dict) and "dense-text" in vectors_cfg:
+                current_dim = getattr(vectors_cfg["dense-text"], "size", None)
+            elif hasattr(vectors_cfg, "size"):
+                current_dim = getattr(vectors_cfg, "size", None)
+
+            if current_dim and current_dim != DENSE_VECTOR_SIZE:
+                print(
+                    f"[DocumentIndexer] Vector dimension mismatch for '{KNOWLEDGE_COLLECTION_NAME}': "
+                    f"existing is {current_dim}, expected {DENSE_VECTOR_SIZE} (model: {VOYAGE_EMBEDDING_MODEL}). "
+                    f"Re-creating collection with dimension {DENSE_VECTOR_SIZE}...",
+                    flush=True,
+                )
+                await client.delete_collection(KNOWLEDGE_COLLECTION_NAME)
+                existing.remove(KNOWLEDGE_COLLECTION_NAME)
+
         if KNOWLEDGE_COLLECTION_NAME not in existing:
-            
             await client.create_collection(
                 collection_name=KNOWLEDGE_COLLECTION_NAME,
                 vectors_config={

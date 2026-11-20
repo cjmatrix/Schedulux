@@ -50,6 +50,21 @@ class QdrantMemoryStore(MemoryVectorStore):
         try:
             resp = await self.client.get_collections()
             existing = [c.name for c in resp.collections]
+            if self.collection_name in existing:
+                col = await self.client.get_collection(self.collection_name)
+                vectors_cfg = getattr(col.config.params, "vectors", None)
+                current_dim = (
+                    getattr(vectors_cfg, "size", None) if hasattr(vectors_cfg, "size") else None
+                )
+                if current_dim and current_dim != self.vector_size:
+                    print(
+                        f"[QdrantMemoryStore] Vector dimension mismatch for {self.collection_name}: "
+                        f"existing {current_dim} != configured {self.vector_size}. Re-creating collection...",
+                        flush=True,
+                    )
+                    await self.client.delete_collection(self.collection_name)
+                    existing.remove(self.collection_name)
+
             if self.collection_name not in existing:
                 await self.client.create_collection(
                     collection_name=self.collection_name,

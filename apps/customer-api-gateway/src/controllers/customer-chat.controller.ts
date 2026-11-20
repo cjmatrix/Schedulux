@@ -1,3 +1,4 @@
+import { Metadata } from '@grpc/grpc-js';
 import {
   BadRequestException,
   Body,
@@ -22,6 +23,7 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { lastValueFrom } from 'rxjs';
 import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
 import { API_ROUTES } from '../constants/routes.constant.js';
+import { TenantTokenQuotaGuard } from '../guards/tenant-token-quota.guard.js';
 import {
   CustomerChatDto,
   InitCustomerChatDto,
@@ -119,6 +121,7 @@ export class CustomerChatController implements OnModuleInit {
 
   @Post(API_ROUTES.PUBLIC_CHAT.ROOT)
   @HttpCode(HttpStatus.OK)
+  @UseGuards(TenantTokenQuotaGuard)
   @UsePipes(ZodValidationPipe)
   async chat(@Req() req: Request, @Body() body: CustomerChatDto) {
     let sessionId = req.customerSession?.sessionId || body.session_id;
@@ -137,17 +140,27 @@ export class CustomerChatController implements OnModuleInit {
       token = signSessionId(sessionId, body.tenant_id, body.agent_id);
     }
 
+    const metadata = new Metadata();
+    const verifiedTier = (req as any).verifiedTier;
+    if (verifiedTier) {
+      metadata.set('x-tenant-tier', verifiedTier);
+      metadata.set('x-quota-verified', 'true');
+    }
+
     const response = await lastValueFrom(
-      this._knowledgeService.customerChat({
-        tenant_id: body.tenant_id,
-        agent_id: body.agent_id,
-        session_id: sessionId,
-        message: body.message,
-        customer_id: body.customer_id,
-        customer_phone: body.customer_phone,
-        customer_name: body.customer_name,
-        mode: 'live',
-      }),
+      this._knowledgeService.customerChat(
+        {
+          tenant_id: body.tenant_id,
+          agent_id: body.agent_id,
+          session_id: sessionId,
+          message: body.message,
+          customer_id: body.customer_id,
+          customer_phone: body.customer_phone,
+          customer_name: body.customer_name,
+          mode: 'live',
+        },
+        metadata,
+      ),
     );
 
     return {

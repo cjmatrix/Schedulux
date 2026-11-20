@@ -65,5 +65,4 @@ class RabbitMQMemoryQueue(MemoryQueue):
             pass
 
 
-
 BullMQMemoryQueue = RabbitMQMemoryQueue

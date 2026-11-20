@@ -520,12 +520,10 @@ async def _execute_booking_turn(
             )
             messages.append(tool_msg)
 
-
     for msg in reversed(current_turn_ai_messages):
         content = _extract_content(msg)
         if content.strip():
             return content
-
 
     try:
         final_synth_msg = await model.ainvoke(messages, config=config)

@@ -1,6 +1,4 @@
 import {
-  Activity,
-  Bell,
   Building2,
   ChevronRight,
   Gauge,
@@ -8,7 +6,6 @@ import {
   Loader2,
   LogOut,
   Menu,
-  Settings,
   Shield,
   X,
 } from 'lucide-react';
@@ -20,8 +17,6 @@ const NAV_ITEMS = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/superadmin/dashboard' },
   { icon: Building2, label: 'Tenants', path: '/superadmin/tenants' },
   { icon: Gauge, label: 'Rate Limits & Tiers', path: '/superadmin/rate-limits' },
-  { icon: Activity, label: 'System Health', path: '/superadmin/system-health' },
-  { icon: Settings, label: 'Global Settings', path: '/superadmin/settings' },
 ];
 
 export default function AdminLayout() {
@@ -157,12 +152,7 @@ export default function AdminLayout() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button className="relative p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors">
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-rose-500" />
-            </button>
-          </div>
+         
         </header>
 
         {/* Nested Content Routes */}

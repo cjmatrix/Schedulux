@@ -709,7 +709,7 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
               className="w-full p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all leading-relaxed resize-none"
             />
             <p className="text-[11px] text-slate-400 mt-1.5">
-              Schedulux automatically inserts dynamic padding into Google Calendar and voice-booking
+              Schedulux automatically inserts dynamic padding into Google Calendar and Ai-booking
               agent reservations.
             </p>
           </div>
@@ -923,7 +923,7 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
           <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 text-slate-600 text-xs">
             <Shield className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
             <span className="text-[11px] leading-relaxed">
-              Schedulux AI voice and autonomous text agents will strictly offer appointment slots
+              Schedulux AI and autonomous text agents will strictly offer appointment slots
               within these confirmed operating hours.
             </span>
           </div>

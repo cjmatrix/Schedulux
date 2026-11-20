@@ -42,7 +42,6 @@ from agent_orchestrator.tracing import flush_telemetry, init_telemetry
 init_telemetry()
 
 
-
 def build_knowledge_servicer() -> tuple[
     KnowledgeServiceServicer,
     CrawlerServiceProtocol,

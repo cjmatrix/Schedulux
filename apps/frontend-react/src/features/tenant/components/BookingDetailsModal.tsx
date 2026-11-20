@@ -283,7 +283,7 @@ export function BookingDetailsModal({
             <div className="p-3.5 bg-indigo-50/60 border border-indigo-100 rounded-2xl text-xs text-indigo-900 space-y-1">
               <div className="flex items-center gap-1.5 font-bold">
                 <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                <span>AI Voice Assistant Interaction</span>
+                <span>AI Assistant Interaction</span>
               </div>
               <p className="text-[11px] text-indigo-700 leading-relaxed">
                 Customer connected via the inbound AI agent line. Automated natural language

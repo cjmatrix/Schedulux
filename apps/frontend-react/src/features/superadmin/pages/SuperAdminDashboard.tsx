@@ -8,7 +8,6 @@ import {
   DollarSign,
   Layers,
   RefreshCw,
-  Server,
   Sparkles,
   TrendingUp,
   Users,
@@ -48,7 +47,7 @@ function formatTokens(num: number): string {
 
 function formatCurrency(amount: number, currency = 'USD'): string {
   const symbol = currency.toUpperCase() === 'USD' ? '$' : `${currency} `;
-  return `${symbol}${(amount || 0).toLocaleString(undefined, {
+  return `${symbol}${(amount/100 || 0).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -526,177 +525,101 @@ export default function SuperAdminDashboard() {
         </div>
       </div>
 
-      {/* Bottom Section: Top 5 Tenants by Token Consumption + Platform Health */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Top 5 Tenants by Token Usage Table */}
-        <div className="xl:col-span-2 bg-slate-900/60 border border-slate-800/80 rounded-2xl overflow-hidden shadow-sm">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800/60">
-            <div>
-              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                <Users className="w-4 h-4 text-indigo-400" />
-                Top 5 Tenants by Token Usage
-              </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Highest resource consumption tenants aggregated by OpenSearch terms
-              </p>
-            </div>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-semibold">
-              Top Consumers
-            </span>
+      {/* Bottom Section: Top 5 Tenants by Token Consumption */}
+      <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl overflow-hidden shadow-sm">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800/60">
+          <div>
+            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <Users className="w-4 h-4 text-indigo-400" />
+              Top 5 Tenants by Token Usage
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Highest resource consumption tenants aggregated by OpenSearch terms
+            </p>
           </div>
-
-          <div className="overflow-x-auto">
-            {topTenantsLoading ? (
-              <div className="p-8 text-center text-slate-500 text-xs">Loading top tenants...</div>
-            ) : !topTenants || topTenants.length === 0 ? (
-              <div className="p-8 text-center text-slate-500 text-xs">
-                No tenant token consumption recorded in OpenSearch yet.
-              </div>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-[11px] text-slate-500 font-medium uppercase tracking-wider border-b border-slate-800/50">
-                    <th className="text-left px-5 py-3 bg-slate-900/40">Rank & Business</th>
-                    <th className="text-left px-5 py-3 bg-slate-900/40 hidden sm:table-cell">Tier</th>
-                    <th className="text-left px-5 py-3 bg-slate-900/40">Tokens Used</th>
-                    <th className="text-left px-5 py-3 bg-slate-900/40 hidden md:table-cell">
-                      Usage Share
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/50">
-                  {topTenants.map((item, idx) => {
-                    const percentage = Math.min(
-                      100,
-                      Math.round((item.total_tokens / maxTenantTokens) * 100),
-                    );
-                    return (
-                      <tr key={item.tenant_id} className="hover:bg-slate-800/30 transition-colors">
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-3">
-                            <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold flex items-center justify-center border border-slate-700">
-                              #{idx + 1}
-                            </span>
-                            <div>
-                              <p className="text-sm font-medium text-white leading-none">
-                                {item.business_name}
-                              </p>
-                              <p className="text-[11px] text-slate-500 mt-1 font-mono">
-                                {item.email || item.tenant_id}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-5 py-3.5 hidden sm:table-cell">
-                          <span
-                            className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium border capitalize ${
-                              TIER_COLORS[item.tier?.toLowerCase()] || TIER_COLORS.unknown
-                            }`}
-                          >
-                            {item.tier || 'Starter'}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <p className="text-sm font-semibold text-cyan-400 font-mono">
-                            {formatTokens(item.total_tokens)}
-                          </p>
-                          <p className="text-[10px] text-slate-500">
-                            {item.total_tokens.toLocaleString()} tokens
-                          </p>
-                        </td>
-                        <td className="px-5 py-3.5 hidden md:table-cell">
-                          <div className="w-32 flex items-center gap-2">
-                            <div className="flex-1 bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                              <div
-                                className="bg-gradient-to-r from-cyan-500 to-indigo-500 h-full rounded-full transition-all duration-500"
-                                style={{ width: `${percentage}%` }}
-                              />
-                            </div>
-                            <span className="text-[11px] font-mono text-slate-400">
-                              {percentage}%
-                            </span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-semibold">
+            Top Consumers
+          </span>
         </div>
 
-        {/* System & Services Live Health */}
-        <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between shadow-sm">
-          <div>
-            <div className="flex items-center justify-between border-b border-slate-800/60 pb-3 mb-4">
-              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                <Server className="w-4 h-4 text-violet-400" />
-                Infrastructure Health
-              </h3>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                All Systems Normal
-              </span>
+        <div className="overflow-x-auto">
+          {topTenantsLoading ? (
+            <div className="p-8 text-center text-slate-500 text-xs">Loading top tenants...</div>
+          ) : !topTenants || topTenants.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 text-xs">
+              No tenant token consumption recorded in OpenSearch yet.
             </div>
-
-            <div className="space-y-3">
-              {[
-                {
-                  name: 'OpenSearch (Bonsai Cluster)',
-                  type: 'Analytics & Token Ledger',
-                  status: 'Operational',
-                  indicator: 'emerald',
-                },
-                {
-                  name: 'MongoDB Replica Set',
-                  type: 'Tenants & Billing Ledgers',
-                  status: 'Operational',
-                  indicator: 'emerald',
-                },
-                {
-                  name: 'Kafka Event Bus (Aiven)',
-                  type: 'billing.tokens.consumed',
-                  status: 'Connected',
-                  indicator: 'emerald',
-                },
-                {
-                  name: 'Redis Cache Cluster',
-                  type: 'Fast Tier Lookups (30D TTL)',
-                  status: 'Operational',
-                  indicator: 'emerald',
-                },
-                {
-                  name: 'AI Orchestration Service',
-                  type: 'gRPC Port 50052',
-                  status: 'Connected',
-                  indicator: 'emerald',
-                },
-              ].map((svc) => (
-                <div
-                  key={svc.name}
-                  className="bg-slate-800/40 border border-slate-700/40 rounded-xl px-3.5 py-2.5 flex items-center justify-between hover:bg-slate-800/60 transition-colors"
-                >
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-white truncate">{svc.name}</p>
-                    <p className="text-[10px] text-slate-500 truncate">{svc.type}</p>
-                  </div>
-                  <span className="text-[11px] font-medium text-emerald-400 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    {svc.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-5 pt-3 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-500">
-            <span>Schedulux Enterprise Core</span>
-            <span className="text-emerald-400 flex items-center gap-1.5 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              Operational
-            </span>
-          </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[11px] text-slate-500 font-medium uppercase tracking-wider border-b border-slate-800/50">
+                  <th className="text-left px-5 py-3 bg-slate-900/40">Rank & Business</th>
+                  <th className="text-left px-5 py-3 bg-slate-900/40 hidden sm:table-cell">Tier</th>
+                  <th className="text-left px-5 py-3 bg-slate-900/40">Tokens Used</th>
+                  <th className="text-left px-5 py-3 bg-slate-900/40 hidden md:table-cell">
+                    Usage Share
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/50">
+                {topTenants.map((item, idx) => {
+                  const percentage = Math.min(
+                    100,
+                    Math.round((item.total_tokens / maxTenantTokens) * 100),
+                  );
+                  return (
+                    <tr key={item.tenant_id} className="hover:bg-slate-800/30 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold flex items-center justify-center border border-slate-700">
+                            #{idx + 1}
+                          </span>
+                          <div>
+                            <p className="text-sm font-medium text-white leading-none">
+                              {item.business_name}
+                            </p>
+                            <p className="text-[11px] text-slate-500 mt-1 font-mono">
+                              {item.email || item.tenant_id}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 hidden sm:table-cell">
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium border capitalize ${
+                            TIER_COLORS[item.tier?.toLowerCase()] || TIER_COLORS.unknown
+                          }`}
+                        >
+                          {item.tier || 'Starter'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-semibold text-cyan-400 font-mono">
+                          {formatTokens(item.total_tokens)}
+                        </p>
+                        <p className="text-[10px] text-slate-500">
+                          {item.total_tokens.toLocaleString()} tokens
+                        </p>
+                      </td>
+                      <td className="px-5 py-3.5 hidden md:table-cell">
+                        <div className="w-48 flex items-center gap-2">
+                          <div className="flex-1 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className="bg-gradient-to-r from-cyan-500 to-indigo-500 h-full rounded-full transition-all duration-500"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                          <span className="text-[11px] font-mono text-slate-400">
+                            {percentage}%
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>

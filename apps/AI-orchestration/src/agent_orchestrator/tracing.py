@@ -31,7 +31,6 @@ _LOGGER_PROVIDER: LoggerProvider | None = None
 
 
 class OtelContextFilter(logging.Filter):
-
     def filter(self, record: logging.LogRecord) -> bool:
         span = trace.get_current_span()
         if span and span.is_recording():
@@ -70,12 +69,13 @@ def init_telemetry() -> None:
     elif endpoint.startswith("https://"):
         endpoint = endpoint[8:]
 
-    resource = Resource.create({
-        "service.name": service_name,
-        "service.version": service_version,
-        "deployment.environment": os.environ.get("NODE_ENV", "development"),
-    })
-
+    resource = Resource.create(
+        {
+            "service.name": service_name,
+            "service.version": service_version,
+            "deployment.environment": os.environ.get("NODE_ENV", "development"),
+        }
+    )
 
     _TRACER_PROVIDER = TracerProvider(resource=resource)
     span_exporter = OTLPSpanExporter(endpoint=endpoint, insecure=True)
@@ -89,7 +89,6 @@ def init_telemetry() -> None:
     )
     trace.set_tracer_provider(_TRACER_PROVIDER)
 
-
     metric_exporter = OTLPMetricExporter(endpoint=endpoint, insecure=True)
     metric_reader = PeriodicExportingMetricReader(
         metric_exporter,
@@ -97,7 +96,6 @@ def init_telemetry() -> None:
     )
     meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
     metrics.set_meter_provider(meter_provider)
-
 
     _LOGGER_PROVIDER = LoggerProvider(resource=resource)
     log_exporter = OTLPLogExporter(endpoint=endpoint, insecure=True)
@@ -111,7 +109,6 @@ def init_telemetry() -> None:
     )
     _logs.set_logger_provider(_LOGGER_PROVIDER)
 
-
     root_logger = logging.getLogger()
     context_filter = OtelContextFilter()
     root_logger.addFilter(context_filter)
@@ -122,12 +119,10 @@ def init_telemetry() -> None:
 
     LoggingInstrumentor().instrument(set_logging_format=True)
 
-
     try:
         SystemMetricsInstrumentor().instrument()
     except Exception as e:
         print(f"[Telemetry Warning] SystemMetricsInstrumentor failed: {e}", file=sys.stderr)
-
 
     try:
         GrpcInstrumentorClient().instrument()

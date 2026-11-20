@@ -333,7 +333,7 @@ export default function BookingsPage() {
               {metrics.aiBookedCount}
             </span>
             <span className="text-[10px] sm:text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-              {metrics.aiPercent}% Voice AI
+              {metrics.aiPercent}% AI
             </span>
           </div>
         </div>

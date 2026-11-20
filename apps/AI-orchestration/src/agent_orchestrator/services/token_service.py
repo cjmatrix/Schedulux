@@ -154,8 +154,10 @@ class TokenTrackingService:
 
         try:
             client = get_redis_client()
-            new_val = await client.incrby(redis_key, total_tokens)
-            ttl = await client.ttl(redis_key)
+            pipe = client.pipeline(transaction=False)
+            pipe.incrby(redis_key, total_tokens)
+            pipe.ttl(redis_key)
+            new_val, ttl = await pipe.execute()
             if ttl < 0:
                 await client.expire(redis_key, 35 * 86400)
             logger.info(

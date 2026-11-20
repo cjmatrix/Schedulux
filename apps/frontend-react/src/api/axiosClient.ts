@@ -106,13 +106,14 @@ axiosClient.interceptors.response.use(
       }
     }
 
+    const resData = error.response?.data;
+    const rawMsg = resData?.message || resData?.error;
     const message =
-      error.response?.data?.error ||
-      error.response?.data?.message ||
+      (Array.isArray(rawMsg) ? rawMsg.join(', ') : rawMsg) ||
       error.message ||
       'An unexpected error occurred';
 
-    // Global Toast Notification for all API errors (except 401 token refresh or if skipGlobalToast is set)
+    
     const customConfig = originalRequest as { skipGlobalToast?: boolean } | undefined;
     if (!customConfig?.skipGlobalToast && error.response?.status !== 401) {
       toast.error(message, {

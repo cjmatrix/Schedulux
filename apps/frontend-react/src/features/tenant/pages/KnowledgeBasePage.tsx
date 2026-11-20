@@ -371,7 +371,7 @@ export default function KnowledgeBasePage() {
                       {uploadStage === 'uploading' && (
                         <>
                           <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
-                          Uploading to S3 Bucket...
+                          Uploading...
                         </>
                       )}
                       {uploadStage === 'confirming' && (
@@ -419,7 +419,7 @@ export default function KnowledgeBasePage() {
                     className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer"
                   >
                     <UploadCloud className="w-4 h-4 text-emerald-400" />
-                    Upload PDF to S3
+                    Upload PDF
                   </button>
                   <button
                     type="button"
@@ -525,20 +525,47 @@ export default function KnowledgeBasePage() {
                 </div>
 
                 <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
-                  <span
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                      doc.status === 'uploaded'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : 'bg-amber-50 text-amber-700 border-amber-200'
-                    }`}
-                  >
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full ${
-                        doc.status === 'uploaded' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
-                      }`}
-                    />
-                    {doc.status === 'uploaded' ? 'Uploaded to S3' : 'Pending'}
-                  </span>
+                  {(() => {
+                    const norm = (doc.status || '').toLowerCase();
+                    if (norm === 'indexed') {
+                      return (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Indexed
+                        </span>
+                      );
+                    }
+                    if (norm === 'indexing') {
+                      return (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-sky-50 text-sky-700 border-sky-200">
+                          <Loader2 className="w-3 h-3 animate-spin text-sky-600" />
+                          Indexing...
+                        </span>
+                      );
+                    }
+                    if (norm === 'uploaded') {
+                      return (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-blue-50 text-blue-700 border-blue-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                          Uploaded
+                        </span>
+                      );
+                    }
+                    if (norm === 'failed') {
+                      return (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-rose-50 text-rose-700 border-rose-200">
+                          <AlertCircle className="w-3 h-3 text-rose-600" />
+                          Failed
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-amber-50 text-amber-700 border-amber-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                        Pending
+                      </span>
+                    );
+                  })()}
 
                   <button
                     onClick={() => handleDelete(doc)}

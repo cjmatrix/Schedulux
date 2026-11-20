@@ -28,6 +28,13 @@ export class AppThrottlerGuard extends ThrottlerGuard {
   }
 
   protected override async shouldSkip(context: ExecutionContext): Promise<boolean> {
+    if (
+      process.env.RATE_LIMIT_DISABLED === 'true' ||
+      process.env.LOADTEST_MODE === 'true'
+    ) {
+      return true;
+    }
+
     if (context.getType() !== 'http') {
       return true;
     }

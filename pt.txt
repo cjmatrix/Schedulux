@@ -174,3 +174,44 @@ Only when traffic reaches extreme scale (e.g. 20,000+ simultaneous chat streams 
 3. Use NestJS's `CorsOptionsDelegate` with `req` to fast-path dashboard traffic and only evaluate dynamic Redis checks on `/api/v1/public/**`.
 4. Set `maxAge: 86400` so preflight checks occur at most once per user per day.
 5. Invalidate the Redis key whenever an agent's runtime config is saved or published.
+
+
+uv run --project apps/AI-orchestration/evals/upload_to_langsmith.py \
+  --file apps/AI-orchestration/evals/sample_dataset.json \
+  --dataset-name brocamp-condonation-eval
+
+
+  
+  
+uv run --project apps/AI-orchestration python apps/AI-orchestration/evals/evaluate_rag.py \
+  --dataset brocamp-condonation-eval \
+  --limit 1
+  AWSTemplateFormatVersion: "2010-09-09"
+
+
+
+ 
+ AWSTemplateFormatVersion: "2010-09-09"
+
+
+
+
+
+
+
+ # 1. 5-Minute Core Availability Ramp-Up (10 -> 100 VUs)
+pnpm loadtest:core:ramp
+# 2. 2-Minute ACID Booking Spike Test (Sudden 10x burst)
+pnpm loadtest:core:spike
+# 3. 5-Minute Customer Chat Pipeline Stress (100 VUs / Mocked LLM)
+pnpm loadtest:chat:mocked
+# 4. 1-Minute Live LLM Benchmark (3 VUs / Real Gemini + Voyage + Qdrant)
+pnpm loadtest:chat:live
+# Quick 10-Second Smoke Test
+pnpm loadtest:quick
+
+
+
+
+
+

@@ -323,7 +323,6 @@ async def handle_schedule_event(payload: dict[str, Any]) -> None:
         )
     )
 
-
     query: dict[str, Any] = {"agent_id": agent_id} if agent_id else {"tenant_id": tenant_id}
     config = await AgentRuntimeConfig.find_one(query)
     if config:
@@ -351,7 +350,6 @@ async def handle_schedule_event(payload: dict[str, Any]) -> None:
             agent_id,
             config.tenant_id,
         )
-
 
     agent_draft = await AgentDraft.find_one(query)
     if agent_draft:

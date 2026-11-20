@@ -138,6 +138,27 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return resolveTierConfigWithCache(this, tier);
   }
 
+  private _getCurrentIsoWeek(): string {
+    const now = new Date();
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+  }
+
+  async getWeeklyTokenUsage(tenantId: string): Promise<number> {
+    try {
+      const isoWeek = this._getCurrentIsoWeek();
+      const raw = await this.get(`tenant:${tenantId}:tokens:${isoWeek}`);
+      return raw ? parseInt(raw, 10) || 0 : 0;
+    } catch (err) {
+      this._logger.warn(`Failed to resolve weekly token usage for ${tenantId}:`, err);
+      return 0;
+    }
+  }
+
   async getTierRateLimit(tenantId: string): Promise<number> {
     try {
       const tier = await this.getTenantTier(tenantId);

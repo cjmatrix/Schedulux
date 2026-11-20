@@ -13,7 +13,6 @@ def extract_text_content(content: Any) -> str:
     if not content:
         return ""
 
-
     if hasattr(content, "content") and not isinstance(content, (str, list, dict)):
         return extract_text_content(content.content)
 
@@ -72,4 +71,3 @@ def extract_text_content(content: Any) -> str:
             return extract_text_content(content["content"])
 
     return str(content).strip()
-

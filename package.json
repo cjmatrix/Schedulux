@@ -29,7 +29,12 @@
     "rabbitmq:up": "docker compose up -d rabbitmq",
     "rabbitmq:down": "docker compose down",
     "build:proto:py": "cd apps/AI-orchestration && uv run python -m grpc_tools.protoc --proto_path=../../packages/proto/src --python_out=src/agent_orchestrator/proto --pyi_out=src/agent_orchestrator/proto --grpc_python_out=src/agent_orchestrator/proto ../../packages/proto/src/*.proto",
-    "build": "pnpm -r run build"
+    "build": "pnpm -r run build",
+    "loadtest:core:ramp": "node loadtests/run.js core:ramp",
+    "loadtest:core:spike": "node loadtests/run.js core:spike",
+    "loadtest:chat:mocked": "node loadtests/run.js chat:mocked",
+    "loadtest:chat:live": "node loadtests/run.js chat:live",
+    "loadtest:quick": "node loadtests/run.js chat:mocked --duration 10s --vus 5"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

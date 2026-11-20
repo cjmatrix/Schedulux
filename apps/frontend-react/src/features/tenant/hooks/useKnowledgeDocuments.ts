@@ -56,7 +56,14 @@ export function useKnowledgeDocuments(agentId?: string) {
       return res.data;
     },
     enabled: Boolean(agentId),
-    staleTime: 30 * 1000,
+    refetchInterval: (query) => {
+      const docs = query.state.data;
+      const hasInFlight = docs?.some((d) =>
+        ['pending', 'uploaded', 'indexing'].includes(d.status?.toLowerCase()),
+      );
+      return hasInFlight ? 3000 : false;
+    },
+    staleTime: 10 * 1000,
   });
 }
 

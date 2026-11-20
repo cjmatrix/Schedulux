@@ -34,10 +34,6 @@ class DocumentService(DocumentServiceProtocol):
         file_size_bytes: int = 0,
         tier: str | None = None,
     ) -> tuple[str, str, str, int]:
-        """
-        Generates presigned upload URL and creates pending KnowledgeDocument entity.
-        Returns: (upload_url, document_id, s3_key, expires_in)
-        """
         redis_client = get_redis_client()
         if not tier:
             tier = await redis_client.get(f"tenant:{tenant_id}:tier")
@@ -58,6 +54,11 @@ class DocumentService(DocumentServiceProtocol):
         expires_in = 900  # 15 minute
 
         max_allowed_bytes = tier_cfg["max_kb_doc_size_mb"] * 1024 * 1024
+        if file_size_bytes > 0 and file_size_bytes > max_allowed_bytes:
+            max_mb = tier_cfg["max_kb_doc_size_mb"]
+            raise TierQuotaExceededException(
+                f"File size exceeds maximum allowed limit ({max_mb} MB) for tier {tier_cfg['name']}."
+            )
 
         upload_url = self.storage.generate_presigned_upload_url(
             key=s3_key,

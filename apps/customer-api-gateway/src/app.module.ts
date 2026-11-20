@@ -7,6 +7,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { CustomerChatController } from './controllers/customer-chat.controller.js';
 import { CorsOriginGuard } from './guards/cors-origin.guard.js';
 import { CustomerThrottlerGuard } from './guards/customer-throttler.guard.js';
+import { TenantTokenQuotaGuard } from './guards/tenant-token-quota.guard.js';
 import { RedisModule } from './modules/redis.module.js';
 import { RedisService } from './services/redis.service.js';
 import { ThrottlerStorageRedisService } from './services/throttler-storage-redis.service.js';
@@ -98,6 +99,7 @@ const isProduction = process.env.NODE_ENV === 'production';
   controllers: [CustomerChatController],
   providers: [
     CorsOriginGuard,
+    TenantTokenQuotaGuard,
     {
       provide: APP_GUARD,
       useClass: CustomerThrottlerGuard,

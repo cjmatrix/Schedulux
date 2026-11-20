@@ -414,3 +414,12 @@ async def process_crawl_job(data: dict):
         except Exception:
             pass
         raise
+    finally:
+        try:
+            active_lock_key = f"tenant:{tenant_id}:crawl:active"
+            current_active = await redis.get(active_lock_key)
+            if current_active == job_id or not current_active:
+                await redis.delete(active_lock_key)
+                print(f"[Crawler Worker] Released crawl lock '{active_lock_key}' for job {job_id}", flush=True)
+        except Exception as lock_err:
+            print(f"[Crawler Worker] Error releasing crawl lock: {lock_err}", flush=True)

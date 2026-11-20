@@ -140,7 +140,11 @@ class StorageService(Protocol):
     """Abstract cloud object storage provider (AWS S3, Cloudflare R2, MinIO, GCS)."""
 
     def generate_presigned_upload_url(
-        self, key: str, content_type: str = "application/pdf", expires_in: int = 900
+        self,
+        key: str,
+        content_type: str = "application/pdf",
+        expires_in: int = 900,
+        max_allowed_bytes: int | None = None,
     ) -> str: ...
 
     def delete_object(self, key: str, bucket: str | None = None) -> None: ...

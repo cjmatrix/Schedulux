@@ -24,9 +24,11 @@ const superadmin_tier_config_controller_js_1 = require("./controllers/superadmin
 const tenant_controller_js_1 = require("./controllers/tenant/tenant.controller.js");
 const tenant_dashboard_controller_js_1 = require("./controllers/tenant/tenant-dashboard.controller.js");
 const app_throttler_guard_js_1 = require("./guards/app-throttler.guard.js");
+const crawl_quota_guard_js_1 = require("./guards/crawl-quota.guard.js");
 const paddle_webhook_guard_js_1 = require("./guards/paddle-webhook.guard.js");
 const roles_guard_js_1 = require("./guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("./guards/tenant-auth.guard.js");
+const tenant_token_quota_guard_js_1 = require("./guards/tenant-token-quota.guard.js");
 const redis_module_js_1 = require("./modules/redis.module.js");
 const throttler_storage_redis_service_js_1 = require("./services/throttler-storage-redis.service.js");
 const schema_gateway_js_1 = require("./websockets/schema.gateway.js");
@@ -182,6 +184,8 @@ exports.AppModule = AppModule = __decorate([
             roles_guard_js_1.RolesGuard,
             tenant_auth_guard_js_1.TenantAuthGuard,
             paddle_webhook_guard_js_1.PaddleWebhookGuard,
+            crawl_quota_guard_js_1.CrawlQuotaGuard,
+            tenant_token_quota_guard_js_1.TenantTokenQuotaGuard,
             {
                 provide: core_1.APP_GUARD,
                 useClass: app_throttler_guard_js_1.AppThrottlerGuard,

@@ -14,8 +14,7 @@ export function TenantProtectedRoute() {
     (isTenantAuth && Boolean(tenantUser)) || (isDashboardAuth && Boolean(dashboardUser));
 
   const shouldFetchProfiles = !isStoreAuthenticated;
-  const { data: tenantProfile, isLoading: isTenantLoading } =
-    useTenantProfile(shouldFetchProfiles);
+  const { data: tenantProfile, isLoading: isTenantLoading } = useTenantProfile(shouldFetchProfiles);
   const { data: dashboardProfile, isLoading: isDashboardLoading } =
     useDashboardProfile(shouldFetchProfiles);
 

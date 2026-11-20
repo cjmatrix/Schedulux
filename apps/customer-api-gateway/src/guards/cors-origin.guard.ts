@@ -39,13 +39,20 @@ export class CorsOriginGuard implements CanActivate, OnModuleInit {
   }
 
   private isDomainAllowed(requestHost: string, whitelistedDomains: string[]): boolean {
-    if (whitelistedDomains.length === 0 || whitelistedDomains.includes('*')) {
+    const host = this.normalizeHostname(requestHost);
+
+    
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
       return true;
     }
 
-    const host = this.normalizeHostname(requestHost);
+  
+    const frontendUrl = process.env.FRONTEND_URL;
+    if (frontendUrl && this.normalizeHostname(frontendUrl) === host) {
+      return true;
+    }
 
-    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+    if (whitelistedDomains.length === 0 || whitelistedDomains.includes('*')) {
       return true;
     }
 

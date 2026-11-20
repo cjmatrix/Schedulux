@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import AsyncIterator
 import grpc
 
 import agent_orchestrator.proto.knowledge_pb2 as knowledge_pb2
@@ -158,6 +159,45 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             context.set_details(f"RESUME_ONBOARDING_ERROR: {str(e)}")
             return knowledge_pb2.OnboardingResponse()
 
+    async def ResumeOnboardingSessionStream(
+        self, request: knowledge_pb2.ResumeOnboardingRequest, context: grpc.aio.ServicerContext
+    ) -> AsyncIterator[knowledge_pb2.OnboardingStreamChunk]:
+        agent_id = getattr(request, "agent_id", "")
+        print(
+            f"[gRPC] ResumeOnboardingSessionStream for tenant: {request.tenant_id}, agent: {agent_id}"
+        )
+        try:
+            metadata_dict = dict(context.invocation_metadata()) if context else {}
+            tier = metadata_dict.get("x-tenant-tier")
+            set_span_attributes(
+                tenant_id=request.tenant_id,
+                agent_id=agent_id,
+                tier=tier,
+            )
+            async for chunk in self.onboarding_service.resume_session_stream(
+                tenant_id=request.tenant_id,
+                agent_id=agent_id,
+                user_answer=request.user_answer,
+                tier=tier,
+            ):
+                yield knowledge_pb2.OnboardingStreamChunk(
+                    event_type=chunk.get("event_type", "token"),
+                    delta=chunk.get("delta", ""),
+                    status=chunk.get("status", ""),
+                    question=chunk.get("question", ""),
+                    field=chunk.get("field", ""),
+                    type=chunk.get("type", ""),
+                    draft_schema_json=chunk.get("draft_schema_json", ""),
+                    live_schema_json=chunk.get("live_schema_json", ""),
+                    error=chunk.get("error") or None,
+                )
+        except Exception as e:
+            print(f"[gRPC Error] ResumeOnboardingSessionStream failed: {e}")
+            yield knowledge_pb2.OnboardingStreamChunk(
+                event_type="error",
+                error=str(e),
+            )
+
     async def GetAgentMessages(
         self, request: knowledge_pb2.GetAgentMessagesRequest, context: grpc.aio.ServicerContext
     ) -> knowledge_pb2.GetAgentMessagesResponse:
@@ -311,6 +351,64 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             return knowledge_pb2.CustomerChatResponse(
                 session_id=request.session_id,
                 response="An error occurred processing your request. Please try again.",
+            )
+
+    async def CustomerChatStream(
+        self, request: knowledge_pb2.CustomerChatRequest, context: grpc.aio.ServicerContext
+    ) -> AsyncIterator[knowledge_pb2.CustomerChatStreamChunk]:
+        print(
+            f"[gRPC] CustomerChatStream for tenant: {request.tenant_id}, agent: {request.agent_id}, session: {request.session_id}"
+        )
+        try:
+            from agent_orchestrator.workflows.customer_agent import process_customer_chat_stream
+
+            metadata_dict = dict(context.invocation_metadata()) if context else {}
+            tier = metadata_dict.get("x-tenant-tier")
+            is_quota_verified = metadata_dict.get("x-quota-verified") == "true"
+            mode = getattr(request, "mode", None) or None
+            is_sandbox = mode == "sandbox" or (
+                bool(request.session_id) and request.session_id.startswith("sandbox_")
+            )
+            set_span_attributes(
+                tenant_id=request.tenant_id,
+                agent_id=request.agent_id,
+                session_id=request.session_id,
+                tier=tier,
+                is_sandbox=is_sandbox,
+            )
+
+            async for chunk in process_customer_chat_stream(
+                tenant_id=request.tenant_id,
+                agent_id=request.agent_id,
+                session_id=request.session_id,
+                message=request.message,
+                customer_id=request.customer_id if request.customer_id else None,
+                customer_phone=request.customer_phone if request.customer_phone else None,
+                customer_name=request.customer_name if request.customer_name else None,
+                mode=mode,
+                tier=tier,
+                is_quota_verified=is_quota_verified,
+            ):
+                yield knowledge_pb2.CustomerChatStreamChunk(
+                    session_id=chunk.get("session_id", request.session_id),
+                    delta=chunk.get("delta", ""),
+                    event_type=chunk.get("event_type", "token"),
+                    booking_id=chunk.get("booking_id") or None,
+                    booking_reference=chunk.get("booking_reference") or None,
+                    status=chunk.get("status") or None,
+                    user_message_id=chunk.get("user_message_id") or None,
+                    agent_message_id=chunk.get("agent_message_id") or None,
+                    created_at=chunk.get("created_at") or None,
+                    error=chunk.get("error") or None,
+                    response=chunk.get("response") or None,
+                )
+        except Exception as e:
+            print(f"[gRPC Error] CustomerChatStream failed: {e}")
+            yield knowledge_pb2.CustomerChatStreamChunk(
+                session_id=request.session_id,
+                event_type="error",
+                error=str(e),
+                delta="An error occurred processing your request. Please try again.",
             )
 
     async def GetCustomerMessages(

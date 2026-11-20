@@ -99,7 +99,6 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
   } | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
-
   useEffect(() => {
     if (!isCreateMode && serviceResponse?.data) {
       const s = serviceResponse.data;
@@ -991,7 +990,8 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
         title="Delete this Service?"
         description={
           <span>
-            Are you sure you want to delete <strong className="text-slate-800">{name}</strong>? The autonomous AI agent will no longer be able to schedule it.
+            Are you sure you want to delete <strong className="text-slate-800">{name}</strong>? The
+            autonomous AI agent will no longer be able to schedule it.
           </span>
         }
         variant="delete"

@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 
-
 export interface UserData {
   tenant_id: string;
   agent_id?: string;

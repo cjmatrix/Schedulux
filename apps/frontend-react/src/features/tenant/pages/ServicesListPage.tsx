@@ -153,7 +153,9 @@ export default function ServicesListPage() {
             className="p-2 border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 rounded-xl transition cursor-pointer disabled:opacity-50 shadow-2xs"
             title="Refresh Services"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-indigo-600' : ''}`} />
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-indigo-600' : ''}`}
+            />
           </button>
           <button
             onClick={() => {
@@ -199,9 +201,7 @@ export default function ServicesListPage() {
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Categories
-            </p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Categories</p>
             <p className="text-2xl font-extrabold text-slate-900 mt-1">{categories.length}</p>
             <p className="text-[11px] text-slate-500 mt-0.5">Active service groupings</p>
           </div>
@@ -358,7 +358,9 @@ export default function ServicesListPage() {
                   <button
                     onClick={() => {
                       if (effectiveAgentId) {
-                        navigate(`/tenant/agents/${effectiveAgentId}/services/${service.service_id}`);
+                        navigate(
+                          `/tenant/agents/${effectiveAgentId}/services/${service.service_id}`,
+                        );
                       } else {
                         navigate(`/tenant/services/${service.service_id}`);
                       }
@@ -404,7 +406,9 @@ export default function ServicesListPage() {
         description={
           serviceToDelete ? (
             <span>
-              Are you sure you want to delete <strong className="text-slate-800">{serviceToDelete.name}</strong>? This action cannot be undone.
+              Are you sure you want to delete{' '}
+              <strong className="text-slate-800">{serviceToDelete.name}</strong>? This action cannot
+              be undone.
             </span>
           ) : undefined
         }

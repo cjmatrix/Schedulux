@@ -767,24 +767,29 @@ export function getWidgetStyles(config?: Partial<WidgetConfig>, inline?: boolean
     }
 
     /* Responsive Mobile Screen */
-    @media (max-width: 480px) {
-      .schedulux-root {
+    @media (max-width: 640px) {
+      .schedulux-root,
+      .schedulux-root.is-inline {
         top: 0 !important;
         bottom: 0 !important;
         left: 0 !important;
         right: 0 !important;
       }
-      .schedulux-window {
-        width: 100vw !important;
-        max-width: 100vw !important;
+      .schedulux-window,
+      .schedulux-root.is-inline .schedulux-window {
+        width: 100% !important;
+        max-width: 100% !important;
         height: 100% !important;
         max-height: 100% !important;
         border-radius: 0 !important;
         margin-bottom: 0 !important;
         border: none !important;
+        box-shadow: none !important;
       }
       .schedulux-header {
         border-radius: 0 !important;
+        border-top-left-radius: 0 !important;
+        border-top-right-radius: 0 !important;
       }
     }
   `;

@@ -28,6 +28,9 @@ export function MessageList({
   const prevScrollHeightRef = useRef(0);
   const isPrependingRef = useRef(false);
 
+  const lastMessage = messages[messages.length - 1];
+  const lastMessageContent = lastMessage?.content || '';
+
   useEffect(() => {
     const prevCount = prevMessagesCountRef.current;
     const currentCount = messages.length;
@@ -41,10 +44,18 @@ export function MessageList({
       return;
     }
 
-    if (currentCount > prevCount || isTyping) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (
+      currentCount > prevCount ||
+      isTyping ||
+      (lastMessage?.role === 'agent' && lastMessage?.delivery_status === 'pending')
+    ) {
+      if (lastMessage?.delivery_status === 'pending' && containerRef.current) {
+        containerRef.current.scrollTop = containerRef.current.scrollHeight;
+      } else {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
     }
-  }, [messages, isTyping]);
+  }, [messages, isTyping, lastMessageContent]);
 
   const handleScroll = (e: Event) => {
     const target = e.currentTarget as HTMLDivElement;
@@ -80,7 +91,7 @@ export function MessageList({
       )}
 
       {messages.map((msg, index) => (
-        <MessageBubble key={msg.id || `msg_${index}`} message={msg} />
+        <MessageBubble key={msg.client_id || msg.id || `msg_${index}`} message={msg} />
       ))}
 
       {showQuickPrompts && (

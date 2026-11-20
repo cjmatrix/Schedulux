@@ -1,10 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import {
-  billingApi,
-  type PaddlePublicConfig,
-  type SubscriptionDetails,
-} from '../api/billingApi';
+import { billingApi, type PaddlePublicConfig, type SubscriptionDetails } from '../api/billingApi';
 
 export const BILLING_KEYS = {
   all: ['billing'] as const,
@@ -51,4 +47,3 @@ export function useCreateCheckout() {
     },
   });
 }
-

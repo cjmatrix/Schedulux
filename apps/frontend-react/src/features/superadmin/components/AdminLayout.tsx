@@ -151,8 +151,6 @@ export default function AdminLayout() {
               </p>
             </div>
           </div>
-
-         
         </header>
 
         {/* Nested Content Routes */}

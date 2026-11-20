@@ -69,8 +69,14 @@ export class RedisService
     });
   }
 
-  onSchemaGenerated(callback: (event: SchemaGeneratedEvent) => void): void {
+  onSchemaGenerated(callback: (event: SchemaGeneratedEvent) => void): () => void {
     this._eventHandlers.push(callback);
+    return () => {
+      const index = this._eventHandlers.indexOf(callback);
+      if (index !== -1) {
+        this._eventHandlers.splice(index, 1);
+      }
+    };
   }
 
   async getDraftSchema(tenantId: string, jobId?: string): Promise<Record<string, unknown> | null> {

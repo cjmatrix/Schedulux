@@ -158,54 +158,79 @@ async def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) ->
 
     prompt = PromptTemplate(
         template="""You are an expert AI system architect for Schedulux AI.
-Your task is to extract and generate a comprehensive AI booking agent configuration from website crawl data for tenant: {tenant_id} (website URL: {url}).
+Your task is to extract and generate a factual, strictly grounded AI booking agent configuration from the provided website crawl data for tenant: {tenant_id} (website URL: {url}).
 
-CRITICAL DOMAIN INSTRUCTIONS:
-1. SERVICES BOOKING MODE & ATTRIBUTES:
-   - For every service, specify the time dimension (booking_mode):
-     * "booking_mode": MUST be "time_slot" for services booked at clock hours/minutes (e.g. consultations, appointments, dental/medical procedures) or "date_range" for services booked over days/dates (e.g. hotel stays, car/equipment rentals). Default: "time_slot".
-   - For every service, include:
-     * "service_id": Unique identifier string (e.g. srv_consultation)
-     * "name": Name of the service
-     * "category": Category (default 'General')
-     * "description": Detailed description
-     * "duration_minutes": Duration in minutes (must be >= 1, default 30)
-     * "buffer_minutes": Post-service buffer time in minutes (default 0)
-     * "booking_mode": "time_slot" or "date_range"
-     * "price": {{"type": "fixed"|"starting_at"|"hourly"|"free"|"custom", "amount": float, "currency": "USD"}}
-     * "verification": {{"require_otp": bool|null}} (Optional per-service OTP verification override: true for high-value/sensitive/exclusive services or date-range stays; false for low-friction/routine services; null to inherit global verification policy)
-     * "resource_requirements": list of required resource specs, e.g. [{{"role": "Provider", "resource_type": "staff", "count": 1, "eligible_resource_ids": ["res_..."], "selection_mode": "user_selectable"|"auto_assign"}}] (use "user_selectable" for human specialists/practitioners or bookable hotel/meeting rooms; "auto_assign" for internal facility chairs, operation bays, equipment, or assets that the system assigns automatically)
+======================================================================
+ABSOLUTE ZERO-HALLUCINATION & FACTUAL GROUNDING MANDATE:
+You must strictly extract ONLY information that is explicitly stated or directly verifiable in the Crawled Data.
+Under NO circumstances should you fabricate, assume, extrapolate, or invent services, staff, resources, contact numbers, emails, addresses, or prices that do not appear in the crawl text.
+======================================================================
 
-2. RESOURCES ATTRIBUTES & ENUMS:
-   - Identify practitioners, staff, rooms, chairs, bays, equipment, or vehicles:
-     * "resource_id": Unique identifier string (e.g. res_dr_smith)
-     * "resource_type": MUST be one of: "staff", "room", "chair", "bay", "equipment", "asset", "vehicle" (default: "staff")
-     * "name": Full name or label
-     * "title": Title or role (e.g. "Senior Specialist")
-     * "category": Category (default 'General')
-     * "description": Description
-     * "is_bookable": bool (default true)
-     * "dispatch_status": MUST be one of: "active", "on_leave", "maintenance", "retired", "inactive" (default: "active")
-     * "custom_shift_overrides": dict (default empty object)
-   - Ensure every service in services[] defines resource_requirements pointing to these resources.
+1. STRICT FACTUAL EXTRACTION - SERVICES (DO NOT INVENT SERVICES):
+   - Extract ONLY services, treatments, procedures, or bookable offerings explicitly listed or described in the Crawled Data.
+   - Do NOT add "common industry services" or imaginary packages. If a site only lists 2 services, output EXACTLY those 2 services.
+   - "service_id": Unique identifier string formatted with prefix srv_ (e.g. srv_exterior_wash).
+   - "name": Exact name of the service as written on the website.
+   - "category": Actual category from the website or 'General'.
+   - "description": Description derived strictly from the website text.
+   - "booking_mode":
+     * "time_slot": For appointments booked at specific clock hours/minutes (e.g. consultations, appointments, medical/dental visits, haircuts, detailing sessions).
+     * "date_range": For bookings spanning multiple calendar days (e.g. hotel room stays, multi-day equipment rentals).
+   - "duration_minutes": Duration in minutes if explicitly stated on the site. If NOT stated, use 30 min (or 60 for date_range) and record "services[].duration_minutes" in runtime_meta.inferred_fields.
+   - "buffer_minutes": 0 (unless explicitly specified on site).
+   - "price":
+     * Extract real prices if explicitly mentioned on the site: {{"type": "fixed"|"starting_at"|"hourly"|"free", "amount": float, "currency": "USD" (or local currency)}}.
+     * If NO price is mentioned in the crawl data, set {{"type": "custom", "amount": 0.0, "currency": "USD"}}. NEVER invent fictional dollar amounts!
+   - "verification": {{"require_otp": bool|null}} (Set true for high-value/sensitive/exclusive services or date_range stays; false for routine/low-friction bookings; null to inherit global default).
+   - "resource_requirements": Link to eligible resources defined in the resources section.
 
-3. SCHEDULING ENGINE & GUARDRAILS:
-   - Set scheduling_engine.booking_mode and scheduling_engine.default_booking_mode to "time_slot" for slot-based appointments (clinics, salons, etc.) or "date_range" for multi-day bookings (rentals, hotels). Individual services in services[] can override this with their own "booking_mode".
-   - Include default_lead_time_hours (default 2), max_advance_booking_days (default 60), cancellation_window_hours (default 24), and hold_duration_minutes (default 10).
-   - Set guardrails.verification_policy with require_otp_for_new_booking (default false). Cancellations and rescheduling are always strictly protected by OTP.
+2. STRICT FACTUAL EXTRACTION - RESOURCES (DO NOT INVENT PEOPLE OR ASSETS):
+   - Extract ONLY real practitioners, doctors, therapists, staff members, bookable rooms, or assets explicitly named or listed on the website.
+   - NEVER invent fictional staff names (e.g. do NOT invent "Dr. Smith", "Jane Doe", "Staff Provider").
+   - If individual staff or practitioner names are NOT mentioned anywhere in the crawl data:
+     * Do NOT invent fake people!
+     * Instead, create EXACTLY ONE generic business provider:
+       {{"resource_id": "res_staff_general", "resource_type": "staff", "name": "General Staff", "title": "Service Specialist", "category": "General", "description": "Primary service provider", "is_bookable": true, "dispatch_status": "active", "custom_shift_overrides": {{}}}}
+     * Point all services' resource_requirements to ["res_staff_general"].
+   - If specific practitioners, staff members, or physical bookable assets ARE named in the crawl text, extract each with:
+     * "resource_id": Unique identifier string with prefix res_ (e.g. res_dr_alan_walker).
+     * "resource_type": One of "staff", "room", "chair", "bay", "equipment", "asset", "vehicle".
+     * "name": Real name from website.
+     * "title": Real title or role (e.g. "Senior Stylist", "Dental Surgeon", "Deluxe Suite").
+     * "is_bookable": true
+     * "dispatch_status": "active"
+     * "custom_shift_overrides": {{}}
 
-4. OPERATING HOURS & SERVICE DURATIONS:
-   - If operating hours or service durations are not explicitly found in the crawled data, use your parametric knowledge to make accurate industry-standard guesses based on the vertical (e.g., Dental consults are 30 min, Dental offices open Mon-Fri 08:00 to 17:00).
-   - Keep track of all fields you guessed or filled with defaults, and list them in `runtime_meta.inferred_fields`.
+3. STRICT FACTUAL EXTRACTION - BUSINESS PROFILE:
+   - "name": Official business name extracted from the site (never generic or made up).
+   - "vertical": Most accurate industry vertical (e.g., medical_dental, salon_spa, automotive, consulting, fitness, hospitality, general).
+   - "address": Real physical address from the site. If NOT found, set to null. NEVER invent fake street names or cities!
+   - "contact":
+     * "public_phone": Real phone number from the site. If NOT found, set to null. NEVER invent fake 555 numbers!
+     * "support_email": Real email address from the site. If NOT found, set to null. NEVER invent fake info@ emails!
+   - "timezone": Local timezone matching the address/city if known (e.g. "America/New_York", "Europe/London", "Asia/Kolkata"), or "UTC" if unstated.
+   - "locale": "en-US" (or detected locale).
+   - "currency": Currency matching the prices or country (default "USD").
 
-5. ACCURACY & PROFILE:
-   - Extract real clinic or business name, address, contact phone/email, and timezone into `business_profile`.
-   - Extract real staff, practitioners, or assets into `resources`.
-   - Extract all offered services, categories, and prices into `services`.
+4. OPERATING HOURS:
+   - Extract actual business days and open/close times if explicitly stated on the site.
+   - If operating hours are NOT stated on the site:
+     * Provide standard business hours (Monday-Friday 09:00-17:00, Saturday/Sunday closed []).
+     * Add "operating_hours" to runtime_meta.inferred_fields.
+
+5. SCHEDULING ENGINE & GUARDRAILS:
+   - Set scheduling_engine.booking_mode and scheduling_engine.default_booking_mode to match the predominant service mode ("time_slot" or "date_range").
+   - Set default_lead_time_hours (default 2), max_advance_booking_days (default 60), cancellation_window_hours (default 24), and hold_duration_minutes (default 10).
+   - Set guardrails.verification_policy with require_otp_for_new_booking (default false).
 
 6. WIDGET CONFIGURATION & SUPERVISOR PROMPT:
-   - Provide a customized `widget_config` (agent_name, initial_greeting, quick_prompts) tailored to this specific business vertical.
-   - If relevant, include custom AI operational instructions in `supervisor_prompt`.
+   - "agent_name": "{Business Name} AI Assistant" or business name receptionist.
+   - "initial_greeting": Friendly greeting explicitly welcoming the user to the specific business name and offering to assist with the ACTUAL extracted services.
+   - "quick_prompts": 3 relevant prompts referencing real services or inquiries for this business (e.g. "What services do you provide?", "Book an appointment", "What are your business hours?").
+   - "supervisor_prompt": Operational instructions for the AI receptionist, tailored ONLY to the actual services and business facts discovered.
+
+7. RUNTIME META:
+   - List any field that had to use fallback defaults in `runtime_meta.inferred_fields` (e.g. ["operating_hours", "services[0].duration_minutes"]).
 
 Crawled Data:
 {crawled_data}

@@ -148,7 +148,6 @@ export default function BillingPage() {
       toast.success('Payment completed successfully! Subscription status updated.');
       invalidateBilling();
 
-      
       const nextParams = new URLSearchParams(searchParams);
       nextParams.delete('payment');
       setSearchParams(nextParams, { replace: true });
@@ -240,11 +239,7 @@ export default function BillingPage() {
         <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full transition-all duration-500 ${
-              isAtLimit
-                ? 'bg-rose-500'
-                : isNearLimit
-                  ? 'bg-amber-500'
-                  : 'bg-blue-600'
+              isAtLimit ? 'bg-rose-500' : isNearLimit ? 'bg-amber-500' : 'bg-blue-600'
             }`}
             style={{ width: `${percentage}%` }}
           />
@@ -319,7 +314,6 @@ export default function BillingPage() {
         </div>
 
         <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap shrink-0 self-start sm:self-center">
-         
           <button
             type="button"
             onClick={() => refetch()}
@@ -350,17 +344,16 @@ export default function BillingPage() {
           </div>
           <p className="text-xs text-blue-800 mt-1 mb-4">
             You already created products <code>S-pro</code>, <code>S-business</code>, and{' '}
-            <code>S-enterprise</code> in your Paddle Sandbox. Follow these 3 simple steps to complete
-            the live sandbox flow:
+            <code>S-enterprise</code> in your Paddle Sandbox. Follow these 3 simple steps to
+            complete the live sandbox flow:
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
             <div className="bg-white p-4 rounded-xl border border-blue-200/60 shadow-xs">
-              <span className="font-bold text-slate-900 block mb-1">
-                1. Prices for Products
-              </span>
+              <span className="font-bold text-slate-900 block mb-1">1. Prices for Products</span>
               <p className="text-slate-600 leading-relaxed">
-                Click into <code>S-pro</code>, <code>S-business</code>, and <code>S-enterprise</code> in{' '}
+                Click into <code>S-pro</code>, <code>S-business</code>, and{' '}
+                <code>S-enterprise</code> in{' '}
                 <a
                   href="https://sandbox-vendors.paddle.com/products-v2"
                   target="_blank"
@@ -369,8 +362,8 @@ export default function BillingPage() {
                 >
                   Products <ExternalLink className="w-3 h-3" />
                 </a>
-                . Click <strong>Add Price</strong> (e.g. $29/mo, $79/mo, $199/mo). Copy the Price IDs (
-                <code>pri_...</code>) to your <code>.env</code>:
+                . Click <strong>Add Price</strong> (e.g. $29/mo, $79/mo, $199/mo). Copy the Price
+                IDs (<code>pri_...</code>) to your <code>.env</code>:
               </p>
               <pre className="mt-2 p-2 bg-slate-50 border border-slate-200 rounded font-mono text-[10px] text-slate-800 overflow-x-auto">
                 PADDLE_PRICE_ID_PRO=pri_...{'\n'}
@@ -380,13 +373,12 @@ export default function BillingPage() {
             </div>
 
             <div className="bg-white p-4 rounded-xl border border-blue-200/60 shadow-xs">
-              <span className="font-bold text-slate-900 block mb-1">
-                2. Client-Side Token
-              </span>
+              <span className="font-bold text-slate-900 block mb-1">2. Client-Side Token</span>
               <p className="text-slate-600 leading-relaxed">
-                In Paddle Sandbox, navigate to <strong>Developer Tools &rarr; Authentication</strong>.
-                Generate a <strong>Client-side token</strong> (starts with <code>test_...</code>) so
-                Paddle.js can display the overlay checkout modal:
+                In Paddle Sandbox, navigate to{' '}
+                <strong>Developer Tools &rarr; Authentication</strong>. Generate a{' '}
+                <strong>Client-side token</strong> (starts with <code>test_...</code>) so Paddle.js
+                can display the overlay checkout modal:
               </p>
               <pre className="mt-2 p-2 bg-slate-50 border border-slate-200 rounded font-mono text-[10px] text-slate-800 overflow-x-auto">
                 PADDLE_CLIENT_TOKEN=test_...
@@ -394,14 +386,14 @@ export default function BillingPage() {
             </div>
 
             <div className="bg-white p-4 rounded-xl border border-blue-200/60 shadow-xs">
-              <span className="font-bold text-slate-900 block mb-1">
-                3. Webhook Notification
-              </span>
+              <span className="font-bold text-slate-900 block mb-1">3. Webhook Notification</span>
               <p className="text-slate-600 leading-relaxed">
                 Go to <strong>Developer Tools &rarr; Notifications</strong>. Click{' '}
                 <strong>New destination</strong>. Set URL to:
                 <br />
-                <code className="text-blue-700 font-mono">https://your-domain/api/v1/tenant/billing/webhook</code>
+                <code className="text-blue-700 font-mono">
+                  https://your-domain/api/v1/tenant/billing/webhook
+                </code>
                 <br />
                 Copy the <strong>Webhook Secret Key</strong> (<code>pdl_ntfset_...</code>):
               </p>
@@ -422,9 +414,7 @@ export default function BillingPage() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-slate-900 capitalize">
-                  {currentTier} Plan
-                </h2>
+                <h2 className="text-lg font-bold text-slate-900 capitalize">{currentTier} Plan</h2>
                 <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                   {subscription?.status || 'Active'}
                 </span>
@@ -443,15 +433,11 @@ export default function BillingPage() {
 
           <div className="flex items-center gap-4 text-xs text-slate-500">
             <div>
-              <span className="font-semibold text-slate-700 block">
-                Workspace Rate Limit
-              </span>
+              <span className="font-semibold text-slate-700 block">Workspace Rate Limit</span>
               <span>{subscription?.tier_config?.rate_limit_rpm || 60} RPM</span>
             </div>
             <div className="border-l border-slate-200 pl-4">
-              <span className="font-semibold text-slate-700 block">
-                Billing Method
-              </span>
+              <span className="font-semibold text-slate-700 block">Billing Method</span>
               <span>
                 {subscription?.paddle_subscription_id ? 'Paddle Sandbox' : 'Default Workspace'}
               </span>
@@ -478,8 +464,8 @@ export default function BillingPage() {
             Available Workspace Plans
           </h2>
           <p className="text-sm text-slate-500">
-            Upgrade your workspace at any time to unlock additional AI agents, services, resources, and
-            tokens.
+            Upgrade your workspace at any time to unlock additional AI agents, services, resources,
+            and tokens.
           </p>
         </div>
 
@@ -508,9 +494,7 @@ export default function BillingPage() {
 
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-bold text-slate-900">
-                      {plan.name}
-                    </h3>
+                    <h3 className="text-lg font-bold text-slate-900">{plan.name}</h3>
                     {isCurrent && (
                       <span className="px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-slate-100 text-slate-800 border border-slate-300">
                         Current
@@ -523,20 +507,14 @@ export default function BillingPage() {
                   </p>
 
                   <div className="flex items-baseline gap-1 mb-6">
-                    <span className="text-3xl font-extrabold text-slate-900">
-                      {plan.price}
-                    </span>
-                    <span className="text-xs text-slate-500 font-medium">
-                      /{plan.period}
-                    </span>
+                    <span className="text-3xl font-extrabold text-slate-900">{plan.price}</span>
+                    <span className="text-xs text-slate-500 font-medium">/{plan.period}</span>
                   </div>
 
                   {/* AI Agents Highlight */}
                   <div className="bg-slate-50 rounded-xl px-3.5 py-2.5 mb-6 flex justify-between items-center text-xs border border-slate-200/80">
                     <span className="font-medium text-slate-600">AI Agents:</span>
-                    <span className="font-semibold text-slate-900">
-                      {plan.agentLimit}
-                    </span>
+                    <span className="font-semibold text-slate-900">{plan.agentLimit}</span>
                   </div>
 
                   {/* Feature Checklist */}
@@ -545,10 +523,7 @@ export default function BillingPage() {
                       Included in {plan.name}:
                     </span>
                     {plan.features.map((feature) => (
-                      <div
-                        key={feature}
-                        className="flex items-start gap-2 text-xs text-slate-600"
-                      >
+                      <div key={feature} className="flex items-start gap-2 text-xs text-slate-600">
                         <Check className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
                         <span>{feature}</span>
                       </div>
@@ -597,8 +572,8 @@ export default function BillingPage() {
           <CreditCard className="w-5 h-5 text-slate-400 shrink-0" />
           <span>
             Payments are securely processed through{' '}
-            <strong className="text-slate-800">Paddle Sandbox</strong>. All major
-            credit cards, PayPal, and Apple Pay are supported.
+            <strong className="text-slate-800">Paddle Sandbox</strong>. All major credit cards,
+            PayPal, and Apple Pay are supported.
           </span>
         </div>
         <div className="flex items-center gap-4">

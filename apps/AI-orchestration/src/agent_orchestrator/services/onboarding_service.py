@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+from collections.abc import AsyncIterator
 import copy
 import json
 from typing import Any
@@ -209,3 +211,85 @@ class OnboardingService(OnboardingServiceProtocol):
             draft_schema_json=draft_json,
             live_schema_json=live_schema_json,
         )
+
+    async def resume_session_stream(
+        self, tenant_id: str, agent_id: str, user_answer: str, tier: str | None = None
+    ) -> AsyncIterator[dict[str, Any]]:
+        clean_user_msg = (user_answer or "").strip()
+        if clean_user_msg and agent_id:
+            try:
+                await self.message_repo.save_message(
+                    tenant_id=tenant_id, agent_id=agent_id, role="tenant", content=clean_user_msg
+                )
+            except Exception as me:
+                print(
+                    f"[OnboardingService] Warning: Failed to persist user answer: {me}", flush=True
+                )
+
+        full_reply = ""
+        done_chunk: dict[str, Any] | None = None
+
+        async for chunk in self.orchestrator.resume_session_stream(
+            tenant_id, user_answer, agent_id, tier=tier
+        ):
+            event_type = chunk.get("event_type", "token")
+            if event_type == "token":
+                delta = chunk.get("delta", "")
+                full_reply += delta
+                yield chunk
+            elif event_type == "done":
+                done_chunk = chunk
+            elif event_type == "error":
+                yield chunk
+                return
+
+        current_draft = await self.orchestrator.get_current_draft(tenant_id, agent_id)
+        canonical_draft = canonicalize_agent_schema(current_draft or {}, status="draft")
+        draft_json = json.dumps(canonical_draft)
+
+        status_val = (done_chunk or {}).get("status", "awaiting_input")
+        is_complete = status_val == "complete"
+        if is_complete:
+            live_schema_json = json.dumps(canonicalize_agent_schema(canonical_draft, status="live"))
+        else:
+            live_cfg = (
+                await self.runtime_repo.get_runtime_config(tenant_id, agent_id)
+                if agent_id
+                else None
+            )
+            live_schema_json = json.dumps(self._format_runtime_config(live_cfg))
+
+        reply_text = (done_chunk or {}).get("question") or full_reply or (
+            "✅ Amazing! Your agent configuration is complete and saved to the database. You are ready to go live!"
+            if is_complete
+            else ""
+        )
+
+        if reply_text and agent_id:
+            try:
+                await self.message_repo.save_message(
+                    tenant_id=tenant_id, agent_id=agent_id, role="agent", content=reply_text
+                )
+            except Exception as me:
+                print(
+                    f"[OnboardingService] Warning: Failed to persist agent reply: {me}", flush=True
+                )
+
+        if self.memory_service and agent_id:
+            try:
+                asyncio.create_task(self.memory_service.check_and_trigger_memory(tenant_id, agent_id))
+            except Exception as mem_err:
+                print(
+                    f"[OnboardingService Warning] Memory trigger check failed: {mem_err}",
+                    flush=True,
+                )
+
+        yield {
+            "event_type": "done",
+            "status": status_val,
+            "question": reply_text,
+            "field": (done_chunk or {}).get("field", ""),
+            "type": (done_chunk or {}).get("type", "semantic_review"),
+            "draft_schema_json": draft_json,
+            "live_schema_json": live_schema_json,
+        }

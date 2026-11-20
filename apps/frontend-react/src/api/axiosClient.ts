@@ -113,7 +113,6 @@ axiosClient.interceptors.response.use(
       error.message ||
       'An unexpected error occurred';
 
-    
     const customConfig = originalRequest as { skipGlobalToast?: boolean } | undefined;
     if (!customConfig?.skipGlobalToast && error.response?.status !== 401) {
       toast.error(message, {

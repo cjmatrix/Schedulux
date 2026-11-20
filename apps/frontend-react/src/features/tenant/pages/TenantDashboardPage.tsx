@@ -13,14 +13,11 @@ import {
   Tag,
   Zap,
 } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { TenantDashboardSkeleton } from '../components/TenantDashboardSkeleton.js';
-import {
-  TENANT_DASHBOARD_KEYS,
-  useTenantDashboardOverview,
-} from '../hooks/useTenantDashboard';
+import { TENANT_DASHBOARD_KEYS, useTenantDashboardOverview } from '../hooks/useTenantDashboard';
 
 function formatTokens(num: number): string {
   if (!num) return '0';
@@ -50,11 +47,19 @@ export default function TenantDashboardPage() {
   const { agentId: routeAgentId } = useParams<{ agentId?: string }>();
   const [searchParams] = useSearchParams();
   const queryAgentId = searchParams.get('agent_id');
-  const targetAgentId = routeAgentId || queryAgentId || undefined;
+  const savedAgentId =
+    typeof window !== 'undefined' ? localStorage.getItem('schedulux_active_agent_id') : null;
+  const targetAgentId = routeAgentId || queryAgentId || savedAgentId || undefined;
 
   const { data, isLoading, isRefetching } = useTenantDashboardOverview(targetAgentId);
 
   const activeAgent = data?.agent;
+
+  useEffect(() => {
+    if (activeAgent?.agent_id && typeof window !== 'undefined') {
+      localStorage.setItem('schedulux_active_agent_id', activeAgent.agent_id);
+    }
+  }, [activeAgent?.agent_id]);
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: TENANT_DASHBOARD_KEYS.all });
@@ -87,6 +92,16 @@ export default function TenantDashboardPage() {
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
+          {activeAgent?.agent_id && (
+            <button
+              onClick={() => navigate(`/tenant/agent-setup/${activeAgent.agent_id}`)}
+              className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-slate-900 text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Configure Active Agent in Studio"
+            >
+              <Settings2 className="w-3.5 h-3.5 text-slate-500" />
+              <span>Configure Agent</span>
+            </button>
+          )}
           <button
             onClick={() => navigate('/tenant/landingboard')}
             className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
@@ -116,7 +131,8 @@ export default function TenantDashboardPage() {
           </div>
           <h3 className="text-base font-bold text-slate-900">No AI Agent Configured</h3>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
-            Get started by creating your first autonomous receptionist to handle bookings, customer inquiries, and staff scheduling.
+            Get started by creating your first autonomous receptionist to handle bookings, customer
+            inquiries, and staff scheduling.
           </p>
           <button
             onClick={() => navigate('/tenant/landingboard')}
@@ -129,33 +145,46 @@ export default function TenantDashboardPage() {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between hover:border-slate-300 transition-all shadow-xs">
+            <div
+              onClick={() =>
+                activeAgent.agent_id && navigate(`/tenant/agent-setup/${activeAgent.agent_id}`)
+              }
+              className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between hover:border-indigo-300 hover:shadow-sm transition-all shadow-xs cursor-pointer group"
+              title="Click to configure agent in Studio"
+            >
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-500 font-semibold">Active Agent</span>
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-2xs">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-2xs group-hover:scale-105 transition-transform">
                   <Bot className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-4">
-                <h3 className="text-lg font-bold text-slate-900 tracking-tight truncate">
+                <h3 className="text-lg font-bold text-slate-900 tracking-tight truncate group-hover:text-indigo-600 transition-colors">
                   {isLoading ? '...' : activeAgent.name}
                 </h3>
-                <div className="flex items-center gap-2 mt-2">
-                  <span
-                    className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border ${
-                      STATUS_PILL[activeAgent.status] || 'bg-amber-50 text-amber-700 border-amber-200'
-                    }`}
-                  >
+                <div className="flex items-center justify-between mt-2">
+                  <div className="flex items-center gap-2">
                     <span
-                      className={`w-1.5 h-1.5 rounded-full ${
-                        activeAgent.status === 'created' ? 'bg-emerald-500' : 'bg-amber-500'
+                      className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border ${
+                        STATUS_PILL[activeAgent.status] ||
+                        'bg-amber-50 text-amber-700 border-amber-200'
                       }`}
-                    />
-                    {activeAgent.status === 'created' ? 'Live' : 'Draft'}
-                  </span>
-                  <span className="text-[11px] text-slate-500 font-mono truncate">
-                    {activeAgent.creation_source || 'custom'}
-                  </span>
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          activeAgent.status === 'created' ? 'bg-emerald-500' : 'bg-amber-500'
+                        }`}
+                      />
+                      {activeAgent.status === 'created' ? 'Live' : 'Draft'}
+                    </span>
+                    <span className="text-[11px] text-slate-500 font-mono truncate">
+                      {activeAgent.creation_source || 'custom'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 group-hover:translate-x-0.5 transition-transform">
+                    <span>Configure</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </div>
                 </div>
               </div>
             </div>
@@ -172,7 +201,7 @@ export default function TenantDashboardPage() {
               </div>
               <div className="mt-4">
                 <p className="text-2xl font-bold text-slate-900 tracking-tight">
-                  {isLoading ? '...' : data?.inventory.total_services ?? 0}
+                  {isLoading ? '...' : (data?.inventory.total_services ?? 0)}
                 </p>
                 <div className="flex items-center justify-between mt-2">
                   <span className="text-[11px] text-slate-500 font-medium">
@@ -188,14 +217,16 @@ export default function TenantDashboardPage() {
               className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between hover:border-slate-300 hover:shadow-sm transition-all shadow-xs cursor-pointer group"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-500 font-semibold">Resources &amp; Capacity</span>
+                <span className="text-xs text-slate-500 font-semibold">
+                  Resources &amp; Capacity
+                </span>
                 <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 shadow-2xs">
                   <Package className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-4">
                 <p className="text-2xl font-bold text-slate-900 tracking-tight">
-                  {isLoading ? '...' : data?.inventory.total_resources ?? 0}
+                  {isLoading ? '...' : (data?.inventory.total_resources ?? 0)}
                 </p>
                 <div className="flex items-center justify-between mt-2">
                   <span className="text-[11px] text-slate-500 font-medium">
@@ -218,7 +249,7 @@ export default function TenantDashboardPage() {
               </div>
               <div className="mt-4">
                 <p className="text-2xl font-bold text-slate-900 tracking-tight">
-                  {isLoading ? '...' : data?.bookings.total ?? 0}
+                  {isLoading ? '...' : (data?.bookings.total ?? 0)}
                 </p>
                 <div className="flex items-center gap-2 mt-2">
                   <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
@@ -239,11 +270,14 @@ export default function TenantDashboardPage() {
                   <Zap className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs text-slate-500 font-semibold truncate">Weekly AI Token Quota</p>
+                  <p className="text-xs text-slate-500 font-semibold truncate">
+                    Weekly AI Token Quota
+                  </p>
                   <p className="text-base font-bold text-slate-900 font-mono mt-0.5">
                     {isLoading ? '...' : formatTokens(data?.tokens.used_this_week ?? 0)}
                     <span className="text-xs text-slate-400 font-normal">
-                      {' '}/ {formatTokens(data?.tokens.weekly_limit ?? 0)}
+                      {' '}
+                      / {formatTokens(data?.tokens.weekly_limit ?? 0)}
                     </span>
                   </p>
                 </div>
@@ -270,9 +304,11 @@ export default function TenantDashboardPage() {
                   <BookOpen className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs text-slate-500 font-semibold truncate">Trained Knowledge Base</p>
+                  <p className="text-xs text-slate-500 font-semibold truncate">
+                    Trained Knowledge Base
+                  </p>
                   <p className="text-base font-bold text-slate-900 mt-0.5 truncate">
-                    {isLoading ? '...' : data?.knowledge.total_documents ?? 0}{' '}
+                    {isLoading ? '...' : (data?.knowledge.total_documents ?? 0)}{' '}
                     <span className="text-xs text-slate-400 font-normal">Documents / FAQs</span>
                   </p>
                 </div>
@@ -404,7 +440,8 @@ export default function TenantDashboardPage() {
                             <td className="px-4 sm:px-5 py-3 sm:py-3.5">
                               <span
                                 className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold border uppercase tracking-wider ${
-                                  STATUS_PILL[booking.status] || 'bg-slate-100 text-slate-600 border-slate-200'
+                                  STATUS_PILL[booking.status] ||
+                                  'bg-slate-100 text-slate-600 border-slate-200'
                                 }`}
                               >
                                 {booking.status}
@@ -439,7 +476,8 @@ export default function TenantDashboardPage() {
                     <div className="p-6 text-center text-slate-400 text-xs font-medium">
                       Loading services...
                     </div>
-                  ) : !data?.inventory.recent_services || data.inventory.recent_services.length === 0 ? (
+                  ) : !data?.inventory.recent_services ||
+                    data.inventory.recent_services.length === 0 ? (
                     <div className="p-6 text-center text-slate-400 text-xs font-medium">
                       No bookable services assigned to this agent yet.
                     </div>
@@ -459,9 +497,7 @@ export default function TenantDashboardPage() {
                         </div>
                         <div className="text-right shrink-0">
                           <span className="text-xs font-bold text-emerald-600 font-mono">
-                            {svc.price
-                              ? `${svc.price.currency} ${svc.price.amount}`
-                              : 'Free'}
+                            {svc.price ? `${svc.price.currency} ${svc.price.amount}` : 'Free'}
                           </span>
                         </div>
                       </div>

@@ -10,10 +10,7 @@ export const CUSTOMER_KEYS = {
   list: (params?: ListCustomersParams) => ['customers', params] as const,
 };
 
-export function useCustomersList(
-  params?: ListCustomersParams,
-  options?: { enabled?: boolean },
-) {
+export function useCustomersList(params?: ListCustomersParams, options?: { enabled?: boolean }) {
   return useQuery<ListCustomersResponseData, Error>({
     queryKey: CUSTOMER_KEYS.list(params),
     queryFn: () => customersApi.listCustomers(params),

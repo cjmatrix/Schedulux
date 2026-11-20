@@ -47,7 +47,7 @@ function formatTokens(num: number): string {
 
 function formatCurrency(amount: number, currency = 'USD'): string {
   const symbol = currency.toUpperCase() === 'USD' ? '$' : `${currency} `;
-  return `${symbol}${(amount/100 || 0).toLocaleString(undefined, {
+  return `${symbol}${(amount / 100 || 0).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -254,7 +254,7 @@ export default function SuperAdminDashboard() {
               {overviewLoading ? (
                 <span className="text-slate-600 text-lg">Loading...</span>
               ) : (
-                overview?.tenants.total.toLocaleString() ?? '0'
+                (overview?.tenants.total.toLocaleString() ?? '0')
               )}
             </p>
             <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -300,7 +300,7 @@ export default function SuperAdminDashboard() {
               {overviewLoading ? (
                 <span className="text-slate-600 text-lg">Loading...</span>
               ) : (
-                overview?.agents.total.toLocaleString() ?? '0'
+                (overview?.agents.total.toLocaleString() ?? '0')
               )}
             </p>
             <div className="flex items-center gap-2 mt-2">

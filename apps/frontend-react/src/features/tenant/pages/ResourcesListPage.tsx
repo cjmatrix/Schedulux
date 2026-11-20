@@ -42,11 +42,9 @@ export default function ResourcesListPage() {
 
   const [debouncedSearch] = useDebounceHook(searchTerm);
 
- 
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch, selectedType, selectedStatus]);
-
 
   const {
     data: resourcesResponse,
@@ -96,7 +94,6 @@ export default function ResourcesListPage() {
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
-
 
   const getWeeklyHours = (jsonStr?: string): string => {
     if (!jsonStr || jsonStr.trim() === '' || jsonStr.trim() === '{}') return 'Standard Hours';
@@ -195,7 +192,9 @@ export default function ResourcesListPage() {
               className="p-2 border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 rounded-xl transition cursor-pointer disabled:opacity-50 shadow-2xs"
               title="Refresh inventory"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-indigo-600' : ''}`} />
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-indigo-600' : ''}`}
+              />
             </button>
             <button
               onClick={() => {
@@ -221,7 +220,9 @@ export default function ResourcesListPage() {
               <Package className="w-4 h-4 text-slate-400 shrink-0" />
             </div>
             <div className="text-xl sm:text-2xl font-extrabold text-slate-900">{stats.total}</div>
-            <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">Physical &amp; staff assets</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">
+              Physical &amp; staff assets
+            </div>
           </div>
 
           <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
@@ -229,8 +230,12 @@ export default function ResourcesListPage() {
               <span className="text-[11px] sm:text-xs font-medium truncate">AI Bookable</span>
               <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
             </div>
-            <div className="text-xl sm:text-2xl font-extrabold text-emerald-600">{stats.active}</div>
-            <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">Active for slot locking</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-emerald-600">
+              {stats.active}
+            </div>
+            <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">
+              Active for slot locking
+            </div>
           </div>
 
           <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
@@ -238,17 +243,27 @@ export default function ResourcesListPage() {
               <span className="text-[11px] sm:text-xs font-medium truncate">Staff &amp; Team</span>
               <Users className="w-4 h-4 text-slate-400 shrink-0" />
             </div>
-            <div className="text-xl sm:text-2xl font-extrabold text-slate-900">{stats.staffCount}</div>
-            <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">Eligible team members</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-slate-900">
+              {stats.staffCount}
+            </div>
+            <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">
+              Eligible team members
+            </div>
           </div>
 
           <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
             <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-[11px] sm:text-xs font-medium truncate">Rooms &amp; Equipment</span>
+              <span className="text-[11px] sm:text-xs font-medium truncate">
+                Rooms &amp; Equipment
+              </span>
               <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
             </div>
-            <div className="text-xl sm:text-2xl font-extrabold text-slate-900">{stats.physicalCount}</div>
-            <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">Spaces &amp; equipment</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-slate-900">
+              {stats.physicalCount}
+            </div>
+            <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">
+              Spaces &amp; equipment
+            </div>
           </div>
         </div>
 

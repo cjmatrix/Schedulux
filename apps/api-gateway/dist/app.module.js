@@ -31,7 +31,6 @@ const tenant_auth_guard_js_1 = require("./guards/tenant-auth.guard.js");
 const tenant_token_quota_guard_js_1 = require("./guards/tenant-token-quota.guard.js");
 const redis_module_js_1 = require("./modules/redis.module.js");
 const throttler_storage_redis_service_js_1 = require("./services/throttler-storage-redis.service.js");
-const schema_gateway_js_1 = require("./websockets/schema.gateway.js");
 const isProduction = process.env.NODE_ENV === 'production';
 let AppModule = class AppModule {
 };
@@ -180,7 +179,6 @@ exports.AppModule = AppModule = __decorate([
             scheduling_controller_js_1.SchedulingController,
         ],
         providers: [
-            schema_gateway_js_1.SchemaGateway,
             roles_guard_js_1.RolesGuard,
             tenant_auth_guard_js_1.TenantAuthGuard,
             paddle_webhook_guard_js_1.PaddleWebhookGuard,

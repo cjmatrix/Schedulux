@@ -261,7 +261,8 @@ export default function ScheduleSettingsPage() {
             )}
           </div>
           <p className="mt-1 text-xs sm:text-sm text-slate-500">
-            Configure global operating hours, blackout dates, booking intervals, and verification rules for this agent.
+            Configure global operating hours, blackout dates, booking intervals, and verification
+            rules for this agent.
           </p>
         </div>
 
@@ -274,7 +275,9 @@ export default function ScheduleSettingsPage() {
             className="p-2 border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 rounded-xl transition cursor-pointer disabled:opacity-50 shadow-2xs"
             title="Refresh settings"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-indigo-600' : ''}`} />
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-indigo-600' : ''}`}
+            />
           </button>
 
           <button
@@ -312,7 +315,8 @@ export default function ScheduleSettingsPage() {
               Timezone &amp; Regional Settings
             </h2>
             <p className="text-xs text-slate-500">
-              Primary timezone and billing currency used to compute slot availability and render pricing.
+              Primary timezone and billing currency used to compute slot availability and render
+              pricing.
             </p>
           </div>
         </div>
@@ -375,7 +379,8 @@ export default function ScheduleSettingsPage() {
               Weekly Operating Hours
             </h2>
             <p className="text-xs text-slate-500">
-              Set regular opening intervals for each day. The AI agent only schedules bookings inside these active windows.
+              Set regular opening intervals for each day. The AI agent only schedules bookings
+              inside these active windows.
             </p>
           </div>
         </div>
@@ -567,7 +572,8 @@ export default function ScheduleSettingsPage() {
               Slot Hold Duration (Minutes)
             </label>
             <p className="text-[11px] text-slate-400 mb-2">
-              How long a time slot is reserved while the customer completes details before auto-release.
+              How long a time slot is reserved while the customer completes details before
+              auto-release.
             </p>
             <input
               type="number"
@@ -597,7 +603,8 @@ export default function ScheduleSettingsPage() {
               Blackout Dates &amp; Closures
             </h2>
             <p className="text-xs text-slate-500">
-              Specify single dates or special occasions when operations are halted (e.g. Holidays, Maintenance).
+              Specify single dates or special occasions when operations are halted (e.g. Holidays,
+              Maintenance).
             </p>
           </div>
         </div>
@@ -673,7 +680,8 @@ export default function ScheduleSettingsPage() {
               Customer Verification &amp; Security Policy
             </h2>
             <p className="text-xs text-slate-500">
-              Enforce phone number verification gates before appointments are confirmed in the system.
+              Enforce phone number verification gates before appointments are confirmed in the
+              system.
             </p>
           </div>
         </div>
@@ -688,7 +696,8 @@ export default function ScheduleSettingsPage() {
                 Require OTP Verification for New Bookings
               </p>
               <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
-                When enabled, first-time callers and customers must verify their phone via SMS OTP before a slot is booked.
+                When enabled, first-time callers and customers must verify their phone via SMS OTP
+                before a slot is booked.
               </p>
             </div>
           </div>

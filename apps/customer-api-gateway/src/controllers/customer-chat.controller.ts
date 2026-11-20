@@ -11,6 +11,7 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UnauthorizedException,
   UseGuards,
   UsePipes,
@@ -18,7 +19,7 @@ import {
 import { ClientGrpc } from '@nestjs/microservices';
 import { trace } from '@opentelemetry/api';
 import { KnowledgeServiceClient } from '@repo/proto/knowledge';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { lastValueFrom } from 'rxjs';
 import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
@@ -177,6 +178,83 @@ export class CustomerChatController implements OnModuleInit {
         status: response.status || null,
       },
     };
+  }
+
+  @Post(API_ROUTES.PUBLIC_CHAT.STREAM)
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(TenantTokenQuotaGuard)
+  @UsePipes(ZodValidationPipe)
+  chatStream(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Body() body: CustomerChatDto,
+  ) {
+    let sessionId = req.customerSession?.sessionId || body.session_id;
+    let token = req.customerSession?.token || body.token;
+
+    if (!sessionId) {
+      const session = createSignedSession('sess', body.tenant_id, body.agent_id);
+      sessionId = session.sessionId;
+      token = session.token;
+
+      const activeSpan = trace.getActiveSpan();
+      if (activeSpan) {
+        activeSpan.setAttribute('session.id', sessionId);
+      }
+    } else if (!token) {
+      token = signSessionId(sessionId, body.tenant_id, body.agent_id);
+    }
+
+    const metadata = new Metadata();
+    const verifiedTier = (req as any).verifiedTier;
+    if (verifiedTier) {
+      metadata.set('x-tenant-tier', verifiedTier);
+      metadata.set('x-quota-verified', 'true');
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    const stream$ = this._knowledgeService.customerChatStream(
+      {
+        tenant_id: body.tenant_id,
+        agent_id: body.agent_id,
+        session_id: sessionId,
+        message: body.message,
+        customer_id: body.customer_id,
+        customer_phone: body.customer_phone,
+        customer_name: body.customer_name,
+        mode: 'live',
+      },
+      metadata,
+    );
+
+    const subscription = stream$.subscribe({
+      next: (chunk) => {
+        const payload = {
+          ...chunk,
+          token,
+          session_id: chunk.session_id || sessionId,
+        };
+        res.write(`data: ${JSON.stringify(payload)}\n\n`);
+      },
+      error: (err) => {
+        res.write(
+          `data: ${JSON.stringify({ event_type: 'error', error: err.message || 'Stream error' })}\n\n`,
+        );
+        res.end();
+      },
+      complete: () => {
+        res.end();
+      },
+    });
+
+    req.on('close', () => {
+      subscription.unsubscribe();
+    });
   }
 
   @Get(API_ROUTES.PUBLIC_CHAT.CONFIG)

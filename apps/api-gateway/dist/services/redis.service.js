@@ -67,6 +67,12 @@ let RedisService = RedisService_1 = class RedisService {
     }
     onSchemaGenerated(callback) {
         this._eventHandlers.push(callback);
+        return () => {
+            const index = this._eventHandlers.indexOf(callback);
+            if (index !== -1) {
+                this._eventHandlers.splice(index, 1);
+            }
+        };
     }
     async getDraftSchema(tenantId, jobId) {
         const key = jobId ? `agent:draft:${tenantId}:${jobId}` : `agent:draft:${tenantId}`;

@@ -32,4 +32,3 @@ export const useDashboardAuthStore = create<DashboardAuthState>((set) => ({
     set({ user: null, isAuthenticated: false });
   },
 }));
-

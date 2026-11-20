@@ -1,5 +1,5 @@
 import type { ResourceInfo, ServiceInfo } from '@repo/proto/scheduling';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useAgentOnboarding } from '../hooks/useAgentOnboarding.js';
 import {
@@ -9,6 +9,7 @@ import {
   RawJsonViewer,
   ResourcesRosterCard,
   SandboxSimulation,
+  SchedulingEngineCard,
   SecurityGuardrailsCard,
   ServicesCatalogCard,
   WizardChatColumn,
@@ -136,12 +137,24 @@ export default function AgentOnboardingWizard() {
     setTimeout(() => setCopiedJson(false), 2000);
   };
 
+  useEffect(() => {
+    if (agentId) {
+      localStorage.setItem('schedulux_active_agent_id', agentId);
+    }
+  }, [agentId]);
+
   return (
     <div className="flex flex-col h-screen w-full bg-slate-100/70 text-slate-900 font-sans antialiased overflow-hidden select-none">
       {/* ── TOP APPLICATION HEADER ── */}
       <WizardHeader
         onNavigateAgents={() => navigate('/tenant/agents')}
-        onNavigateDashboard={() => navigate('/tenant/dashboard')}
+        onNavigateDashboard={() =>
+          navigate(
+            agentId
+              ? `/tenant/agents/${agentId}/dashboard?agent_id=${agentId}`
+              : '/tenant/dashboard',
+          )
+        }
         onNavigateProfile={() => navigate('/tenant/profile')}
       />
 
@@ -199,6 +212,10 @@ export default function AgentOnboardingWizard() {
                     formattedHoursText={formattedHoursText}
                     operatingHours={operatingHours}
                   />
+                )}
+
+                {(canvasModule === 'all' || canvasModule === 'scheduling') && (
+                  <SchedulingEngineCard schedulingEngine={draftSchema?.scheduling_engine} />
                 )}
 
                 {(canvasModule === 'all' || canvasModule === 'services') && (

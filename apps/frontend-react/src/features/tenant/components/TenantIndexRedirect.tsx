@@ -10,4 +10,3 @@ export function TenantIndexRedirect() {
 
   return <Navigate to="/tenant/dashboard" replace />;
 }
-

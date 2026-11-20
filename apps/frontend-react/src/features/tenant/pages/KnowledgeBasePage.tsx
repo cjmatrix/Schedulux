@@ -261,7 +261,8 @@ export default function KnowledgeBasePage() {
             </h1>
           </div>
           <p className="mt-1 text-xs sm:text-sm text-slate-500">
-            Upload PDF documents (pricing matrices, FAQ sheets, policy guides) to train your AI agent.
+            Upload PDF documents (pricing matrices, FAQ sheets, policy guides) to train your AI
+            agent.
           </p>
         </div>
 
@@ -269,7 +270,9 @@ export default function KnowledgeBasePage() {
         <div className="flex flex-wrap items-center gap-2.5">
           {currentAgent && (
             <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200/80 text-xs">
-              <span className="font-semibold text-slate-700">{currentAgent.name || currentAgent.agent_id}</span>
+              <span className="font-semibold text-slate-700">
+                {currentAgent.name || currentAgent.agent_id}
+              </span>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 Live
@@ -591,7 +594,9 @@ export default function KnowledgeBasePage() {
         description={
           docToDelete ? (
             <span>
-              Are you sure you want to delete <strong className="text-slate-800">{docToDelete.file_name}</strong>? This document will be permanently removed from the agent's knowledge base and vector index.
+              Are you sure you want to delete{' '}
+              <strong className="text-slate-800">{docToDelete.file_name}</strong>? This document
+              will be permanently removed from the agent's knowledge base and vector index.
             </span>
           ) : undefined
         }

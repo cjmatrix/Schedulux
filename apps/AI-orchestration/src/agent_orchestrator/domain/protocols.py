@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
@@ -132,6 +132,10 @@ class AgentOrchestrator(Protocol):
     async def resume_session(
         self, tenant_id: str, user_answer: str, agent_id: str, tier: str | None = None
     ) -> dict[str, Any]: ...
+
+    async def resume_session_stream(
+        self, tenant_id: str, user_answer: str, agent_id: str, tier: str | None = None
+    ) -> AsyncIterator[dict[str, Any]]: ...
 
     async def get_current_draft(self, tenant_id: str, agent_id: str) -> dict[str, Any] | None: ...
 

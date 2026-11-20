@@ -732,7 +732,9 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
                       : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                   }`}
                 >
-                  {hasCustomOverrides ? 'Custom Shift Overrides Active' : 'Inheriting Standard Workspace Hours'}
+                  {hasCustomOverrides
+                    ? 'Custom Shift Overrides Active'
+                    : 'Inheriting Standard Workspace Hours'}
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-1">
@@ -785,9 +787,12 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
                   <Clock className="w-5 h-5 text-slate-600" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900">Standard Organization Schedule Active</h4>
+                  <h4 className="text-xs font-bold text-slate-900">
+                    Standard Organization Schedule Active
+                  </h4>
                   <p className="text-[11px] text-slate-500 mt-0.5 max-w-lg">
-                    No custom shift overrides are applied. The AI booking agent will automatically use your organization's general operating hours for scheduling.
+                    No custom shift overrides are applied. The AI booking agent will automatically
+                    use your organization's general operating hours for scheduling.
                   </p>
                 </div>
               </div>
@@ -851,7 +856,9 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
                               <input
                                 type="time"
                                 value={shift.start}
-                                onChange={(e) => handleShiftChange(key, idx, 'start', e.target.value)}
+                                onChange={(e) =>
+                                  handleShiftChange(key, idx, 'start', e.target.value)
+                                }
                                 className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none"
                               />
                               <span className="text-slate-400 font-medium">to</span>
@@ -923,8 +930,8 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
           <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 text-slate-600 text-xs">
             <Shield className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
             <span className="text-[11px] leading-relaxed">
-              Schedulux AI and autonomous text agents will strictly offer appointment slots
-              within these confirmed operating hours.
+              Schedulux AI and autonomous text agents will strictly offer appointment slots within
+              these confirmed operating hours.
             </span>
           </div>
         </div>

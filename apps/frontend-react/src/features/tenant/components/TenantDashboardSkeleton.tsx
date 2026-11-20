@@ -1,12 +1,4 @@
-import {
-  BookOpen,
-  Bot,
-  Calendar,
-  Loader2,
-  Package,
-  Tag,
-  Zap,
-} from 'lucide-react';
+import { BookOpen, Bot, Calendar, Loader2, Package, Tag, Zap } from 'lucide-react';
 
 export function TenantDashboardSkeleton() {
   return (
@@ -22,9 +14,7 @@ export function TenantDashboardSkeleton() {
             <Loader2 className="w-4 h-4 animate-spin" />
           </div>
           <div>
-            <h2 className="text-xs font-bold text-slate-800">
-              Synchronizing Dashboard Metrics...
-            </h2>
+            <h2 className="text-xs font-bold text-slate-800">Synchronizing Dashboard Metrics...</h2>
             <p className="text-[11px] text-slate-400">
               Loading agent operational status, service counts, and scheduled appointments
             </p>
@@ -215,4 +205,3 @@ export function TenantDashboardSkeleton() {
     </div>
   );
 }
-

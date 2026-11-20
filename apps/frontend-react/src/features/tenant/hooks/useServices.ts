@@ -81,10 +81,7 @@ export function useDeleteService() {
   });
 }
 
-export function useResourcesList(
-  params?: ListResourcesParams,
-  options?: { enabled?: boolean },
-) {
+export function useResourcesList(params?: ListResourcesParams, options?: { enabled?: boolean }) {
   return useQuery<ListResourcesResponseData, Error>({
     queryKey: SCHEDULING_KEYS.resourcesList(params),
     queryFn: () => servicesApi.listResources(params),

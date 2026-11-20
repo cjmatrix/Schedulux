@@ -51,6 +51,18 @@ export interface OnboardingResponse {
     draft_schema_json: string;
     live_schema_json: string;
 }
+export interface OnboardingStreamChunk {
+    /** "token", "done", "error" */
+    event_type: string;
+    delta: string;
+    status: string;
+    question: string;
+    field: string;
+    type: string;
+    draft_schema_json: string;
+    live_schema_json: string;
+    error?: string | undefined;
+}
 export interface SaveInitialAgentDraftRequest {
     tenant_id: string;
     draft_json: string;
@@ -135,6 +147,20 @@ export interface CustomerChatResponse {
     user_message_id: string;
     agent_message_id: string;
     created_at: string;
+}
+export interface CustomerChatStreamChunk {
+    session_id: string;
+    delta: string;
+    /** "token" | "status" | "done" | "error" */
+    event_type: string;
+    booking_id?: string | undefined;
+    booking_reference?: string | undefined;
+    status?: string | undefined;
+    user_message_id?: string | undefined;
+    agent_message_id?: string | undefined;
+    created_at?: string | undefined;
+    error?: string | undefined;
+    response?: string | undefined;
 }
 export interface GetCustomerMessagesRequest {
     tenant_id: string;
@@ -223,11 +249,13 @@ export interface KnowledgeServiceClient {
     getCrawlStatus(request: GetCrawlStatusRequest, metadata?: Metadata): Observable<GetCrawlStatusResponse>;
     startOnboardingSession(request: StartOnboardingRequest, metadata?: Metadata): Observable<OnboardingResponse>;
     resumeOnboardingSession(request: ResumeOnboardingRequest, metadata?: Metadata): Observable<OnboardingResponse>;
+    resumeOnboardingSessionStream(request: ResumeOnboardingRequest, metadata?: Metadata): Observable<OnboardingStreamChunk>;
     saveInitialAgentDraft(request: SaveInitialAgentDraftRequest, metadata?: Metadata): Observable<SaveInitialAgentDraftResponse>;
     listTenantAgents(request: ListTenantAgentsRequest, metadata?: Metadata): Observable<ListTenantAgentsResponse>;
     deleteAgent(request: DeleteAgentRequest, metadata?: Metadata): Observable<DeleteAgentResponse>;
     getAgentMessages(request: GetAgentMessagesRequest, metadata?: Metadata): Observable<GetAgentMessagesResponse>;
     customerChat(request: CustomerChatRequest, metadata?: Metadata): Observable<CustomerChatResponse>;
+    customerChatStream(request: CustomerChatRequest, metadata?: Metadata): Observable<CustomerChatStreamChunk>;
     getCustomerMessages(request: GetCustomerMessagesRequest, metadata?: Metadata): Observable<GetCustomerMessagesResponse>;
     getWidgetConfig(request: GetWidgetConfigRequest, metadata?: Metadata): Observable<GetWidgetConfigResponse>;
     updateWidgetConfig(request: UpdateWidgetConfigRequest, metadata?: Metadata): Observable<UpdateWidgetConfigResponse>;
@@ -242,11 +270,13 @@ export interface KnowledgeServiceController {
     getCrawlStatus(request: GetCrawlStatusRequest, metadata?: Metadata): Promise<GetCrawlStatusResponse> | Observable<GetCrawlStatusResponse> | GetCrawlStatusResponse;
     startOnboardingSession(request: StartOnboardingRequest, metadata?: Metadata): Promise<OnboardingResponse> | Observable<OnboardingResponse> | OnboardingResponse;
     resumeOnboardingSession(request: ResumeOnboardingRequest, metadata?: Metadata): Promise<OnboardingResponse> | Observable<OnboardingResponse> | OnboardingResponse;
+    resumeOnboardingSessionStream(request: ResumeOnboardingRequest, metadata?: Metadata): Observable<OnboardingStreamChunk>;
     saveInitialAgentDraft(request: SaveInitialAgentDraftRequest, metadata?: Metadata): Promise<SaveInitialAgentDraftResponse> | Observable<SaveInitialAgentDraftResponse> | SaveInitialAgentDraftResponse;
     listTenantAgents(request: ListTenantAgentsRequest, metadata?: Metadata): Promise<ListTenantAgentsResponse> | Observable<ListTenantAgentsResponse> | ListTenantAgentsResponse;
     deleteAgent(request: DeleteAgentRequest, metadata?: Metadata): Promise<DeleteAgentResponse> | Observable<DeleteAgentResponse> | DeleteAgentResponse;
     getAgentMessages(request: GetAgentMessagesRequest, metadata?: Metadata): Promise<GetAgentMessagesResponse> | Observable<GetAgentMessagesResponse> | GetAgentMessagesResponse;
     customerChat(request: CustomerChatRequest, metadata?: Metadata): Promise<CustomerChatResponse> | Observable<CustomerChatResponse> | CustomerChatResponse;
+    customerChatStream(request: CustomerChatRequest, metadata?: Metadata): Observable<CustomerChatStreamChunk>;
     getCustomerMessages(request: GetCustomerMessagesRequest, metadata?: Metadata): Promise<GetCustomerMessagesResponse> | Observable<GetCustomerMessagesResponse> | GetCustomerMessagesResponse;
     getWidgetConfig(request: GetWidgetConfigRequest, metadata?: Metadata): Promise<GetWidgetConfigResponse> | Observable<GetWidgetConfigResponse> | GetWidgetConfigResponse;
     updateWidgetConfig(request: UpdateWidgetConfigRequest, metadata?: Metadata): Promise<UpdateWidgetConfigResponse> | Observable<UpdateWidgetConfigResponse> | UpdateWidgetConfigResponse;

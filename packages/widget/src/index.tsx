@@ -35,7 +35,13 @@ export function initScheduluxWidget(options: WidgetInitOptions): ScheduluxWidget
   const instanceKey = `${options.tenantId}_${options.agentId}`;
   if (activeInstances.has(instanceKey)) {
     const existing = activeInstances.get(instanceKey);
-    if (existing) return existing;
+    if (existing) {
+      if (options.container) {
+        existing.destroy();
+      } else {
+        return existing;
+      }
+    }
   }
 
   

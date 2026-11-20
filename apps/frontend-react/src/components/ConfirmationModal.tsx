@@ -54,11 +54,8 @@ export function ConfirmationModal({
   const isDelete = variant === 'delete' || variant === 'danger';
   const isWarn = variant === 'warn' || variant === 'warning';
 
- 
-  const resolvedConfirmText =
-    confirmText || (isDelete ? 'Delete' : isWarn ? 'Proceed' : 'Confirm');
+  const resolvedConfirmText = confirmText || (isDelete ? 'Delete' : isWarn ? 'Proceed' : 'Confirm');
 
-  
   const renderIcon = () => {
     if (icon) return icon;
     if (isDelete) {
@@ -130,13 +127,9 @@ export function ConfirmationModal({
             {renderIcon()}
           </div>
           <div className="pr-6">
-            <h3 className="text-base font-bold text-slate-900 tracking-tight">
-              {title}
-            </h3>
+            <h3 className="text-base font-bold text-slate-900 tracking-tight">{title}</h3>
             {description && (
-              <div className="text-xs text-slate-500 mt-1 leading-relaxed">
-                {description}
-              </div>
+              <div className="text-xs text-slate-500 mt-1 leading-relaxed">{description}</div>
             )}
           </div>
         </div>
@@ -177,4 +170,3 @@ export function ConfirmationModal({
     </div>
   );
 }
-

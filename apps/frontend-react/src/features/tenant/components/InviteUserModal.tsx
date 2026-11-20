@@ -90,7 +90,8 @@ export function InviteUserModal({
             Invite Team Member
           </h2>
           <p className="text-xs text-slate-500 leading-relaxed max-w-md">
-            Send an email invitation link to your staff. They will set their own password and will be restricted to the assigned agent.
+            Send an email invitation link to your staff. They will set their own password and will
+            be restricted to the assigned agent.
           </p>
         </div>
 
@@ -158,7 +159,8 @@ export function InviteUserModal({
               </div>
             )}
             <p className="text-[11px] text-slate-400 mt-1">
-              Staff can only view and manage bookings, services, resources, and customers for this agent.
+              Staff can only view and manage bookings, services, resources, and customers for this
+              agent.
             </p>
           </div>
 
@@ -180,7 +182,9 @@ export function InviteUserModal({
                   <span>Operations Manager</span>
                 </div>
                 <p className="text-[11px] text-slate-500 leading-normal">
-                  Staff members have operational access to Calendar & Bookings, Services, Resources, and Customers. They cannot access billing, invite other users, or edit agent knowledge base.
+                  Staff members have operational access to Calendar & Bookings, Services, Resources,
+                  and Customers. They cannot access billing, invite other users, or edit agent
+                  knowledge base.
                 </p>
               </div>
             </div>

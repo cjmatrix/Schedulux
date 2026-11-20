@@ -24,7 +24,6 @@ import ForgotPasswordPage from './features/tenant/pages/ForgotPasswordPage.tsx';
 import KnowledgeBasePage from './features/tenant/pages/KnowledgeBasePage.tsx';
 import LoginPage from './features/tenant/pages/LoginPage.tsx';
 
-
 import BillingPage from './features/tenant/pages/BillingPage.tsx';
 import EmbedWidgetPage from './features/tenant/pages/EmbedWidgetPage.tsx';
 import TenantLayout from './features/tenant/pages/layout/TenantLayout.tsx';
@@ -39,6 +38,7 @@ import TenantAgentsPage from './features/tenant/pages/TenantAgentsPage.tsx';
 import TenantDashboardPage from './features/tenant/pages/TenantDashboardPage.tsx';
 import VerifyEmailPage from './features/tenant/pages/VerifyEmailPage.tsx';
 import WorkspaceUsersPage from './features/tenant/pages/WorkspaceUsersPage.tsx';
+import PublicChatPage from './features/public/pages/PublicChatPage.tsx';
 import AgentOnboardingWizard from './pages/AgentOnboardingWizard.tsx';
 import LandingPage from './pages/LandingPage.tsx';
 import SchedulingOnboarding from './pages/SchedulingOnboarding.tsx';
@@ -93,6 +93,14 @@ const router = createBrowserRouter([
   {
     path: '/reset-password',
     element: <ResetPasswordPage />,
+  },
+  {
+    path: '/chat/:tenantId/:agentId',
+    element: <PublicChatPage />,
+  },
+  {
+    path: '/book/:tenantId/:agentId',
+    element: <PublicChatPage />,
   },
   {
     path: '/superadmin/login',

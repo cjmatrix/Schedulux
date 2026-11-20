@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -88,6 +89,9 @@ class OnboardingServiceProtocol(Protocol):
     async def resume_session(
         self, tenant_id: str, agent_id: str, user_answer: str, tier: str | None = None
     ) -> OnboardingResult: ...
+    async def resume_session_stream(
+        self, tenant_id: str, agent_id: str, user_answer: str, tier: str | None = None
+    ) -> AsyncIterator[dict[str, Any]]: ...
 
 
 class MemoryServiceProtocol(Protocol):

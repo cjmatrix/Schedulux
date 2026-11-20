@@ -1,8 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  type UpdateWidgetConfigPayload,
-  widgetConfigApi,
-} from '../api/widgetConfigApi';
+import { type UpdateWidgetConfigPayload, widgetConfigApi } from '../api/widgetConfigApi';
 
 export const WIDGET_CONFIG_KEYS = {
   all: ['widget_config'] as const,
@@ -10,7 +7,10 @@ export const WIDGET_CONFIG_KEYS = {
     [...WIDGET_CONFIG_KEYS.all, agentId, source] as const,
 };
 
-export function useWidgetConfig(agentId: string | null | undefined, source: 'live' | 'draft' = 'live') {
+export function useWidgetConfig(
+  agentId: string | null | undefined,
+  source: 'live' | 'draft' = 'live',
+) {
   return useQuery({
     queryKey: WIDGET_CONFIG_KEYS.detail(agentId || '', source),
     queryFn: async () => {
@@ -44,4 +44,3 @@ export function useUpdateWidgetConfig(agentId: string | null | undefined) {
     },
   });
 }
-

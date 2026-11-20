@@ -30,11 +30,7 @@ export function useTenantAgents() {
 export function useDeleteAgent() {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    ApiResponse<{ success: boolean; agent_id: string }>,
-    Error,
-    string
-  >({
+  return useMutation<ApiResponse<{ success: boolean; agent_id: string }>, Error, string>({
     mutationFn: async (agentId: string) => {
       return knowledgeApi.deleteAgent(agentId);
     },

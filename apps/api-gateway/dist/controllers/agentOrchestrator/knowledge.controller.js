@@ -30,11 +30,13 @@ const grpc_metadata_util_js_1 = require("../../utils/grpc-metadata.util.js");
 let KnowledgeController = class KnowledgeController {
     _client;
     _schemaCacheService;
+    _schemaEventSubscriber;
     _redisService;
     _knowledgeService;
-    constructor(_client, _schemaCacheService, _redisService) {
+    constructor(_client, _schemaCacheService, _schemaEventSubscriber, _redisService) {
         this._client = _client;
         this._schemaCacheService = _schemaCacheService;
+        this._schemaEventSubscriber = _schemaEventSubscriber;
         this._redisService = _redisService;
     }
     onModuleInit() {
@@ -104,6 +106,79 @@ let KnowledgeController = class KnowledgeController {
             },
         };
     }
+    streamSchema(req, query) {
+        const tenantId = this._getTenantId(req);
+        const targetJobId = query.job_id;
+        return new rxjs_1.Observable((subscriber) => {
+            let isCompleted = false;
+            this._schemaCacheService
+                .getDraftSchema(tenantId, targetJobId)
+                .then((existingSchema) => {
+                if (existingSchema && !isCompleted) {
+                    isCompleted = true;
+                    subscriber.next({
+                        type: 'schema:ready',
+                        data: {
+                            tenant_id: tenantId,
+                            job_id: targetJobId || '',
+                            schema: existingSchema,
+                            status: 'completed',
+                        },
+                    });
+                    subscriber.complete();
+                }
+            })
+                .catch(() => { });
+            const unsubscribe = this._schemaEventSubscriber.onSchemaGenerated((event) => {
+                if (isCompleted)
+                    return;
+                if (event.tenant_id && event.tenant_id !== tenantId) {
+                    return;
+                }
+                if (targetJobId && event.job_id && event.job_id !== targetJobId) {
+                    return;
+                }
+                if (event.event === 'SCHEMA_GENERATION_FAILED' || event.error) {
+                    isCompleted = true;
+                    subscriber.next({
+                        type: 'schema:failed',
+                        data: {
+                            job_id: event.job_id,
+                            tenant_id: event.tenant_id,
+                            error: event.error || messages_constant_js_1.RESPONSE_MESSAGES.WEBSOCKET.SCHEMA_GENERATION_FAILED,
+                            status: 'failed',
+                        },
+                    });
+                    subscriber.complete();
+                    return;
+                }
+                isCompleted = true;
+                subscriber.next({
+                    type: 'schema:ready',
+                    data: {
+                        job_id: event.job_id,
+                        tenant_id: event.tenant_id,
+                        schema: event.schema,
+                        status: 'completed',
+                    },
+                });
+                subscriber.complete();
+            });
+            const heartbeatInterval = setInterval(() => {
+                if (!isCompleted) {
+                    subscriber.next({
+                        type: 'ping',
+                        data: { time: Date.now() },
+                    });
+                }
+            }, 20000);
+            return () => {
+                isCompleted = true;
+                clearInterval(heartbeatInterval);
+                unsubscribe();
+            };
+        });
+    }
     async startOnboarding(req, body) {
         const tenantId = this._getTenantId(req);
         const tier = this._getTenantTier(req);
@@ -145,6 +220,36 @@ let KnowledgeController = class KnowledgeController {
                 live_schema: JSON.parse(response.live_schema_json || '{}'),
             },
         };
+    }
+    resumeOnboardingStream(req, res, body) {
+        const tenantId = this._getTenantId(req);
+        const tier = this._getTenantTier(req);
+        const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
+        res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders?.();
+        const stream$ = this._knowledgeService.resumeOnboardingSessionStream({
+            tenant_id: tenantId,
+            user_answer: body.user_answer,
+            agent_id: body.agent_id || '',
+        }, metadata);
+        const subscription = stream$.subscribe({
+            next: (chunk) => {
+                res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+            },
+            error: (err) => {
+                res.write(`data: ${JSON.stringify({ event_type: 'error', error: err.message || 'Stream error' })}\n\n`);
+                res.end();
+            },
+            complete: () => {
+                res.end();
+            },
+        });
+        req.on('close', () => {
+            subscription.unsubscribe();
+        });
     }
     async sandboxInit(req, body) {
         const tenantId = this._getTenantId(req);
@@ -322,6 +427,67 @@ let KnowledgeController = class KnowledgeController {
                 status: response.status || undefined,
             },
         };
+    }
+    sandboxChatStream(req, res, body) {
+        const tenantId = this._getTenantId(req);
+        const agentId = body.agent_id || 'default';
+        let sessionId = body.session_id;
+        let token = body.token;
+        if (token) {
+            const verified = (0, session_token_util_js_1.verifySessionToken)(token, {
+                expectedTenantId: tenantId,
+                expectedAgentId: agentId,
+            });
+            if (!verified.valid || !verified.sessionId) {
+                throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
+            }
+            sessionId = verified.sessionId;
+        }
+        else if (sessionId) {
+            token = (0, session_token_util_js_1.signSessionId)(sessionId, tenantId, agentId);
+        }
+        else {
+            const session = (0, session_token_util_js_1.createSignedSession)(`sandbox_${tenantId}_${agentId}`, tenantId, agentId);
+            sessionId = session.sessionId;
+            token = session.token;
+        }
+        const tier = this._getTenantTier(req);
+        const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
+        res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders?.();
+        const stream$ = this._knowledgeService.customerChatStream({
+            tenant_id: tenantId,
+            agent_id: agentId,
+            session_id: sessionId,
+            message: body.message,
+            customer_id: body.customer_id || '',
+            customer_phone: body.customer_phone || '',
+            customer_name: body.customer_name || 'Sandbox Tester',
+            mode: 'sandbox',
+        }, metadata);
+        const subscription = stream$.subscribe({
+            next: (chunk) => {
+                const payload = {
+                    ...chunk,
+                    token,
+                    session_id: chunk.session_id || sessionId,
+                };
+                res.write(`data: ${JSON.stringify(payload)}\n\n`);
+            },
+            error: (err) => {
+                res.write(`data: ${JSON.stringify({ event_type: 'error', error: err.message || 'Stream error' })}\n\n`);
+                res.end();
+            },
+            complete: () => {
+                res.end();
+            },
+        });
+        req.on('close', () => {
+            subscription.unsubscribe();
+        });
     }
     async saveInitialDraft(req, body) {
         const tenantId = this._getTenantId(req);
@@ -547,6 +713,15 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "getSchema", null);
 __decorate([
+    (0, common_1.Sse)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.SCHEMA_STREAM),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.GetSchemaQueryDto]),
+    __metadata("design:returntype", rxjs_1.Observable)
+], KnowledgeController.prototype, "streamSchema", null);
+__decorate([
     (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_START),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, common_1.UseGuards)(tenant_token_quota_guard_js_1.TenantTokenQuotaGuard),
@@ -568,6 +743,18 @@ __decorate([
     __metadata("design:paramtypes", [Object, knowledge_dto_js_1.ResumeOnboardingDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "resumeOnboarding", null);
+__decorate([
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_MESSAGE_STREAM),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UseGuards)(tenant_token_quota_guard_js_1.TenantTokenQuotaGuard),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Res)()),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, knowledge_dto_js_1.ResumeOnboardingDto]),
+    __metadata("design:returntype", void 0)
+], KnowledgeController.prototype, "resumeOnboardingStream", null);
 __decorate([
     (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_INIT),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
@@ -607,6 +794,18 @@ __decorate([
     __metadata("design:paramtypes", [Object, knowledge_dto_js_1.SendSandboxMessageDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "sandboxChat", null);
+__decorate([
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_STREAM),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UseGuards)(tenant_token_quota_guard_js_1.TenantTokenQuotaGuard),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Res)()),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, knowledge_dto_js_1.SendSandboxMessageDto]),
+    __metadata("design:returntype", void 0)
+], KnowledgeController.prototype, "sandboxChatStream", null);
 __decorate([
     (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.AGENTS_DRAFT),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
@@ -718,6 +917,7 @@ exports.KnowledgeController = KnowledgeController = __decorate([
     (0, roles_decorator_js_1.Roles)('tenant_owner'),
     __param(0, (0, common_1.Inject)('KNOWLEDGE_PACKAGE')),
     __param(1, (0, common_1.Inject)('ISchemaCacheService')),
-    __param(2, (0, common_1.Inject)(redis_service_js_1.RedisService)),
-    __metadata("design:paramtypes", [Object, Object, redis_service_js_1.RedisService])
+    __param(2, (0, common_1.Inject)('ISchemaEventSubscriber')),
+    __param(3, (0, common_1.Inject)(redis_service_js_1.RedisService)),
+    __metadata("design:paramtypes", [Object, Object, Object, redis_service_js_1.RedisService])
 ], KnowledgeController);

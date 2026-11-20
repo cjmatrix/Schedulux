@@ -9,7 +9,7 @@ export interface SchemaGeneratedEvent {
 }
 
 export interface ISchemaEventSubscriber {
-  onSchemaGenerated(callback: (event: SchemaGeneratedEvent) => void): void;
+  onSchemaGenerated(callback: (event: SchemaGeneratedEvent) => void): () => void;
 }
 
 export interface ISchemaCacheService {

@@ -71,6 +71,19 @@ export interface OnboardingResponse {
   live_schema_json: string;
 }
 
+export interface OnboardingStreamChunk {
+  /** "token", "done", "error" */
+  event_type: string;
+  delta: string;
+  status: string;
+  question: string;
+  field: string;
+  type: string;
+  draft_schema_json: string;
+  live_schema_json: string;
+  error?: string | undefined;
+}
+
 export interface SaveInitialAgentDraftRequest {
   tenant_id: string;
   draft_json: string;
@@ -167,6 +180,21 @@ export interface CustomerChatResponse {
   user_message_id: string;
   agent_message_id: string;
   created_at: string;
+}
+
+export interface CustomerChatStreamChunk {
+  session_id: string;
+  delta: string;
+  /** "token" | "status" | "done" | "error" */
+  event_type: string;
+  booking_id?: string | undefined;
+  booking_reference?: string | undefined;
+  status?: string | undefined;
+  user_message_id?: string | undefined;
+  agent_message_id?: string | undefined;
+  created_at?: string | undefined;
+  error?: string | undefined;
+  response?: string | undefined;
 }
 
 export interface GetCustomerMessagesRequest {
@@ -276,6 +304,11 @@ export interface KnowledgeServiceClient {
 
   resumeOnboardingSession(request: ResumeOnboardingRequest, metadata?: Metadata): Observable<OnboardingResponse>;
 
+  resumeOnboardingSessionStream(
+    request: ResumeOnboardingRequest,
+    metadata?: Metadata,
+  ): Observable<OnboardingStreamChunk>;
+
   saveInitialAgentDraft(
     request: SaveInitialAgentDraftRequest,
     metadata?: Metadata,
@@ -288,6 +321,8 @@ export interface KnowledgeServiceClient {
   getAgentMessages(request: GetAgentMessagesRequest, metadata?: Metadata): Observable<GetAgentMessagesResponse>;
 
   customerChat(request: CustomerChatRequest, metadata?: Metadata): Observable<CustomerChatResponse>;
+
+  customerChatStream(request: CustomerChatRequest, metadata?: Metadata): Observable<CustomerChatStreamChunk>;
 
   getCustomerMessages(
     request: GetCustomerMessagesRequest,
@@ -336,6 +371,11 @@ export interface KnowledgeServiceController {
     metadata?: Metadata,
   ): Promise<OnboardingResponse> | Observable<OnboardingResponse> | OnboardingResponse;
 
+  resumeOnboardingSessionStream(
+    request: ResumeOnboardingRequest,
+    metadata?: Metadata,
+  ): Observable<OnboardingStreamChunk>;
+
   saveInitialAgentDraft(
     request: SaveInitialAgentDraftRequest,
     metadata?: Metadata,
@@ -360,6 +400,8 @@ export interface KnowledgeServiceController {
     request: CustomerChatRequest,
     metadata?: Metadata,
   ): Promise<CustomerChatResponse> | Observable<CustomerChatResponse> | CustomerChatResponse;
+
+  customerChatStream(request: CustomerChatRequest, metadata?: Metadata): Observable<CustomerChatStreamChunk>;
 
   getCustomerMessages(
     request: GetCustomerMessagesRequest,
@@ -409,11 +451,13 @@ export function KnowledgeServiceControllerMethods() {
       "getCrawlStatus",
       "startOnboardingSession",
       "resumeOnboardingSession",
+      "resumeOnboardingSessionStream",
       "saveInitialAgentDraft",
       "listTenantAgents",
       "deleteAgent",
       "getAgentMessages",
       "customerChat",
+      "customerChatStream",
       "getCustomerMessages",
       "getWidgetConfig",
       "updateWidgetConfig",

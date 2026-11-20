@@ -7,11 +7,13 @@ service KnowledgeService {
   rpc GetCrawlStatus (GetCrawlStatusRequest) returns (GetCrawlStatusResponse);
   rpc StartOnboardingSession (StartOnboardingRequest) returns (OnboardingResponse);
   rpc ResumeOnboardingSession (ResumeOnboardingRequest) returns (OnboardingResponse);
+  rpc ResumeOnboardingSessionStream (ResumeOnboardingRequest) returns (stream OnboardingStreamChunk);
   rpc SaveInitialAgentDraft (SaveInitialAgentDraftRequest) returns (SaveInitialAgentDraftResponse);
   rpc ListTenantAgents (ListTenantAgentsRequest) returns (ListTenantAgentsResponse);
   rpc DeleteAgent (DeleteAgentRequest) returns (DeleteAgentResponse);
   rpc GetAgentMessages (GetAgentMessagesRequest) returns (GetAgentMessagesResponse);
   rpc CustomerChat (CustomerChatRequest) returns (CustomerChatResponse);
+  rpc CustomerChatStream (CustomerChatRequest) returns (stream CustomerChatStreamChunk);
   rpc GetCustomerMessages (GetCustomerMessagesRequest) returns (GetCustomerMessagesResponse);
   rpc GetWidgetConfig (GetWidgetConfigRequest) returns (GetWidgetConfigResponse);
   rpc UpdateWidgetConfig (UpdateWidgetConfigRequest) returns (UpdateWidgetConfigResponse);
@@ -81,6 +83,18 @@ message OnboardingResponse {
   string type = 4;
   string draft_schema_json = 5;
   string live_schema_json = 6;
+}
+
+message OnboardingStreamChunk {
+  string event_type = 1; // "token", "done", "error"
+  string delta = 2;
+  string status = 3;
+  string question = 4;
+  string field = 5;
+  string type = 6;
+  string draft_schema_json = 7;
+  string live_schema_json = 8;
+  optional string error = 9;
 }
 
 message SaveInitialAgentDraftRequest {
@@ -177,6 +191,20 @@ message CustomerChatResponse {
   string user_message_id = 6;
   string agent_message_id = 7;
   string created_at = 8;
+}
+
+message CustomerChatStreamChunk {
+  string session_id = 1;
+  string delta = 2;
+  string event_type = 3; // "token" | "status" | "done" | "error"
+  optional string booking_id = 4;
+  optional string booking_reference = 5;
+  optional string status = 6;
+  optional string user_message_id = 7;
+  optional string agent_message_id = 8;
+  optional string created_at = 9;
+  optional string error = 10;
+  optional string response = 11;
 }
 
 message GetCustomerMessagesRequest {

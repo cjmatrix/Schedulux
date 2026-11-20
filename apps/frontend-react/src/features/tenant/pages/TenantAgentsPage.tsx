@@ -80,9 +80,7 @@ export default function TenantAgentsPage() {
     currentTenant?.business_name ||
     'Tenant Owner';
   const currentUserRole =
-    authUser?.system_role === 'manager'
-      ? 'Operations Manager'
-      : 'Tenant Owner';
+    authUser?.system_role === 'manager' ? 'Operations Manager' : 'Tenant Owner';
   const userInitials = currentUserFullName.substring(0, 2).toUpperCase();
 
   const handleCopyId = (id: string, e: React.MouseEvent) => {
@@ -166,7 +164,8 @@ export default function TenantAgentsPage() {
               </span>
             </div>
             <p className="mt-1 text-xs sm:text-sm text-slate-500">
-              Manage your scheduling bots. Each agent has its own dedicated services, resources, and knowledge.
+              Manage your scheduling bots. Each agent has its own dedicated services, resources, and
+              knowledge.
             </p>
           </div>
 
@@ -178,7 +177,9 @@ export default function TenantAgentsPage() {
               className="p-2 border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 rounded-xl transition cursor-pointer shadow-2xs disabled:opacity-50"
               title="Refresh Agents"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-indigo-600' : ''}`} />
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-indigo-600' : ''}`}
+              />
             </button>
             <button
               onClick={() => navigate('/tenant/landingboard')}
@@ -454,7 +455,9 @@ export default function TenantAgentsPage() {
           <div className="space-y-3">
             <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-bold text-slate-900 text-sm truncate">{agentToDelete.name}</span>
+                <span className="font-bold text-slate-900 text-sm truncate">
+                  {agentToDelete.name}
+                </span>
                 <span
                   className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
                     agentToDelete.status === 'created'
@@ -473,7 +476,8 @@ export default function TenantAgentsPage() {
             <div className="flex items-start gap-2 bg-rose-50/70 border border-rose-100 rounded-2xl p-3 text-[11px] text-rose-800 leading-relaxed">
               <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
               <span>
-                Deleting this agent will remove its draft schema, runtime configuration, cached knowledge, and active chat widget sessions.
+                Deleting this agent will remove its draft schema, runtime configuration, cached
+                knowledge, and active chat widget sessions.
               </span>
             </div>
           </div>

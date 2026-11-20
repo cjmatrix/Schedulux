@@ -48,9 +48,7 @@ export function useSuperAdminTokenChart(
   });
 }
 
-export function useSuperAdminTopTenants(
-  filter?: DashboardDateFilter & { limit?: number },
-) {
+export function useSuperAdminTopTenants(filter?: DashboardDateFilter & { limit?: number }) {
   return useQuery<TopTenantTokenUsage[], Error>({
     queryKey: SUPERADMIN_DASHBOARD_KEYS.topTenants(filter),
     queryFn: () => superAdminDashboardApi.getTopTenants(filter),

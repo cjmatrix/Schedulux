@@ -1,6 +1,5 @@
 import { marked } from 'marked';
 
-
 marked.use({
   gfm: true,
   breaks: true,
@@ -19,7 +18,6 @@ function sanitizeHtml(html: string): string {
     .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
     .replace(/\son\w+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '');
 }
-
 
 export function renderMarkdown(content: string): string {
   if (!content) return '';

@@ -80,9 +80,7 @@ export function BookingsCalendarView({
 
   const isDateRangeBooking = (booking: BookingInfo) => {
     const matchedService = services.find((s) => s.service_id === booking.service_id);
-    return (
-      booking.booking_mode === 'date_range' || matchedService?.booking_mode === 'date_range'
-    );
+    return booking.booking_mode === 'date_range' || matchedService?.booking_mode === 'date_range';
   };
 
   const displayedBookings = useMemo(() => {
@@ -383,7 +381,9 @@ export function BookingsCalendarView({
       {/* Calendar Header Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 pb-4 border-b border-slate-100">
         <div className="flex items-center gap-2.5 sm:gap-3">
-          <h2 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight">{headerTitle}</h2>
+          <h2 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight">
+            {headerTitle}
+          </h2>
           {isLoading && <Loader2 className="w-4 h-4 animate-spin text-slate-500 shrink-0" />}
           <button
             type="button"
@@ -460,13 +460,34 @@ export function BookingsCalendarView({
 
       {/* Weekday Column Headers */}
       <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">
-        <div><span className="sm:hidden">M</span><span className="hidden sm:inline">Mon</span></div>
-        <div><span className="sm:hidden">T</span><span className="hidden sm:inline">Tue</span></div>
-        <div><span className="sm:hidden">W</span><span className="hidden sm:inline">Wed</span></div>
-        <div><span className="sm:hidden">T</span><span className="hidden sm:inline">Thu</span></div>
-        <div><span className="sm:hidden">F</span><span className="hidden sm:inline">Fri</span></div>
-        <div><span className="sm:hidden">S</span><span className="hidden sm:inline">Sat</span></div>
-        <div><span className="sm:hidden">S</span><span className="hidden sm:inline">Sun</span></div>
+        <div>
+          <span className="sm:hidden">M</span>
+          <span className="hidden sm:inline">Mon</span>
+        </div>
+        <div>
+          <span className="sm:hidden">T</span>
+          <span className="hidden sm:inline">Tue</span>
+        </div>
+        <div>
+          <span className="sm:hidden">W</span>
+          <span className="hidden sm:inline">Wed</span>
+        </div>
+        <div>
+          <span className="sm:hidden">T</span>
+          <span className="hidden sm:inline">Thu</span>
+        </div>
+        <div>
+          <span className="sm:hidden">F</span>
+          <span className="hidden sm:inline">Fri</span>
+        </div>
+        <div>
+          <span className="sm:hidden">S</span>
+          <span className="hidden sm:inline">Sat</span>
+        </div>
+        <div>
+          <span className="sm:hidden">S</span>
+          <span className="hidden sm:inline">Sun</span>
+        </div>
       </div>
 
       {/* Calendar Grid (Month or Week) */}
@@ -724,7 +745,8 @@ export function BookingsCalendarView({
                 </div>
                 <div className="flex items-center gap-2 mt-1.5">
                   <span className="px-2.5 py-0.5 rounded-full bg-slate-200/80 text-slate-800 text-[11px] font-bold">
-                    {drawerBookings.length} {drawerBookings.length === 1 ? 'Appointment' : 'Appointments'}
+                    {drawerBookings.length}{' '}
+                    {drawerBookings.length === 1 ? 'Appointment' : 'Appointments'}
                   </span>
                   {selectedDateForDrawer === todayStr && (
                     <span className="px-2 py-0.5 rounded-full bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wider">
@@ -777,7 +799,9 @@ export function BookingsCalendarView({
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 flex flex-col gap-3">
               {filteredDrawerBookings.length === 0 ? (
                 <div className="py-16 text-center text-slate-400 text-xs">
-                  {drawerSearch ? 'No appointments match your search' : 'No appointments scheduled for this date.'}
+                  {drawerSearch
+                    ? 'No appointments match your search'
+                    : 'No appointments scheduled for this date.'}
                 </div>
               ) : (
                 filteredDrawerBookings.map((b) => {

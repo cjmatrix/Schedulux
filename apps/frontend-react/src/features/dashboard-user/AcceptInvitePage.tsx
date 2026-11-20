@@ -111,7 +111,8 @@ export default function AcceptInvitePage() {
           </div>
           <h2 className="text-xl font-bold text-slate-900 mb-2">Invitation Invalid or Expired</h2>
           <p className="text-xs text-slate-500 leading-relaxed mb-6">
-            {infoError || 'This invitation link is invalid or has already expired. Please ask your workspace administrator to resend the invitation.'}
+            {infoError ||
+              'This invitation link is invalid or has already expired. Please ask your workspace administrator to resend the invitation.'}
           </p>
           <Link
             to="/dashboarduser/login"
@@ -158,8 +159,12 @@ export default function AcceptInvitePage() {
             Accept Invitation
           </h1>
           <p className="text-xs text-slate-500 leading-relaxed">
-            Welcome, <strong className="text-slate-800">{invitation?.name}</strong>! You have been invited to join{' '}
-            <strong className="text-slate-800">{invitation?.business_name || 'the workspace'}</strong> as an Operations Manager.
+            Welcome, <strong className="text-slate-800">{invitation?.name}</strong>! You have been
+            invited to join{' '}
+            <strong className="text-slate-800">
+              {invitation?.business_name || 'the workspace'}
+            </strong>{' '}
+            as an Operations Manager.
           </p>
         </div>
 
@@ -170,9 +175,7 @@ export default function AcceptInvitePage() {
               <UserCheck className="w-4 h-4 text-slate-700" />
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="text-xs font-bold text-slate-900 truncate">
-                {invitation?.email}
-              </span>
+              <span className="text-xs font-bold text-slate-900 truncate">{invitation?.email}</span>
               <span className="text-[11px] text-slate-500 flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
                 Operations Manager

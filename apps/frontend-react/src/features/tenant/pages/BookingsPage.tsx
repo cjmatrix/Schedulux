@@ -33,7 +33,7 @@ export default function BookingsPage() {
   const { data: agents = [] } = useTenantAgents();
 
   const activeAgentId =
-    (isManager && authUser?.agent_id)
+    isManager && authUser?.agent_id
       ? authUser.agent_id
       : routeAgentId || queryAgentId || (agents.length > 0 ? agents[0].agent_id : undefined);
 
@@ -401,7 +401,9 @@ export default function BookingsPage() {
           {activeAgentId && (
             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200/80 truncate max-w-[200px]">
               <Bot className="w-3.5 h-3.5 text-slate-700 shrink-0" />
-              <span className="truncate">{agents.find((a) => a.agent_id === activeAgentId)?.name || activeAgentId}</span>
+              <span className="truncate">
+                {agents.find((a) => a.agent_id === activeAgentId)?.name || activeAgentId}
+              </span>
             </div>
           )}
 
@@ -446,7 +448,8 @@ export default function BookingsPage() {
             <div className="p-3 bg-amber-50 border border-amber-200/80 text-amber-800 rounded-2xl text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
               <span>
-                Showing the first 1,000 bookings for this period. Use the staff filter or switch to Week View for high-volume dates.
+                Showing the first 1,000 bookings for this period. Use the staff filter or switch to
+                Week View for high-volume dates.
               </span>
             </div>
           )}

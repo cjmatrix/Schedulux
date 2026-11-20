@@ -20,8 +20,8 @@ except ImportError:
 
 
 CACHE_TTL_SECONDS = int(os.environ.get("CRAWL_CACHE_TTL_SECONDS", "86400"))
-DEFAULT_MIN_LINKS = 5
-DEFAULT_MAX_LINKS = 7
+DEFAULT_MIN_LINKS = 4
+DEFAULT_MAX_LINKS = 6
 
 browser_cfg = BrowserConfig(
     headless=True,

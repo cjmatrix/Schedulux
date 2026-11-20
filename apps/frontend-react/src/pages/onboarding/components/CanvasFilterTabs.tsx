@@ -17,6 +17,7 @@ export const CanvasFilterTabs: React.FC<CanvasFilterTabsProps> = ({
   const tabs = [
     { id: 'all' as const, label: 'All Modules' },
     { id: 'profile' as const, label: 'Business Profile' },
+    { id: 'scheduling' as const, label: 'Scheduling Engine' },
     { id: 'services' as const, label: 'Services Catalog', count: servicesCount },
     { id: 'resources' as const, label: 'Resources Roster', count: resourcesCount },
     { id: 'guardrails' as const, label: 'Security Guardrails', count: 4 },

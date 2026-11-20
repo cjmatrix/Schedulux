@@ -78,10 +78,21 @@ export default function TenantLayout(_props: TenantLayoutProps = {}) {
     setMobileMenuOpen(false);
   }, [location.pathname]);
 
+  const savedAgentId =
+    typeof window !== 'undefined' ? localStorage.getItem('schedulux_active_agent_id') : null;
+  const isSavedAgentValid = savedAgentId && agents.some((a) => a.agent_id === savedAgentId);
+
+  const resolvedAgentId =
+    urlAgentId || (isSavedAgentValid ? savedAgentId : null) || (agents[0]?.agent_id ?? null);
+
   const currentAgentId =
-    (userRole === 'manager' && authUser?.agent_id)
-      ? authUser.agent_id
-      : urlAgentId || (agents[0]?.agent_id ?? null);
+    userRole === 'manager' && authUser?.agent_id ? authUser.agent_id : resolvedAgentId;
+
+  useEffect(() => {
+    if (currentAgentId) {
+      localStorage.setItem('schedulux_active_agent_id', currentAgentId);
+    }
+  }, [currentAgentId]);
 
   const currentAgent = agents.find((a) => a.agent_id === currentAgentId);
 
@@ -129,9 +140,7 @@ export default function TenantLayout(_props: TenantLayoutProps = {}) {
     currentTenant?.contact_email?.split('@')[0] ||
     'Workspace Member';
   const currentUserRole =
-    authUser?.system_role === 'manager'
-      ? 'Operations Manager'
-      : 'Tenant Owner';
+    authUser?.system_role === 'manager' ? 'Operations Manager' : 'Tenant Owner';
   const userInitials = currentUserFullName.substring(0, 2).toUpperCase();
 
   const handleNavItemClick = (itemPath: string) => {
@@ -183,6 +192,9 @@ export default function TenantLayout(_props: TenantLayoutProps = {}) {
   };
 
   const handleSwitchAgent = (newAgentId: string) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('schedulux_active_agent_id', newAgentId);
+    }
     if (isManager) {
       useDashboardAuthStore.getState().setActiveAgentId(newAgentId);
     }
@@ -267,7 +279,8 @@ export default function TenantLayout(_props: TenantLayoutProps = {}) {
               <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-200/60">
                 <Bot className="w-4 h-4 text-slate-900 shrink-0" />
                 <span className="truncate">
-                  {currentAgent?.name || (currentAgentId ? `Agent: ${currentAgentId.slice(-6)}` : 'Assigned Agent')}
+                  {currentAgent?.name ||
+                    (currentAgentId ? `Agent: ${currentAgentId.slice(-6)}` : 'Assigned Agent')}
                 </span>
               </div>
             )

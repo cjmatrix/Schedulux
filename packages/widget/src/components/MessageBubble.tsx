@@ -30,8 +30,8 @@ export function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
 
   return (
     <div
-      className={`schedulux-msg-row ${isUser ? 'user' : 'agent'} ${isPending ? 'is-pending' : ''}`}
-      style={isPending ? { opacity: 0.72 } : undefined}
+      className={`schedulux-msg-row ${isUser ? 'user' : 'agent'} ${isPending && isUser ? 'is-pending' : ''}`}
+      style={isPending && isUser ? { opacity: 0.72 } : undefined}
     >
       <div className="schedulux-bubble">
         <div
@@ -50,7 +50,7 @@ export function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
       </div>
       <div className="schedulux-msg-time">
         {timeText}
-        {isPending && ' • sending...'}
+        {isPending && isUser && ' • sending...'}
       </div>
     </div>
   );

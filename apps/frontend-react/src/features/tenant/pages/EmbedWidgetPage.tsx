@@ -3,13 +3,16 @@ import {
   Check,
   Code2,
   Copy,
+  ExternalLink,
   Globe,
   Info,
   Layers,
+  Link2,
   Lock,
   Plus,
   RefreshCw,
   Save,
+  Share2,
   ShieldCheck,
   Sparkles,
   Terminal,
@@ -58,6 +61,7 @@ export default function EmbedWidgetPage() {
   const [embedMode, setEmbedMode] = useState<EmbedDisplayMode>('bubble');
   const [activeTab, setActiveTab] = useState<IntegrationTab>('html');
   const [copiedSnippet, setCopiedSnippet] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // Sync loaded whitelisted domains from remote config
   useEffect(() => {
@@ -73,7 +77,7 @@ export default function EmbedWidgetPage() {
     if (!trimmed) return;
 
     // Basic URL/hostname cleanup
-    let cleaned = trimmed.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    const cleaned = trimmed.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
     if (!cleaned) {
       setDomainError('Please enter a valid website origin or domain');
       return;
@@ -110,8 +114,7 @@ export default function EmbedWidgetPage() {
     );
   };
 
-  const customerGatewayUrl =
-    import.meta.env.VITE_CUSTOMER_GATEWAY_URL || 'http://localhost:5001';
+  const customerGatewayUrl = import.meta.env.VITE_CUSTOMER_GATEWAY_URL || 'http://localhost:5001';
   const widgetScriptUrl =
     typeof window !== 'undefined'
       ? `${window.location.origin}/widget.js`
@@ -146,6 +149,17 @@ export default function EmbedWidgetPage() {
     navigator.clipboard.writeText(currentSnippet);
     setCopiedSnippet(true);
     setTimeout(() => setCopiedSnippet(false), 2500);
+  };
+
+  const publicChatUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/chat/${tenantId}/${selectedAgentId}`
+      : `/chat/${tenantId}/${selectedAgentId}`;
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(publicChatUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
   };
 
   // React / Next.js snippet
@@ -187,16 +201,21 @@ export default function AppointmentChatWidget() {
             <div className="p-1.5 sm:p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
               <Code2 className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight">Embed Chat Widget</h1>
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+              Embed Chat Widget
+            </h1>
           </div>
           <p className="mt-1 text-xs sm:text-sm text-slate-500">
-            Deploy your autonomous AI booking agent directly onto your website with instant client-side isolation and CORS security.
+            Deploy your autonomous AI booking agent directly onto your website with instant
+            client-side isolation and CORS security.
           </p>
         </div>
 
         {selectedAgent && (
           <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200/80 text-xs">
-            <span className="font-semibold text-slate-700">{selectedAgent.name || selectedAgent.agent_id}</span>
+            <span className="font-semibold text-slate-700">
+              {selectedAgent.name || selectedAgent.agent_id}
+            </span>
             <span
               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
                 selectedAgent.status === 'created'
@@ -206,13 +225,72 @@ export default function AppointmentChatWidget() {
             >
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
-                  selectedAgent.status === 'created' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                  selectedAgent.status === 'created'
+                    ? 'bg-emerald-500 animate-pulse'
+                    : 'bg-amber-500'
                 }`}
               />
               {selectedAgent.status === 'created' ? 'Live' : 'Draft'}
             </span>
           </div>
         )}
+      </div>
+
+      {/* Standalone Hosted Chat Link Banner (No Website Required) */}
+      <div className="bg-gradient-to-r from-indigo-50/80 via-white to-indigo-50/40 rounded-2xl p-5 sm:p-6 border border-indigo-100 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          <div className="max-w-xl">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 mb-2">
+              <Share2 className="w-3.5 h-3.5" />
+              <span>Direct Booking Link • No Website Needed</span>
+            </div>
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+              Hosted Standalone Booking Page
+            </h2>
+            <p className="mt-1 text-xs sm:text-sm text-slate-600 leading-relaxed">
+              Don’t have a website? Share this direct link with your clients on WhatsApp, Instagram
+              bio, Google Maps, SMS, or Email. Clients can immediately chat with your AI assistant
+              and book appointments without any configuration.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:w-auto">
+            <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl shadow-xs font-mono text-xs text-slate-700 truncate min-w-0 max-w-full sm:max-w-md">
+              <Link2 className="w-4 h-4 text-slate-400 shrink-0" />
+              <span className="truncate">{publicChatUrl}</span>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
+              >
+                {copiedLink ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-200" />
+                    <span>Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy Link</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => window.open(publicChatUrl, '_blank')}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer shadow-xs"
+                title="Preview hosted booking page in new tab"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Preview</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Main Grid: Left Column (Embed Code & Guides) | Right Column (CORS Origins & Security) */}
@@ -243,14 +321,19 @@ export default function AppointmentChatWidget() {
                   <span className="text-sm font-bold text-slate-900">Floating Chat Bubble</span>
                   <div
                     className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                      embedMode === 'bubble' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'
+                      embedMode === 'bubble'
+                        ? 'border-indigo-600 bg-indigo-600'
+                        : 'border-slate-300'
                     }`}
                   >
-                    {embedMode === 'bubble' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    {embedMode === 'bubble' && (
+                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                    )}
                   </div>
                 </div>
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  Pins a compact launcher button to the bottom corner of your page. Opens an interactive chat window on click.
+                  Pins a compact launcher button to the bottom corner of your page. Opens an
+                  interactive chat window on click.
                 </p>
               </button>
 
@@ -264,17 +347,24 @@ export default function AppointmentChatWidget() {
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-bold text-slate-900">Inline Embedded Container</span>
+                  <span className="text-sm font-bold text-slate-900">
+                    Inline Embedded Container
+                  </span>
                   <div
                     className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                      embedMode === 'inline' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'
+                      embedMode === 'inline'
+                        ? 'border-indigo-600 bg-indigo-600'
+                        : 'border-slate-300'
                     }`}
                   >
-                    {embedMode === 'inline' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    {embedMode === 'inline' && (
+                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                    )}
                   </div>
                 </div>
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  Embeds the chat interface directly inside any designated section, column, or hero block on your landing page.
+                  Embeds the chat interface directly inside any designated section, column, or hero
+                  block on your landing page.
                 </p>
               </button>
             </div>
@@ -375,12 +465,22 @@ export default function AppointmentChatWidget() {
             {activeTab === 'html' && (
               <div className="flex flex-col gap-3 text-xs text-slate-600">
                 <p>
-                  Paste the embed snippet directly inside the <code className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-800 font-mono">&lt;body&gt;</code> section of your website, ideally right before the closing <code className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-800 font-mono">&lt;/body&gt;</code> tag.
+                  Paste the embed snippet directly inside the{' '}
+                  <code className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-800 font-mono">
+                    &lt;body&gt;
+                  </code>{' '}
+                  section of your website, ideally right before the closing{' '}
+                  <code className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-800 font-mono">
+                    &lt;/body&gt;
+                  </code>{' '}
+                  tag.
                 </p>
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/60 flex items-start gap-2.5">
                   <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
                   <span>
-                    The script loads asynchronously and renders completely inside an isolated <strong>Shadow DOM</strong>, preventing CSS style leakage or conflicts with your site's styles.
+                    The script loads asynchronously and renders completely inside an isolated{' '}
+                    <strong>Shadow DOM</strong>, preventing CSS style leakage or conflicts with your
+                    site's styles.
                   </span>
                 </div>
               </div>
@@ -389,7 +489,9 @@ export default function AppointmentChatWidget() {
             {activeTab === 'react' && (
               <div className="flex flex-col gap-3 text-xs">
                 <p className="text-slate-600">
-                  Mount the widget using a custom React hook or <code className="px-1.5 py-0.5 bg-slate-100 rounded font-mono">useEffect</code> block in your Next.js / Vite application:
+                  Mount the widget using a custom React hook or{' '}
+                  <code className="px-1.5 py-0.5 bg-slate-100 rounded font-mono">useEffect</code>{' '}
+                  block in your Next.js / Vite application:
                 </p>
                 <pre className="p-3 bg-slate-900 text-slate-100 rounded-xl font-mono text-[11px] overflow-x-auto leading-relaxed">
                   <code>{reactSnippet}</code>
@@ -400,10 +502,21 @@ export default function AppointmentChatWidget() {
             {activeTab === 'wordpress' && (
               <div className="flex flex-col gap-3 text-xs text-slate-600">
                 <ol className="list-decimal pl-5 space-y-2">
-                  <li>In your WordPress Admin Dashboard, navigate to <strong>Plugins &rarr; Add New</strong>.</li>
-                  <li>Search for and install <strong>WPCode</strong> (or any "Insert Headers and Footers" plugin).</li>
-                  <li>Navigate to <strong>Code Snippets &rarr; Header &amp; Footer</strong>.</li>
-                  <li>Paste the Schedulux script snippet into the <strong>Footer</strong> input box and click <strong>Save Changes</strong>.</li>
+                  <li>
+                    In your WordPress Admin Dashboard, navigate to{' '}
+                    <strong>Plugins &rarr; Add New</strong>.
+                  </li>
+                  <li>
+                    Search for and install <strong>WPCode</strong> (or any "Insert Headers and
+                    Footers" plugin).
+                  </li>
+                  <li>
+                    Navigate to <strong>Code Snippets &rarr; Header &amp; Footer</strong>.
+                  </li>
+                  <li>
+                    Paste the Schedulux script snippet into the <strong>Footer</strong> input box
+                    and click <strong>Save Changes</strong>.
+                  </li>
                 </ol>
               </div>
             )}
@@ -411,10 +524,27 @@ export default function AppointmentChatWidget() {
             {activeTab === 'shopify' && (
               <div className="flex flex-col gap-3 text-xs text-slate-600">
                 <ol className="list-decimal pl-5 space-y-2">
-                  <li>In your Shopify admin, go to <strong>Online Store &rarr; Themes</strong>.</li>
-                  <li>Click the three dots next to your current theme and choose <strong>Edit code</strong>.</li>
-                  <li>Locate and open the <code className="px-1.5 py-0.5 bg-slate-100 rounded font-mono">theme.liquid</code> file.</li>
-                  <li>Paste the script snippet just before the closing <code className="px-1.5 py-0.5 bg-slate-100 rounded font-mono">&lt;/body&gt;</code> tag and click <strong>Save</strong>.</li>
+                  <li>
+                    In your Shopify admin, go to <strong>Online Store &rarr; Themes</strong>.
+                  </li>
+                  <li>
+                    Click the three dots next to your current theme and choose{' '}
+                    <strong>Edit code</strong>.
+                  </li>
+                  <li>
+                    Locate and open the{' '}
+                    <code className="px-1.5 py-0.5 bg-slate-100 rounded font-mono">
+                      theme.liquid
+                    </code>{' '}
+                    file.
+                  </li>
+                  <li>
+                    Paste the script snippet just before the closing{' '}
+                    <code className="px-1.5 py-0.5 bg-slate-100 rounded font-mono">
+                      &lt;/body&gt;
+                    </code>{' '}
+                    tag and click <strong>Save</strong>.
+                  </li>
                 </ol>
               </div>
             )}
@@ -430,7 +560,9 @@ export default function AppointmentChatWidget() {
                 <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
                   <ShieldCheck className="w-4 h-4" />
                 </div>
-                <h2 className="text-base font-bold text-slate-900">Allowed Website Origins (CORS)</h2>
+                <h2 className="text-base font-bold text-slate-900">
+                  Allowed Website Origins (CORS)
+                </h2>
               </div>
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                 {domains.length} configured
@@ -438,7 +570,9 @@ export default function AppointmentChatWidget() {
             </div>
 
             <p className="text-xs text-slate-500 leading-relaxed">
-              Restrict which websites are authorized to embed this agent and connect to the Customer API Gateway. Prevents unauthorized third parties from embedding your bot or using your quotas.
+              Restrict which websites are authorized to embed this agent and connect to the Customer
+              API Gateway. Prevents unauthorized third parties from embedding your bot or using your
+              quotas.
             </p>
 
             {/* Input to add new domain */}
@@ -525,7 +659,8 @@ export default function AppointmentChatWidget() {
                   <Lock className="w-5 h-5 text-slate-400 mx-auto mb-1.5" />
                   <p className="text-xs font-semibold text-slate-600">No origins restricted yet</p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    When whitelist is empty, any domain can initialize the widget. Add your production domain to enforce protection.
+                    When whitelist is empty, any domain can initialize the widget. Add your
+                    production domain to enforce protection.
                   </p>
                 </div>
               ) : (
@@ -537,7 +672,9 @@ export default function AppointmentChatWidget() {
                     >
                       <div className="flex items-center gap-2 truncate">
                         <Globe className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="font-mono text-slate-800 font-medium truncate">{domain}</span>
+                        <span className="font-mono text-slate-800 font-medium truncate">
+                          {domain}
+                        </span>
                       </div>
                       <button
                         type="button"
@@ -594,7 +731,16 @@ export default function AppointmentChatWidget() {
               <h3 className="text-sm font-bold">Split Gateway Architecture</h3>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Your public customer chat runs on a dedicated high-throughput microservice gateway (<code className="px-1.5 py-0.5 bg-slate-800 rounded font-mono text-[11px] text-indigo-300">port 5001</code>), isolating unauthenticated customer traffic from your authenticated tenant administration gateway (<code className="px-1.5 py-0.5 bg-slate-800 rounded font-mono text-[11px] text-indigo-300">port 5000</code>).
+              Your public customer chat runs on a dedicated high-throughput microservice gateway (
+              <code className="px-1.5 py-0.5 bg-slate-800 rounded font-mono text-[11px] text-indigo-300">
+                port 5001
+              </code>
+              ), isolating unauthenticated customer traffic from your authenticated tenant
+              administration gateway (
+              <code className="px-1.5 py-0.5 bg-slate-800 rounded font-mono text-[11px] text-indigo-300">
+                port 5000
+              </code>
+              ).
             </p>
             <div className="p-3 bg-slate-800/80 rounded-xl text-[11px] text-slate-400 space-y-1">
               <div>&bull; HMAC-signed stateless session verification</div>

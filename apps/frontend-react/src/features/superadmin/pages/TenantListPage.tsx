@@ -87,7 +87,8 @@ export default function TenantListPage() {
             <h1 className="text-3xl font-semibold text-white tracking-tight">Service Owners</h1>
           </div>
           <p className="text-sm text-slate-400 max-w-xl leading-relaxed">
-            Manage tenants, view active plan tiers, and control workspace status across the platform.
+            Manage tenants, view active plan tiers, and control workspace status across the
+            platform.
           </p>
         </div>
 
@@ -147,9 +148,7 @@ export default function TenantListPage() {
             <Building2 className="w-4 h-4 text-indigo-400" />
           </div>
           <div className="flex items-end justify-between">
-            <span className="text-3xl font-light text-white">
-              {stats?.total ?? totalCount}
-            </span>
+            <span className="text-3xl font-light text-white">{stats?.total ?? totalCount}</span>
           </div>
         </div>
 
@@ -239,8 +238,7 @@ export default function TenantListPage() {
                     STATUS_CONFIG[tenant.status.toLowerCase()] ?? STATUS_CONFIG.pending;
                   const tierStyle = TIER_COLOR[tenant.tier] ?? TIER_COLOR.Starter;
                   const isUnlimited = tenant.weekly_token_limit === -1;
-                  const remaining =
-                    tenant.weekly_token_remaining ?? tenant.weekly_token_limit ?? 0;
+                  const remaining = tenant.weekly_token_remaining ?? tenant.weekly_token_limit ?? 0;
                   const limit = tenant.weekly_token_limit ?? 0;
 
                   return (
@@ -410,11 +408,15 @@ export default function TenantListPage() {
         description={
           actionTenant?.type === 'suspend' ? (
             <span>
-              Are you sure you want to suspend tenant <strong className="text-slate-800">{actionTenant.name}</strong>? Their autonomous agents and API access will be temporarily halted.
+              Are you sure you want to suspend tenant{' '}
+              <strong className="text-slate-800">{actionTenant.name}</strong>? Their autonomous
+              agents and API access will be temporarily halted.
             </span>
           ) : (
             <span>
-              Are you sure you want to reactivate tenant <strong className="text-slate-800">{actionTenant?.name}</strong>? Their autonomous agents and API access will be restored.
+              Are you sure you want to reactivate tenant{' '}
+              <strong className="text-slate-800">{actionTenant?.name}</strong>? Their autonomous
+              agents and API access will be restored.
             </span>
           )
         }

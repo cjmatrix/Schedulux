@@ -22,7 +22,6 @@ import { TenantAuthGuard } from './guards/tenant-auth.guard.js';
 import { TenantTokenQuotaGuard } from './guards/tenant-token-quota.guard.js';
 import { RedisModule } from './modules/redis.module.js';
 import { ThrottlerStorageRedisService } from './services/throttler-storage-redis.service.js';
-import { SchemaGateway } from './websockets/schema.gateway.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -170,7 +169,6 @@ const isProduction = process.env.NODE_ENV === 'production';
     SchedulingController,
   ],
   providers: [
-    SchemaGateway,
     RolesGuard,
     TenantAuthGuard,
     PaddleWebhookGuard,

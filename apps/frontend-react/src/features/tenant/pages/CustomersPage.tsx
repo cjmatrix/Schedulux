@@ -149,7 +149,9 @@ export default function CustomersPage() {
             <div className="p-1.5 sm:p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
               <Users className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight">Customer Directory</h1>
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+              Customer Directory
+            </h1>
             <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold shrink-0">
               {total} Total
             </span>

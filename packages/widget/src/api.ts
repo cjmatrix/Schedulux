@@ -182,6 +182,154 @@ export async function postChatMessage(
   };
 }
 
+export async function postChatMessageStream(
+  apiBase: string,
+  tenantId: string,
+  agentId: string,
+  sessionId: string,
+  token: string | undefined,
+  message: string,
+  customerName?: string,
+  customerPhone?: string,
+  mode: 'live' | 'sandbox' = 'live',
+  onDelta?: (delta: string) => void,
+): Promise<{
+  response: string;
+  sessionId: string;
+  token?: string;
+  user_message_id?: string;
+  agent_message_id?: string;
+  created_at?: string;
+  booking_id?: string;
+  booking_reference?: string;
+  status?: string;
+}> {
+  const base = apiBase.replace(/\/+$/, '');
+  const url =
+    mode === 'sandbox'
+      ? `${base}/api/v1/tenant/knowledge/onboarding/sandbox/stream`
+      : `${base}/api/v1/public/chat/stream`;
+
+  const payload: Record<string, unknown> = {
+    tenant_id: tenantId,
+    agent_id: agentId,
+    session_id: sessionId,
+    token,
+    message,
+  };
+  if (customerName) payload.customer_name = customerName;
+  if (customerPhone) payload.customer_phone = customerPhone;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+      },
+      credentials: mode === 'sandbox' ? 'include' : 'same-origin',
+      body: JSON.stringify(payload),
+    });
+  } catch (fetchErr) {
+    console.warn('[Schedulux Widget] Stream fetch failed, falling back to unary:', fetchErr);
+    return postChatMessage(
+      apiBase,
+      tenantId,
+      agentId,
+      sessionId,
+      token,
+      message,
+      customerName,
+      customerPhone,
+      mode,
+    );
+  }
+
+  if (!res.ok || !res.body) {
+    console.warn(
+      `[Schedulux Widget] Stream endpoint returned status ${res.status}, falling back to unary.`,
+    );
+    return postChatMessage(
+      apiBase,
+      tenantId,
+      agentId,
+      sessionId,
+      token,
+      message,
+      customerName,
+      customerPhone,
+      mode,
+    );
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullResponse = '';
+  let finalMeta: Record<string, any> = {};
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+        const jsonStr = trimmed.slice(5).trim();
+        if (!jsonStr) continue;
+
+        try {
+          const data = JSON.parse(jsonStr);
+          if (data.token) {
+            saveStoredSession(tenantId, agentId, {
+              sessionId: data.session_id || sessionId,
+              token: data.token,
+            });
+          }
+
+          if (data.event_type === 'token' && data.delta) {
+            fullResponse += data.delta;
+            onDelta?.(data.delta);
+          } else if (data.event_type === 'done') {
+            finalMeta = data;
+            if (data.response && !fullResponse) {
+              fullResponse = data.response;
+              onDelta?.(data.response);
+            }
+          } else if (data.event_type === 'error') {
+            if (data.delta && !fullResponse) {
+              fullResponse = data.delta;
+              onDelta?.(data.delta);
+            }
+          }
+        } catch {
+          // ignore chunk parse error
+        }
+      }
+    }
+  } catch (streamErr) {
+    console.warn('[Schedulux Widget] Stream read interrupted:', streamErr);
+  }
+
+  return {
+    response: fullResponse || finalMeta.response || '',
+    sessionId: finalMeta.session_id || sessionId,
+    token: finalMeta.token || token,
+    user_message_id: finalMeta.user_message_id || undefined,
+    agent_message_id: finalMeta.agent_message_id || undefined,
+    created_at: finalMeta.created_at || undefined,
+    booking_id: finalMeta.booking_id || undefined,
+    booking_reference: finalMeta.booking_reference || undefined,
+    status: finalMeta.status || undefined,
+  };
+}
+
 export async function fetchWidgetConfig(
   apiBase: string,
   tenantId: string,

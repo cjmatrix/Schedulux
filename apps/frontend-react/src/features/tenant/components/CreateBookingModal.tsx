@@ -128,7 +128,7 @@ export function CreateBookingModal({
     return {
       service_id: selectedServiceId,
       start_date: selectedDate,
-      end_date: bookingMode === 'date_range' ? (checkOutDate || selectedDate) : selectedDate,
+      end_date: bookingMode === 'date_range' ? checkOutDate || selectedDate : selectedDate,
       agent_id: agentId,
       resource_id: selectedResourceId || undefined,
       resource_ids: selectedResourceIds.length > 0 ? selectedResourceIds : undefined,
@@ -454,8 +454,9 @@ export function CreateBookingModal({
                       2. Resource & Unit Assignments
                     </label>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      This service requires {requirements.length} distinct resources. Auto-assign will
-                      optimally dispatch available resources, or you can manually override specific units.
+                      This service requires {requirements.length} distinct resources. Auto-assign
+                      will optimally dispatch available resources, or you can manually override
+                      specific units.
                     </p>
                   </div>
                   <span className="text-[11px] text-slate-400 shrink-0">Optional</span>
@@ -481,9 +482,7 @@ export function CreateBookingModal({
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-slate-800">
-                                {slotLabel}
-                              </span>
+                              <span className="text-xs font-bold text-slate-800">{slotLabel}</span>
                               <span className="text-[10px] uppercase font-bold text-slate-400 px-1.5 py-0.5 rounded bg-white border border-slate-200/60">
                                 {req.resource_type || 'staff'}
                               </span>

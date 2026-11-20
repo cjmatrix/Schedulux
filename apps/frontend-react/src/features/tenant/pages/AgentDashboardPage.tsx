@@ -87,7 +87,8 @@ export default function AgentDashboardPage() {
             )}
           </div>
           <p className="mt-1 text-xs sm:text-sm text-slate-500">
-            Operations cockpit for {agentInfo?.name || 'this agent'}: service catalog, resource scheduling, and knowledge base.
+            Operations cockpit for {agentInfo?.name || 'this agent'}: service catalog, resource
+            scheduling, and knowledge base.
           </p>
         </div>
 

@@ -218,9 +218,7 @@ export function BookingsTableView({
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-8 h-8 rounded-full bg-slate-900 text-white font-bold text-xs flex items-center justify-center shrink-0">
-                      {booking.customer?.name
-                        ? booking.customer.name.charAt(0).toUpperCase()
-                        : 'C'}
+                      {booking.customer?.name ? booking.customer.name.charAt(0).toUpperCase() : 'C'}
                     </div>
                     <div className="min-w-0">
                       <div className="font-bold text-slate-900 text-sm truncate">
@@ -270,7 +268,8 @@ export function BookingsTableView({
                   <div className="flex items-center justify-between text-[11px] text-slate-500">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3 text-slate-400" />
-                      {sched.primaryDate} {sched.secondaryDetails ? `• ${sched.secondaryDetails}` : ''}
+                      {sched.primaryDate}{' '}
+                      {sched.secondaryDetails ? `• ${sched.secondaryDetails}` : ''}
                     </span>
                     <span className="truncate">
                       {sched.isDateRange ? 'Unit: ' : 'Staff: '}

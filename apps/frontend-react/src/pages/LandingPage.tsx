@@ -63,10 +63,11 @@ const VERTICALS: Record<string, VerticalData> = {
       rightNode: 'Meeting Suite 2',
     },
     simulation: {
-      customerMessage: 'Hi, I need a 60-minute strategy audit session with Sarah next Tuesday morning.',
+      customerMessage:
+        'Hi, I need a 60-minute strategy audit session with Sarah next Tuesday morning.',
       intentBadge: 'Intent: Booking • Service: Strategy Audit (60m)',
       agentResponse:
-        "Sarah has an opening on Tuesday, November 17 at 10:00 AM in Executive Suite 2. We factor in 15 minutes of preparation buffer before your session. May I send a 6-digit SMS verification code to confirm this reservation?",
+        'Sarah has an opening on Tuesday, November 17 at 10:00 AM in Executive Suite 2. We factor in 15 minutes of preparation buffer before your session. May I send a 6-digit SMS verification code to confirm this reservation?',
       systemAction: 'RAM Slot Hold: 15-minute lock • Specialist Sarah + Suite 2 Co-allocated',
       resourceAllocation: 'Lead: Sarah M. • Facility: Executive Suite 2',
     },
@@ -89,7 +90,7 @@ const VERTICALS: Record<string, VerticalData> = {
       customerMessage: 'I would like a balayage and blowout with Elena sometime next Saturday.',
       intentBadge: 'Intent: Booking • Service: Balayage & Blowout (135m)',
       agentResponse:
-        "Elena has an opening on Saturday, November 21 at 2:00 PM. We allocate 90 minutes for color processing plus a 45-minute finish blowout at Station Chair 4. I can hold this slot and send an SMS verification code now!",
+        'Elena has an opening on Saturday, November 21 at 2:00 PM. We allocate 90 minutes for color processing plus a 45-minute finish blowout at Station Chair 4. I can hold this slot and send an SMS verification code now!',
       systemAction: 'Hold Duration: 15m active • Elena + Station 4 co-scheduled',
       resourceAllocation: 'Stylist: Elena R. • Resource: Station Chair 4',
     },
@@ -112,7 +113,7 @@ const VERTICALS: Record<string, VerticalData> = {
       customerMessage: 'My sedan needs brake pad replacement and 40k inspection before Friday.',
       intentBadge: 'Intent: Booking • Service: Brake Pad Service (90m)',
       agentResponse:
-        "Brake pad replacement requires a heavy hoist bay. Senior Technician Marco is available Thursday, November 19 at 9:00 AM with Lift Bay 3. Would you like me to reserve this appointment for your vehicle?",
+        'Brake pad replacement requires a heavy hoist bay. Senior Technician Marco is available Thursday, November 19 at 9:00 AM with Lift Bay 3. Would you like me to reserve this appointment for your vehicle?',
       systemAction: 'Multi-Resource Reservation: Tech Marco + Lift Bay 3 Locked',
       resourceAllocation: 'Mechanic: Marco V. • Asset: Hoist Bay 3',
     },
@@ -164,7 +165,9 @@ const FAQS: FaqItem[] = [
 
 export default function LandingPage() {
   const { user, isAuthenticated } = useAuthStore();
-  const [activeVertical, setActiveVertical] = useState<'consulting' | 'salons' | 'auto'>('consulting');
+  const [activeVertical, setActiveVertical] = useState<'consulting' | 'salons' | 'auto'>(
+    'consulting',
+  );
   const [showDemoModal, setShowDemoModal] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
@@ -381,10 +384,10 @@ export default function LandingPage() {
 
           <div className="lg:col-span-5 lg:pt-2">
             <p className="text-neutral-500 text-base sm:text-[17px] leading-relaxed">
-              Build, customize, and deploy autonomous scheduling agents for any appointment business.
-              From consulting studios and salons to repair centers and healthcare, Schedulux configures
-              your services, staff, rooms, and buffer rules—deploying an AI booking concierge that verifies
-              clients via SMS OTP and eliminates double-bookings.
+              Build, customize, and deploy autonomous scheduling agents for any appointment
+              business. From consulting studios and salons to repair centers and healthcare,
+              Schedulux configures your services, staff, rooms, and buffer rules—deploying an AI
+              booking concierge that verifies clients via SMS OTP and eliminates double-bookings.
             </p>
           </div>
         </section>
@@ -544,13 +547,17 @@ export default function LandingPage() {
                 <span className="text-[10px] uppercase font-semibold text-neutral-400 block mb-1">
                   Customer Input (Web Chat Widget):
                 </span>
-                <p className="text-neutral-700 italic">"{currentVertical.simulation.customerMessage}"</p>
+                <p className="text-neutral-700 italic">
+                  "{currentVertical.simulation.customerMessage}"
+                </p>
               </div>
               <div className="p-3.5 rounded-xl bg-neutral-950 text-white border border-neutral-800">
                 <span className="text-[10px] uppercase font-semibold text-neutral-400 block mb-1">
                   Schedulux Concierge Response:
                 </span>
-                <p className="text-neutral-100 leading-relaxed">"{currentVertical.simulation.agentResponse}"</p>
+                <p className="text-neutral-100 leading-relaxed">
+                  "{currentVertical.simulation.agentResponse}"
+                </p>
                 <div className="mt-2 text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
                   <CheckCircle2 className="w-3 h-3 shrink-0" />
                   <span>{currentVertical.simulation.systemAction}</span>
@@ -615,8 +622,8 @@ export default function LandingPage() {
                 </h3>
                 <p className="text-xs text-neutral-500 leading-relaxed">
                   Eliminate double-booking forever. Schedulux evaluates operating hours, shift
-                  calendars, and buffer intervals, holding a temporary lock in RAM until the appointment
-                  is confirmed.
+                  calendars, and buffer intervals, holding a temporary lock in RAM until the
+                  appointment is confirmed.
                 </p>
               </div>
 
@@ -637,8 +644,9 @@ export default function LandingPage() {
                   Staff &amp; Facility Co-Allocation
                 </h3>
                 <p className="text-xs text-neutral-500 leading-relaxed">
-                  Co-allocate human specialists (advisors, stylists, technicians) and physical assets
-                  (meeting suites, styling stations, service bays) in a single unified booking.
+                  Co-allocate human specialists (advisors, stylists, technicians) and physical
+                  assets (meeting suites, styling stations, service bays) in a single unified
+                  booking.
                 </p>
               </div>
 
@@ -681,8 +689,9 @@ export default function LandingPage() {
                   PDF Knowledge Base RAG
                 </h3>
                 <p className="text-xs text-neutral-500 leading-relaxed">
-                  Upload service guidelines, pricing sheets, or cancellation policies. Qdrant vector search
-                  and Voyage AI embeddings answer customer questions with strict zero-hallucination grounding.
+                  Upload service guidelines, pricing sheets, or cancellation policies. Qdrant vector
+                  search and Voyage AI embeddings answer customer questions with strict
+                  zero-hallucination grounding.
                 </p>
               </div>
 
@@ -712,10 +721,13 @@ export default function LandingPage() {
               <span className="text-[11px] font-semibold tracking-wider uppercase text-neutral-400 block mb-3">
                 STEP 01
               </span>
-              <h3 className="text-base font-bold text-neutral-950 mb-2">Consult with AI Architect</h3>
+              <h3 className="text-base font-bold text-neutral-950 mb-2">
+                Consult with AI Architect
+              </h3>
               <p className="text-sm text-neutral-500 leading-relaxed">
                 Describe your services, staff, and operating hours naturally to the Schedulux Lead
-                Booking Architect in your studio, or paste your website URL to auto-extract services via our crawler.
+                Booking Architect in your studio, or paste your website URL to auto-extract services
+                via our crawler.
               </p>
             </div>
 
@@ -724,10 +736,13 @@ export default function LandingPage() {
               <span className="text-[11px] font-semibold tracking-wider uppercase text-neutral-400 block mb-3">
                 STEP 02
               </span>
-              <h3 className="text-base font-bold text-neutral-950 mb-2">Configure Guardrails &amp; Buffers</h3>
+              <h3 className="text-base font-bold text-neutral-950 mb-2">
+                Configure Guardrails &amp; Buffers
+              </h3>
               <p className="text-sm text-neutral-500 leading-relaxed">
-                Set custom preparation and transition buffers between appointments, blackout holiday dates,
-                cancellation policy windows, and emergency triage triggers for human staff escalation.
+                Set custom preparation and transition buffers between appointments, blackout holiday
+                dates, cancellation policy windows, and emergency triage triggers for human staff
+                escalation.
               </p>
             </div>
 
@@ -736,9 +751,12 @@ export default function LandingPage() {
               <span className="text-[11px] font-semibold tracking-wider uppercase text-neutral-400 block mb-3">
                 STEP 03
               </span>
-              <h3 className="text-base font-bold text-neutral-950 mb-2">Embed Widget on Your Website</h3>
+              <h3 className="text-base font-bold text-neutral-950 mb-2">
+                Embed Widget on Your Website
+              </h3>
               <p className="text-sm text-neutral-500 leading-relaxed">
-                Customize your chat widget theme, whitelist your website origin, and paste a 1-line script tag to start capturing verified 24/7 customer bookings on autopilot.
+                Customize your chat widget theme, whitelist your website origin, and paste a 1-line
+                script tag to start capturing verified 24/7 customer bookings on autopilot.
               </p>
             </div>
           </div>
@@ -770,9 +788,12 @@ export default function LandingPage() {
               <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mb-5">
                 <Briefcase className="w-5 h-5 text-indigo-600" />
               </div>
-              <h3 className="text-base font-bold text-neutral-950 mb-2">Consulting &amp; Advisory</h3>
+              <h3 className="text-base font-bold text-neutral-950 mb-2">
+                Consulting &amp; Advisory
+              </h3>
               <p className="text-xs text-neutral-500 leading-relaxed">
-                Discovery calls, senior advisor matching, preparation buffer intervals, and automated client intake questionnaires.
+                Discovery calls, senior advisor matching, preparation buffer intervals, and
+                automated client intake questionnaires.
               </p>
             </div>
 
@@ -783,7 +804,8 @@ export default function LandingPage() {
               </div>
               <h3 className="text-base font-bold text-neutral-950 mb-2">Salons &amp; Wellness</h3>
               <p className="text-xs text-neutral-500 leading-relaxed">
-                Stylist station assignments, chemical processing buffers, client preferences, and 6-digit SMS OTP self-service rescheduling.
+                Stylist station assignments, chemical processing buffers, client preferences, and
+                6-digit SMS OTP self-service rescheduling.
               </p>
             </div>
 
@@ -792,9 +814,12 @@ export default function LandingPage() {
               <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-5">
                 <Car className="w-5 h-5 text-emerald-600" />
               </div>
-              <h3 className="text-base font-bold text-neutral-950 mb-2">Auto &amp; Equipment Bays</h3>
+              <h3 className="text-base font-bold text-neutral-950 mb-2">
+                Auto &amp; Equipment Bays
+              </h3>
               <p className="text-xs text-neutral-500 leading-relaxed">
-                Heavy hoist bay allocation, technician shift coordination, symptom intake, and real-time maintenance slot dispatching.
+                Heavy hoist bay allocation, technician shift coordination, symptom intake, and
+                real-time maintenance slot dispatching.
               </p>
             </div>
 
@@ -803,9 +828,12 @@ export default function LandingPage() {
               <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center mb-5">
                 <Building2 className="w-5 h-5 text-teal-600" />
               </div>
-              <h3 className="text-base font-bold text-neutral-950 mb-2">Healthcare &amp; Clinics</h3>
+              <h3 className="text-base font-bold text-neutral-950 mb-2">
+                Healthcare &amp; Clinics
+              </h3>
               <p className="text-xs text-neutral-500 leading-relaxed">
-                Patient intake, practitioner and treatment room co-allocation, sanitization buffers, and emergency clinical phone handoff.
+                Patient intake, practitioner and treatment room co-allocation, sanitization buffers,
+                and emergency clinical phone handoff.
               </p>
             </div>
           </div>
@@ -821,7 +849,8 @@ export default function LandingPage() {
               Simple, predictable plans for growing businesses.
             </h2>
             <p className="text-sm text-neutral-500 mt-2">
-              Every plan includes autonomous AI booking concierges, deterministic slot locking, and zero double-booking.
+              Every plan includes autonomous AI booking concierges, deterministic slot locking, and
+              zero double-booking.
             </p>
           </div>
 
@@ -833,25 +862,34 @@ export default function LandingPage() {
                   Starter
                 </div>
                 <div className="flex items-baseline gap-1 mb-3">
-                  <span className="text-3xl font-extrabold text-neutral-950 tracking-tight">$0</span>
+                  <span className="text-3xl font-extrabold text-neutral-950 tracking-tight">
+                    $0
+                  </span>
                   <span className="text-xs text-neutral-500 font-medium">/ forever</span>
                 </div>
                 <p className="text-xs text-neutral-500 leading-relaxed mb-6">
-                  Baseline tier for solo operators and independent specialists building their first AI scheduling agent.
+                  Baseline tier for solo operators and independent specialists building their first
+                  AI scheduling agent.
                 </p>
 
                 <div className="space-y-3 pt-6 border-t border-neutral-100 text-xs text-neutral-700">
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span><strong>1</strong> AI Booking Agent</span>
+                    <span>
+                      <strong>1</strong> AI Booking Agent
+                    </span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Up to <strong>2</strong> Bookable Services</span>
+                    <span>
+                      Up to <strong>2</strong> Bookable Services
+                    </span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Up to <strong>2</strong> Staff / Bay Resources</span>
+                    <span>
+                      Up to <strong>2</strong> Staff / Bay Resources
+                    </span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -881,7 +919,9 @@ export default function LandingPage() {
                   Pro
                 </div>
                 <div className="flex items-baseline gap-1 mb-3">
-                  <span className="text-3xl font-extrabold text-neutral-950 tracking-tight">$29</span>
+                  <span className="text-3xl font-extrabold text-neutral-950 tracking-tight">
+                    $29
+                  </span>
                   <span className="text-xs text-neutral-500 font-medium">/ month</span>
                 </div>
                 <p className="text-xs text-neutral-500 leading-relaxed mb-6">
@@ -891,15 +931,21 @@ export default function LandingPage() {
                 <div className="space-y-3 pt-6 border-t border-neutral-100 text-xs text-neutral-700">
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span><strong>2</strong> AI Booking Agents</span>
+                    <span>
+                      <strong>2</strong> AI Booking Agents
+                    </span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Up to <strong>15</strong> Bookable Services</span>
+                    <span>
+                      Up to <strong>15</strong> Bookable Services
+                    </span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Up to <strong>10</strong> Staff / Bay Resources</span>
+                    <span>
+                      Up to <strong>10</strong> Staff / Bay Resources
+                    </span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -933,25 +979,34 @@ export default function LandingPage() {
                   Business
                 </div>
                 <div className="flex items-baseline gap-1 mb-3">
-                  <span className="text-3xl font-extrabold text-neutral-950 tracking-tight">$79</span>
+                  <span className="text-3xl font-extrabold text-neutral-950 tracking-tight">
+                    $79
+                  </span>
                   <span className="text-xs text-neutral-500 font-medium">/ month</span>
                 </div>
                 <p className="text-xs text-neutral-500 leading-relaxed mb-6">
-                  High-capacity tier for busy multi-staff businesses, studios, and high-volume operations.
+                  High-capacity tier for busy multi-staff businesses, studios, and high-volume
+                  operations.
                 </p>
 
                 <div className="space-y-3 pt-6 border-t border-neutral-200 text-xs text-neutral-800 font-medium">
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span><strong>5</strong> AI Booking Agents</span>
+                    <span>
+                      <strong>5</strong> AI Booking Agents
+                    </span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Up to <strong>50</strong> Bookable Services</span>
+                    <span>
+                      Up to <strong>50</strong> Bookable Services
+                    </span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Up to <strong>50</strong> Staff / Bay Resources</span>
+                    <span>
+                      Up to <strong>50</strong> Staff / Bay Resources
+                    </span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -981,7 +1036,9 @@ export default function LandingPage() {
                   Enterprise
                 </div>
                 <div className="flex items-baseline gap-1 mb-3">
-                  <span className="text-3xl font-extrabold text-neutral-950 tracking-tight">$199</span>
+                  <span className="text-3xl font-extrabold text-neutral-950 tracking-tight">
+                    $199
+                  </span>
                   <span className="text-xs text-neutral-500 font-medium">/ month</span>
                 </div>
                 <p className="text-xs text-neutral-500 leading-relaxed mb-6">
@@ -991,11 +1048,15 @@ export default function LandingPage() {
                 <div className="space-y-3 pt-6 border-t border-neutral-100 text-xs text-neutral-700">
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span><strong>Unlimited</strong> AI Agents</span>
+                    <span>
+                      <strong>Unlimited</strong> AI Agents
+                    </span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span><strong>Unlimited</strong> Services &amp; Resources</span>
+                    <span>
+                      <strong>Unlimited</strong> Services &amp; Resources
+                    </span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -1110,7 +1171,8 @@ export default function LandingPage() {
                 <div className="mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-center gap-2 animate-in fade-in duration-200">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   <span>
-                    Agent scaffold generated successfully for <strong>{websiteUrl}</strong>! Ready to customize in your studio.
+                    Agent scaffold generated successfully for <strong>{websiteUrl}</strong>! Ready
+                    to customize in your studio.
                   </span>
                 </div>
               )}
@@ -1178,7 +1240,8 @@ export default function LandingPage() {
               <h3 className="text-xl font-bold text-neutral-950">Experience Schedulux AI</h3>
             </div>
             <p className="text-xs text-neutral-500 mb-6">
-              Connect with our solutions team to test custom scheduling rules or multi-resource allocation.
+              Connect with our solutions team to test custom scheduling rules or multi-resource
+              allocation.
             </p>
 
             <form

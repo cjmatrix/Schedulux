@@ -14,15 +14,13 @@ export class TenantTokenQuotaGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest();
-    const tenantId =
-      req.tenant?.tenant_id || req.dashboardUser?.tenant_id || req.body?.tenant_id;
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id || req.body?.tenant_id;
 
     if (!tenantId) {
       return true;
     }
 
-    const tier =
-      req.tenant?.tier || req.dashboardUser?.tier || req.body?.tier || 'starter';
+    const tier = req.tenant?.tier || req.dashboardUser?.tier || req.body?.tier || 'starter';
 
     const tierConfig = await this._redisService.getCachedTierConfig(tier);
     const limit = tierConfig.weekly_token_limit ?? 100_000;
@@ -46,4 +44,3 @@ export class TenantTokenQuotaGuard implements CanActivate {
     return true;
   }
 }
-

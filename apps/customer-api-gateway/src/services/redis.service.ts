@@ -28,8 +28,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    const redisUri =
-      this._configService?.get<string>('REDIS_URI') || process.env.REDIS_URI;
+    const redisUri = this._configService?.get<string>('REDIS_URI') || process.env.REDIS_URI;
     const redisHost =
       this._configService?.get<string>('REDIS_HOST') || process.env.REDIS_HOST || 'localhost';
     const redisPort = Number(
@@ -38,7 +37,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
     try {
       if (redisUri) {
-        this._logger.log(`Connecting to Redis cluster via URI: ${redisUri.replace(/:[^:@]+@/, ':***@')}`);
+        this._logger.log(
+          `Connecting to Redis cluster via URI: ${redisUri.replace(/:[^:@]+@/, ':***@')}`,
+        );
         this._client = new Redis(redisUri, {
           maxRetriesPerRequest: 2,
           enableReadyCheck: true,
@@ -163,10 +164,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       const tier = await this.getTenantTier(tenantId);
       const tierConfig = await this.getCachedTierConfig(tier);
-      return (
-        Number(tierConfig.rate_limit_rpm) ||
-        STATIC_TIER_CONFIGS[DEFAULT_TIER].rate_limit_rpm
-      );
+      return Number(tierConfig.rate_limit_rpm) || STATIC_TIER_CONFIGS[DEFAULT_TIER].rate_limit_rpm;
     } catch (err) {
       this._logger.warn(
         `Failed to resolve rate limit RPM for tenant ${tenantId}, using fallback:`,
@@ -176,4 +174,3 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 }
-

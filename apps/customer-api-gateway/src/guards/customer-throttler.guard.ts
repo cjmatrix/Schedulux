@@ -32,10 +32,7 @@ export class CustomerThrottlerGuard extends ThrottlerGuard {
   }
 
   protected override async getTracker(req: Record<string, any>): Promise<string> {
-    const tenantId =
-      req.body?.tenant_id ||
-      req.query?.tenant_id ||
-      req.headers?.['x-tenant-id'];
+    const tenantId = req.body?.tenant_id || req.query?.tenant_id || req.headers?.['x-tenant-id'];
 
     if (tenantId && typeof tenantId === 'string' && tenantId.trim().length > 0) {
       return `tenant:${tenantId.trim()}`;
@@ -59,4 +56,3 @@ export class CustomerThrottlerGuard extends ThrottlerGuard {
     return `${throttlerName}:${trackerString}`;
   }
 }
-

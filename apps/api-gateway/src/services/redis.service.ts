@@ -17,7 +17,7 @@ export class RedisService
   private readonly _logger = new Logger(RedisService.name);
   private _client!: Redis;
   private _subscriber!: Redis;
-  private readonly _eventHandlers: ((event: SchemaGeneratedEvent) => void)[] = [];
+  private readonly _channelHandlers = new Map<string, Set<(event: SchemaGeneratedEvent) => void>>();
 
   constructor(
     @Inject(ConfigService)
@@ -25,8 +25,7 @@ export class RedisService
   ) {}
 
   onModuleInit() {
-    const redisUri =
-      this._configService.get<string>('REDIS_URI') || process.env.REDIS_URI;
+    const redisUri = this._configService.get<string>('REDIS_URI') || process.env.REDIS_URI;
     const redisHost =
       this._configService.get<string>('REDIS_HOST') || process.env.REDIS_HOST || 'localhost';
     const redisPort = Number(
@@ -43,38 +42,64 @@ export class RedisService
       this._subscriber = new Redis({ host: redisHost, port: redisPort });
     }
 
-    const channel = 'schema-generation-events';
-    this._subscriber.subscribe(channel, (err) => {
-      if (err) {
-        this._logger.error(`Failed to subscribe to ${channel} channel`, err);
-      } else {
-        this._logger.log(`Subscribed to Redis channel: ${channel}`);
-      }
-    });
-
     this._subscriber.on('message', (receivedChannel, message) => {
-      if (receivedChannel === channel) {
-        try {
-          const parsed: SchemaGeneratedEvent = JSON.parse(message);
-          this._logger.log(
-            `Received schema event for tenant ${parsed.tenant_id}, job ${parsed.job_id}`,
-          );
-          for (const handler of this._eventHandlers) {
-            handler(parsed);
-          }
-        } catch (e) {
-          this._logger.error('Error parsing Redis Pub/Sub message', e);
+      const handlers = this._channelHandlers.get(receivedChannel);
+      if (!handlers || handlers.size === 0) {
+        return;
+      }
+
+      try {
+        const parsed: SchemaGeneratedEvent = JSON.parse(message);
+        this._logger.log(
+          `Received schema event on channel '${receivedChannel}' for tenant ${parsed.tenant_id}, job ${parsed.job_id}`,
+        );
+        for (const handler of handlers) {
+          handler(parsed);
         }
+      } catch (e) {
+        this._logger.error(`Error parsing Redis Pub/Sub message on channel ${receivedChannel}`, e);
       }
     });
   }
 
-  onSchemaGenerated(callback: (event: SchemaGeneratedEvent) => void): () => void {
-    this._eventHandlers.push(callback);
+  onSchemaGenerated(
+    tenantId: string,
+    jobId: string,
+    callback: (event: SchemaGeneratedEvent) => void,
+  ): () => void {
+    const channel = jobId ? `schema-events:${tenantId}:${jobId}` : `schema-events:${tenantId}`;
+    let handlers = this._channelHandlers.get(channel);
+
+    if (!handlers) {
+      handlers = new Set();
+      this._channelHandlers.set(channel, handlers);
+
+      this._subscriber.subscribe(channel, (err) => {
+        if (err) {
+          this._logger.error(`Failed to subscribe to Redis channel: ${channel}`, err);
+        } else {
+          this._logger.log(`Subscribed to Redis channel: ${channel}`);
+        }
+      });
+    }
+
+    handlers.add(callback);
+
     return () => {
-      const index = this._eventHandlers.indexOf(callback);
-      if (index !== -1) {
-        this._eventHandlers.splice(index, 1);
+      const currentHandlers = this._channelHandlers.get(channel);
+      if (!currentHandlers) return;
+
+      currentHandlers.delete(callback);
+
+      if (currentHandlers.size === 0) {
+        this._channelHandlers.delete(channel);
+        this._subscriber.unsubscribe(channel, (err) => {
+          if (err) {
+            this._logger.error(`Failed to unsubscribe from Redis channel: ${channel}`, err);
+          } else {
+            this._logger.log(`Unsubscribed from Redis channel: ${channel}`);
+          }
+        });
       }
     };
   }
@@ -94,7 +119,6 @@ export class RedisService
   getClient(): Redis {
     return this._client;
   }
-
 
   async checkRateLimit(
     key: string,
@@ -185,7 +209,10 @@ export class RedisService
         };
       }
     } catch (err) {
-      this._logger.warn(`Failed to read tier_config:${normalized} from Redis, using fallback:`, err);
+      this._logger.warn(
+        `Failed to read tier_config:${normalized} from Redis, using fallback:`,
+        err,
+      );
     }
     return fallback;
   }
@@ -440,4 +467,3 @@ export class RedisService
     if (this._client) await this._client.quit();
   }
 }
-

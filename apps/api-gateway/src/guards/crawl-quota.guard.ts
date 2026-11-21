@@ -22,7 +22,6 @@ export class CrawlQuotaGuard implements CanActivate {
 
     const tenantTier = req.tenant?.tier || req.dashboardUser?.tier || 'starter';
 
-  
     const activeJobId = await this._redisService.getActiveCrawlJob(tenantId);
     if (activeJobId) {
       throw new HttpException(
@@ -35,7 +34,6 @@ export class CrawlQuotaGuard implements CanActivate {
       );
     }
 
-   
     const tierConfig = await this._redisService.getCachedTierConfig(tenantTier);
     const weeklyLimit =
       tierConfig.weekly_crawl_limit ?? (tenantTier.toLowerCase() === 'enterprise' ? -1 : 5);

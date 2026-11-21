@@ -21,6 +21,7 @@ import { COOKIE_NAMES } from '../../constants/cookies.constant.js';
 import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
 import { API_ROUTES } from '../../constants/routes.constant.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
+import { CIRCUIT_BREAKER_SERVICE, ICircuitBreakerService } from '@repo/circuit-breaker';
 import {
   getAccessTokenCookieOptions,
   getClearCookieOptions,
@@ -39,10 +40,17 @@ import {
 export class DashboardUserAuthController implements OnModuleInit {
   private _dashboardUserAuthClient!: DashboardAuthServiceClient;
 
-  constructor(@Inject('DASHBOARD_PACKAGE') private readonly _client: ClientGrpc) {}
+  constructor(
+    @Inject('DASHBOARD_PACKAGE') private readonly _client: ClientGrpc,
+    @Inject(CIRCUIT_BREAKER_SERVICE)
+    private readonly _circuitBreakerService: ICircuitBreakerService,
+  ) {}
 
   onModuleInit() {
-    this._dashboardUserAuthClient = this._client.getService('DashboardAuthService');
+    this._dashboardUserAuthClient = this._circuitBreakerService.wrapGrpcClient(
+      'dashboard-service',
+      this._client.getService<DashboardAuthServiceClient>('DashboardAuthService'),
+    );
   }
 
   @Post(API_ROUTES.DASHBOARD_USER.AUTH.LOGIN)
@@ -54,7 +62,11 @@ export class DashboardUserAuthController implements OnModuleInit {
     res.clearCookie(COOKIE_NAMES.TENANT_ACCESS_TOKEN, getClearCookieOptions());
     res.clearCookie(COOKIE_NAMES.TENANT_REFRESH_TOKEN, getClearCookieOptions());
 
-    res.cookie(COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN, response.access_token, getAccessTokenCookieOptions());
+    res.cookie(
+      COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN,
+      response.access_token,
+      getAccessTokenCookieOptions(),
+    );
     res.cookie(
       COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN,
       response.refresh_token,
@@ -93,7 +105,11 @@ export class DashboardUserAuthController implements OnModuleInit {
       this._dashboardUserAuthClient.refreshToken({ refresh_token: token }),
     );
 
-    res.cookie(COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN, response.access_token, getAccessTokenCookieOptions());
+    res.cookie(
+      COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN,
+      response.access_token,
+      getAccessTokenCookieOptions(),
+    );
     res.cookie(
       COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN,
       response.refresh_token,
@@ -178,4 +194,3 @@ export class DashboardUserAuthController implements OnModuleInit {
     };
   }
 }
-

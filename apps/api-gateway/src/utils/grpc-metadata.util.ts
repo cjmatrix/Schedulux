@@ -6,4 +6,3 @@ export function createTenantGrpcMetadata(tenantId: string, tier = 'starter'): Me
   metadata.set('x-tenant-tier', tier || 'starter');
   return metadata;
 }
-

@@ -40,4 +40,3 @@ export const PublicChatMessagesQuerySchema = z.object({
 });
 
 export class PublicChatMessagesQueryDto extends createZodDto(PublicChatMessagesQuerySchema) {}
-

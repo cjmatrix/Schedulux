@@ -7,6 +7,7 @@ import {
   HttpCode,
   HttpStatus,
   Inject,
+  Logger,
   OnModuleInit,
   Post,
   Query,
@@ -33,17 +34,20 @@ import {
 } from '../dtos/customer-chat.dto.js';
 import { CorsOriginGuard } from '../guards/cors-origin.guard.js';
 import { CustomerSessionGuard } from '../guards/customer-session.guard.js';
-import {
-  createSignedSession,
-  signSessionId,
-} from '../utils/session-token.util.js';
+import { createSignedSession, signSessionId } from '../utils/session-token.util.js';
+import { CIRCUIT_BREAKER_SERVICE, ICircuitBreakerService } from '@repo/circuit-breaker';
 
 @Controller(API_ROUTES.PUBLIC_CHAT.BASE)
 @UseGuards(CorsOriginGuard, CustomerSessionGuard)
 export class CustomerChatController implements OnModuleInit {
+  private readonly _logger = new Logger(CustomerChatController.name);
   private _knowledgeService!: KnowledgeServiceClient;
 
-  constructor(@Inject('KNOWLEDGE_PACKAGE') private readonly _client: ClientGrpc) {}
+  constructor(
+    @Inject('KNOWLEDGE_PACKAGE') private readonly _client: ClientGrpc,
+    @Inject(CIRCUIT_BREAKER_SERVICE)
+    private readonly _circuitBreakerService: ICircuitBreakerService,
+  ) {}
 
   onModuleInit() {
     this._knowledgeService = this._client.getService<KnowledgeServiceClient>('KnowledgeService');
@@ -67,14 +71,17 @@ export class CustomerChatController implements OnModuleInit {
     }
 
     if (resolvedSessionId && resolvedToken) {
+      const currentSessionId = resolvedSessionId;
       try {
-        const response = await lastValueFrom(
-          this._knowledgeService.getCustomerMessages({
-            tenant_id: body.tenant_id,
-            agent_id: body.agent_id,
-            session_id: resolvedSessionId,
-            limit: 20,
-          }),
+        const response = await this._circuitBreakerService.execute('knowledge-data', () =>
+          lastValueFrom(
+            this._knowledgeService.getCustomerMessages({
+              tenant_id: body.tenant_id,
+              agent_id: body.agent_id,
+              session_id: currentSessionId,
+              limit: 20,
+            }),
+          ),
         );
         messages = response.messages || [];
         isFirstTime = messages.length === 0;
@@ -148,20 +155,38 @@ export class CustomerChatController implements OnModuleInit {
       metadata.set('x-quota-verified', 'true');
     }
 
-    const response = await lastValueFrom(
-      this._knowledgeService.customerChat(
-        {
-          tenant_id: body.tenant_id,
-          agent_id: body.agent_id,
+    const response = await this._circuitBreakerService.execute(
+      'knowledge-chat-unary',
+      () =>
+        lastValueFrom(
+          this._knowledgeService.customerChat(
+            {
+              tenant_id: body.tenant_id,
+              agent_id: body.agent_id,
+              session_id: sessionId,
+              message: body.message,
+              customer_id: body.customer_id,
+              customer_phone: body.customer_phone,
+              customer_name: body.customer_name,
+              mode: 'live',
+            },
+            metadata,
+          ),
+        ),
+      (err) => {
+        this._logger.warn(`[CustomerChat] Fallback triggered: ${err.message}`);
+        return {
           session_id: sessionId,
-          message: body.message,
-          customer_id: body.customer_id,
-          customer_phone: body.customer_phone,
-          customer_name: body.customer_name,
-          mode: 'live',
-        },
-        metadata,
-      ),
+          response:
+            'Our AI assistant is temporarily unavailable due to high demand. Please try again in a few moments.',
+          user_message_id: `fallback-usr-${Date.now()}`,
+          agent_message_id: `fallback-agent-${Date.now()}`,
+          created_at: new Date().toISOString(),
+          booking_id: '',
+          booking_reference: '',
+          status: 'degraded',
+        } as any;
+      },
     );
 
     return {
@@ -184,11 +209,7 @@ export class CustomerChatController implements OnModuleInit {
   @HttpCode(HttpStatus.OK)
   @UseGuards(TenantTokenQuotaGuard)
   @UsePipes(ZodValidationPipe)
-  chatStream(
-    @Req() req: Request,
-    @Res() res: Response,
-    @Body() body: CustomerChatDto,
-  ) {
+  chatStream(@Req() req: Request, @Res() res: Response, @Body() body: CustomerChatDto) {
     let sessionId = req.customerSession?.sessionId || body.session_id;
     let token = req.customerSession?.token || body.token;
 
@@ -212,6 +233,36 @@ export class CustomerChatController implements OnModuleInit {
       metadata.set('x-quota-verified', 'true');
     }
 
+    if (this._circuitBreakerService.isOpen('knowledge-chat-stream')) {
+      this._logger.warn(
+        `[CustomerChatStream] Breaker "knowledge-chat-stream" is OPEN. Emitting fast fallback SSE.`,
+      );
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders?.();
+      res.write(
+        `data: ${JSON.stringify({
+          event_type: 'token',
+          content:
+            'Our AI assistant is temporarily unavailable due to high demand. Please try again in a few moments.',
+          token,
+          session_id: sessionId,
+        })}\n\n`,
+      );
+      res.write(
+        `data: ${JSON.stringify({
+          event_type: 'done',
+          token,
+          session_id: sessionId,
+          status: 'degraded',
+        })}\n\n`,
+      );
+      res.end();
+      return;
+    }
+
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
@@ -232,6 +283,7 @@ export class CustomerChatController implements OnModuleInit {
       metadata,
     );
 
+    let streamFailed = false;
     const subscription = stream$.subscribe({
       next: (chunk) => {
         const payload = {
@@ -242,12 +294,21 @@ export class CustomerChatController implements OnModuleInit {
         res.write(`data: ${JSON.stringify(payload)}\n\n`);
       },
       error: (err) => {
+        streamFailed = true;
+        this._circuitBreakerService.recordFailure('knowledge-chat-stream', err);
+        this._logger.warn(`[CustomerChatStream] Stream error recorded in breaker: ${err.message}`);
         res.write(
-          `data: ${JSON.stringify({ event_type: 'error', error: err.message || 'Stream error' })}\n\n`,
+          `data: ${JSON.stringify({
+            event_type: 'error',
+            error: 'Our AI assistant is temporarily unavailable. Please retry shortly.',
+          })}\n\n`,
         );
         res.end();
       },
       complete: () => {
+        if (!streamFailed) {
+          this._circuitBreakerService.recordSuccess('knowledge-chat-stream');
+        }
         res.end();
       },
     });
@@ -260,12 +321,22 @@ export class CustomerChatController implements OnModuleInit {
   @Get(API_ROUTES.PUBLIC_CHAT.CONFIG)
   @UsePipes(ZodValidationPipe)
   async getConfig(@Query() query: PublicChatConfigQueryDto) {
-    const response = await lastValueFrom(
-      this._knowledgeService.getWidgetConfig({
-        tenant_id: query.tenant_id,
-        agent_id: query.agent_id,
-        source: 'live',
-      }),
+    const response = await this._circuitBreakerService.execute(
+      'knowledge-widget-config',
+      () =>
+        lastValueFrom(
+          this._knowledgeService.getWidgetConfig({
+            tenant_id: query.tenant_id,
+            agent_id: query.agent_id,
+            source: 'live',
+          }),
+        ),
+      () =>
+        ({
+          tenant_id: query.tenant_id,
+          agent_id: query.agent_id,
+          widget_config_json: '{}',
+        }) as any,
     );
 
     let widgetConfig = {};
@@ -296,14 +367,24 @@ export class CustomerChatController implements OnModuleInit {
       throw new BadRequestException('session_id or valid token is required');
     }
 
-    const response = await lastValueFrom(
-      this._knowledgeService.getCustomerMessages({
-        tenant_id: req.customerSession?.tenantId || query.tenant_id,
-        agent_id: req.customerSession?.agentId || query.agent_id,
-        session_id: resolvedSessionId,
-        limit: query.limit,
-        before: query.before,
-      }),
+    const response = await this._circuitBreakerService.execute(
+      'knowledge-messages',
+      () =>
+        lastValueFrom(
+          this._knowledgeService.getCustomerMessages({
+            tenant_id: req.customerSession?.tenantId || query.tenant_id,
+            agent_id: req.customerSession?.agentId || query.agent_id,
+            session_id: resolvedSessionId,
+            limit: query.limit,
+            before: query.before,
+          }),
+        ),
+      () =>
+        ({
+          messages: [],
+          next_cursor: '',
+          has_more: false,
+        }) as any,
     );
 
     return {
@@ -316,4 +397,3 @@ export class CustomerChatController implements OnModuleInit {
     };
   }
 }
-

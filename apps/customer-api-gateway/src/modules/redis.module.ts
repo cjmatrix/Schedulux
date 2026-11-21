@@ -8,4 +8,3 @@ import { ThrottlerStorageRedisService } from '../services/throttler-storage-redi
   exports: [RedisService, ThrottlerStorageRedisService],
 })
 export class RedisModule {}
-

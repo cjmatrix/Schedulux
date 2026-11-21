@@ -30,6 +30,7 @@ import { Roles } from '../../decorators/roles.decorator.js';
 import { RolesGuard } from '../../guards/roles.guard.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
 import { createTenantGrpcMetadata } from '../../utils/grpc-metadata.util.js';
+import { CIRCUIT_BREAKER_SERVICE, ICircuitBreakerService } from '@repo/circuit-breaker';
 import { GetAvailabilityQueryDto } from './dtos/availability.dto.js';
 import {
   CancelBookingDto,
@@ -54,11 +55,19 @@ import { CreateServiceDto, ListServicesQueryDto, UpdateServiceDto } from './dtos
 export class SchedulingController implements OnModuleInit {
   private _schedulingService!: SchedulingInventoryServiceClient;
 
-  constructor(@Inject('SCHEDULING_PACKAGE') private readonly _client: ClientGrpc) {}
+  constructor(
+    @Inject('SCHEDULING_PACKAGE') private readonly _client: ClientGrpc,
+    @Inject(CIRCUIT_BREAKER_SERVICE)
+    private readonly _circuitBreakerService: ICircuitBreakerService,
+  ) {}
 
   onModuleInit() {
-    this._schedulingService = this._client.getService<SchedulingInventoryServiceClient>(
+    const rawService = this._client.getService<SchedulingInventoryServiceClient>(
       SCHEDULING_INVENTORY_SERVICE_NAME,
+    );
+    this._schedulingService = this._circuitBreakerService.wrapGrpcClient(
+      'scheduling-service',
+      rawService,
     );
   }
 

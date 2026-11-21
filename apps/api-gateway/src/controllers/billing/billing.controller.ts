@@ -27,6 +27,7 @@ import { RolesGuard } from '../../guards/roles.guard.js';
 import { PaddleWebhookGuard } from '../../guards/paddle-webhook.guard.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
 import { RedisService } from '../../services/redis.service.js';
+import { CIRCUIT_BREAKER_SERVICE, ICircuitBreakerService } from '@repo/circuit-breaker';
 import { PaddleWebhookDto } from './dtos/paddle-webhook.dto.js';
 import { CreateCheckoutDto } from './dtos/checkout.dto.js';
 
@@ -39,10 +40,15 @@ export class BillingController implements OnModuleInit {
     @Inject('TENANT_PACKAGE') private readonly _tenantClient: ClientGrpc,
     @Inject(RedisService) private readonly _redisService: RedisService,
     @Inject(ConfigService) private readonly _configService: ConfigService,
+    @Inject(CIRCUIT_BREAKER_SERVICE)
+    private readonly _circuitBreakerService: ICircuitBreakerService,
   ) {}
 
   onModuleInit() {
-    this._tenantService = this._tenantClient.getService<TenantServiceClient>('TenantService');
+    this._tenantService = this._circuitBreakerService.wrapGrpcClient(
+      'tenant-service',
+      this._tenantClient.getService<TenantServiceClient>('TenantService'),
+    );
   }
 
   private _getTenantId(req: AuthenticatedTenantRequest): string {
@@ -53,11 +59,11 @@ export class BillingController implements OnModuleInit {
     return tenantId;
   }
 
-  @Get("/test")
-  getTest(){
-    return{
-      message:"Successs"
-    }
+  @Get('/test')
+  getTest() {
+    return {
+      message: 'Successs',
+    };
   }
 
   @Get(API_ROUTES.TENANT.BILLING.CONFIG)
@@ -148,10 +154,7 @@ export class BillingController implements OnModuleInit {
   @Roles('tenant_owner')
   @UsePipes(ZodValidationPipe)
   @HttpCode(HttpStatus.OK)
-  async createCheckout(
-    @Req() req: AuthenticatedTenantRequest,
-    @Body() body: CreateCheckoutDto,
-  ) {
+  async createCheckout(@Req() req: AuthenticatedTenantRequest, @Body() body: CreateCheckoutDto) {
     const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
       this._tenantService.createPaddleCheckout({

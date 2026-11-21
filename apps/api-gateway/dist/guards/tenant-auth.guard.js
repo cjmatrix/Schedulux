@@ -24,23 +24,25 @@ const rxjs_1 = require("rxjs");
 const cookies_constant_js_1 = require("../constants/cookies.constant.js");
 const messages_constant_js_1 = require("../constants/messages.constant.js");
 const redis_service_js_1 = require("../services/redis.service.js");
+const circuit_breaker_1 = require("@repo/circuit-breaker");
 let TenantAuthGuard = class TenantAuthGuard {
     _configService;
     _redisService;
     _client;
     _dashboardClient;
+    _circuitBreakerService;
     _tenantService;
     _dashboardAuthService;
-    constructor(_configService, _redisService, _client, _dashboardClient) {
+    constructor(_configService, _redisService, _client, _dashboardClient, _circuitBreakerService) {
         this._configService = _configService;
         this._redisService = _redisService;
         this._client = _client;
         this._dashboardClient = _dashboardClient;
+        this._circuitBreakerService = _circuitBreakerService;
     }
     onModuleInit() {
-        this._tenantService = this._client.getService('TenantService');
-        this._dashboardAuthService =
-            this._dashboardClient.getService('DashboardAuthService');
+        this._tenantService = this._circuitBreakerService.wrapGrpcClient('tenant-service', this._client.getService('TenantService'));
+        this._dashboardAuthService = this._circuitBreakerService.wrapGrpcClient('dashboard-service', this._dashboardClient.getService('DashboardAuthService'));
     }
     async canActivate(context) {
         const request = context.switchToHttp().getRequest();
@@ -155,6 +157,7 @@ exports.TenantAuthGuard = TenantAuthGuard = __decorate([
     __param(1, (0, common_1.Inject)(redis_service_js_1.RedisService)),
     __param(2, (0, common_1.Inject)('TENANT_PACKAGE')),
     __param(3, (0, common_1.Inject)('DASHBOARD_PACKAGE')),
+    __param(4, (0, common_1.Inject)(circuit_breaker_1.CIRCUIT_BREAKER_SERVICE)),
     __metadata("design:paramtypes", [config_1.ConfigService,
-        redis_service_js_1.RedisService, Object, Object])
+        redis_service_js_1.RedisService, Object, Object, Object])
 ], TenantAuthGuard);

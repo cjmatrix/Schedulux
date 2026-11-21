@@ -22,11 +22,9 @@ import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
 import { API_ROUTES } from '../../constants/routes.constant.js';
 import { Roles } from '../../decorators/roles.decorator.js';
 import { RolesGuard } from '../../guards/roles.guard.js';
-import {
-  AuthenticatedTenantRequest,
-  TenantAuthGuard,
-} from '../../guards/tenant-auth.guard.js';
+import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
 import { RedisService } from '../../services/redis.service.js';
+import { CIRCUIT_BREAKER_SERVICE, ICircuitBreakerService } from '@repo/circuit-breaker';
 import { TenantDashboardOverviewDto } from './dtos/tenant.dto.js';
 
 @Controller(API_ROUTES.TENANT.DASHBOARD.BASE)
@@ -40,15 +38,21 @@ export class TenantDashboardController implements OnModuleInit {
     @Inject('KNOWLEDGE_PACKAGE') private readonly _knowledgeClient: ClientGrpc,
     @Inject('SCHEDULING_PACKAGE') private readonly _schedulingClient: ClientGrpc,
     @Inject(RedisService) private readonly _redisService: RedisService,
+    @Inject(CIRCUIT_BREAKER_SERVICE)
+    private readonly _circuitBreakerService: ICircuitBreakerService,
   ) {}
 
   onModuleInit() {
-    this._knowledgeService =
-      this._knowledgeClient.getService<KnowledgeServiceClient>('KnowledgeService');
-    this._schedulingService =
+    this._knowledgeService = this._circuitBreakerService.wrapGrpcClient(
+      'knowledge-data',
+      this._knowledgeClient.getService<KnowledgeServiceClient>('KnowledgeService'),
+    );
+    this._schedulingService = this._circuitBreakerService.wrapGrpcClient(
+      'scheduling-service',
       this._schedulingClient.getService<SchedulingInventoryServiceClient>(
         SCHEDULING_INVENTORY_SERVICE_NAME,
-      );
+      ),
+    );
   }
 
   @Get(API_ROUTES.TENANT.DASHBOARD.OVERVIEW)
@@ -67,14 +71,12 @@ export class TenantDashboardController implements OnModuleInit {
     const tierConfig = await this._redisService.getCachedTierConfig(tier);
 
     const agentsRes = await lastValueFrom(
-      this._knowledgeService
-        .listTenantAgents({ tenant_id: tenantId })
-        .pipe(
-          catchError((err) => {
-            this._logger.error('Failed to list tenant agents:', err);
-            return of({ agents: [] });
-          }),
-        ),
+      this._knowledgeService.listTenantAgents({ tenant_id: tenantId }).pipe(
+        catchError((err) => {
+          this._logger.error('Failed to list tenant agents:', err);
+          return of({ agents: [] });
+        }),
+      ),
     );
 
     const rawAgentsList = agentsRes?.agents || [];
@@ -134,93 +136,87 @@ export class TenantDashboardController implements OnModuleInit {
       };
     }
 
-    const [
-      bookingsRes,
-      confirmedBookingsRes,
-      servicesRes,
-      resourcesRes,
-      documentsRes,
-      tokenUsage,
-    ] = await Promise.all([
-      lastValueFrom(
-        this._schedulingService
-          .listBookings({
-            tenant_id: tenantId,
-            agent_id: activeAgent.agent_id,
-            page: 1,
-            limit: 5,
-          })
-          .pipe(
-            catchError((err) => {
-              this._logger.error('Failed to list agent bookings:', err);
-              return of({ bookings: [], total: 0, page: 1, limit: 5 });
-            }),
-          ),
-      ),
-      lastValueFrom(
-        this._schedulingService
-          .listBookings({
-            tenant_id: tenantId,
-            agent_id: activeAgent.agent_id,
-            page: 1,
-            limit: 1,
-            status: 'confirmed',
-          })
-          .pipe(
-            catchError((err) => {
-              this._logger.error('Failed to count confirmed agent bookings:', err);
-              return of({ bookings: [], total: 0, page: 1, limit: 1 });
-            }),
-          ),
-      ),
-      lastValueFrom(
-        this._schedulingService
-          .listServices({
-            tenant_id: tenantId,
-            agent_id: activeAgent.agent_id,
-            page: 1,
-            limit: 5,
-            category: '',
-          })
-          .pipe(
-            catchError((err) => {
-              this._logger.error('Failed to list agent services:', err);
-              return of({ services: [], total: 0, page: 1, limit: 5 });
-            }),
-          ),
-      ),
-      lastValueFrom(
-        this._schedulingService
-          .listResources({
-            tenant_id: tenantId,
-            agent_id: activeAgent.agent_id,
-            page: 1,
-            limit: 1,
-            resource_type: '',
-            dispatch_status: '',
-          })
-          .pipe(
-            catchError((err) => {
-              this._logger.error('Failed to list agent resources count:', err);
-              return of({ resources: [], total: 0, page: 1, limit: 1 });
-            }),
-          ),
-      ),
-      lastValueFrom(
-        this._knowledgeService
-          .listDocuments({
-            tenant_id: tenantId,
-            agent_id: activeAgent.agent_id,
-          })
-          .pipe(
-            catchError((err) => {
-              this._logger.error('Failed to list agent documents:', err);
-              return of({ documents: [] });
-            }),
-          ),
-      ),
-      this._redisService.getWeeklyTokenUsage(tenantId).catch(() => 0),
-    ]);
+    const [bookingsRes, confirmedBookingsRes, servicesRes, resourcesRes, documentsRes, tokenUsage] =
+      await Promise.all([
+        lastValueFrom(
+          this._schedulingService
+            .listBookings({
+              tenant_id: tenantId,
+              agent_id: activeAgent.agent_id,
+              page: 1,
+              limit: 5,
+            })
+            .pipe(
+              catchError((err) => {
+                this._logger.error('Failed to list agent bookings:', err);
+                return of({ bookings: [], total: 0, page: 1, limit: 5 });
+              }),
+            ),
+        ),
+        lastValueFrom(
+          this._schedulingService
+            .listBookings({
+              tenant_id: tenantId,
+              agent_id: activeAgent.agent_id,
+              page: 1,
+              limit: 1,
+              status: 'confirmed',
+            })
+            .pipe(
+              catchError((err) => {
+                this._logger.error('Failed to count confirmed agent bookings:', err);
+                return of({ bookings: [], total: 0, page: 1, limit: 1 });
+              }),
+            ),
+        ),
+        lastValueFrom(
+          this._schedulingService
+            .listServices({
+              tenant_id: tenantId,
+              agent_id: activeAgent.agent_id,
+              page: 1,
+              limit: 5,
+              category: '',
+            })
+            .pipe(
+              catchError((err) => {
+                this._logger.error('Failed to list agent services:', err);
+                return of({ services: [], total: 0, page: 1, limit: 5 });
+              }),
+            ),
+        ),
+        lastValueFrom(
+          this._schedulingService
+            .listResources({
+              tenant_id: tenantId,
+              agent_id: activeAgent.agent_id,
+              page: 1,
+              limit: 1,
+              resource_type: '',
+              dispatch_status: '',
+            })
+            .pipe(
+              catchError((err) => {
+                this._logger.error('Failed to list agent resources count:', err);
+                return of({ resources: [], total: 0, page: 1, limit: 1 });
+              }),
+            ),
+        ),
+        lastValueFrom(
+          this._knowledgeService
+            .listDocuments({
+              tenant_id: tenantId,
+              agent_id: activeAgent.agent_id,
+            })
+            .pipe(
+              catchError((err) => {
+                this._logger.error('Failed to list agent documents:', err);
+                return of({ documents: [] });
+              }),
+            ),
+        ),
+        this._redisService.getWeeklyTokenUsage(tenantId).catch(() => 0),
+      ]);
 
     const totalBookings = bookingsRes?.total || 0;
     const confirmedBookings = confirmedBookingsRes?.total || 0;

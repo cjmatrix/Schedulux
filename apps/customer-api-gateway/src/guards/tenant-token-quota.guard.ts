@@ -14,8 +14,7 @@ export class TenantTokenQuotaGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest();
-    const tenantId =
-      req.body?.tenant_id || req.query?.tenant_id || req.headers?.['x-tenant-id'];
+    const tenantId = req.body?.tenant_id || req.query?.tenant_id || req.headers?.['x-tenant-id'];
 
     if (!tenantId) {
       return true;
@@ -49,4 +48,3 @@ export class TenantTokenQuotaGuard implements CanActivate {
     return true;
   }
 }
-

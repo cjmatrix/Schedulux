@@ -9,10 +9,13 @@ export interface SchemaGeneratedEvent {
 }
 
 export interface ISchemaEventSubscriber {
-  onSchemaGenerated(callback: (event: SchemaGeneratedEvent) => void): () => void;
+  onSchemaGenerated(
+    tenantId: string,
+    jobId: string,
+    callback: (event: SchemaGeneratedEvent) => void,
+  ): () => void;
 }
 
 export interface ISchemaCacheService {
   getDraftSchema(tenantId: string, jobId?: string): Promise<Record<string, unknown> | null>;
 }
-

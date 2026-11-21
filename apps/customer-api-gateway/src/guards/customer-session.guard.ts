@@ -41,15 +41,10 @@ export class CustomerSessionGuard implements CanActivate {
       (req.body?.token as string | undefined) ||
       (req.query?.token as string | undefined);
 
-    const rawSessionId = (req.body?.session_id ) as string | undefined;
-    const tenantId = (req.body?.tenant_id ) as
-      | string
-      | undefined;
-    const agentId = (req.body?.agent_id ) as
-      | string
-      | undefined;
+    const rawSessionId = req.body?.session_id as string | undefined;
+    const tenantId = req.body?.tenant_id as string | undefined;
+    const agentId = req.body?.agent_id as string | undefined;
 
-   
     if (rawSessionId?.startsWith('sandbox_')) {
       throw new BadRequestException('Sandbox sessions are not allowed in public live chat.');
     }

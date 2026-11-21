@@ -9,6 +9,7 @@ import { CorsOriginGuard } from './guards/cors-origin.guard.js';
 import { CustomerThrottlerGuard } from './guards/customer-throttler.guard.js';
 import { TenantTokenQuotaGuard } from './guards/tenant-token-quota.guard.js';
 import { RedisModule } from './modules/redis.module.js';
+import { CircuitBreakerModule } from '@repo/circuit-breaker';
 import { RedisService } from './services/redis.service.js';
 import { ThrottlerStorageRedisService } from './services/throttler-storage-redis.service.js';
 
@@ -36,13 +37,11 @@ const isProduction = process.env.NODE_ENV === 'production';
       },
     }),
     RedisModule,
+    CircuitBreakerModule,
     ThrottlerModule.forRootAsync({
       imports: [RedisModule],
       inject: [ThrottlerStorageRedisService, RedisService],
-      useFactory: (
-        storage: ThrottlerStorageRedisService,
-        redisService: RedisService,
-      ) => ({
+      useFactory: (storage: ThrottlerStorageRedisService, redisService: RedisService) => ({
         throttlers: [
           {
             name: 'short',
@@ -55,9 +54,7 @@ const isProduction = process.env.NODE_ENV === 'production';
             limit: async (context: ExecutionContext) => {
               const req = context.switchToHttp().getRequest();
               const tenantId =
-                req.body?.tenant_id ||
-                req.query?.tenant_id ||
-                req.headers?.['x-tenant-id'];
+                req.body?.tenant_id || req.query?.tenant_id || req.headers?.['x-tenant-id'];
 
               if (tenantId && typeof tenantId === 'string' && tenantId.trim().length > 0) {
                 return await redisService.getTierRateLimit(tenantId.trim());
@@ -107,4 +104,3 @@ const isProduction = process.env.NODE_ENV === 'production';
   ],
 })
 export class AppModule {}
-

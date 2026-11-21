@@ -8,4 +8,3 @@ export const RESPONSE_MESSAGES = {
     FORBIDDEN_ORIGIN: 'Access denied: Website origin is not authorized for this agent.',
   },
 } as const;
-

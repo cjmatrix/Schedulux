@@ -51,4 +51,3 @@ export const UpdateTenantScheduleDtoSchema = z.object({
 });
 
 export class UpdateTenantScheduleDto extends createZodDto(UpdateTenantScheduleDtoSchema) {}
-

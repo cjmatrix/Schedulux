@@ -79,4 +79,3 @@ export function getTierConfig(tier?: string | null): TierConfig {
   const normalized = tier.trim().toLowerCase();
   return STATIC_TIER_CONFIGS[normalized] || STATIC_TIER_CONFIGS.starter;
 }
-

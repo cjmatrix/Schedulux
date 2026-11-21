@@ -97,7 +97,9 @@ export const GetSandboxWidgetConfigQuerySchema = z.object({
   agent_id: z.string().optional().default('default'),
 });
 
-export class GetSandboxWidgetConfigQueryDto extends createZodDto(GetSandboxWidgetConfigQuerySchema) {}
+export class GetSandboxWidgetConfigQueryDto extends createZodDto(
+  GetSandboxWidgetConfigQuerySchema,
+) {}
 
 export const GetSandboxMessagesQuerySchema = z.object({
   agent_id: z.string().optional().default('default'),

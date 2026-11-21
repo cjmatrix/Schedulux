@@ -16,4 +16,3 @@ export const UpdateTierConfigSchema = z.object({
 });
 
 export class UpdateTierConfigDto extends createZodDto(UpdateTierConfigSchema) {}
-

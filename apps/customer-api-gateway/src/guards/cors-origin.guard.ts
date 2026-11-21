@@ -12,6 +12,7 @@ import { KnowledgeServiceClient } from '@repo/proto/knowledge';
 import type { Request, Response } from 'express';
 import { lastValueFrom } from 'rxjs';
 import { RedisService } from '../services/redis.service.js';
+import { CIRCUIT_BREAKER_SERVICE, ICircuitBreakerService } from '@repo/circuit-breaker';
 
 @Injectable()
 export class CorsOriginGuard implements CanActivate, OnModuleInit {
@@ -20,6 +21,8 @@ export class CorsOriginGuard implements CanActivate, OnModuleInit {
   constructor(
     @Inject('KNOWLEDGE_PACKAGE') private readonly _client: ClientGrpc,
     @Inject(RedisService) private readonly _redisService: RedisService,
+    @Inject(CIRCUIT_BREAKER_SERVICE)
+    private readonly _circuitBreakerService: ICircuitBreakerService,
   ) {}
 
   onModuleInit() {
@@ -41,12 +44,10 @@ export class CorsOriginGuard implements CanActivate, OnModuleInit {
   private isDomainAllowed(requestHost: string, whitelistedDomains: string[]): boolean {
     const host = this.normalizeHostname(requestHost);
 
-    
     if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
       return true;
     }
 
-  
     const frontendUrl = process.env.FRONTEND_URL;
     if (frontendUrl && this.normalizeHostname(frontendUrl) === host) {
       return true;
@@ -83,12 +84,17 @@ export class CorsOriginGuard implements CanActivate, OnModuleInit {
     }
 
     try {
-      const response = await lastValueFrom(
-        this._knowledgeService.getWidgetConfig({
-          tenant_id: tenantId,
-          agent_id: agentId,
-          source: 'live',
-        }),
+      const response = await this._circuitBreakerService.execute(
+        'knowledge-widget-config',
+        () =>
+          lastValueFrom(
+            this._knowledgeService.getWidgetConfig({
+              tenant_id: tenantId,
+              agent_id: agentId,
+              source: 'live',
+            }),
+          ),
+        () => ({ widget_config_json: '{}' }) as any,
       );
 
       let domains: string[] = [];

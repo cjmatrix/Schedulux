@@ -17,16 +17,24 @@ import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
 import { API_ROUTES } from '../../constants/routes.constant.js';
 import { SuperAdminAuthGuard } from '../../guards/superadmin-auth.guard.js';
 import { ListTenantsDto, SuspendTenantParamDto } from './dtos/superAdmin.dto.js';
+import { CIRCUIT_BREAKER_SERVICE, ICircuitBreakerService } from '@repo/circuit-breaker';
 
 @Controller(API_ROUTES.SUPERADMIN.TENANTS.BASE)
 @UseGuards(SuperAdminAuthGuard)
 export class SuperAdminTenantController implements OnModuleInit {
   private _superAdminTenantClient!: TenantServiceClient;
 
-  constructor(@Inject('TENANT_PACKAGE') private readonly _client: ClientGrpc) {}
+  constructor(
+    @Inject('TENANT_PACKAGE') private readonly _client: ClientGrpc,
+    @Inject(CIRCUIT_BREAKER_SERVICE)
+    private readonly _circuitBreakerService: ICircuitBreakerService,
+  ) {}
 
   onModuleInit() {
-    this._superAdminTenantClient = this._client.getService('TenantService');
+    this._superAdminTenantClient = this._circuitBreakerService.wrapGrpcClient(
+      'tenant-service',
+      this._client.getService('TenantService'),
+    );
   }
 
   @Get(API_ROUTES.SUPERADMIN.TENANTS.ROOT)
@@ -62,4 +70,3 @@ export class SuperAdminTenantController implements OnModuleInit {
     };
   }
 }
-

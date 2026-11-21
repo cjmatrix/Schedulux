@@ -8,4 +8,3 @@ export const API_ROUTES = {
     CONFIG: 'config',
   },
 } as const;
-

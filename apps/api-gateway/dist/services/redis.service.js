@@ -23,7 +23,7 @@ let RedisService = RedisService_1 = class RedisService {
     _logger = new common_1.Logger(RedisService_1.name);
     _client;
     _subscriber;
-    _eventHandlers = [];
+    _channelHandlers = new Map();
     constructor(_configService) {
         this._configService = _configService;
     }
@@ -41,36 +41,54 @@ let RedisService = RedisService_1 = class RedisService {
             this._client = new ioredis_1.Redis({ host: redisHost, port: redisPort });
             this._subscriber = new ioredis_1.Redis({ host: redisHost, port: redisPort });
         }
-        const channel = 'schema-generation-events';
-        this._subscriber.subscribe(channel, (err) => {
-            if (err) {
-                this._logger.error(`Failed to subscribe to ${channel} channel`, err);
-            }
-            else {
-                this._logger.log(`Subscribed to Redis channel: ${channel}`);
-            }
-        });
         this._subscriber.on('message', (receivedChannel, message) => {
-            if (receivedChannel === channel) {
-                try {
-                    const parsed = JSON.parse(message);
-                    this._logger.log(`Received schema event for tenant ${parsed.tenant_id}, job ${parsed.job_id}`);
-                    for (const handler of this._eventHandlers) {
-                        handler(parsed);
-                    }
+            const handlers = this._channelHandlers.get(receivedChannel);
+            if (!handlers || handlers.size === 0) {
+                return;
+            }
+            try {
+                const parsed = JSON.parse(message);
+                this._logger.log(`Received schema event on channel '${receivedChannel}' for tenant ${parsed.tenant_id}, job ${parsed.job_id}`);
+                for (const handler of handlers) {
+                    handler(parsed);
                 }
-                catch (e) {
-                    this._logger.error('Error parsing Redis Pub/Sub message', e);
-                }
+            }
+            catch (e) {
+                this._logger.error(`Error parsing Redis Pub/Sub message on channel ${receivedChannel}`, e);
             }
         });
     }
-    onSchemaGenerated(callback) {
-        this._eventHandlers.push(callback);
+    onSchemaGenerated(tenantId, jobId, callback) {
+        const channel = jobId ? `schema-events:${tenantId}:${jobId}` : `schema-events:${tenantId}`;
+        let handlers = this._channelHandlers.get(channel);
+        if (!handlers) {
+            handlers = new Set();
+            this._channelHandlers.set(channel, handlers);
+            this._subscriber.subscribe(channel, (err) => {
+                if (err) {
+                    this._logger.error(`Failed to subscribe to Redis channel: ${channel}`, err);
+                }
+                else {
+                    this._logger.log(`Subscribed to Redis channel: ${channel}`);
+                }
+            });
+        }
+        handlers.add(callback);
         return () => {
-            const index = this._eventHandlers.indexOf(callback);
-            if (index !== -1) {
-                this._eventHandlers.splice(index, 1);
+            const currentHandlers = this._channelHandlers.get(channel);
+            if (!currentHandlers)
+                return;
+            currentHandlers.delete(callback);
+            if (currentHandlers.size === 0) {
+                this._channelHandlers.delete(channel);
+                this._subscriber.unsubscribe(channel, (err) => {
+                    if (err) {
+                        this._logger.error(`Failed to unsubscribe from Redis channel: ${channel}`, err);
+                    }
+                    else {
+                        this._logger.log(`Unsubscribed from Redis channel: ${channel}`);
+                    }
+                });
             }
         };
     }

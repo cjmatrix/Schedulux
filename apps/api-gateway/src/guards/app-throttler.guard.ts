@@ -28,10 +28,7 @@ export class AppThrottlerGuard extends ThrottlerGuard {
   }
 
   protected override async shouldSkip(context: ExecutionContext): Promise<boolean> {
-    if (
-      process.env.RATE_LIMIT_DISABLED === 'true' ||
-      process.env.LOADTEST_MODE === 'true'
-    ) {
+    if (process.env.RATE_LIMIT_DISABLED === 'true' || process.env.LOADTEST_MODE === 'true') {
       return true;
     }
 
@@ -48,7 +45,6 @@ export class AppThrottlerGuard extends ThrottlerGuard {
   }
 
   protected override async getTracker(req: Record<string, any>): Promise<string> {
-  
     if (req.tenant?.tenant_id) {
       return `tenant:${req.tenant.tenant_id}`;
     }
@@ -56,7 +52,6 @@ export class AppThrottlerGuard extends ThrottlerGuard {
       return `tenant:${req.dashboardUser.tenant_id}`;
     }
 
-   
     const tenantToken = req.cookies?.[COOKIE_NAMES.TENANT_ACCESS_TOKEN];
     const dashboardToken = req.cookies?.[COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN];
     const authHeader = req.headers?.authorization;
@@ -72,12 +67,9 @@ export class AppThrottlerGuard extends ThrottlerGuard {
         if (decoded?.tenant_id) {
           return `tenant:${decoded.tenant_id}`;
         }
-      } catch {
-      
-      }
+      } catch {}
     }
 
-    
     const forwarded = req.headers?.['x-forwarded-for'];
     const ip =
       (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : undefined) ||
@@ -88,4 +80,3 @@ export class AppThrottlerGuard extends ThrottlerGuard {
     return `ip:${ip}`;
   }
 }
-

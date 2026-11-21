@@ -30,6 +30,7 @@ const roles_guard_js_1 = require("./guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("./guards/tenant-auth.guard.js");
 const tenant_token_quota_guard_js_1 = require("./guards/tenant-token-quota.guard.js");
 const redis_module_js_1 = require("./modules/redis.module.js");
+const circuit_breaker_1 = require("@repo/circuit-breaker");
 const throttler_storage_redis_service_js_1 = require("./services/throttler-storage-redis.service.js");
 const isProduction = process.env.NODE_ENV === 'production';
 let AppModule = class AppModule {
@@ -58,6 +59,7 @@ exports.AppModule = AppModule = __decorate([
                 },
             }),
             redis_module_js_1.RedisModule,
+            circuit_breaker_1.CircuitBreakerModule,
             throttler_1.ThrottlerModule.forRootAsync({
                 imports: [redis_module_js_1.RedisModule],
                 inject: [throttler_storage_redis_service_js_1.ThrottlerStorageRedisService],

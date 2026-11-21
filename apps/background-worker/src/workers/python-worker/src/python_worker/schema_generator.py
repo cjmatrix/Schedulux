@@ -334,7 +334,7 @@ async def process_schema_generation(job_or_data, token=None):
         print(f"[Schema Worker] Stored draft schema in Redis: {draft_key}", flush=True)
         print(f"[Schema Worker] Schema JSON preview: {schema_json[:500]}...", flush=True)
 
-        pubsub_channel = "schema-generation-events"
+        pubsub_channel = f"schema-events:{tenant_id}:{job_id}"
         event_payload = {
             "event": "SCHEMA_GENERATED",
             "tenant_id": tenant_id,
@@ -360,7 +360,7 @@ async def process_schema_generation(job_or_data, token=None):
         else:
             friendly_err = f"AI schema synthesis failed: {raw_err}"
 
-        pubsub_channel = "schema-generation-events"
+        pubsub_channel = f"schema-events:{tenant_id}:{job_id}"
         event_payload = {
             "event": "SCHEMA_GENERATION_FAILED",
             "tenant_id": tenant_id,

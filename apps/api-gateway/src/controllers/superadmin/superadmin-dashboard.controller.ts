@@ -22,6 +22,7 @@ import {
   TokenChartQueryDto,
   TopTenantsQueryDto,
 } from './dtos/dashboard.dto.js';
+import { CIRCUIT_BREAKER_SERVICE, ICircuitBreakerService } from '@repo/circuit-breaker';
 
 @Controller(API_ROUTES.SUPERADMIN.DASHBOARD.BASE)
 @UseGuards(SuperAdminAuthGuard)
@@ -33,15 +34,21 @@ export class SuperAdminDashboardController implements OnModuleInit {
   constructor(
     @Inject('SUPERADMIN_PACKAGE') private readonly _superadminClient: ClientGrpc,
     @Inject('KNOWLEDGE_PACKAGE') private readonly _knowledgeClientGrpc: ClientGrpc,
+    @Inject(CIRCUIT_BREAKER_SERVICE)
+    private readonly _circuitBreakerService: ICircuitBreakerService,
   ) {}
 
   onModuleInit() {
-    this._dashboardClient =
+    this._dashboardClient = this._circuitBreakerService.wrapGrpcClient(
+      'superadmin-service',
       this._superadminClient.getService<SuperAdminDashboardServiceClient>(
         'SuperAdminDashboardService',
-      );
-    this._knowledgeClient =
-      this._knowledgeClientGrpc.getService<KnowledgeServiceClient>('KnowledgeService');
+      ),
+    );
+    this._knowledgeClient = this._circuitBreakerService.wrapGrpcClient(
+      'knowledge-data',
+      this._knowledgeClientGrpc.getService<KnowledgeServiceClient>('KnowledgeService'),
+    );
   }
 
   @Get(API_ROUTES.SUPERADMIN.DASHBOARD.OVERVIEW)
@@ -73,18 +80,16 @@ export class SuperAdminDashboardController implements OnModuleInit {
           ),
       ),
       lastValueFrom(
-        this._knowledgeClient
-          .getAgentStats({})
-          .pipe(
-            catchError((err) => {
-              this._logger.error('Failed to get agent stats from AI-orchestration:', err);
-              return of({
-                total_agents: 0,
-                active_agents: 0,
-                draft_agents: 0,
-              });
-            }),
-          ),
+        this._knowledgeClient.getAgentStats({}).pipe(
+          catchError((err) => {
+            this._logger.error('Failed to get agent stats from AI-orchestration:', err);
+            return of({
+              total_agents: 0,
+              active_agents: 0,
+              draft_agents: 0,
+            });
+          }),
+        ),
       ),
     ]);
 

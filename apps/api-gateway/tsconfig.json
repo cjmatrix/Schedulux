@@ -11,10 +11,11 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "paths": {
+      "@repo/circuit-breaker": ["../../packages/circuit-breaker/src/index.ts"],
       "@repo/proto": ["../../packages/proto/src/index.ts"],
       "@repo/proto/*": ["../../packages/proto/src/interfaces/*.ts"]
     }
   },
   "include": ["src/**/*"],
-  "references": [{ "path": "../../packages/proto" }]
+  "references": [{ "path": "../../packages/proto" }, { "path": "../../packages/circuit-breaker" }]
 }

@@ -9,4 +9,3 @@ export const ListCustomersQuerySchema = z.object({
 });
 
 export class ListCustomersQueryDto extends createZodDto(ListCustomersQuerySchema) {}
-

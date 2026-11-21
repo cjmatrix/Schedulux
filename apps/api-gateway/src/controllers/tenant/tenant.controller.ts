@@ -28,6 +28,7 @@ import { API_ROUTES } from '../../constants/routes.constant.js';
 import { Roles } from '../../decorators/roles.decorator.js';
 import { RolesGuard } from '../../guards/roles.guard.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
+import { CIRCUIT_BREAKER_SERVICE, ICircuitBreakerService } from '@repo/circuit-breaker';
 import {
   getAccessTokenCookieOptions,
   getRefreshTokenCookieOptions,
@@ -55,13 +56,23 @@ export class TenantController implements OnModuleInit {
   constructor(
     @Inject('TENANT_PACKAGE') private readonly _client: ClientGrpc,
     @Inject('DASHBOARD_PACKAGE') private readonly _dashboardClient: ClientGrpc,
+    @Inject(CIRCUIT_BREAKER_SERVICE)
+    private readonly _circuitBreakerService: ICircuitBreakerService,
   ) {}
 
   onModuleInit() {
-    this._tenantAuthService = this._client.getService<TenantAuthServiceClient>('TenantAuthService');
-    this._tenantServiceClient = this._client.getService<TenantServiceClient>('TenantService');
-    this._dashboardUserServiceClient =
-      this._dashboardClient.getService<DashboardUserServiceClient>('DashboardUserService');
+    this._tenantAuthService = this._circuitBreakerService.wrapGrpcClient(
+      'tenant-service',
+      this._client.getService<TenantAuthServiceClient>('TenantAuthService'),
+    );
+    this._tenantServiceClient = this._circuitBreakerService.wrapGrpcClient(
+      'tenant-service',
+      this._client.getService<TenantServiceClient>('TenantService'),
+    );
+    this._dashboardUserServiceClient = this._circuitBreakerService.wrapGrpcClient(
+      'dashboard-service',
+      this._dashboardClient.getService<DashboardUserServiceClient>('DashboardUserService'),
+    );
   }
 
   private _getTenantId(req: AuthenticatedTenantRequest): string {
@@ -105,8 +116,16 @@ export class TenantController implements OnModuleInit {
   async login(@Body() body: TenantLoginDto, @Res({ passthrough: true }) res: Response) {
     const response = await lastValueFrom(this._tenantAuthService.login(body));
 
-    res.cookie(COOKIE_NAMES.TENANT_ACCESS_TOKEN, response.access_token, getAccessTokenCookieOptions());
-    res.cookie(COOKIE_NAMES.TENANT_REFRESH_TOKEN, response.refresh_token, getRefreshTokenCookieOptions());
+    res.cookie(
+      COOKIE_NAMES.TENANT_ACCESS_TOKEN,
+      response.access_token,
+      getAccessTokenCookieOptions(),
+    );
+    res.cookie(
+      COOKIE_NAMES.TENANT_REFRESH_TOKEN,
+      response.refresh_token,
+      getRefreshTokenCookieOptions(),
+    );
 
     return {
       message: response.message,
@@ -121,8 +140,16 @@ export class TenantController implements OnModuleInit {
       this._tenantAuthService.googleLogin({ id_token: body.id_token }),
     );
 
-    res.cookie(COOKIE_NAMES.TENANT_ACCESS_TOKEN, response.access_token, getAccessTokenCookieOptions());
-    res.cookie(COOKIE_NAMES.TENANT_REFRESH_TOKEN, response.refresh_token, getRefreshTokenCookieOptions());
+    res.cookie(
+      COOKIE_NAMES.TENANT_ACCESS_TOKEN,
+      response.access_token,
+      getAccessTokenCookieOptions(),
+    );
+    res.cookie(
+      COOKIE_NAMES.TENANT_REFRESH_TOKEN,
+      response.refresh_token,
+      getRefreshTokenCookieOptions(),
+    );
 
     return {
       message: response.message,
@@ -154,8 +181,16 @@ export class TenantController implements OnModuleInit {
       this._tenantAuthService.refreshToken({ refresh_token: token }),
     );
 
-    res.cookie(COOKIE_NAMES.TENANT_ACCESS_TOKEN, response.access_token, getAccessTokenCookieOptions());
-    res.cookie(COOKIE_NAMES.TENANT_REFRESH_TOKEN, response.refresh_token, getRefreshTokenCookieOptions());
+    res.cookie(
+      COOKIE_NAMES.TENANT_ACCESS_TOKEN,
+      response.access_token,
+      getAccessTokenCookieOptions(),
+    );
+    res.cookie(
+      COOKIE_NAMES.TENANT_REFRESH_TOKEN,
+      response.refresh_token,
+      getRefreshTokenCookieOptions(),
+    );
 
     return {
       message: response.message,
@@ -214,10 +249,7 @@ export class TenantController implements OnModuleInit {
   @Roles('tenant_owner')
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(ZodValidationPipe)
-  async inviteUser(
-    @Req() req: AuthenticatedTenantRequest,
-    @Body() body: InviteUserDto,
-  ) {
+  async inviteUser(@Req() req: AuthenticatedTenantRequest, @Body() body: InviteUserDto) {
     const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
       this._dashboardUserServiceClient.inviteUser({
@@ -287,4 +319,3 @@ export class TenantController implements OnModuleInit {
     };
   }
 }
-

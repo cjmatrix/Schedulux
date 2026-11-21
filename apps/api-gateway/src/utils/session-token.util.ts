@@ -26,7 +26,6 @@ export interface VerifySessionResult {
   error?: string;
 }
 
-
 export function signSessionToken(payload: SessionTokenPayload): string {
   const claims: Record<string, any> = {
     sid: payload.sessionId,
@@ -42,7 +41,6 @@ export function signSessionToken(payload: SessionTokenPayload): string {
   return jwt.sign(claims, CHAT_SESSION_SECRET, options);
 }
 
-
 export function signSessionId(
   sessionId: string,
   tenantId?: string,
@@ -56,7 +54,6 @@ export function signSessionId(
     expiresInSeconds,
   });
 }
-
 
 export function verifySessionToken(
   token?: string | null,
@@ -97,7 +94,6 @@ export function verifySessionToken(
     return { valid: false, error: err?.message || 'Invalid token' };
   }
 }
-
 
 export function createSignedSession(
   prefix = 'sess',

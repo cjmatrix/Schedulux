@@ -70,14 +70,12 @@ export class ThrottlerStorageRedisService implements ThrottlerStorage {
     `;
 
     try {
-      const res = (await client.eval(
-        script,
-        1,
-        redisKey,
-        ttlMs,
-        limit,
-        blockDurationMs,
-      )) as [number, number, number, number];
+      const res = (await client.eval(script, 1, redisKey, ttlMs, limit, blockDurationMs)) as [
+        number,
+        number,
+        number,
+        number,
+      ];
 
       const totalHits = Number(res[0]);
       const timeToExpire = Math.max(0, Number(res[1]));
@@ -91,10 +89,7 @@ export class ThrottlerStorageRedisService implements ThrottlerStorage {
         timeToBlockExpire,
       };
     } catch (err) {
-      this._logger.warn(
-        `Redis customer throttler error for key ${redisKey}, failing open:`,
-        err,
-      );
+      this._logger.warn(`Redis customer throttler error for key ${redisKey}, failing open:`, err);
       return {
         totalHits: 1,
         timeToExpire: Math.ceil(ttlMs / 1000),
@@ -104,4 +99,3 @@ export class ThrottlerStorageRedisService implements ThrottlerStorage {
     }
   }
 }
-

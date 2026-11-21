@@ -20,16 +20,19 @@ const cookies_constant_js_1 = require("../../constants/cookies.constant.js");
 const messages_constant_js_1 = require("../../constants/messages.constant.js");
 const routes_constant_js_1 = require("../../constants/routes.constant.js");
 const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
+const circuit_breaker_1 = require("@repo/circuit-breaker");
 const cookie_util_js_1 = require("../../utils/cookie.util.js");
 const dashboard_user_dto_js_1 = require("./dtos/dashboard-user.dto.js");
 let DashboardUserAuthController = class DashboardUserAuthController {
     _client;
+    _circuitBreakerService;
     _dashboardUserAuthClient;
-    constructor(_client) {
+    constructor(_client, _circuitBreakerService) {
         this._client = _client;
+        this._circuitBreakerService = _circuitBreakerService;
     }
     onModuleInit() {
-        this._dashboardUserAuthClient = this._client.getService('DashboardAuthService');
+        this._dashboardUserAuthClient = this._circuitBreakerService.wrapGrpcClient('dashboard-service', this._client.getService('DashboardAuthService'));
     }
     async Login(data, res) {
         const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserAuthClient.login(data));
@@ -182,5 +185,6 @@ __decorate([
 exports.DashboardUserAuthController = DashboardUserAuthController = __decorate([
     (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.DASHBOARD_USER.AUTH.BASE),
     __param(0, (0, common_1.Inject)('DASHBOARD_PACKAGE')),
-    __metadata("design:paramtypes", [Object])
+    __param(1, (0, common_1.Inject)(circuit_breaker_1.CIRCUIT_BREAKER_SERVICE)),
+    __metadata("design:paramtypes", [Object, Object])
 ], DashboardUserAuthController);

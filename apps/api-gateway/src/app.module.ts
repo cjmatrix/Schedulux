@@ -21,6 +21,7 @@ import { RolesGuard } from './guards/roles.guard.js';
 import { TenantAuthGuard } from './guards/tenant-auth.guard.js';
 import { TenantTokenQuotaGuard } from './guards/tenant-token-quota.guard.js';
 import { RedisModule } from './modules/redis.module.js';
+import { CircuitBreakerModule } from '@repo/circuit-breaker';
 import { ThrottlerStorageRedisService } from './services/throttler-storage-redis.service.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
@@ -47,6 +48,7 @@ const isProduction = process.env.NODE_ENV === 'production';
       },
     }),
     RedisModule,
+    CircuitBreakerModule,
     ThrottlerModule.forRootAsync({
       imports: [RedisModule],
       inject: [ThrottlerStorageRedisService],

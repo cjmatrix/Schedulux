@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var KnowledgeController_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.KnowledgeController = void 0;
 const common_1 = require("@nestjs/common");
@@ -24,20 +25,27 @@ const roles_guard_js_1 = require("../../guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
 const tenant_token_quota_guard_js_1 = require("../../guards/tenant-token-quota.guard.js");
 const redis_service_js_1 = require("../../services/redis.service.js");
+const circuit_breaker_1 = require("@repo/circuit-breaker");
 const knowledge_dto_js_1 = require("./dtos/knowledge.dto.js");
 const session_token_util_js_1 = require("../../utils/session-token.util.js");
 const grpc_metadata_util_js_1 = require("../../utils/grpc-metadata.util.js");
-let KnowledgeController = class KnowledgeController {
+let KnowledgeController = KnowledgeController_1 = class KnowledgeController {
     _client;
     _schemaCacheService;
     _schemaEventSubscriber;
     _redisService;
+    _circuitBreakerService;
+    _logger = new common_1.Logger(KnowledgeController_1.name);
     _knowledgeService;
-    constructor(_client, _schemaCacheService, _schemaEventSubscriber, _redisService) {
+    constructor(_client, _schemaCacheService, _schemaEventSubscriber, _redisService, _circuitBreakerService) {
         this._client = _client;
         this._schemaCacheService = _schemaCacheService;
         this._schemaEventSubscriber = _schemaEventSubscriber;
         this._redisService = _redisService;
+        this._circuitBreakerService = _circuitBreakerService;
+    }
+    async _executeKnowledgeData(action) {
+        return this._circuitBreakerService.execute('knowledge-data', action);
     }
     onModuleInit() {
         this._knowledgeService = this._client.getService('KnowledgeService');
@@ -55,10 +63,10 @@ let KnowledgeController = class KnowledgeController {
     async crawlSite(req, body) {
         const tenantId = this._getTenantId(req);
         const weeklyLimit = req.crawlQuota?.weeklyLimit ?? 5;
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.crawlSite({
+        const response = await this._circuitBreakerService.execute('knowledge-crawl', () => (0, rxjs_1.lastValueFrom)(this._knowledgeService.crawlSite({
             tenant_id: tenantId,
             url: body.url,
-        }));
+        })));
         if (response.job_id) {
             await this._redisService.acquireCrawlLock(tenantId, response.job_id, 900);
             await this._redisService.recordCrawlUsage(tenantId, weeklyLimit);
@@ -73,10 +81,10 @@ let KnowledgeController = class KnowledgeController {
     }
     async getCrawlStatus(req, query) {
         const tenantId = this._getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getCrawlStatus({
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.getCrawlStatus({
             tenant_id: tenantId,
             job_id: query.job_id,
-        }));
+        })));
         const normalizedStatus = (response.status || '').toLowerCase();
         if (['completed', 'failed', 'error', 'finished'].includes(normalizedStatus)) {
             await this._redisService.releaseCrawlLock(tenantId);
@@ -129,15 +137,9 @@ let KnowledgeController = class KnowledgeController {
                 }
             })
                 .catch(() => { });
-            const unsubscribe = this._schemaEventSubscriber.onSchemaGenerated((event) => {
+            const unsubscribe = this._schemaEventSubscriber.onSchemaGenerated(tenantId, targetJobId || '', (event) => {
                 if (isCompleted)
                     return;
-                if (event.tenant_id && event.tenant_id !== tenantId) {
-                    return;
-                }
-                if (targetJobId && event.job_id && event.job_id !== targetJobId) {
-                    return;
-                }
                 if (event.event === 'SCHEMA_GENERATION_FAILED' || event.error) {
                     isCompleted = true;
                     subscriber.next({
@@ -183,11 +185,11 @@ let KnowledgeController = class KnowledgeController {
         const tenantId = this._getTenantId(req);
         const tier = this._getTenantTier(req);
         const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.startOnboardingSession({
+        const response = await this._circuitBreakerService.execute('knowledge-onboarding-unary', () => (0, rxjs_1.lastValueFrom)(this._knowledgeService.startOnboardingSession({
             tenant_id: tenantId,
             initial_draft_json: body.initial_draft_json || '{}',
             agent_id: body.agent_id || '',
-        }, metadata));
+        }, metadata)));
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.SESSION_STARTED,
             data: {
@@ -204,11 +206,21 @@ let KnowledgeController = class KnowledgeController {
         const tenantId = this._getTenantId(req);
         const tier = this._getTenantTier(req);
         const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.resumeOnboardingSession({
+        const response = await this._circuitBreakerService.execute('knowledge-onboarding-unary', () => (0, rxjs_1.lastValueFrom)(this._knowledgeService.resumeOnboardingSession({
             tenant_id: tenantId,
             user_answer: body.user_answer,
             agent_id: body.agent_id || '',
-        }, metadata));
+        }, metadata)), (err) => {
+            this._logger.warn(`[KnowledgeController] resumeOnboarding fallback triggered: ${err.message}`);
+            return {
+                status: 'error',
+                question: 'The AI Architect is temporarily unavailable due to high demand. Please retry in a few moments.',
+                field: '',
+                type: 'text',
+                draft_schema_json: '{}',
+                live_schema_json: '{}',
+            };
+        });
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.MESSAGE_PROCESSED,
             data: {
@@ -225,6 +237,24 @@ let KnowledgeController = class KnowledgeController {
         const tenantId = this._getTenantId(req);
         const tier = this._getTenantTier(req);
         const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
+        if (this._circuitBreakerService.isOpen('knowledge-onboarding-stream')) {
+            this._logger.warn(`[KnowledgeController] Breaker "knowledge-onboarding-stream" is OPEN. Fast-failing stream.`);
+            res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+            res.setHeader('Cache-Control', 'no-cache, no-transform');
+            res.setHeader('Connection', 'keep-alive');
+            res.setHeader('X-Accel-Buffering', 'no');
+            res.flushHeaders?.();
+            res.write(`data: ${JSON.stringify({
+                event_type: 'token',
+                content: 'The AI Architect is temporarily busy due to high demand. Please retry in a few moments.',
+            })}\n\n`);
+            res.write(`data: ${JSON.stringify({
+                event_type: 'done',
+                status: 'degraded',
+            })}\n\n`);
+            res.end();
+            return;
+        }
         res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
         res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
@@ -235,15 +265,25 @@ let KnowledgeController = class KnowledgeController {
             user_answer: body.user_answer,
             agent_id: body.agent_id || '',
         }, metadata);
+        let streamFailed = false;
         const subscription = stream$.subscribe({
             next: (chunk) => {
                 res.write(`data: ${JSON.stringify(chunk)}\n\n`);
             },
             error: (err) => {
-                res.write(`data: ${JSON.stringify({ event_type: 'error', error: err.message || 'Stream error' })}\n\n`);
+                streamFailed = true;
+                this._circuitBreakerService.recordFailure('knowledge-onboarding-stream', err);
+                this._logger.warn(`[KnowledgeController] Stream error recorded in breaker: ${err.message}`);
+                res.write(`data: ${JSON.stringify({
+                    event_type: 'error',
+                    error: err.message || 'Stream error',
+                })}\n\n`);
                 res.end();
             },
             complete: () => {
+                if (!streamFailed) {
+                    this._circuitBreakerService.recordSuccess('knowledge-onboarding-stream');
+                }
                 res.end();
             },
         });
@@ -273,13 +313,14 @@ let KnowledgeController = class KnowledgeController {
             resolvedToken = (0, session_token_util_js_1.signSessionId)(body.session_id, tenantId, agentId);
         }
         if (resolvedSessionId && resolvedToken) {
+            const currentSessionId = resolvedSessionId;
             try {
-                const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getCustomerMessages({
+                const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.getCustomerMessages({
                     tenant_id: tenantId,
                     agent_id: agentId,
-                    session_id: resolvedSessionId,
+                    session_id: currentSessionId,
                     limit: 20,
-                }));
+                })));
                 messages = response.messages || [];
                 isFirstTime = messages.length === 0;
                 return {
@@ -321,11 +362,11 @@ let KnowledgeController = class KnowledgeController {
     async getSandboxWidgetConfig(req, query) {
         const tenantId = this._getTenantId(req);
         const agentId = query.agent_id || 'default';
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getWidgetConfig({
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.getWidgetConfig({
             tenant_id: tenantId,
             agent_id: agentId,
             source: 'draft',
-        }));
+        })));
         let widgetConfig = {};
         if (response.widget_config_json) {
             try {
@@ -361,13 +402,13 @@ let KnowledgeController = class KnowledgeController {
         if (!resolvedSessionId) {
             throw new common_1.BadRequestException(messages_constant_js_1.RESPONSE_MESSAGES.CHAT.REQUIRED_FIELDS);
         }
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getCustomerMessages({
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.getCustomerMessages({
             tenant_id: tenantId,
             agent_id: agentId,
             session_id: resolvedSessionId,
             limit: query.limit,
             before: query.before,
-        }));
+        })));
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.CHAT.MESSAGES_RETRIEVED,
             data: {
@@ -402,7 +443,7 @@ let KnowledgeController = class KnowledgeController {
         }
         const tier = this._getTenantTier(req);
         const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.customerChat({
+        const response = await this._circuitBreakerService.execute('knowledge-sandbox-unary', () => (0, rxjs_1.lastValueFrom)(this._knowledgeService.customerChat({
             tenant_id: tenantId,
             agent_id: agentId,
             session_id: sessionId,
@@ -411,7 +452,19 @@ let KnowledgeController = class KnowledgeController {
             customer_phone: body.customer_phone || '',
             customer_name: body.customer_name || 'Sandbox Tester',
             mode: 'sandbox',
-        }, metadata));
+        }, metadata)), (err) => {
+            this._logger.warn(`[KnowledgeController] sandboxChat fallback triggered: ${err.message}`);
+            return {
+                session_id: sessionId,
+                response: 'Sandbox agent is temporarily unavailable due to high load. Please try again shortly.',
+                user_message_id: `fallback-usr-${Date.now()}`,
+                agent_message_id: `fallback-agent-${Date.now()}`,
+                created_at: new Date().toISOString(),
+                booking_id: '',
+                booking_reference: '',
+                status: 'degraded',
+            };
+        });
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.SANDBOX_CHAT_PROCESSED,
             data: {
@@ -453,6 +506,28 @@ let KnowledgeController = class KnowledgeController {
         }
         const tier = this._getTenantTier(req);
         const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
+        if (this._circuitBreakerService.isOpen('knowledge-sandbox-stream')) {
+            this._logger.warn(`[KnowledgeController] Breaker "knowledge-sandbox-stream" is OPEN. Fast-failing sandbox stream.`);
+            res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+            res.setHeader('Cache-Control', 'no-cache, no-transform');
+            res.setHeader('Connection', 'keep-alive');
+            res.setHeader('X-Accel-Buffering', 'no');
+            res.flushHeaders?.();
+            res.write(`data: ${JSON.stringify({
+                event_type: 'token',
+                content: 'Sandbox agent is temporarily unavailable. Please retry in a moment.',
+                token,
+                session_id: sessionId,
+            })}\n\n`);
+            res.write(`data: ${JSON.stringify({
+                event_type: 'done',
+                token,
+                session_id: sessionId,
+                status: 'degraded',
+            })}\n\n`);
+            res.end();
+            return;
+        }
         res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
         res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
@@ -468,6 +543,7 @@ let KnowledgeController = class KnowledgeController {
             customer_name: body.customer_name || 'Sandbox Tester',
             mode: 'sandbox',
         }, metadata);
+        let streamFailed = false;
         const subscription = stream$.subscribe({
             next: (chunk) => {
                 const payload = {
@@ -478,10 +554,19 @@ let KnowledgeController = class KnowledgeController {
                 res.write(`data: ${JSON.stringify(payload)}\n\n`);
             },
             error: (err) => {
-                res.write(`data: ${JSON.stringify({ event_type: 'error', error: err.message || 'Stream error' })}\n\n`);
+                streamFailed = true;
+                this._circuitBreakerService.recordFailure('knowledge-sandbox-stream', err);
+                this._logger.warn(`[KnowledgeController] Sandbox stream error recorded in breaker: ${err.message}`);
+                res.write(`data: ${JSON.stringify({
+                    event_type: 'error',
+                    error: err.message || 'Stream error',
+                })}\n\n`);
                 res.end();
             },
             complete: () => {
+                if (!streamFailed) {
+                    this._circuitBreakerService.recordSuccess('knowledge-sandbox-stream');
+                }
                 res.end();
             },
         });
@@ -493,12 +578,12 @@ let KnowledgeController = class KnowledgeController {
         const tenantId = this._getTenantId(req);
         const tier = this._getTenantTier(req);
         const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.saveInitialAgentDraft({
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.saveInitialAgentDraft({
             tenant_id: tenantId,
             draft_json: body.draft_json || '',
             creation_source: body.creation_source || 'web_crawl',
             name: body.name || '',
-        }, metadata));
+        }, metadata)));
         return {
             message: response.message,
             data: {
@@ -509,9 +594,9 @@ let KnowledgeController = class KnowledgeController {
     }
     async listAgents(req) {
         const tenantId = this._getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.listTenantAgents({
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.listTenantAgents({
             tenant_id: tenantId,
-        }));
+        })));
         let agents = response.agents || [];
         if (req.dashboardUser?.agent_ids && req.dashboardUser.agent_ids.length > 0) {
             agents = agents.filter((a) => req.dashboardUser.agent_ids.includes(a.agent_id));
@@ -525,10 +610,10 @@ let KnowledgeController = class KnowledgeController {
         const tenantId = this._getTenantId(req);
         const tier = this._getTenantTier(req);
         const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.deleteAgent({
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.deleteAgent({
             tenant_id: tenantId,
             agent_id: agentId,
-        }, metadata));
+        }, metadata)));
         return {
             message: response.message || messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.AGENT_DELETED,
             data: {
@@ -539,12 +624,12 @@ let KnowledgeController = class KnowledgeController {
     }
     async getAgentMessages(req, agentId, query) {
         const tenantId = this._getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getAgentMessages({
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.getAgentMessages({
             tenant_id: tenantId,
             agent_id: agentId,
             limit: query.limit,
             before: query.before,
-        }));
+        })));
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.CHAT.MESSAGES_RETRIEVED,
             data: {
@@ -556,12 +641,12 @@ let KnowledgeController = class KnowledgeController {
     }
     async getOnboardingMessages(req, query) {
         const tenantId = this._getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getAgentMessages({
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.getAgentMessages({
             tenant_id: tenantId,
             agent_id: query.agent_id,
             limit: query.limit,
             before: query.before,
-        }));
+        })));
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.CHAT.MESSAGES_RETRIEVED,
             data: {
@@ -582,12 +667,12 @@ let KnowledgeController = class KnowledgeController {
             }
         }
         const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tenantTier);
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getDocumentUploadUrl({
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.getDocumentUploadUrl({
             tenant_id: tenantId,
             agent_id: body.agent_id,
             file_name: body.file_name,
             file_size_bytes: body.file_size_bytes || 0,
-        }, metadata));
+        }, metadata)));
         return {
             message: 'Presigned upload URL generated successfully',
             data: {
@@ -600,10 +685,10 @@ let KnowledgeController = class KnowledgeController {
     }
     async confirmDocumentUpload(req, body) {
         const tenantId = this._getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.confirmDocumentUpload({
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.confirmDocumentUpload({
             tenant_id: tenantId,
             document_id: body.document_id,
-        }));
+        })));
         return {
             message: response.message,
             data: { success: response.success },
@@ -611,10 +696,10 @@ let KnowledgeController = class KnowledgeController {
     }
     async listDocuments(req, query) {
         const tenantId = this._getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.listDocuments({
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.listDocuments({
             tenant_id: tenantId,
             agent_id: query.agent_id || '',
-        }));
+        })));
         return {
             message: 'Documents retrieved successfully',
             data: response.documents || [],
@@ -622,10 +707,10 @@ let KnowledgeController = class KnowledgeController {
     }
     async deleteDocument(req, documentId) {
         const tenantId = this._getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.deleteDocument({
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.deleteDocument({
             tenant_id: tenantId,
             document_id: documentId,
-        }));
+        })));
         return {
             message: response.message,
             data: { success: response.success },
@@ -633,11 +718,11 @@ let KnowledgeController = class KnowledgeController {
     }
     async getWidgetConfig(req, agentId, source) {
         const tenantId = this._getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getWidgetConfig({
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.getWidgetConfig({
             tenant_id: tenantId,
             agent_id: agentId,
             source: source || 'live',
-        }));
+        })));
         let widgetConfig = {};
         if (response.widget_config_json) {
             try {
@@ -658,12 +743,12 @@ let KnowledgeController = class KnowledgeController {
     }
     async updateWidgetConfig(req, agentId, body) {
         const tenantId = this._getTenantId(req);
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.updateWidgetConfig({
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.updateWidgetConfig({
             tenant_id: tenantId,
             agent_id: agentId,
             whitelisted_domains: body.whitelisted_domains,
             widget_config_json: body.widget_config_json,
-        }));
+        })));
         let widgetConfig = {};
         if (response.widget_config_json) {
             try {
@@ -911,7 +996,7 @@ __decorate([
     __metadata("design:paramtypes", [Object, String, knowledge_dto_js_1.UpdateWidgetConfigDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "updateWidgetConfig", null);
-exports.KnowledgeController = KnowledgeController = __decorate([
+exports.KnowledgeController = KnowledgeController = KnowledgeController_1 = __decorate([
     (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.BASE),
     (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),
     (0, roles_decorator_js_1.Roles)('tenant_owner'),
@@ -919,5 +1004,6 @@ exports.KnowledgeController = KnowledgeController = __decorate([
     __param(1, (0, common_1.Inject)('ISchemaCacheService')),
     __param(2, (0, common_1.Inject)('ISchemaEventSubscriber')),
     __param(3, (0, common_1.Inject)(redis_service_js_1.RedisService)),
-    __metadata("design:paramtypes", [Object, Object, Object, redis_service_js_1.RedisService])
+    __param(4, (0, common_1.Inject)(circuit_breaker_1.CIRCUIT_BREAKER_SERVICE)),
+    __metadata("design:paramtypes", [Object, Object, Object, redis_service_js_1.RedisService, Object])
 ], KnowledgeController);

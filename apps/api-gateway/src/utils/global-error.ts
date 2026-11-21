@@ -1,4 +1,11 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
 import { Request, Response } from 'express';
 import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
 
@@ -64,7 +71,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       const stack = exception instanceof Error ? exception.stack : exception;
       this._logger.error(`[${request.method} ${request.url}] status=${status}`, stack);
     } else {
-      this._logger.warn(`[${request.method} ${request.url}] status=${status} error=${JSON.stringify(errorDetails)}`);
+      this._logger.warn(
+        `[${request.method} ${request.url}] status=${status} error=${JSON.stringify(errorDetails)}`,
+      );
     }
 
     response.status(status).json({
@@ -75,4 +84,3 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     });
   }
 }
-

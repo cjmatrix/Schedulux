@@ -22,23 +22,25 @@ const routes_constant_js_1 = require("../../constants/routes.constant.js");
 const roles_decorator_js_1 = require("../../decorators/roles.decorator.js");
 const roles_guard_js_1 = require("../../guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
+const circuit_breaker_1 = require("@repo/circuit-breaker");
 const cookie_util_js_1 = require("../../utils/cookie.util.js");
 const tenant_dto_js_1 = require("./dtos/tenant.dto.js");
 let TenantController = class TenantController {
     _client;
     _dashboardClient;
+    _circuitBreakerService;
     _tenantAuthService;
     _tenantServiceClient;
     _dashboardUserServiceClient;
-    constructor(_client, _dashboardClient) {
+    constructor(_client, _dashboardClient, _circuitBreakerService) {
         this._client = _client;
         this._dashboardClient = _dashboardClient;
+        this._circuitBreakerService = _circuitBreakerService;
     }
     onModuleInit() {
-        this._tenantAuthService = this._client.getService('TenantAuthService');
-        this._tenantServiceClient = this._client.getService('TenantService');
-        this._dashboardUserServiceClient =
-            this._dashboardClient.getService('DashboardUserService');
+        this._tenantAuthService = this._circuitBreakerService.wrapGrpcClient('tenant-service', this._client.getService('TenantAuthService'));
+        this._tenantServiceClient = this._circuitBreakerService.wrapGrpcClient('tenant-service', this._client.getService('TenantService'));
+        this._dashboardUserServiceClient = this._circuitBreakerService.wrapGrpcClient('dashboard-service', this._dashboardClient.getService('DashboardUserService'));
     }
     _getTenantId(req) {
         const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
@@ -298,5 +300,6 @@ exports.TenantController = TenantController = __decorate([
     (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.TENANT.AUTH.BASE),
     __param(0, (0, common_1.Inject)('TENANT_PACKAGE')),
     __param(1, (0, common_1.Inject)('DASHBOARD_PACKAGE')),
-    __metadata("design:paramtypes", [Object, Object])
+    __param(2, (0, common_1.Inject)(circuit_breaker_1.CIRCUIT_BREAKER_SERVICE)),
+    __metadata("design:paramtypes", [Object, Object, Object])
 ], TenantController);

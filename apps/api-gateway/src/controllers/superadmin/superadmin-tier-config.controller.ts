@@ -18,6 +18,7 @@ import { API_ROUTES } from '../../constants/routes.constant.js';
 import { SuperAdminAuthGuard } from '../../guards/superadmin-auth.guard.js';
 import { RedisService } from '../../services/redis.service.js';
 import { UpdateTierConfigDto } from './dtos/tierConfig.dto.js';
+import { CIRCUIT_BREAKER_SERVICE, ICircuitBreakerService } from '@repo/circuit-breaker';
 
 @Controller(API_ROUTES.SUPERADMIN.TIER_CONFIGS.BASE)
 @UseGuards(SuperAdminAuthGuard)
@@ -27,11 +28,15 @@ export class SuperAdminTierConfigController implements OnModuleInit {
   constructor(
     @Inject('SUPERADMIN_PACKAGE') private readonly _client: ClientGrpc,
     @Inject(RedisService) private readonly _redisService: RedisService,
+    @Inject(CIRCUIT_BREAKER_SERVICE)
+    private readonly _circuitBreakerService: ICircuitBreakerService,
   ) {}
 
   onModuleInit() {
-    this._tierConfigService =
-      this._client.getService<SuperAdminTierConfigServiceClient>('SuperAdminTierConfigService');
+    this._tierConfigService = this._circuitBreakerService.wrapGrpcClient(
+      'superadmin-service',
+      this._client.getService<SuperAdminTierConfigServiceClient>('SuperAdminTierConfigService'),
+    );
   }
 
   @Get(API_ROUTES.SUPERADMIN.TIER_CONFIGS.ROOT)
@@ -54,10 +59,7 @@ export class SuperAdminTierConfigController implements OnModuleInit {
 
   @Put(API_ROUTES.SUPERADMIN.TIER_CONFIGS.BY_TIER)
   @UsePipes(ZodValidationPipe)
-  async updateTierConfig(
-    @Param('tier') tier: string,
-    @Body() body: UpdateTierConfigDto,
-  ) {
+  async updateTierConfig(@Param('tier') tier: string, @Body() body: UpdateTierConfigDto) {
     const res = await lastValueFrom(
       this._tierConfigService.updateTierConfig({
         tier,
@@ -87,4 +89,3 @@ export class SuperAdminTierConfigController implements OnModuleInit {
     };
   }
 }
-

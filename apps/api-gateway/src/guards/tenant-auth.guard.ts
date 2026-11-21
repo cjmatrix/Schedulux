@@ -18,6 +18,7 @@ import { lastValueFrom } from 'rxjs';
 import { COOKIE_NAMES } from '../constants/cookies.constant.js';
 import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
 import { RedisService } from '../services/redis.service.js';
+import { CIRCUIT_BREAKER_SERVICE, ICircuitBreakerService } from '@repo/circuit-breaker';
 
 export interface AuthenticatedTenantRequest extends Request {
   tenant?: {
@@ -62,12 +63,19 @@ export class TenantAuthGuard implements CanActivate, OnModuleInit {
     @Inject(RedisService) private readonly _redisService: RedisService,
     @Inject('TENANT_PACKAGE') private readonly _client: ClientGrpc,
     @Inject('DASHBOARD_PACKAGE') private readonly _dashboardClient: ClientGrpc,
+    @Inject(CIRCUIT_BREAKER_SERVICE)
+    private readonly _circuitBreakerService: ICircuitBreakerService,
   ) {}
 
   onModuleInit() {
-    this._tenantService = this._client.getService<TenantServiceClient>('TenantService');
-    this._dashboardAuthService =
-      this._dashboardClient.getService<DashboardAuthServiceClient>('DashboardAuthService');
+    this._tenantService = this._circuitBreakerService.wrapGrpcClient(
+      'tenant-service',
+      this._client.getService<TenantServiceClient>('TenantService'),
+    );
+    this._dashboardAuthService = this._circuitBreakerService.wrapGrpcClient(
+      'dashboard-service',
+      this._dashboardClient.getService<DashboardAuthServiceClient>('DashboardAuthService'),
+    );
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {

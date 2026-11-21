@@ -43,4 +43,3 @@ export const GetInvitationDetailsSchema = z.object({
 });
 
 export class GetInvitationDetailsDto extends createZodDto(GetInvitationDetailsSchema) {}
-

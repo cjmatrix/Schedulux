@@ -20,14 +20,17 @@ const messages_constant_js_1 = require("../../constants/messages.constant.js");
 const routes_constant_js_1 = require("../../constants/routes.constant.js");
 const superadmin_auth_guard_js_1 = require("../../guards/superadmin-auth.guard.js");
 const superAdmin_dto_js_1 = require("./dtos/superAdmin.dto.js");
+const circuit_breaker_1 = require("@repo/circuit-breaker");
 let SuperAdminTenantController = class SuperAdminTenantController {
     _client;
+    _circuitBreakerService;
     _superAdminTenantClient;
-    constructor(_client) {
+    constructor(_client, _circuitBreakerService) {
         this._client = _client;
+        this._circuitBreakerService = _circuitBreakerService;
     }
     onModuleInit() {
-        this._superAdminTenantClient = this._client.getService('TenantService');
+        this._superAdminTenantClient = this._circuitBreakerService.wrapGrpcClient('tenant-service', this._client.getService('TenantService'));
     }
     async ListTenants(query) {
         const lists = await (0, rxjs_1.lastValueFrom)(this._superAdminTenantClient.listTenants({
@@ -72,5 +75,6 @@ exports.SuperAdminTenantController = SuperAdminTenantController = __decorate([
     (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.SUPERADMIN.TENANTS.BASE),
     (0, common_1.UseGuards)(superadmin_auth_guard_js_1.SuperAdminAuthGuard),
     __param(0, (0, common_1.Inject)('TENANT_PACKAGE')),
-    __metadata("design:paramtypes", [Object])
+    __param(1, (0, common_1.Inject)(circuit_breaker_1.CIRCUIT_BREAKER_SERVICE)),
+    __metadata("design:paramtypes", [Object, Object])
 ], SuperAdminTenantController);

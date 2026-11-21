@@ -23,6 +23,7 @@ const roles_decorator_js_1 = require("../../decorators/roles.decorator.js");
 const roles_guard_js_1 = require("../../guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
 const grpc_metadata_util_js_1 = require("../../utils/grpc-metadata.util.js");
+const circuit_breaker_1 = require("@repo/circuit-breaker");
 const availability_dto_js_1 = require("./dtos/availability.dto.js");
 const booking_dto_js_1 = require("./dtos/booking.dto.js");
 const customer_dto_js_1 = require("./dtos/customer.dto.js");
@@ -31,12 +32,15 @@ const schedule_dto_js_1 = require("./dtos/schedule.dto.js");
 const service_dto_js_1 = require("./dtos/service.dto.js");
 let SchedulingController = class SchedulingController {
     _client;
+    _circuitBreakerService;
     _schedulingService;
-    constructor(_client) {
+    constructor(_client, _circuitBreakerService) {
         this._client = _client;
+        this._circuitBreakerService = _circuitBreakerService;
     }
     onModuleInit() {
-        this._schedulingService = this._client.getService(scheduling_1.SCHEDULING_INVENTORY_SERVICE_NAME);
+        const rawService = this._client.getService(scheduling_1.SCHEDULING_INVENTORY_SERVICE_NAME);
+        this._schedulingService = this._circuitBreakerService.wrapGrpcClient('scheduling-service', rawService);
     }
     _getTenantId(req) {
         const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
@@ -615,5 +619,6 @@ exports.SchedulingController = SchedulingController = __decorate([
     (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),
     (0, roles_decorator_js_1.Roles)('tenant_owner', 'manager'),
     __param(0, (0, common_1.Inject)('SCHEDULING_PACKAGE')),
-    __metadata("design:paramtypes", [Object])
+    __param(1, (0, common_1.Inject)(circuit_breaker_1.CIRCUIT_BREAKER_SERVICE)),
+    __metadata("design:paramtypes", [Object, Object])
 ], SchedulingController);

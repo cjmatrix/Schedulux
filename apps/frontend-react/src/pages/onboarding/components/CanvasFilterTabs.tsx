@@ -24,7 +24,7 @@ export const CanvasFilterTabs: React.FC<CanvasFilterTabsProps> = ({
   ];
 
   return (
-    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
       {tabs.map((tab) => {
         const isActive = canvasModule === tab.id;
         return (

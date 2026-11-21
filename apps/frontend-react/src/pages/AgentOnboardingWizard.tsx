@@ -1,4 +1,5 @@
 import type { ResourceInfo, ServiceInfo } from '@repo/proto/scheduling';
+import { Bot, FlaskConical, SlidersHorizontal } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useAgentOnboarding } from '../hooks/useAgentOnboarding.js';
@@ -50,6 +51,16 @@ export default function AgentOnboardingWizard() {
   const [rightViewMode, setRightViewMode] = useState<RightViewMode>('rules');
   const [canvasModule, setCanvasModule] = useState<CanvasModule>('all');
   const [copiedJson, setCopiedJson] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'chat' | 'canvas' | 'sandbox'>('chat');
+
+  const handleMobileTabChange = (tab: 'chat' | 'canvas' | 'sandbox') => {
+    setMobileTab(tab);
+    if (tab === 'sandbox') {
+      setRightViewMode('sandbox');
+    } else if (tab === 'canvas' && rightViewMode === 'sandbox') {
+      setRightViewMode('rules');
+    }
+  };
 
   const businessProfile = draftSchema?.business_profile || {};
   const clinicName = businessProfile.name || 'AI Scheduling Agent';
@@ -155,13 +166,13 @@ export default function AgentOnboardingWizard() {
               : '/tenant/dashboard',
           )
         }
-        onNavigateProfile={() => navigate('/tenant/profile')}
       />
 
-      {/* ── MAIN WORKSPACE BODY (SPLIT VIEW) ── */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* LEFT COLUMN: CONVERSATIONAL AGENT ARCHITECT */}
+      <div className="flex flex-1 overflow-hidden relative">
         <WizardChatColumn
+          className={`w-full lg:w-1/2 flex flex-col bg-white border-r border-slate-200 relative h-full min-h-0 ${
+            mobileTab === 'chat' ? 'flex' : 'hidden lg:flex'
+          }`}
           allMessages={messages}
           status={status}
           inputValue={inputValue}
@@ -175,14 +186,24 @@ export default function AgentOnboardingWizard() {
           isFetchingPreviousPage={isFetchingPreviousPage}
           onLoadPreviousMessages={fetchPreviousPage}
           firstItemIndex={firstItemIndex}
+          onNavigateToCanvas={() => handleMobileTabChange('canvas')}
         />
 
-        {/* RIGHT COLUMN: SCHEMA CANVASES & TEST SIMULATOR */}
-        <div className="w-1/2 flex flex-col bg-slate-50/80 overflow-hidden">
-          {/* Canvas Subheader / Mode Switcher */}
+        <div
+          className={`w-full lg:w-1/2 flex flex-col bg-slate-50/80 overflow-hidden h-full min-h-0 ${
+            mobileTab !== 'chat' ? 'flex' : 'hidden lg:flex'
+          }`}
+        >
           <CanvasHeader
             rightViewMode={rightViewMode}
-            setRightViewMode={setRightViewMode}
+            setRightViewMode={(mode) => {
+              setRightViewMode(mode);
+              if (mode === 'sandbox') {
+                setMobileTab('sandbox');
+              } else {
+                setMobileTab('canvas');
+              }
+            }}
             isDirty={isDirty}
             pendingChangesCount={diffPatches.length}
             isSavingChanges={isSavingChanges}
@@ -190,9 +211,7 @@ export default function AgentOnboardingWizard() {
             isLive={isLive}
           />
 
-          {/* Canvas Scroll Area */}
-          <div className="flex-1 overflow-y-auto p-8 space-y-6">
-            {/* VIEW MODE 1: LOGIC & RULES CANVAS */}
+          <div className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-8 space-y-4 sm:space-y-6">
             {rightViewMode === 'rules' && (
               <>
                 <CanvasFilterTabs
@@ -240,7 +259,6 @@ export default function AgentOnboardingWizard() {
               </>
             )}
 
-            {/* VIEW MODE 2: TEST SANDBOX SIMULATION */}
             {rightViewMode === 'sandbox' && (
               <SandboxSimulation
                 clinicName={clinicName}
@@ -251,7 +269,6 @@ export default function AgentOnboardingWizard() {
               />
             )}
 
-            {/* VIEW MODE 3: RAW JSON SCHEMA */}
             {rightViewMode === 'json' && (
               <RawJsonViewer
                 draftSchema={draftSchema}
@@ -261,6 +278,52 @@ export default function AgentOnboardingWizard() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="lg:hidden bg-white border-t border-slate-200/90 px-3 py-1.5 flex items-center justify-around z-30 flex-shrink-0 shadow-lg">
+        <button
+          type="button"
+          onClick={() => handleMobileTabChange('chat')}
+          className={`flex-1 py-1.5 flex flex-col items-center gap-0.5 rounded-xl transition cursor-pointer ${
+            mobileTab === 'chat'
+              ? 'text-slate-950 font-bold bg-slate-100'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Bot className="w-4 h-4" />
+          <span className="text-[10px]">Architect</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleMobileTabChange('canvas')}
+          className={`flex-1 py-1.5 flex flex-col items-center gap-0.5 rounded-xl transition cursor-pointer relative ${
+            mobileTab === 'canvas'
+              ? 'text-slate-950 font-bold bg-slate-100'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <div className="relative">
+            <SlidersHorizontal className="w-4 h-4" />
+            {isDirty && diffPatches.length > 0 && (
+              <span className="absolute -top-1 -right-2 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white animate-pulse" />
+            )}
+          </div>
+          <span className="text-[10px]">Canvas</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleMobileTabChange('sandbox')}
+          className={`flex-1 py-1.5 flex flex-col items-center gap-0.5 rounded-xl transition cursor-pointer ${
+            mobileTab === 'sandbox'
+              ? 'text-slate-950 font-bold bg-slate-100'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <FlaskConical className="w-4 h-4" />
+          <span className="text-[10px]">Sandbox</span>
+        </button>
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ from agent_orchestrator.domain.exceptions import TierQuotaExceededException
 from agent_orchestrator.domain.protocols import (
     DocumentIndexingQueue,
     DocumentRepository,
+    KnowledgeVectorStore,
     StorageService,
 )
 from agent_orchestrator.models import KnowledgeDocument, KnowledgeDocumentStatus
@@ -21,10 +22,12 @@ class DocumentService(DocumentServiceProtocol):
         document_repo: DocumentRepository,
         storage: StorageService,
         indexing_queue: DocumentIndexingQueue | None = None,
+        knowledge_store: KnowledgeVectorStore | None = None,
     ):
         self.document_repo = document_repo
         self.storage = storage
         self.indexing_queue = indexing_queue
+        self.knowledge_store = knowledge_store
 
     async def get_upload_url(
         self,
@@ -117,14 +120,22 @@ class DocumentService(DocumentServiceProtocol):
         )
 
     async def delete_document(self, tenant_id: str, document_id: str) -> bool:
-        """Delete document from storage provider and repository."""
         doc = await self.document_repo.get_by_doc_id(tenant_id, document_id)
         if not doc:
             return False
 
+        if self.knowledge_store:
+            try:
+                await self.knowledge_store.delete_by_document_id(
+                    tenant_id=tenant_id,
+                    document_id=document_id,
+                )
+            except Exception as ke:
+                print(f"[DocumentService] Failed to delete document vectors: {ke}", flush=True)
+
         try:
             self.storage.delete_object(key=doc.s3_key, bucket=doc.s3_bucket)
         except Exception as e:
-            print(f"[DocumentService] Failed to delete storage object: {e}")
+            print(f"[DocumentService] Failed to delete storage object: {e}", flush=True)
 
         return await self.document_repo.delete_document(tenant_id, document_id)

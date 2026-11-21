@@ -5,11 +5,14 @@ from typing import Any
 from agent_orchestrator.clients.redis_client import (
     delete_cached_biz_context,
     delete_cached_draft,
+    delete_cached_tenant_agents,
     get_cached_biz_context,
     get_cached_draft,
+    get_cached_tenant_agents,
     get_redis_client,
     set_cached_biz_context,
     set_cached_draft,
+    set_cached_tenant_agents,
 )
 from agent_orchestrator.domain.protocols import CacheRepository
 
@@ -40,3 +43,16 @@ class RedisCacheRepository(CacheRepository):
     async def get_raw_crawl_draft(self, tenant_id: str) -> str | None:
         client = get_redis_client()
         return await client.get(f"agent:draft:{tenant_id}")
+
+    async def get_cached_tenant_agents(
+        self, tenant_id: str
+    ) -> list[dict[str, Any]] | None:
+        return await get_cached_tenant_agents(tenant_id)
+
+    async def set_cached_tenant_agents(
+        self, tenant_id: str, agents: list[dict[str, Any]], ttl: int = 3600
+    ) -> None:
+        await set_cached_tenant_agents(tenant_id, agents, ttl=ttl)
+
+    async def delete_cached_tenant_agents(self, tenant_id: str) -> None:
+        await delete_cached_tenant_agents(tenant_id)

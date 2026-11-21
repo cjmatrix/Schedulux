@@ -13,6 +13,7 @@ from agent_orchestrator.domain.exceptions import (
 from agent_orchestrator.domain.protocols import (
     CacheRepository,
     DraftRepository,
+    KnowledgeVectorStore,
     RuntimeConfigRepository,
 )
 from agent_orchestrator.domain.templates import build_default_agent_template
@@ -28,10 +29,12 @@ class AgentManagementService(AgentManagementServiceProtocol):
         draft_repo: DraftRepository,
         runtime_repo: RuntimeConfigRepository,
         cache_repo: CacheRepository,
+        knowledge_store: KnowledgeVectorStore | None = None,
     ):
         self.draft_repo = draft_repo
         self.runtime_repo = runtime_repo
         self.cache_repo = cache_repo
+        self.knowledge_store = knowledge_store
 
     async def save_initial_draft(
         self,
@@ -122,6 +125,7 @@ class AgentManagementService(AgentManagementServiceProtocol):
 
         try:
             await self.cache_repo.set_cached_draft(tenant_id, agent_id, draft_dict)
+            await self.cache_repo.delete_cached_tenant_agents(tenant_id)
         except Exception as re:
             print(
                 f"[AgentManagementService] Warning: Failed to cache draft in Redis: {re}",
@@ -131,6 +135,13 @@ class AgentManagementService(AgentManagementServiceProtocol):
         return agent_id, "pending"
 
     async def list_tenant_agents(self, tenant_id: str) -> list[AgentSummaryDTO]:
+        try:
+            cached = await self.cache_repo.get_cached_tenant_agents(tenant_id)
+            if cached is not None:
+                return [AgentSummaryDTO(**item) for item in cached]
+        except Exception as ce:
+            print(f"[AgentManagementService] Redis get_cached_tenant_agents error: {ce}", flush=True)
+
         agents_map: dict[str, AgentSummaryDTO] = {}
 
         drafts = await self.draft_repo.list_drafts(tenant_id)
@@ -181,11 +192,30 @@ class AgentManagementService(AgentManagementServiceProtocol):
                 created_at=d.created_at.isoformat() if d.created_at else "",
             )
 
-        return sorted(
+        result = sorted(
             list(agents_map.values()),
             key=lambda x: x.updated_at or x.created_at,
             reverse=True,
         )
+
+        try:
+            serialized = [
+                {
+                    "agent_id": a.agent_id,
+                    "name": a.name,
+                    "status": a.status,
+                    "creation_source": a.creation_source,
+                    "services_count": a.services_count,
+                    "updated_at": a.updated_at,
+                    "created_at": a.created_at,
+                }
+                for a in result
+            ]
+            await self.cache_repo.set_cached_tenant_agents(tenant_id, serialized)
+        except Exception as ce:
+            print(f"[AgentManagementService] Redis set_cached_tenant_agents error: {ce}", flush=True)
+
+        return result
 
     async def delete_agent(self, tenant_id: str, agent_id: str) -> tuple[bool, str]:
         deleted_draft = await self.draft_repo.delete_draft(tenant_id, agent_id)
@@ -194,11 +224,21 @@ class AgentManagementService(AgentManagementServiceProtocol):
         try:
             await self.cache_repo.delete_cached_draft(tenant_id, agent_id)
             await self.cache_repo.delete_cached_biz_context(tenant_id, agent_id)
+            await self.cache_repo.delete_cached_tenant_agents(tenant_id)
         except Exception as ce:
             print(
                 f"[AgentManagementService] Warning: Failed to clear Redis cache for agent '{agent_id}': {ce}",
                 flush=True,
             )
+
+        if self.knowledge_store:
+            try:
+                await self.knowledge_store.delete_by_agent_id(tenant_id, agent_id)
+            except Exception as ke:
+                print(
+                    f"[AgentManagementService] Warning: Failed to delete Qdrant vectors for agent '{agent_id}': {ke}",
+                    flush=True,
+                )
 
         if not deleted_draft and not deleted_runtime:
             return False, f"Agent '{agent_id}' not found"

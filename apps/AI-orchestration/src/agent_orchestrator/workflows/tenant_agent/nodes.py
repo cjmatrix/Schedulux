@@ -909,11 +909,13 @@ async def node_finalize_and_save(state: GraphState) -> dict:
     try:
         from agent_orchestrator.clients.redis_client import (
             delete_cached_biz_context,
+            delete_cached_tenant_agents,
             set_cached_draft,
         )
 
         await set_cached_draft(tenant_id, agent_id, canonical_draft)
         await delete_cached_biz_context(tenant_id, agent_id)
+        await delete_cached_tenant_agents(tenant_id)
     except Exception as re:
         print(f"[TenantAgent Warning] Failed to update Redis cache on finalize: {re}", flush=True)
 

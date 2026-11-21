@@ -130,3 +130,12 @@ body {
 .wizard-markdown tr:last-child td {
   border-bottom: none;
 }
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

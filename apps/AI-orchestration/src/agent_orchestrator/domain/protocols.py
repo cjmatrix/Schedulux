@@ -89,6 +89,16 @@ class CacheRepository(Protocol):
 
     async def get_raw_crawl_draft(self, tenant_id: str) -> str | None: ...
 
+    async def get_cached_tenant_agents(
+        self, tenant_id: str
+    ) -> list[dict[str, Any]] | None: ...
+
+    async def set_cached_tenant_agents(
+        self, tenant_id: str, agents: list[dict[str, Any]], ttl: int = 3600
+    ) -> None: ...
+
+    async def delete_cached_tenant_agents(self, tenant_id: str) -> None: ...
+
 
 class CrawlerQueue(Protocol):
     async def enqueue_crawl(self, tenant_id: str, url: str, job_id: str) -> None: ...
@@ -260,6 +270,10 @@ class KnowledgeVectorStore(Protocol):
         agent_id: str | None,
         limit: int,
     ) -> list[dict[str, Any]]: ...
+
+    async def delete_by_document_id(self, tenant_id: str, document_id: str) -> bool: ...
+
+    async def delete_by_agent_id(self, tenant_id: str, agent_id: str) -> bool: ...
 
 
 @runtime_checkable

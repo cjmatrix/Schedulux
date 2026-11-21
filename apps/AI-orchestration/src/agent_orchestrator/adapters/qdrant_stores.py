@@ -242,5 +242,63 @@ class QdrantKnowledgeStore(KnowledgeVectorStore):
             print(f"[QdrantKnowledgeStore] Hybrid search warning: {e}", flush=True)
             return []
 
+    async def delete_by_document_id(self, tenant_id: str, document_id: str) -> bool:
+        if not await self._collection_exists():
+            return True
+
+        filter_criteria = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="tenant_id",
+                    match=models.MatchValue(value=tenant_id),
+                ),
+                models.FieldCondition(
+                    key="document_id",
+                    match=models.MatchValue(value=document_id),
+                ),
+            ]
+        )
+        try:
+            await self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=models.FilterSelector(filter=filter_criteria),
+            )
+            return True
+        except Exception as e:
+            print(
+                f"[QdrantKnowledgeStore Error] Failed to delete vectors for doc '{document_id}': {e}",
+                flush=True,
+            )
+            return False
+
+    async def delete_by_agent_id(self, tenant_id: str, agent_id: str) -> bool:
+        if not await self._collection_exists():
+            return True
+
+        filter_criteria = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="tenant_id",
+                    match=models.MatchValue(value=tenant_id),
+                ),
+                models.FieldCondition(
+                    key="agent_id",
+                    match=models.MatchValue(value=agent_id),
+                ),
+            ]
+        )
+        try:
+            await self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=models.FilterSelector(filter=filter_criteria),
+            )
+            return True
+        except Exception as e:
+            print(
+                f"[QdrantKnowledgeStore Error] Failed to delete vectors for agent '{agent_id}': {e}",
+                flush=True,
+            )
+            return False
+
     async def close(self) -> None:
         await self.client.close()

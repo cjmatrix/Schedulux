@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import agent_orchestrator.proto.knowledge_pb2_grpc as knowledge_pb2_grpc
 from agent_orchestrator.adapters.orchestrator_adapter import LangGraphAgentOrchestrator
-from agent_orchestrator.adapters.qdrant_stores import QdrantMemoryStore
+from agent_orchestrator.adapters.qdrant_stores import QdrantKnowledgeStore, QdrantMemoryStore
 from agent_orchestrator.adapters.s3_storage_provider import S3StorageProvider
 from agent_orchestrator.adapters.voyage_embedder import VoyageDenseEmbedder
 from agent_orchestrator.api.servicers.knowledge_servicer import KnowledgeServiceServicer
@@ -47,6 +47,7 @@ def build_knowledge_servicer() -> tuple[
     CrawlerServiceProtocol,
     MemoryQueue,
     RabbitMQDocumentIndexingQueue,
+    QdrantKnowledgeStore,
 ]:
     msg_repo = MongoMessageRepository()
     draft_repo = MongoDraftRepository()
@@ -55,6 +56,7 @@ def build_knowledge_servicer() -> tuple[
     crawler_queue = RabbitMQCrawlerQueue()
     memory_queue = RabbitMQMemoryQueue()
     indexing_queue = RabbitMQDocumentIndexingQueue()
+    knowledge_store = QdrantKnowledgeStore()
 
     orchestrator = LangGraphAgentOrchestrator()
     memory_service = MemoryService(
@@ -78,6 +80,7 @@ def build_knowledge_servicer() -> tuple[
         draft_repo=draft_repo,
         runtime_repo=runtime_repo,
         cache_repo=cache_repo,
+        knowledge_store=knowledge_store,
     )
     crawler_service = CrawlerService(queue=crawler_queue)
     doc_repo = MongoDocumentRepository()
@@ -86,6 +89,7 @@ def build_knowledge_servicer() -> tuple[
         document_repo=doc_repo,
         storage=storage_provider,
         indexing_queue=indexing_queue,
+        knowledge_store=knowledge_store,
     )
 
     servicer = KnowledgeServiceServicer(
@@ -95,13 +99,13 @@ def build_knowledge_servicer() -> tuple[
         crawler_service=crawler_service,
         document_service=document_service,
     )
-    return servicer, crawler_service, memory_queue, indexing_queue
+    return servicer, crawler_service, memory_queue, indexing_queue, knowledge_store
 
 
 async def serve():
     await init_db()
     server = grpc.aio.server()
-    servicer, crawler_service, memory_queue, indexing_queue = build_knowledge_servicer()
+    servicer, crawler_service, memory_queue, indexing_queue, knowledge_store = build_knowledge_servicer()
     knowledge_pb2_grpc.add_KnowledgeServiceServicer_to_server(servicer, server)
 
     port = os.environ.get("PORT", "50052")
@@ -119,6 +123,7 @@ async def serve():
         await crawler_service.close()
         await memory_queue.close()
         await indexing_queue.close()
+        await knowledge_store.close()
         flush_telemetry()
 
 

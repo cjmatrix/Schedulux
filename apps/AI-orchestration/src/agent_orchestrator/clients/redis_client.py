@@ -61,6 +61,44 @@ async def delete_cached_draft(tenant_id: str, agent_id: str) -> None:
         print(f"[Redis] Error deleting cached draft ({tenant_id}/{agent_id}): {e}", flush=True)
 
 
+def get_tenant_agents_redis_key(tenant_id: str) -> str:
+    return f"tenant:{tenant_id}:agents"
+
+
+async def get_cached_tenant_agents(tenant_id: str) -> list[dict[str, Any]] | None:
+    try:
+        client = get_redis_client()
+        key = get_tenant_agents_redis_key(tenant_id)
+        val = await client.get(key)
+        if val:
+            return json.loads(val)
+    except Exception as e:
+        print(f"[Redis] Error getting cached tenant agents ({tenant_id}): {e}", flush=True)
+    return None
+
+
+async def set_cached_tenant_agents(
+    tenant_id: str,
+    agents: list[dict[str, Any]],
+    ttl: int = 3600,
+) -> None:
+    try:
+        client = get_redis_client()
+        key = get_tenant_agents_redis_key(tenant_id)
+        await client.set(key, json.dumps(agents), ex=ttl)
+    except Exception as e:
+        print(f"[Redis] Error setting cached tenant agents ({tenant_id}): {e}", flush=True)
+
+
+async def delete_cached_tenant_agents(tenant_id: str) -> None:
+    try:
+        client = get_redis_client()
+        key = get_tenant_agents_redis_key(tenant_id)
+        await client.delete(key)
+    except Exception as e:
+        print(f"[Redis] Error deleting cached tenant agents ({tenant_id}): {e}", flush=True)
+
+
 def get_biz_context_redis_key(tenant_id: str, agent_id: str, mode: str = "live") -> str:
     return f"biz_context:{tenant_id}:{agent_id}:{mode}"
 
@@ -254,7 +292,7 @@ async def verify_otp_code(phone: str, code: str) -> tuple[bool, str]:
         return False, "system_error"
 
 
-# ── Provisional Slot Hold Keys & Distributed Locking ─────────────────────────
+
 
 
 def get_slot_hold_key(tenant_id: str, agent_id: str, resource_id: str, start_time: str) -> str:

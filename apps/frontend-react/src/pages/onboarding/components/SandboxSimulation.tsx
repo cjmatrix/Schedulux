@@ -83,53 +83,54 @@ export const SandboxSimulation: React.FC<SandboxSimulationProps> = ({
   };
 
   return (
-    <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-2xs flex flex-col h-[700px] overflow-hidden">
-      {/* Studio Sandbox Toolbar */}
-      <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 flex-shrink-0">
-        <div className="flex items-center gap-3">
+    <div className="bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-2xs flex flex-col h-[620px] sm:h-[700px] overflow-hidden">
+      <div className="flex items-center justify-between pb-3 sm:pb-3.5 border-b border-slate-100 flex-shrink-0 gap-2">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
           <div
-            className={`w-9 h-9 rounded-xl ${
+            className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex-shrink-0 ${
               isLive ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
             } flex items-center justify-center font-bold`}
           >
             <Bot className="w-4 h-4" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-xs font-bold text-slate-900">{clinicName} Sandbox</h3>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h3 className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                {clinicName}
+                <span className="hidden sm:inline"> Sandbox</span>
+              </h3>
               {isLive ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 flex-shrink-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   Live Agent
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/60">
+                <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/60 flex-shrink-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                  Draft Preview
+                  Draft
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
-              <span className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 text-[10px] sm:text-[11px] text-slate-500 overflow-hidden">
+              <span className="hidden sm:inline-flex items-center gap-1">
                 <Palette className="w-3 h-3 text-slate-400" />
                 Theme:
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md font-mono text-[10px] text-slate-700 font-semibold">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded-md font-mono text-[9px] sm:text-[10px] text-slate-700 font-semibold flex-shrink-0">
                 <span
-                  className="w-2.5 h-2.5 rounded-full shadow-2xs"
+                  className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shadow-2xs"
                   style={{ backgroundColor: primaryColor }}
                 />
                 {primaryColor}
               </span>
-              <span className="capitalize text-slate-400 text-[10px]">• {themeMode} mode</span>
-              <span className="capitalize text-slate-400 text-[10px]">• {launcherStyle}</span>
+              <span className="capitalize text-slate-400 text-[10px] truncate">• {themeMode} mode</span>
+              <span className="hidden sm:inline capitalize text-slate-400 text-[10px]">• {launcherStyle}</span>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          {/* Device Preview Toggle */}
-          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200/80 mr-1">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="hidden sm:flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200/80 mr-1">
             <button
               type="button"
               onClick={() => setPreviewDevice('desktop')}

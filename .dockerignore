@@ -1,0 +1,45 @@
+# Version Control & IDEs
+.git
+.github
+.vscode
+.idea
+
+# Dependency Directories
+node_modules
+**/node_modules
+.venv
+**/.venv
+
+# Python artifacts
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.mypy_cache
+**/.ruff_cache
+**/.pytest_cache
+
+# Build outputs & cache
+dist
+**/dist
+build
+**/build
+.turbo
+**/.turbo
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# Logs & Temporary files
+*.log
+**/*.log
+coverage
+**/.user_uploaded
+scratch
+
+# Environment files
+.env*
+!.env.example
+
+# Terraform
+infra/terraform/.terraform
+infra/terraform/*.tfstate*

@@ -2,6 +2,7 @@
   "name": "schedulx-core",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@11.20.0",
   "scripts": {
     "lint": "biome lint .",
     "lint:fix": "biome check --write .",
@@ -38,6 +39,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
-    "concurrently": "^10.0.5"
+    "concurrently": "^10.0.5",
+    "turbo": "^2.11.13"
   }
 }

@@ -450,6 +450,7 @@ async def send_booking_otp(
         )
 
     code = f"{secrets.randbelow(900000) + 100000}"
+    print("Booking otp",code,flush=True)
     await store_otp(cleaned_phone, code, ttl=300)
 
     await get_sms_queue().enqueue_otp_sms(

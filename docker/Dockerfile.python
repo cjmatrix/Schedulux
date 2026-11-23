@@ -1,0 +1,47 @@
+# syntax=docker/dockerfile:1
+
+# ==========================================
+# Stage 1: Build virtual environment with uv
+# ==========================================
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+
+WORKDIR /app
+
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
+ENV UV_HTTP_TIMEOUT=120
+
+# Install dependencies in a separate layer for Docker cache optimization
+COPY apps/AI-orchestration/pyproject.toml apps/AI-orchestration/uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --no-dev
+
+# Copy application source code and install the project
+COPY apps/AI-orchestration/src ./src
+COPY apps/AI-orchestration/README.md ./README.md
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
+
+# ==========================================
+# Stage 2: Minimal Non-Root Production Runner
+# ==========================================
+FROM python:3.12-slim-bookworm AS runner
+
+# Security: Non-root user
+RUN groupadd --system --gid 1001 appgroup && \
+    useradd --system --uid 1001 --gid appgroup appuser
+
+WORKDIR /app
+
+# Copy virtualenv and project files
+COPY --from=builder --chown=appuser:appgroup /app /app
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONUNBUFFERED=1
+ENV PORT=50052
+
+USER appuser
+
+EXPOSE 50052
+
+CMD ["agent-orchestrator"]

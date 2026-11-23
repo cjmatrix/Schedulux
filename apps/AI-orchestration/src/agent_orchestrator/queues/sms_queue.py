@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+from typing import Any
 
 import aio_pika
+import boto3
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,20 @@ class RabbitMQSmsQueue:
             await self._channel.declare_queue(SMS_QUEUE_NAME, durable=True)
         return self._channel
 
+    def _send_to_sqs(self, name: str, data: dict[str, Any]) -> bool:
+        sqs_url = os.getenv("AWS_SQS_SMS_QUEUE_URL", "")
+        if not sqs_url:
+            return False
+        try:
+            sqs = boto3.client("sqs", region_name=os.getenv("AWS_REGION", "ap-south-1"))
+            payload = {"name": name, "data": data}
+            sqs.send_message(QueueUrl=sqs_url, MessageBody=json.dumps(payload))
+            logger.info("[SmsQueue] Enqueued '%s' to SQS '%s'", name, sqs_url)
+            return True
+        except Exception as e:
+            logger.error("[SmsQueue] Failed to enqueue '%s' to SQS: %s", name, e)
+            return False
+
     async def enqueue_otp_sms(
         self,
         phone: str,
@@ -36,16 +52,20 @@ class RabbitMQSmsQueue:
         tenant_id: str = "",
         agent_id: str = "",
     ) -> None:
+        payload_data = {
+            "phone": phone.strip(),
+            "code": str(code).strip(),
+            "tenant_id": tenant_id,
+            "agent_id": agent_id,
+        }
+        if self._send_to_sqs("send-otp", payload_data):
+            return
+
         try:
             channel = await self._get_channel()
             payload = {
                 "name": "send-otp",
-                "data": {
-                    "phone": phone.strip(),
-                    "code": str(code).strip(),
-                    "tenant_id": tenant_id,
-                    "agent_id": agent_id,
-                },
+                "data": payload_data,
             }
 
             await channel.default_exchange.publish(
@@ -71,19 +91,23 @@ class RabbitMQSmsQueue:
         tenant_id: str = "",
         agent_id: str = "",
     ) -> None:
+        payload_data = {
+            "phone": phone.strip(),
+            "customer_name": customer_name.strip(),
+            "service_name": service_name.strip(),
+            "start_time": start_time.strip(),
+            "booking_reference": booking_reference.strip(),
+            "tenant_id": tenant_id,
+            "agent_id": agent_id,
+        }
+        if self._send_to_sqs("send-booking-created", payload_data):
+            return
+
         try:
             channel = await self._get_channel()
             payload = {
                 "name": "send-booking-created",
-                "data": {
-                    "phone": phone.strip(),
-                    "customer_name": customer_name.strip(),
-                    "service_name": service_name.strip(),
-                    "start_time": start_time.strip(),
-                    "booking_reference": booking_reference.strip(),
-                    "tenant_id": tenant_id,
-                    "agent_id": agent_id,
-                },
+                "data": payload_data,
             }
 
             await channel.default_exchange.publish(
@@ -115,19 +139,23 @@ class RabbitMQSmsQueue:
         tenant_id: str = "",
         agent_id: str = "",
     ) -> None:
+        payload_data = {
+            "phone": phone.strip(),
+            "customer_name": customer_name.strip(),
+            "service_name": service_name.strip(),
+            "start_time": start_time.strip(),
+            "booking_reference": booking_reference.strip(),
+            "tenant_id": tenant_id,
+            "agent_id": agent_id,
+        }
+        if self._send_to_sqs("send-booking-cancelled", payload_data):
+            return
+
         try:
             channel = await self._get_channel()
             payload = {
                 "name": "send-booking-cancelled",
-                "data": {
-                    "phone": phone.strip(),
-                    "customer_name": customer_name.strip(),
-                    "service_name": service_name.strip(),
-                    "start_time": start_time.strip(),
-                    "booking_reference": booking_reference.strip(),
-                    "tenant_id": tenant_id,
-                    "agent_id": agent_id,
-                },
+                "data": payload_data,
             }
 
             await channel.default_exchange.publish(

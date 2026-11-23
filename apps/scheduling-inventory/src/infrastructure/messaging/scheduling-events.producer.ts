@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
+import { trace } from '@opentelemetry/api';
 import type { PriceInfo, ServiceVerificationInfo } from '@repo/proto/scheduling';
 import type { ClientSession } from 'mongoose';
 import { firstValueFrom } from 'rxjs';
@@ -44,6 +45,8 @@ export interface BaseSchedulingEventPayload {
   agent_id: string;
   version: number;
   timestamp: string;
+  trace_id?: string;
+  traceparent?: string;
 }
 
 export interface ServiceEventPayload extends BaseSchedulingEventPayload {
@@ -156,6 +159,18 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
     private readonly _outboxRepository: IOutboxRepository,
   ) {}
 
+  private _attachTraceContext<T extends BaseSchedulingEventPayload>(payload: T): T {
+    const spanContext = trace.getActiveSpan()?.spanContext();
+    if (spanContext?.traceId) {
+      return {
+        ...payload,
+        trace_id: spanContext.traceId,
+        traceparent: `00-${spanContext.traceId}-${spanContext.spanId}-${spanContext.traceFlags.toString(16).padStart(2, '0')}`,
+      };
+    }
+    return payload;
+  }
+
   async createServiceCreatedOutboxEvent(
     entity: ServiceEntity,
     session?: ClientSession,
@@ -181,7 +196,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'service.created',
         topic: KAFKA_SERVICE_TOPIC_SERVICES,
         partitionKey: entity.agentId || entity.tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -212,7 +227,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'service.updated',
         topic: KAFKA_SERVICE_TOPIC_SERVICES,
         partitionKey: entity.agentId || entity.tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -244,7 +259,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'service.deleted',
         topic: KAFKA_SERVICE_TOPIC_SERVICES,
         partitionKey: agentId || tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -275,7 +290,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'resource.created',
         topic: KAFKA_SERVICE_TOPIC_RESOURCES,
         partitionKey: entity.agentId || entity.tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -306,7 +321,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'resource.updated',
         topic: KAFKA_SERVICE_TOPIC_RESOURCES,
         partitionKey: entity.agentId || entity.tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -338,7 +353,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'resource.deleted',
         topic: KAFKA_SERVICE_TOPIC_RESOURCES,
         partitionKey: agentId || tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -348,10 +363,23 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
     try {
       const key = outboxDoc.partition_key;
       const value = JSON.stringify(outboxDoc.payload);
-      await firstValueFrom(this._messagingClient.emit(outboxDoc.topic, { key, value }));
+      const payloadObj = outboxDoc.payload as Record<string, unknown> | undefined;
+      const traceparent = (payloadObj?.traceparent as string) || undefined;
+      const traceId = (payloadObj?.trace_id as string) || undefined;
+
+      await firstValueFrom(
+        this._messagingClient.emit(outboxDoc.topic, {
+          key,
+          value,
+          headers: {
+            ...(traceparent ? { traceparent } : {}),
+            ...(traceId ? { trace_id: traceId } : {}),
+          },
+        }),
+      );
       await this._outboxRepository.markPublished([outboxDoc._id]);
       this._logger.log(
-        `[Messaging] Emitted and marked PUBLISHED: ${outboxDoc._id} (${outboxDoc.event_type})`,
+        `[Messaging] Emitted and marked PUBLISHED: ${outboxDoc._id} (${outboxDoc.event_type}) [Trace: ${traceId || 'N/A'}]`,
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -489,7 +517,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'booking.created',
         topic: KAFKA_SERVICE_TOPIC_BOOKINGS,
         partitionKey: entity.tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -549,7 +577,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'booking.cancelled',
         topic: KAFKA_SERVICE_TOPIC_BOOKINGS,
         partitionKey: entity.tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -611,7 +639,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'booking.rescheduled',
         topic: KAFKA_SERVICE_TOPIC_BOOKINGS,
         partitionKey: entity.tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -682,7 +710,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType,
         topic: KAFKA_SERVICE_TOPIC_BOOKINGS,
         partitionKey: entity.tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -756,7 +784,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'schedule.updated',
         topic: KAFKA_SERVICE_TOPIC_SCHEDULES,
         partitionKey: doc.agent_id || doc.tenant_id,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );

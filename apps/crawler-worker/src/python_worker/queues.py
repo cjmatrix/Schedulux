@@ -6,6 +6,8 @@ import aio_pika
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
 
+from python_worker.tracing import inject_trace_context
+
 dotenv_path = Path(__file__).resolve().parents[5] / ".env"
 load_dotenv(dotenv_path)
 
@@ -13,9 +15,13 @@ redis_uri = os.environ.get("REDIS_URI", "redis://localhost:6379")
 rabbitmq_uri = os.environ.get("RABBITMQ_URI", "amqp://guest:guest@localhost:5672")
 
 CRAWL_QUEUE_NAME = os.environ.get("CRAWL_QUEUE_NAME", "knowledge-crawl-queue")
+CRAWL_DLQ_NAME = os.environ.get("CRAWL_DLQ_NAME", "knowledge-crawl-queue-dlq")
 SCHEMA_QUEUE_NAME = os.environ.get("SCHEMA_QUEUE_NAME", "schema-generation-queue")
 DOCUMENT_INDEXING_QUEUE_NAME = os.environ.get(
     "DOCUMENT_INDEXING_QUEUE_NAME", "knowledge-document-indexing-queue"
+)
+DOCUMENT_INDEXING_DLQ_NAME = os.environ.get(
+    "DOCUMENT_INDEXING_DLQ_NAME", "knowledge-document-indexing-dlq"
 )
 DOCUMENT_STATUS_QUEUE_NAME = os.environ.get(
     "DOCUMENT_STATUS_QUEUE_NAME", "knowledge-document-status-queue"
@@ -26,22 +32,40 @@ _rabbit_channel: Optional[aio_pika.abc.AbstractChannel] = None
 _redis_client: Optional[aioredis.Redis] = None
 
 
+async def _declare_standard_queues(channel: aio_pika.abc.AbstractChannel) -> None:
+    
+    crawl_args = {
+        "x-dead-letter-exchange": "",
+        "x-dead-letter-routing-key": CRAWL_DLQ_NAME,
+    }
+    doc_indexing_args = {
+        "x-dead-letter-exchange": "",
+        "x-dead-letter-routing-key": DOCUMENT_INDEXING_DLQ_NAME,
+    }
+
+  
+    await channel.declare_queue(CRAWL_DLQ_NAME, durable=True)
+    await channel.declare_queue(DOCUMENT_INDEXING_DLQ_NAME, durable=True)
+
+
+    await channel.declare_queue(CRAWL_QUEUE_NAME, durable=True, arguments=crawl_args)
+    await channel.declare_queue(SCHEMA_QUEUE_NAME, durable=True)
+    await channel.declare_queue(
+        DOCUMENT_INDEXING_QUEUE_NAME, durable=True, arguments=doc_indexing_args
+    )
+    await channel.declare_queue(DOCUMENT_STATUS_QUEUE_NAME, durable=True)
+
+
 async def get_rabbitmq_channel() -> aio_pika.abc.AbstractChannel:
     """Returns a global singleton robust RabbitMQ channel, declaring standard queues."""
     global _rabbit_connection, _rabbit_channel
-    if _rabbit_connection is None or _rabbit_connection.is_closed:
+    if self_conn_is_closed := (_rabbit_connection is None or _rabbit_connection.is_closed):
         _rabbit_connection = await aio_pika.connect_robust(rabbitmq_uri)
         _rabbit_channel = await _rabbit_connection.channel()
-        await _rabbit_channel.declare_queue(CRAWL_QUEUE_NAME, durable=True)
-        await _rabbit_channel.declare_queue(SCHEMA_QUEUE_NAME, durable=True)
-        await _rabbit_channel.declare_queue(DOCUMENT_INDEXING_QUEUE_NAME, durable=True)
-        await _rabbit_channel.declare_queue(DOCUMENT_STATUS_QUEUE_NAME, durable=True)
+        await _declare_standard_queues(_rabbit_channel)
     elif _rabbit_channel is None or _rabbit_channel.is_closed:
         _rabbit_channel = await _rabbit_connection.channel()
-        await _rabbit_channel.declare_queue(CRAWL_QUEUE_NAME, durable=True)
-        await _rabbit_channel.declare_queue(SCHEMA_QUEUE_NAME, durable=True)
-        await _rabbit_channel.declare_queue(DOCUMENT_INDEXING_QUEUE_NAME, durable=True)
-        await _rabbit_channel.declare_queue(DOCUMENT_STATUS_QUEUE_NAME, durable=True)
+        await _declare_standard_queues(_rabbit_channel)
     return _rabbit_channel
 
 
@@ -65,12 +89,16 @@ async def publish_document_indexing_job(
         "file_name": file_name,
     }
 
+    headers: dict[str, Any] = {}
+    inject_trace_context(headers, payload)
+
     await channel.default_exchange.publish(
         aio_pika.Message(
             body=json.dumps(payload).encode(),
             delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
             content_type="application/json",
             message_id=f"doc_idx_{document_id}",
+            headers=headers,
         ),
         routing_key=DOCUMENT_INDEXING_QUEUE_NAME,
     )
@@ -100,12 +128,16 @@ async def publish_document_status_update(
         "error_message": error_message,
     }
 
+    headers: dict[str, Any] = {}
+    inject_trace_context(headers, payload)
+
     await channel.default_exchange.publish(
         aio_pika.Message(
             body=json.dumps(payload).encode(),
             delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
             content_type="application/json",
             message_id=f"doc_status_{document_id}_{status}",
+            headers=headers,
         ),
         routing_key=DOCUMENT_STATUS_QUEUE_NAME,
     )
@@ -116,7 +148,7 @@ async def publish_document_status_update(
 
 
 async def publish_schema_generation_job(tenant_id: str, url: str, job_id: str, crawled_data: dict) -> None:
-    """Publishes a schema generation task to RabbitMQ schema-generation-queue."""
+ 
     channel = await get_rabbitmq_channel()
     payload = {
         "name": "generate-schema",
@@ -126,12 +158,16 @@ async def publish_schema_generation_job(tenant_id: str, url: str, job_id: str, c
         "crawled_data": crawled_data,
     }
 
+    headers: dict[str, Any] = {}
+    inject_trace_context(headers, payload)
+
     await channel.default_exchange.publish(
         aio_pika.Message(
             body=json.dumps(payload).encode(),
             delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
             content_type="application/json",
             message_id=f"schema_{job_id}",
+            headers=headers,
         ),
         routing_key=SCHEMA_QUEUE_NAME,
     )

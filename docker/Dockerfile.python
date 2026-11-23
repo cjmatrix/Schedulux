@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 
-# ==========================================
+
 # Stage 1: Build virtual environment with uv
-# ==========================================
+
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
 WORKDIR /app
@@ -22,9 +22,9 @@ COPY apps/AI-orchestration/README.md ./README.md
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-# ==========================================
+
 # Stage 2: Minimal Non-Root Production Runner
-# ==========================================
+
 FROM python:3.12-slim-bookworm AS runner
 
 # Security: Non-root user

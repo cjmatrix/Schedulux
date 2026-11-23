@@ -17,7 +17,7 @@ function normalizePhone(phone) {
   return cleaned;
 }
 
-async function sendRawSms(to, body) {
+async function sendRawSms(to, body, traceId = "N/A") {
   const rawTo = String(to || "").trim();
   if (!rawTo) {
     throw new Error("Recipient phone number is required.");
@@ -28,6 +28,7 @@ async function sendRawSms(to, body) {
     const simulatedSid = `SM_sim_${Math.random().toString(36).substring(2, 15)}`;
     console.log("\n─────────────────────────────────────────────────────────────────");
     console.log("📱 [SmsService DEV MODE — SIMULATED SMS]");
+    console.log(`   TraceID: ${traceId}`);
     console.log(`   To:      ${cleanedTo}`);
     console.log(`   From:    ${fromPhone || messagingServiceSid || "+15550000000"}`);
     console.log(`   SID:     ${simulatedSid}`);
@@ -87,14 +88,22 @@ export const handler = async (event) => {
   for (const record of event.Records) {
     try {
       const parsed = JSON.parse(record.body);
+      const traceId =
+        parsed.trace_id ||
+        record.messageAttributes?.trace_id?.stringValue ||
+        (record.messageAttributes?.traceparent?.stringValue
+          ? record.messageAttributes.traceparent.stringValue.split("-")[1]
+          : "N/A");
       const jobName = parsed.name || parsed.jobName || "";
       const payload = parsed.data || parsed;
       const to = payload.phone || payload.to;
 
+      console.log(`[SmsWorker] [TraceID: ${traceId}] Processing job: '${jobName}' for recipient: ${to}`);
+
       switch (jobName) {
         case "send-otp": {
           const body = `Your Schedulux verification code is: ${payload.code}. Valid for 5 minutes. Do not share this code.`;
-          await sendRawSms(to, body);
+          await sendRawSms(to, body, traceId);
           break;
         }
 
@@ -105,7 +114,7 @@ export const handler = async (event) => {
           const ref = payload.booking_reference || payload.bookingReference || payload.booking_id;
           const refText = ref ? ` Ref: ${ref}.` : "";
           const body = `${greeting}, your booking for ${service} on ${payload.start_time || payload.startTime} is confirmed!${refText} Thank you for choosing us.`;
-          await sendRawSms(to, body);
+          await sendRawSms(to, body, traceId);
           break;
         }
 
@@ -115,7 +124,7 @@ export const handler = async (event) => {
           const ref = payload.booking_reference || payload.bookingReference || payload.booking_id;
           const refText = ref ? ` (Ref: ${ref})` : "";
           const body = `${greeting}, your appointment for ${service} scheduled for ${payload.start_time || payload.startTime} has been cancelled.${refText}`;
-          await sendRawSms(to, body);
+          await sendRawSms(to, body, traceId);
           break;
         }
 
@@ -126,7 +135,7 @@ export const handler = async (event) => {
           const refText = ref ? ` (Ref: ${ref})` : "";
           const newTime = payload.new_start_time || payload.start_time || payload.startTime;
           const body = `${greeting}, your appointment for ${service} has been rescheduled to ${newTime}.${refText} See you then!`;
-          await sendRawSms(to, body);
+          await sendRawSms(to, body, traceId);
           break;
         }
 
@@ -136,20 +145,20 @@ export const handler = async (event) => {
           const ref = payload.booking_reference || payload.bookingReference || payload.booking_id;
           const refText = ref ? ` (Ref: ${ref})` : "";
           const body = `${greeting}, thank you for visiting us for your ${service} appointment!${refText} Your appointment is now marked as completed.`;
-          await sendRawSms(to, body);
+          await sendRawSms(to, body, traceId);
           break;
         }
 
         case "send-raw-sms": {
-          await sendRawSms(to, payload.body);
+          await sendRawSms(to, payload.body, traceId);
           break;
         }
 
         default: {
           if (payload.body) {
-            await sendRawSms(to, payload.body);
+            await sendRawSms(to, payload.body, traceId);
           } else {
-            console.warn(`[SmsWorker] Ignored unknown job: ${jobName}`);
+            console.warn(`[SmsWorker] [TraceID: ${traceId}] Ignored unknown job: ${jobName}`);
           }
           break;
         }

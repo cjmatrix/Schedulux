@@ -7,6 +7,9 @@ from urllib.parse import urlparse, urljoin, urlunparse
 from pydantic import BaseModel, Field
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 from python_worker.queues import publish_schema_generation_job, get_redis_client
+from python_worker.tracing import get_tracer
+
+tracer = get_tracer("crawler-worker.crawler")
 
 try:
     from langchain_google_genai import ChatGoogleGenerativeAI
@@ -22,6 +25,12 @@ except ImportError:
 CACHE_TTL_SECONDS = int(os.environ.get("CRAWL_CACHE_TTL_SECONDS", "86400"))
 DEFAULT_MIN_LINKS = 4
 DEFAULT_MAX_LINKS = 6
+
+
+class PermanentCrawlError(Exception):
+    """Raised when a crawl failure is fatal/permanent (e.g. 404, 403, invalid domain) and should not be retried."""
+    pass
+
 
 browser_cfg = BrowserConfig(
     headless=True,
@@ -192,12 +201,7 @@ async def select_relevant_links_with_llm(
     min_links: int = DEFAULT_MIN_LINKS,
     max_links: int = DEFAULT_MAX_LINKS
 ) -> list[str]:
-    """
-    Stage 2: Micro-LLM Link Selector.
-    Uses a fast structured LLM call to pick the highest value pages for services, pricing,
-    operating hours, staff, and booking.
-    Guarantees at least `min_links` if the website has that many candidates.
-    """
+ 
     if not candidates:
         return []
 
@@ -268,12 +272,7 @@ async def select_relevant_links_with_llm(
 
 
 async def crawl_site_knowledge(target_url: str, tenant_id: str = "default") -> dict:
-    """
-    Crawls a site homepage and targeted internal pages with Redis caching per tenant.
-    - Caches homepage result + discovered link list.
-    - Uses 3-stage link filtering (regex + heuristic scoring + fast LLM selector).
-    - Caches individual crawled pages with stripped boilerplate.
-    """
+  
     semaphore = asyncio.Semaphore(2)
     site_knowledge = {}
     redis = get_redis_client()
@@ -295,26 +294,65 @@ async def crawl_site_knowledge(target_url: str, tenant_id: str = "default") -> d
     async with AsyncWebCrawler(config=browser_cfg) as crawler:
         if not cached_initial:
             print(f"[Crawl] Starting discovery on: {target_url}")
-            initial_result = await crawler.arun(url=target_url, config=run_cfg)
+            with tracer.start_as_current_span(
+                "crawl.homepage.fetch",
+                attributes={"crawl.url": target_url, "tenant.id": tenant_id},
+            ) as hp_span:
+                initial_result = await crawler.arun(url=target_url, config=run_cfg)
 
-            if not initial_result.success:
-                raise Exception(f"Failed to crawl homepage: {initial_result.error_message}")
+                status_code = getattr(initial_result, "status_code", None)
+                error_msg = getattr(initial_result, "error_message", "") or ""
+                if status_code:
+                    hp_span.set_attribute("http.status_code", status_code)
 
-            clean_home_md = clean_page_markdown(initial_result.markdown)
-            site_knowledge[target_url] = clean_home_md
+                
+                if status_code in (401, 403, 404, 410, 451):
+                    raise PermanentCrawlError(
+                        f"HTTP {status_code}: Site returned client error or access denied"
+                    )
+
+               
+                permanent_network_indicators = [
+                    "ERR_NAME_NOT_RESOLVED",
+                    "ERR_CONNECTION_REFUSED",
+                    "ERR_INVALID_URL",
+                    "ERR_CERT_",
+                    "DNS_PROBE_",
+                ]
+                if any(ind in error_msg for ind in permanent_network_indicators):
+                    raise PermanentCrawlError(
+                        f"Unreachable domain or invalid URL ({error_msg})"
+                    )
+
+                if not initial_result.success:
+                    lower_err = error_msg.lower()
+                    if "404" in lower_err or "not found" in lower_err:
+                        raise PermanentCrawlError(f"Page not found (404): {error_msg}")
+                    if any(kw in lower_err for kw in ("403", "forbidden", "cloudflare", "access denied", "blocked")):
+                        raise PermanentCrawlError(f"Access blocked or forbidden: {error_msg}")
+                    raise Exception(f"Failed to crawl homepage: {error_msg}")
+
+                clean_home_md = clean_page_markdown(initial_result.markdown)
+                if not clean_home_md or len(clean_home_md.strip()) < 10:
+                    raise PermanentCrawlError("Homepage contained no readable content or extractable text.")
+
+                site_knowledge[target_url] = clean_home_md
 
             raw_links = initial_result.links.get("internal", [])
           
             candidate_links = extract_and_score_candidate_links(target_url, raw_links)
             print(f"[Crawl] Discovered {len(candidate_links)} non-junk candidate internal links.")
 
-           
-            urls_to_crawl = await select_relevant_links_with_llm(
-                target_url,
-                candidate_links,
-                min_links=DEFAULT_MIN_LINKS,
-                max_links=DEFAULT_MAX_LINKS
-            )
+            with tracer.start_as_current_span(
+                "crawl.links.llm_select",
+                attributes={"candidate_links_count": len(candidate_links)},
+            ):
+                urls_to_crawl = await select_relevant_links_with_llm(
+                    target_url,
+                    candidate_links,
+                    min_links=DEFAULT_MIN_LINKS,
+                    max_links=DEFAULT_MAX_LINKS
+                )
 
             homepage_payload = {
                 "url": target_url,
@@ -343,18 +381,25 @@ async def crawl_site_knowledge(target_url: str, tenant_id: str = "default") -> d
 
                 print(f"[Crawl] Crawling targeted page (Cache MISS): {page_url}")
                 try:
-                    res = await crawler.arun(url=page_url, config=run_cfg)
-                    if res.success:
-                        clean_md = clean_page_markdown(res.markdown)
-                        site_knowledge[page_url] = clean_md
-                        page_payload = {
-                            "url": page_url,
-                            "markdown": clean_md,
-                            "is_homepage": False
-                        }
-                        await redis.setex(page_cache_key, CACHE_TTL_SECONDS, json.dumps(page_payload))
-                    else:
-                        print(f"[Crawl] Failed: {page_url} - {res.error_message}")
+                    with tracer.start_as_current_span(
+                        "crawl.page.fetch",
+                        attributes={"crawl.page_url": page_url},
+                    ) as page_span:
+                        res = await crawler.arun(url=page_url, config=run_cfg)
+                        page_status = getattr(res, "status_code", 0) or 0
+                        if page_status:
+                            page_span.set_attribute("http.status_code", page_status)
+                        if res.success:
+                            clean_md = clean_page_markdown(res.markdown)
+                            site_knowledge[page_url] = clean_md
+                            page_payload = {
+                                "url": page_url,
+                                "markdown": clean_md,
+                                "is_homepage": False
+                            }
+                            await redis.setex(page_cache_key, CACHE_TTL_SECONDS, json.dumps(page_payload))
+                        else:
+                            print(f"[Crawl] Failed: {page_url} - {res.error_message}")
                 except Exception as e:
                     print(f"[Crawl] Error on {page_url}: {str(e)}")
 
@@ -386,12 +431,13 @@ async def process_crawl_job(data: dict):
 
         knowledge = await crawl_site_knowledge(url, tenant_id=tenant_id)
 
-        await publish_schema_generation_job(
-            tenant_id=tenant_id,
-            url=url,
-            job_id=job_id,
-            crawled_data=knowledge,
-        )
+        with tracer.start_as_current_span("crawl.schema.publish"):
+            await publish_schema_generation_job(
+                tenant_id=tenant_id,
+                url=url,
+                job_id=job_id,
+                crawled_data=knowledge,
+            )
 
         status_payload["status"] = "completed"
         status_payload["pages"] = knowledge
@@ -401,10 +447,15 @@ async def process_crawl_job(data: dict):
         return knowledge
 
     except Exception as e:
-        print(f"[Crawler Worker] Job {job_id} failed: {str(e)}", flush=True)
+        is_permanent = isinstance(e, PermanentCrawlError)
+        print(
+            f"[Crawler Worker] Job {job_id} failed (permanent={is_permanent}): {str(e)}",
+            flush=True,
+        )
         try:
             err_payload = {
                 "status": "failed",
+                "permanent": is_permanent,
                 "tenant_id": tenant_id,
                 "url": url,
                 "job_id": job_id,

@@ -5,11 +5,15 @@ import os
 from typing import Any
 
 import aio_pika
+from opentelemetry import trace
 
 from agent_orchestrator.clients.redis_client import get_redis_client
 from agent_orchestrator.domain.protocols import CrawlerQueue
 
 CRAWL_QUEUE_NAME = "knowledge-crawl-queue"
+CRAWL_DLQ_NAME = "knowledge-crawl-queue-dlq"
+
+tracer = trace.get_tracer("agent-orchestrator.crawler-queue")
 
 
 class RabbitMQCrawlerQueue(CrawlerQueue):
@@ -21,33 +25,69 @@ class RabbitMQCrawlerQueue(CrawlerQueue):
         self._channel: aio_pika.abc.AbstractChannel | None = None
 
     async def _get_channel(self) -> aio_pika.abc.AbstractChannel:
+        crawl_args = {
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": CRAWL_DLQ_NAME,
+        }
         if self._connection is None or self._connection.is_closed:
             self._connection = await aio_pika.connect_robust(self.uri)
             self._channel = await self._connection.channel()
-            await self._channel.declare_queue(CRAWL_QUEUE_NAME, durable=True)
+            await self._channel.declare_queue(CRAWL_DLQ_NAME, durable=True)
+            await self._channel.declare_queue(CRAWL_QUEUE_NAME, durable=True, arguments=crawl_args)
         elif self._channel is None or self._channel.is_closed:
             self._channel = await self._connection.channel()
-            await self._channel.declare_queue(CRAWL_QUEUE_NAME, durable=True)
+            await self._channel.declare_queue(CRAWL_DLQ_NAME, durable=True)
+            await self._channel.declare_queue(CRAWL_QUEUE_NAME, durable=True, arguments=crawl_args)
         return self._channel
 
     async def enqueue_crawl(self, tenant_id: str, url: str, job_id: str) -> None:
         channel = await self._get_channel()
-        payload = {
-            "name": "crawl-site",
-            "tenant_id": tenant_id,
-            "url": url,
-            "job_id": job_id,
-        }
 
-        await channel.default_exchange.publish(
-            aio_pika.Message(
-                body=json.dumps(payload).encode(),
-                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
-                content_type="application/json",
-                message_id=job_id,
-            ),
-            routing_key=CRAWL_QUEUE_NAME,
-        )
+        with tracer.start_as_current_span(
+            "knowledge.crawl.enqueue",
+            kind=trace.SpanKind.PRODUCER,
+            attributes={
+                "messaging.system": "rabbitmq",
+                "messaging.destination.name": CRAWL_QUEUE_NAME,
+                "messaging.operation": "publish",
+                "tenant.id": tenant_id,
+                "crawl.job_id": job_id,
+                "crawl.url": url,
+            },
+        ) as producer_span:
+            ctx = producer_span.get_span_context()
+            trace_id = format(ctx.trace_id, "032x") if ctx.is_valid else None
+            traceparent = (
+                f"00-{trace_id}-{format(ctx.span_id, '016x')}-{ctx.trace_flags:02x}"
+                if ctx.is_valid
+                else None
+            )
+
+            payload = {
+                "name": "crawl-site",
+                "tenant_id": tenant_id,
+                "url": url,
+                "job_id": job_id,
+                "trace_id": trace_id,
+                "traceparent": traceparent,
+            }
+
+            headers: dict[str, Any] = {}
+            if traceparent:
+                headers["traceparent"] = traceparent
+            if trace_id:
+                headers["trace_id"] = trace_id
+
+            await channel.default_exchange.publish(
+                aio_pika.Message(
+                    body=json.dumps(payload).encode(),
+                    delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+                    content_type="application/json",
+                    message_id=job_id,
+                    headers=headers,
+                ),
+                routing_key=CRAWL_QUEUE_NAME,
+            )
 
         try:
             redis = get_redis_client()
@@ -66,7 +106,7 @@ class RabbitMQCrawlerQueue(CrawlerQueue):
             )
 
         print(
-            f"[RabbitMQCrawlerQueue] Enqueued crawl job {job_id} to '{CRAWL_QUEUE_NAME}'",
+            f"[RabbitMQCrawlerQueue] Enqueued crawl job {job_id} to '{CRAWL_QUEUE_NAME}' (trace_id={trace_id})",
             flush=True,
         )
 

@@ -16,7 +16,7 @@
       "!!**/__pycache__",
       "!!**/*.pyc",
       "!!apps/AI-orchestration",
-      "!!apps/background-worker/src/workers/python-worker",
+      "!!apps/crawler-worker",
       "!!packages/proto/dist",
       "!!packages/proto/src/interfaces",
       "!!apps/frontend-react/public",

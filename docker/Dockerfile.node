@@ -1,16 +1,16 @@
 # syntax=docker/dockerfile:1
 
-# ==========================================
+
 # Stage 1: Base Alpine Image with pnpm
-# ==========================================
+
 FROM node:22-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@11.20.0 --activate
 
-# ==========================================
+
 # Stage 2: Pruner (Turborepo Docker Pruning)
-# ==========================================
+
 FROM base AS pruner
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
@@ -18,9 +18,9 @@ COPY . .
 ARG APP_NAME
 RUN npx turbo prune ${APP_NAME} --docker
 
-# ==========================================
+
 # Stage 3: Builder (Compile TS & Protobuf)
-# ==========================================
+
 FROM base AS builder
 RUN apk add --no-cache libc6-compat protobuf
 WORKDIR /app
@@ -45,9 +45,9 @@ RUN npx turbo build --filter=${APP_NAME}
 # Prune devDependencies to keep final footprint lean
 RUN pnpm prune --prod --no-optional
 
-# ==========================================
+
 # Stage 4: Production Runner (Lean & Non-Root)
-# ==========================================
+
 FROM node:22-alpine AS runner
 WORKDIR /app
 
@@ -55,7 +55,7 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nestjs
 
-ENV NODE_ENV=production
+
 
 USER nestjs
 

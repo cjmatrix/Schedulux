@@ -7,10 +7,22 @@ from typing import Any
 
 import aio_pika
 import boto3
+from opentelemetry import trace
 
 logger = logging.getLogger(__name__)
 
 SMS_QUEUE_NAME = os.getenv("SMS_QUEUE_NAME", "sms-queue")
+
+
+def _get_active_trace_context() -> tuple[str | None, str | None]:
+    
+    span = trace.get_current_span()
+    span_ctx = span.get_span_context() if span else None
+    if span_ctx and span_ctx.is_valid:
+        trace_id = format(span_ctx.trace_id, "032x")
+        traceparent = f"00-{trace_id}-{format(span_ctx.span_id, '016x')}-{span_ctx.trace_flags:02x}"
+        return trace_id, traceparent
+    return None, None
 
 
 class RabbitMQSmsQueue:
@@ -31,15 +43,56 @@ class RabbitMQSmsQueue:
             await self._channel.declare_queue(SMS_QUEUE_NAME, durable=True)
         return self._channel
 
-    def _send_to_sqs(self, name: str, data: dict[str, Any]) -> bool:
+    def _send_to_sqs(
+        self,
+        name: str,
+        data: dict[str, Any],
+        trace_id: str | None = None,
+        traceparent: str | None = None,
+    ) -> bool:
         sqs_url = os.getenv("AWS_SQS_SMS_QUEUE_URL", "")
         if not sqs_url:
             return False
+
+        if not trace_id or not traceparent:
+            ctx_tid, ctx_tp = _get_active_trace_context()
+            trace_id = trace_id or ctx_tid
+            traceparent = traceparent or ctx_tp
+
         try:
             sqs = boto3.client("sqs", region_name=os.getenv("AWS_REGION", "ap-south-1"))
-            payload = {"name": name, "data": data}
-            sqs.send_message(QueueUrl=sqs_url, MessageBody=json.dumps(payload))
-            logger.info("[SmsQueue] Enqueued '%s' to SQS '%s'", name, sqs_url)
+            payload = {
+                "name": name,
+                "data": data,
+                "trace_id": trace_id,
+                "traceparent": traceparent,
+            }
+            message_attributes: dict[str, Any] = {}
+            if traceparent:
+                message_attributes["traceparent"] = {
+                    "DataType": "String",
+                    "StringValue": traceparent,
+                }
+            if trace_id:
+                message_attributes["trace_id"] = {
+                    "DataType": "String",
+                    "StringValue": trace_id,
+                }
+
+            params: dict[str, Any] = {
+                "QueueUrl": sqs_url,
+                "MessageBody": json.dumps(payload),
+            }
+            if message_attributes:
+                params["MessageAttributes"] = message_attributes
+
+            sqs.send_message(**params)
+            logger.info(
+                "[SmsQueue] Enqueued '%s' to SQS '%s' (Trace: %s)",
+                name,
+                sqs_url,
+                trace_id or "N/A",
+            )
             return True
         except Exception as e:
             logger.error("[SmsQueue] Failed to enqueue '%s' to SQS: %s", name, e)
@@ -51,14 +104,21 @@ class RabbitMQSmsQueue:
         code: str,
         tenant_id: str = "",
         agent_id: str = "",
+        trace_id: str | None = None,
+        traceparent: str | None = None,
     ) -> None:
+        if not trace_id or not traceparent:
+            ctx_tid, ctx_tp = _get_active_trace_context()
+            trace_id = trace_id or ctx_tid
+            traceparent = traceparent or ctx_tp
+
         payload_data = {
             "phone": phone.strip(),
             "code": str(code).strip(),
             "tenant_id": tenant_id,
             "agent_id": agent_id,
         }
-        if self._send_to_sqs("send-otp", payload_data):
+        if self._send_to_sqs("send-otp", payload_data, trace_id=trace_id, traceparent=traceparent):
             return
 
         try:
@@ -66,7 +126,14 @@ class RabbitMQSmsQueue:
             payload = {
                 "name": "send-otp",
                 "data": payload_data,
+                "trace_id": trace_id,
+                "traceparent": traceparent,
             }
+            headers: dict[str, Any] = {}
+            if traceparent:
+                headers["traceparent"] = traceparent
+            if trace_id:
+                headers["trace_id"] = trace_id
 
             await channel.default_exchange.publish(
                 aio_pika.Message(
@@ -74,10 +141,16 @@ class RabbitMQSmsQueue:
                     delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
                     content_type="application/json",
                     message_id=f"otp_{phone}_{code}",
+                    headers=headers or None,
                 ),
                 routing_key=SMS_QUEUE_NAME,
             )
-            logger.info("[SmsQueue] Enqueued OTP SMS for %s to '%s'", phone, SMS_QUEUE_NAME)
+            logger.info(
+                "[SmsQueue] Enqueued OTP SMS for %s to '%s' (Trace: %s)",
+                phone,
+                SMS_QUEUE_NAME,
+                trace_id or "N/A",
+            )
         except Exception as e:
             logger.error("[SmsQueue] Failed to enqueue OTP SMS for %s: %s", phone, e)
 
@@ -90,7 +163,14 @@ class RabbitMQSmsQueue:
         booking_reference: str = "",
         tenant_id: str = "",
         agent_id: str = "",
+        trace_id: str | None = None,
+        traceparent: str | None = None,
     ) -> None:
+        if not trace_id or not traceparent:
+            ctx_tid, ctx_tp = _get_active_trace_context()
+            trace_id = trace_id or ctx_tid
+            traceparent = traceparent or ctx_tp
+
         payload_data = {
             "phone": phone.strip(),
             "customer_name": customer_name.strip(),
@@ -100,7 +180,12 @@ class RabbitMQSmsQueue:
             "tenant_id": tenant_id,
             "agent_id": agent_id,
         }
-        if self._send_to_sqs("send-booking-created", payload_data):
+        if self._send_to_sqs(
+            "send-booking-created",
+            payload_data,
+            trace_id=trace_id,
+            traceparent=traceparent,
+        ):
             return
 
         try:
@@ -108,7 +193,14 @@ class RabbitMQSmsQueue:
             payload = {
                 "name": "send-booking-created",
                 "data": payload_data,
+                "trace_id": trace_id,
+                "traceparent": traceparent,
             }
+            headers: dict[str, Any] = {}
+            if traceparent:
+                headers["traceparent"] = traceparent
+            if trace_id:
+                headers["trace_id"] = trace_id
 
             await channel.default_exchange.publish(
                 aio_pika.Message(
@@ -116,13 +208,15 @@ class RabbitMQSmsQueue:
                     delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
                     content_type="application/json",
                     message_id=f"bk_sms_{booking_reference or phone}",
+                    headers=headers or None,
                 ),
                 routing_key=SMS_QUEUE_NAME,
             )
             logger.info(
-                "[SmsQueue] Enqueued booking confirmation SMS for %s (Ref: %s)",
+                "[SmsQueue] Enqueued booking confirmation SMS for %s (Ref: %s, Trace: %s)",
                 phone,
                 booking_reference,
+                trace_id or "N/A",
             )
         except Exception as e:
             logger.error(
@@ -138,7 +232,14 @@ class RabbitMQSmsQueue:
         booking_reference: str = "",
         tenant_id: str = "",
         agent_id: str = "",
+        trace_id: str | None = None,
+        traceparent: str | None = None,
     ) -> None:
+        if not trace_id or not traceparent:
+            ctx_tid, ctx_tp = _get_active_trace_context()
+            trace_id = trace_id or ctx_tid
+            traceparent = traceparent or ctx_tp
+
         payload_data = {
             "phone": phone.strip(),
             "customer_name": customer_name.strip(),
@@ -148,7 +249,12 @@ class RabbitMQSmsQueue:
             "tenant_id": tenant_id,
             "agent_id": agent_id,
         }
-        if self._send_to_sqs("send-booking-cancelled", payload_data):
+        if self._send_to_sqs(
+            "send-booking-cancelled",
+            payload_data,
+            trace_id=trace_id,
+            traceparent=traceparent,
+        ):
             return
 
         try:
@@ -156,7 +262,14 @@ class RabbitMQSmsQueue:
             payload = {
                 "name": "send-booking-cancelled",
                 "data": payload_data,
+                "trace_id": trace_id,
+                "traceparent": traceparent,
             }
+            headers: dict[str, Any] = {}
+            if traceparent:
+                headers["traceparent"] = traceparent
+            if trace_id:
+                headers["trace_id"] = trace_id
 
             await channel.default_exchange.publish(
                 aio_pika.Message(
@@ -164,13 +277,15 @@ class RabbitMQSmsQueue:
                     delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
                     content_type="application/json",
                     message_id=f"cancel_sms_{booking_reference or phone}",
+                    headers=headers or None,
                 ),
                 routing_key=SMS_QUEUE_NAME,
             )
             logger.info(
-                "[SmsQueue] Enqueued booking cancellation SMS for %s (Ref: %s)",
+                "[SmsQueue] Enqueued booking cancellation SMS for %s (Ref: %s, Trace: %s)",
                 phone,
                 booking_reference,
+                trace_id or "N/A",
             )
         except Exception as e:
             logger.error(

@@ -12,14 +12,14 @@ ENV UV_LINK_MODE=copy
 ENV UV_HTTP_TIMEOUT=120
 
 # Install dependencies in a separate layer for Docker cache optimization
-COPY apps/background-worker/src/workers/python-worker/pyproject.toml apps/background-worker/src/workers/python-worker/uv.lock ./
+COPY apps/crawler-worker/pyproject.toml apps/crawler-worker/uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev
 
 # Copy application source code and install project
-COPY apps/background-worker/src/workers/python-worker/src ./src
-COPY apps/background-worker/src/workers/python-worker/worker.py ./worker.py
-COPY apps/background-worker/src/workers/python-worker/README.md ./README.md
+COPY apps/crawler-worker/src ./src
+COPY apps/crawler-worker/worker.py ./worker.py
+COPY apps/crawler-worker/README.md ./README.md
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 

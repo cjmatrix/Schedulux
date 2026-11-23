@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
 
 import grpc
+from opentelemetry import trace
 
 from agent_orchestrator.circuit_breaker import (
     CircuitBreakerError,
@@ -96,19 +97,32 @@ def build_embedded_services(raw_services: list[dict[str, Any]]) -> list[ServiceE
     return services_list
 
 
+class _TraceContextClientInterceptor(grpc.aio.UnaryUnaryClientInterceptor):
+    
+
+    async def intercept_unary_unary(self, continuation, client_call_details, request):
+        current_span = trace.get_current_span()
+        span_ctx = current_span.get_span_context() if current_span else None
+        if span_ctx and span_ctx.is_valid:
+            traceparent = f"00-{format(span_ctx.trace_id, '032x')}-{format(span_ctx.span_id, '016x')}-{span_ctx.trace_flags:02x}"
+            metadata = list(client_call_details.metadata or [])
+            metadata.append(("traceparent", traceparent))
+            metadata.append(("trace_id", format(span_ctx.trace_id, "032x")))
+            client_call_details = client_call_details._replace(metadata=metadata)
+        return await continuation(client_call_details, request)
+
+
 async def _execute_scheduling_rpc[T](
     rpc_caller: Callable[[scheduling_pb2_grpc.SchedulingInventoryServiceStub], Awaitable[T]],
     operation_name: str,
     fallback_on_open: dict[str, Any],
 ) -> T | dict[str, Any]:
-    """
-    Executes a gRPC call to scheduling-inventory guarded by aiobreaker.
-    Centralizes channel lifecycle, timeouts, circuit breaking, and unified error handling.
-    """
+    
     target_url = SCHEDULING_SERVICE_URL
+    interceptors = [_TraceContextClientInterceptor()]
 
     async def _do_rpc() -> T:
-        async with grpc.aio.insecure_channel(target_url) as channel:
+        async with grpc.aio.insecure_channel(target_url, interceptors=interceptors) as channel:
             stub = scheduling_pb2_grpc.SchedulingInventoryServiceStub(channel)
             return await rpc_caller(stub)
 

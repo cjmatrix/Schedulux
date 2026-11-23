@@ -9,8 +9,8 @@
         "Identity & Tenant",
         "Scheduling & Inventory",
         "Frontend React",
-        "Background Worker (TS)",
-        "Background Worker (Python)",
+        "Kafka Consumer",
+        "Crawler Worker (Python)",
         "AI Orchestrator (gRPC)"
       ],
       "dependsOrder": "parallel",
@@ -99,9 +99,9 @@
       "problemMatcher": []
     },
     {
-      "label": "Background Worker (TS)",
+      "label": "Kafka Consumer",
       "type": "shell",
-      "command": "pnpm dev:worker",
+      "command": "pnpm dev:consumer",
       "isBackground": true,
       "presentation": {
         "echo": true,
@@ -112,9 +112,9 @@
       "problemMatcher": []
     },
     {
-      "label": "Background Worker (Python)",
+      "label": "Crawler Worker (Python)",
       "type": "shell",
-      "command": "pnpm dev:worker:python",
+      "command": "pnpm dev:crawler",
       "isBackground": true,
       "presentation": {
         "echo": true,

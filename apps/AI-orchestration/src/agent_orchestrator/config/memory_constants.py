@@ -40,3 +40,4 @@ QDRANT_VECTOR_SIZE = int(os.getenv("QDRANT_VECTOR_SIZE", "1024"))
 
 
 AGENT_MEMORY_QUEUE_NAME = os.getenv("AGENT_MEMORY_QUEUE_NAME", "agent-memory-queue")
+AGENT_MEMORY_DLQ_NAME = os.getenv("AGENT_MEMORY_DLQ_NAME", "agent-memory-queue-dlq")

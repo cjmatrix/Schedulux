@@ -193,7 +193,7 @@ Transcript to analyze:
             }
         except Exception as e:
             print(f"[MemoryService Error] Memory consolidation failed: {e}", flush=True)
-            return {"status": "error", "error": str(e)}
+            raise
 
     async def get_relevant_memory(
         self, tenant_id: str, agent_id: str, query: str

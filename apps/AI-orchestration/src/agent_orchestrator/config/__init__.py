@@ -1,5 +1,6 @@
 from agent_orchestrator.config.memory_constants import (
     AGENT_MEMORY_QUEUE_NAME,
+    AGENT_MEMORY_DLQ_NAME,
     MEMORY_CHUNK_SIZE,
     MEMORY_CHUNK_TOKEN_SIZE,
     MEMORY_KEEP_RECENT,
@@ -44,4 +45,5 @@ __all__ = [
     "QDRANT_COLLECTION_NAME",
     "QDRANT_VECTOR_SIZE",
     "AGENT_MEMORY_QUEUE_NAME",
+    "AGENT_MEMORY_DLQ_NAME",
 ]

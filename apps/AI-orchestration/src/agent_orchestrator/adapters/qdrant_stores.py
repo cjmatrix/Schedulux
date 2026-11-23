@@ -126,7 +126,7 @@ class QdrantMemoryStore(MemoryVectorStore):
         tenant_id: str,
         agent_id: str | None = None,
         limit: int = 4,
-        score_threshold: float | None = 0.45,
+        score_threshold: float | None = 0.35,
     ) -> list[str]:
         if not query_vector or not any(query_vector):
             return []

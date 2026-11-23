@@ -7,7 +7,9 @@ import aio_pika
 from pathlib import Path
 from dotenv import load_dotenv
 
-dotenv_path = Path(__file__).resolve().parents[3] / ".env"
+dotenv_path = Path(__file__).resolve().parent / ".env"
+if not dotenv_path.exists():
+    dotenv_path = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(dotenv_path)
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))

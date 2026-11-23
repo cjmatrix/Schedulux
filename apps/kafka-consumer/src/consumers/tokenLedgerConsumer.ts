@@ -4,7 +4,7 @@ import { Consumer, Kafka, logLevel } from 'kafkajs';
 export const KAFKA_TOKEN_TOPIC =
   process.env.KAFKA_TOKEN_TOPIC || 'billing.tokens.consumed';
 export const KAFKA_TOKEN_CONSUMER_GROUP =
-  process.env.KAFKA_TOKEN_CONSUMER_GROUP_ID || 'background-worker-token-ledger';
+  process.env.KAFKA_TOKEN_CONSUMER_GROUP_ID || 'kafka-consumer-token-ledger';
 
 export const OPENSEARCH_INDEX = process.env.OPENSEARCH_TOKEN_INDEX || 'token-ledger';
 
@@ -111,7 +111,7 @@ export const startTokenLedgerConsumer = async (): Promise<TokenLedgerConsumerCon
     }
 
     const kafka = new Kafka({
-      clientId: 'background-worker-token-ledger',
+      clientId: 'kafka-consumer-token-ledger',
       brokers: brokersList,
       ssl: kafkaPassword ? { rejectUnauthorized: false } : undefined,
       sasl: kafkaPassword

@@ -7,49 +7,33 @@ import {
   startTokenLedgerConsumer,
   type TokenLedgerConsumerController,
 } from './consumers/tokenLedgerConsumer.js';
-import { createEmailWorker, type EmailWorkerController } from './workers/emailWorker.js';
-import { createSmsWorker, type SmsWorkerController } from './workers/smsWorker.js';
 
-console.log(' [Background Worker Service] Starting workers & consumers...');
+console.log(' [Kafka Consumer Service] Starting consumers...');
 
-let emailWorker: EmailWorkerController | null = null;
-let smsWorker: SmsWorkerController | null = null;
 let bookingEventsConsumer: BookingEventsConsumerController | null = null;
 let tokenLedgerConsumer: TokenLedgerConsumerController | null = null;
 
 async function bootstrap() {
   try {
-    emailWorker = await createEmailWorker();
-    console.log(' [Background Worker] Listening for jobs on RabbitMQ "email-queue"');
-
-    smsWorker = await createSmsWorker();
-    console.log(' [Background Worker] Listening for jobs on RabbitMQ "sms-queue"');
-
     bookingEventsConsumer = await startBookingEventsConsumer();
     if (bookingEventsConsumer) {
-      console.log(' [Background Worker] Listening for domain events on Kafka "scheduling.booking.events"');
+      console.log(' [Kafka Consumer] Listening for domain events on Kafka "scheduling.booking.events"');
     }
 
     tokenLedgerConsumer = await startTokenLedgerConsumer();
     if (tokenLedgerConsumer) {
-      console.log(' [Background Worker] Listening for token usage on Kafka "billing.tokens.consumed"');
+      console.log(' [Kafka Consumer] Listening for token usage on Kafka "billing.tokens.consumed"');
     }
-  } catch (err) {
-    console.error(' [Background Worker] Failed to start workers:', err);
+  } catch (err: unknown) {
+    console.error(' [Kafka Consumer] Failed to start consumers:', err);
     process.exit(1);
   }
 }
 
 const gracefulShutdown = async (signal: string) => {
-  console.log(`\nReceived ${signal}. Shutting down workers...`);
+  console.log(`\nReceived ${signal}. Shutting down consumers...`);
   try {
     const shutdowns: Promise<void>[] = [];
-    if (emailWorker) {
-      shutdowns.push(emailWorker.close());
-    }
-    if (smsWorker) {
-      shutdowns.push(smsWorker.close());
-    }
     if (bookingEventsConsumer) {
       shutdowns.push(bookingEventsConsumer.close());
     }
@@ -57,9 +41,9 @@ const gracefulShutdown = async (signal: string) => {
       shutdowns.push(tokenLedgerConsumer.close());
     }
     await Promise.allSettled(shutdowns);
-    console.log(' Workers & consumers closed. Exiting process.');
+    console.log(' Consumers closed. Exiting process.');
     process.exit(0);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error during shutdown:', error);
     process.exit(1);
   }

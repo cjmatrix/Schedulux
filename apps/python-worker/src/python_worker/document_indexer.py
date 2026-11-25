@@ -11,7 +11,7 @@ from typing import Any
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from fastembed.sparse import SparseTextEmbedding
 from qdrant_client import AsyncQdrantClient, models
 import voyageai
@@ -22,8 +22,7 @@ from python_worker.tracing import get_tracer
 
 tracer = get_tracer("crawler-worker.document-indexer")
 
-dotenv_path = Path(__file__).resolve().parents[5] / ".env"
-load_dotenv(dotenv_path)
+load_dotenv(find_dotenv())
 
 KNOWLEDGE_COLLECTION_NAME = os.getenv("KNOWLEDGE_COLLECTION_NAME", "knowledge_documents")
 VOYAGE_EMBEDDING_MODEL = os.getenv("VOYAGE_EMBEDDING_MODEL", "voyage-4")

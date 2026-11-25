@@ -29,3 +29,14 @@ module "lambda_sms" {
   twilio_messaging_service_sid = var.twilio_messaging_service_sid
   default_country_code         = var.default_country_code
 }
+
+module "ec2" {
+  source = "./modules/ec2"
+
+  project_name        = var.project_name
+  environment         = var.environment
+  instance_type       = var.ec2_instance_type
+  root_volume_size    = var.ec2_root_volume_size
+  ssh_cidr_blocks     = var.ssh_cidr_blocks
+  k8s_api_cidr_blocks = var.k8s_api_cidr_blocks
+}

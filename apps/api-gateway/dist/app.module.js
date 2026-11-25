@@ -33,6 +33,11 @@ const redis_module_js_1 = require("./modules/redis.module.js");
 const circuit_breaker_1 = require("@repo/circuit-breaker");
 const throttler_storage_redis_service_js_1 = require("./services/throttler-storage-redis.service.js");
 const isProduction = process.env.NODE_ENV === 'production';
+const grpcChannelOptions = {
+    'grpc.service_config': JSON.stringify({
+        loadBalancingConfig: [{ round_robin: {} }],
+    }),
+};
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -90,7 +95,8 @@ exports.AppModule = AppModule = __decorate([
                     name: 'TENANT_PACKAGE',
                     transport: microservices_1.Transport.GRPC,
                     options: {
-                        url: 'localhost:50051',
+                        url: process.env.IDENTITY_GRPC_URL || process.env.TENANT_SERVICE_URL || 'localhost:50051',
+                        channelOptions: grpcChannelOptions,
                         package: 'tenant',
                         protoPath: require.resolve('@repo/proto/tenant.proto'),
                         loader: {
@@ -106,7 +112,8 @@ exports.AppModule = AppModule = __decorate([
                     name: 'DASHBOARD_PACKAGE',
                     transport: microservices_1.Transport.GRPC,
                     options: {
-                        url: 'localhost:50051',
+                        url: process.env.IDENTITY_GRPC_URL || process.env.TENANT_SERVICE_URL || 'localhost:50051',
+                        channelOptions: grpcChannelOptions,
                         package: 'dashboard',
                         protoPath: require.resolve('@repo/proto/dashboard.proto'),
                         loader: {
@@ -122,7 +129,8 @@ exports.AppModule = AppModule = __decorate([
                     name: 'SUPERADMIN_PACKAGE',
                     transport: microservices_1.Transport.GRPC,
                     options: {
-                        url: 'localhost:50051',
+                        url: process.env.IDENTITY_GRPC_URL || process.env.TENANT_SERVICE_URL || 'localhost:50051',
+                        channelOptions: grpcChannelOptions,
                         package: 'superadmin',
                         protoPath: require.resolve('@repo/proto/superadmin.proto'),
                         loader: {
@@ -138,7 +146,10 @@ exports.AppModule = AppModule = __decorate([
                     name: 'KNOWLEDGE_PACKAGE',
                     transport: microservices_1.Transport.GRPC,
                     options: {
-                        url: 'localhost:50052',
+                        url: process.env.AI_ORCHESTRATION_GRPC_URL ||
+                            process.env.KNOWLEDGE_GRPC_URL ||
+                            'localhost:50052',
+                        channelOptions: grpcChannelOptions,
                         package: 'knowledge',
                         protoPath: require.resolve('@repo/proto/knowledge.proto'),
                         loader: {
@@ -154,7 +165,8 @@ exports.AppModule = AppModule = __decorate([
                     name: 'SCHEDULING_PACKAGE',
                     transport: microservices_1.Transport.GRPC,
                     options: {
-                        url: 'localhost:50053',
+                        url: process.env.SCHEDULING_GRPC_URL || 'localhost:50053',
+                        channelOptions: grpcChannelOptions,
                         package: 'scheduling',
                         protoPath: require.resolve('@repo/proto/scheduling.proto'),
                         loader: {

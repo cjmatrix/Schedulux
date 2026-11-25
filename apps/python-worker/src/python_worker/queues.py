@@ -4,12 +4,11 @@ import json
 from typing import Optional, Any
 import aio_pika
 import redis.asyncio as aioredis
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 
 from python_worker.tracing import inject_trace_context
 
-dotenv_path = Path(__file__).resolve().parents[5] / ".env"
-load_dotenv(dotenv_path)
+load_dotenv(find_dotenv())
 
 redis_uri = os.environ.get("REDIS_URI", "redis://localhost:6379")
 rabbitmq_uri = os.environ.get("RABBITMQ_URI", "amqp://guest:guest@localhost:5672")

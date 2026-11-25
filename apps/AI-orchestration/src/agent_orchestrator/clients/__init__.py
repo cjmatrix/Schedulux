@@ -10,6 +10,8 @@ from agent_orchestrator.clients.redis_client import (
 from agent_orchestrator.clients.scheduling_client import (
     build_embedded_resources,
     build_embedded_services,
+    close_scheduling_channel,
+    get_scheduling_channel,
     sync_agent_inventory,
 )
 
@@ -21,5 +23,7 @@ __all__ = [
     "set_cached_draft",
     "build_embedded_resources",
     "build_embedded_services",
+    "close_scheduling_channel",
+    "get_scheduling_channel",
     "sync_agent_inventory",
 ]

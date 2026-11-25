@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: schedulux-config
+  namespace: schedulux
+  labels:
+    app.kubernetes.io/part-of: schedulux
+data:
+  NODE_ENV: "production"
+  PORT: "5000"
+  FRONTEND_URL: "https://app.schedulux.com"
+
+  # Internal Microservice Headless gRPC URLs (Enables Client-Side Round-Robin)
+  IDENTITY_GRPC_URL: "identity-tenant-headless.schedulux.svc.cluster.local:50051"
+  TENANT_SERVICE_URL: "identity-tenant-headless.schedulux.svc.cluster.local:50051"
+  AI_ORCHESTRATION_GRPC_URL: "ai-orchestration-headless.schedulux.svc.cluster.local:50052"
+  KNOWLEDGE_GRPC_URL: "ai-orchestration-headless.schedulux.svc.cluster.local:50052"
+  SCHEDULING_GRPC_URL: "scheduling-inventory-headless.schedulux.svc.cluster.local:50053"
+  SCHEDULING_SERVICE_URL: "scheduling-inventory-headless.schedulux.svc.cluster.local:50053"
+
+  # Redis Distributed Cache
+  REDIS_URI: "redis://redis-service.schedulux.svc.cluster.local:6379"
+  REDIS_HOST: "redis-service.schedulux.svc.cluster.local"
+  REDIS_PORT: "6379"
+
+  # Message Brokers
+  RABBITMQ_URI: "amqp://guest:guest@rabbitmq-service.schedulux.svc.cluster.local:5672"
+  KAFKA_BROKERS: "kafka-service.schedulux.svc.cluster.local:9092"
+  KAFKA_CONSUMER_GROUP: "ai-orchestration-consumer-group"
+  KAFKA_BOOKING_TOPIC: "booking.events"
+  KAFKA_SCHEDULING_DOMAIN_TOPIC: "scheduling.domain.events"
+  KAFKA_TOKEN_TOPIC: "billing.tokens.consumed"
+
+  # Asynchronous RabbitMQ Queue Names
+  DOCUMENT_INDEXING_QUEUE_NAME: "knowledge-document-indexing-queue"
+  DOCUMENT_STATUS_QUEUE_NAME: "knowledge-document-status-queue"
+  AGENT_MEMORY_QUEUE_NAME: "agent-memory-queue"
+  AGENT_MEMORY_DLQ_NAME: "agent-memory-queue-dlq"
+  CRAWL_QUEUE_NAME: "knowledge-crawl-queue"
+  CRAWL_DLQ_NAME: "knowledge-crawl-queue-dlq"
+  SCHEMA_QUEUE_NAME: "schema-generation-queue"
+
+  # Telemetry & Storage Indexes
+  OPENSEARCH_TOKEN_INDEX: "token-ledger"
+
+  # OpenTelemetry Tracing (K3s Collector / Grafana Agent)
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.schedulux.svc.cluster.local:4317"
+
+  # Throttling & Session
+  RATE_LIMIT_DISABLED: "false"
+  ACCESS_TOKEN_MAX_AGE_MS: "900000"
+  REFRESH_TOKEN_MAX_AGE_MS: "604800000"

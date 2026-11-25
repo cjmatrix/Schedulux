@@ -11,9 +11,10 @@ This document contains all Docker build commands for the backend microservices i
 All Node.js services utilize the unified Turborepo-pruned [Dockerfile.node](file:///home/cjmatrix/Documents/Schedulux/Schedulx-core/docker/Dockerfile.node). Pass the appropriate `--build-arg APP_NAME` and `--build-arg APP_DIR`.
 
 ### 1.1 API Gateway
-* **Package**: `@repo/api-gateway`
-* **Directory**: `apps/api-gateway`
-* **Port**: `5000` (HTTP)
+
+- **Package**: `@repo/api-gateway`
+- **Directory**: `apps/api-gateway`
+- **Port**: `5000` (HTTP)
 
 ```bash
 docker build -f docker/Dockerfile.node \
@@ -25,9 +26,10 @@ docker build -f docker/Dockerfile.node \
 ---
 
 ### 1.2 Customer API Gateway
-* **Package**: `@repo/customer-api-gateway`
-* **Directory**: `apps/customer-api-gateway`
-* **Port**: `5001` (HTTP / WebSocket)
+
+- **Package**: `@repo/customer-api-gateway`
+- **Directory**: `apps/customer-api-gateway`
+- **Port**: `5001` (HTTP / WebSocket)
 
 ```bash
 docker build -f docker/Dockerfile.node \
@@ -39,9 +41,10 @@ docker build -f docker/Dockerfile.node \
 ---
 
 ### 1.3 Identity & Tenant Microservice
-* **Package**: `@repo/identity-tenant`
-* **Directory**: `apps/identity-tenant`
-* **Port**: `50051` (gRPC)
+
+- **Package**: `@repo/identity-tenant`
+- **Directory**: `apps/identity-tenant`
+- **Port**: `50051` (gRPC)
 
 ```bash
 docker build -f docker/Dockerfile.node \
@@ -53,9 +56,10 @@ docker build -f docker/Dockerfile.node \
 ---
 
 ### 1.4 Scheduling & Inventory Microservice
-* **Package**: `@repo/scheduling-inventory`
-* **Directory**: `apps/scheduling-inventory`
-* **Port**: `50053` (gRPC)
+
+- **Package**: `@repo/scheduling-inventory`
+- **Directory**: `apps/scheduling-inventory`
+- **Port**: `50053` (gRPC)
 
 ```bash
 docker build -f docker/Dockerfile.node \
@@ -67,8 +71,9 @@ docker build -f docker/Dockerfile.node \
 ---
 
 ### 1.5 Kafka Consumer Service
-* **Package**: `@repo/kafka-consumer`
-* **Directory**: `apps/kafka-consumer`
+
+- **Package**: `@repo/kafka-consumer`
+- **Directory**: `apps/kafka-consumer`
 
 ```bash
 docker build -f docker/Dockerfile.node \
@@ -84,9 +89,10 @@ docker build -f docker/Dockerfile.node \
 Python services use dedicated `uv`-optimized Dockerfiles for fast, lean multi-stage builds.
 
 ### 2.1 AI Orchestration Microservice
-* **Dockerfile**: [Dockerfile.python](file:///home/cjmatrix/Documents/Schedulux/Schedulx-core/docker/Dockerfile.python)
-* **Directory**: `apps/AI-orchestration`
-* **Port**: `50052` (gRPC)
+
+- **Dockerfile**: [Dockerfile.python](file:///home/cjmatrix/Documents/Schedulux/Schedulx-core/docker/Dockerfile.python)
+- **Directory**: `apps/AI-orchestration`
+- **Port**: `50052` (gRPC)
 
 ```bash
 docker build -f docker/Dockerfile.python \
@@ -96,8 +102,9 @@ docker build -f docker/Dockerfile.python \
 ---
 
 ### 2.2 Crawler & Document Indexer Worker
-* **Dockerfile**: [Dockerfile.python-worker](file:///home/cjmatrix/Documents/Schedulux/Schedulx-core/docker/Dockerfile.python-worker)
-* **Directory**: `apps/crawler-worker`
+
+- **Dockerfile**: [Dockerfile.python-worker](file:///home/cjmatrix/Documents/Schedulux/Schedulx-core/docker/Dockerfile.python-worker)
+- **Directory**: `apps/crawler-worker`
 
 ```bash
 docker build -f docker/Dockerfile.python-worker \
@@ -156,17 +163,43 @@ docker build -f docker/Dockerfile.python-worker \
 
 ---
 
-## 4. Importing Images into K3s (Local Cluster)
+## 4. Pushing Images to Docker Hub
 
-If you are running a local K3s cluster without an external container registry:
+To tag and push all built microservices to Docker Hub (for account `cjmatrix`):
+
+```bash
+# Tag all images for Docker Hub
+docker tag schedulux/api-gateway:latest cjmatrix/api-gateway:latest
+docker tag schedulux/customer-api-gateway:latest cjmatrix/customer-api-gateway:latest
+docker tag schedulux/identity-tenant:latest cjmatrix/identity-tenant:latest
+docker tag schedulux/scheduling-inventory:latest cjmatrix/scheduling-inventory:latest
+docker tag schedulux/ai-orchestration:latest cjmatrix/ai-orchestration:latest
+docker tag schedulux/crawler-worker:latest cjmatrix/crawler-worker:latest
+docker tag schedulux/kafka-consumer:latest cjmatrix/kafka-consumer:latest
+
+# Push all images to Docker Hub
+docker push cjmatrix/api-gateway:latest
+docker push cjmatrix/customer-api-gateway:latest
+docker push cjmatrix/identity-tenant:latest
+docker push cjmatrix/scheduling-inventory:latest
+docker push cjmatrix/ai-orchestration:latest
+docker push cjmatrix/crawler-worker:latest
+docker push cjmatrix/kafka-consumer:latest
+```
+
+---
+
+## 5. Importing Images into K3s (Local Cluster Alternative)
+
+If you are running a local K3s cluster without pulling from Docker Hub:
 
 ```bash
 # Save and import images directly into K3s containerd
-docker save schedulux/api-gateway:latest | sudo k3s ctr images import -
-docker save schedulux/customer-api-gateway:latest | sudo k3s ctr images import -
-docker save schedulux/identity-tenant:latest | sudo k3s ctr images import -
-docker save schedulux/scheduling-inventory:latest | sudo k3s ctr images import -
-docker save schedulux/kafka-consumer:latest | sudo k3s ctr images import -
-docker save schedulux/ai-orchestration:latest | sudo k3s ctr images import -
-docker save schedulux/crawler-worker:latest | sudo k3s ctr images import -
+docker save cjmatrix/api-gateway:latest | sudo k3s ctr images import -
+docker save cjmatrix/customer-api-gateway:latest | sudo k3s ctr images import -
+docker save cjmatrix/identity-tenant:latest | sudo k3s ctr images import -
+docker save cjmatrix/scheduling-inventory:latest | sudo k3s ctr images import -
+docker save cjmatrix/kafka-consumer:latest | sudo k3s ctr images import -
+docker save cjmatrix/ai-orchestration:latest | sudo k3s ctr images import -
+docker save cjmatrix/crawler-worker:latest | sudo k3s ctr images import -
 ```

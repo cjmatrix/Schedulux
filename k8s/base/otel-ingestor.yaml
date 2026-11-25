@@ -1,0 +1,124 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-ingestor-config
+  namespace: schedulux
+  labels:
+    app: otel-ingestor
+    app.kubernetes.io/part-of: schedulux
+data:
+  config.yaml: |
+    extensions:
+      basicauth/opensearch:
+        client_auth:
+          username: "${env:OPENSEARCH_USERNAME}"
+          password: "${env:OPENSEARCH_PASSWORD}"
+
+    receivers:
+      kafka:
+        brokers:
+          - "${env:KAFKA_BROKERS}"
+        protocol_version: "2.1.0"
+        group_id: "schedulux-otel-ingestor"
+        traces:
+          topics:
+            - "otel-traces"
+          encoding: "otlp_json"
+        logs:
+          topics:
+            - "otel-logs"
+          encoding: "otlp_json"
+        auth:
+          sasl:
+            mechanism: "SCRAM-SHA-256"
+            username: "${env:KAFKA_USERNAME}"
+            password: "${env:KAFKA_PASSWORD}"
+        tls:
+          insecure: false
+          insecure_skip_verify: true
+
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 100
+        spike_limit_mib: 30
+
+      batch:
+        timeout: 5s
+        send_batch_size: 1024
+
+    exporters:
+      opensearch:
+        http:
+          endpoint: "${env:OPENSEARCH_ENDPOINT}"
+          auth:
+            authenticator: basicauth/opensearch
+        traces_index: "otel-traces"
+        logs_index: "otel-logs"
+        mapping:
+          mode: "otel-v1"
+        retry_on_failure:
+          enabled: true
+          initial_interval: 1s
+          max_interval: 30s
+          max_elapsed_time: 5m
+        sending_queue:
+          enabled: true
+          num_consumers: 2
+          queue_size: 500
+
+    service:
+      extensions: [basicauth/opensearch]
+      pipelines:
+        traces:
+          receivers: [kafka]
+          processors: [memory_limiter, batch]
+          exporters: [opensearch]
+        logs:
+          receivers: [kafka]
+          processors: [memory_limiter, batch]
+          exporters: [opensearch]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-ingestor
+  namespace: schedulux
+  labels:
+    app: otel-ingestor
+    app.kubernetes.io/name: otel-ingestor
+    app.kubernetes.io/part-of: schedulux
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-ingestor
+  template:
+    metadata:
+      labels:
+        app: otel-ingestor
+    spec:
+      containers:
+        - name: otel-ingestor
+          image: otel/opentelemetry-collector-contrib:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--config=/etc/otelcol-contrib/config.yaml"
+          envFrom:
+            - secretRef:
+                name: schedulux-secrets
+          resources:
+            requests:
+              cpu: 50m
+              memory: 60Mi
+            limits:
+              cpu: 200m
+              memory: 150Mi
+          volumeMounts:
+            - name: ingestor-config-volume
+              mountPath: /etc/otelcol-contrib/config.yaml
+              subPath: config.yaml
+      volumes:
+        - name: ingestor-config-volume
+          configMap:
+            name: otel-ingestor-config

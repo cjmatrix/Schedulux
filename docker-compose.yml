@@ -23,7 +23,7 @@ services:
     container_name: schedulux-otel-collector
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
-      - ./infra/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+      - ./infra/observability/otel-collector-config.yaml:/etc/otel-collector-config.yaml
     ports:
       - "4317:4317" # OTLP gRPC (from NestJS services)
       - "4318:4318" # OTLP HTTP
@@ -37,7 +37,7 @@ services:
     container_name: schedulux-otel-ingestor
     command: ["--config=/etc/otel-ingestor-config.yaml"]
     volumes:
-      - ./infra/otel-ingestor-config.yaml:/etc/otel-ingestor-config.yaml
+      - ./infra/observability/otel-ingestor-config.yaml:/etc/otel-ingestor-config.yaml
     env_file:
       - .env
     restart: unless-stopped

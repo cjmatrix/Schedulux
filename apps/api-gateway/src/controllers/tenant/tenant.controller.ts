@@ -83,6 +83,14 @@ export class TenantController implements OnModuleInit {
     return tenantId;
   }
 
+  @Get('test')
+  testEndpoint() {
+  return {
+    status: 'ok',
+    service: 'api-gateway', 
+    timestamp: new Date().toISOString(),
+  };
+}
   @Get(API_ROUTES.TENANT.AUTH.ME)
   @UseGuards(TenantAuthGuard, RolesGuard)
   @Roles('tenant_owner')

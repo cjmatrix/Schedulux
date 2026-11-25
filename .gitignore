@@ -108,3 +108,5 @@ evals/
 
 __pycache__/
 *.pyc
+
+doppler-secrets.yaml

@@ -26,6 +26,12 @@ import { ThrottlerStorageRedisService } from './services/throttler-storage-redis
 
 const isProduction = process.env.NODE_ENV === 'production';
 
+const grpcChannelOptions = {
+  'grpc.service_config': JSON.stringify({
+    loadBalancingConfig: [{ round_robin: {} }],
+  }),
+};
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -80,7 +86,8 @@ const isProduction = process.env.NODE_ENV === 'production';
         name: 'TENANT_PACKAGE',
         transport: Transport.GRPC,
         options: {
-          url: 'localhost:50051',
+          url: process.env.IDENTITY_GRPC_URL || process.env.TENANT_SERVICE_URL || 'localhost:50051',
+          channelOptions: grpcChannelOptions,
           package: 'tenant',
           protoPath: require.resolve('@repo/proto/tenant.proto'),
           loader: {
@@ -96,7 +103,8 @@ const isProduction = process.env.NODE_ENV === 'production';
         name: 'DASHBOARD_PACKAGE',
         transport: Transport.GRPC,
         options: {
-          url: 'localhost:50051',
+          url: process.env.IDENTITY_GRPC_URL || process.env.TENANT_SERVICE_URL || 'localhost:50051',
+          channelOptions: grpcChannelOptions,
           package: 'dashboard',
           protoPath: require.resolve('@repo/proto/dashboard.proto'),
           loader: {
@@ -112,7 +120,8 @@ const isProduction = process.env.NODE_ENV === 'production';
         name: 'SUPERADMIN_PACKAGE',
         transport: Transport.GRPC,
         options: {
-          url: 'localhost:50051',
+          url: process.env.IDENTITY_GRPC_URL || process.env.TENANT_SERVICE_URL || 'localhost:50051',
+          channelOptions: grpcChannelOptions,
           package: 'superadmin',
           protoPath: require.resolve('@repo/proto/superadmin.proto'),
           loader: {
@@ -128,7 +137,11 @@ const isProduction = process.env.NODE_ENV === 'production';
         name: 'KNOWLEDGE_PACKAGE',
         transport: Transport.GRPC,
         options: {
-          url: 'localhost:50052',
+          url:
+            process.env.AI_ORCHESTRATION_GRPC_URL ||
+            process.env.KNOWLEDGE_GRPC_URL ||
+            'localhost:50052',
+          channelOptions: grpcChannelOptions,
           package: 'knowledge',
           protoPath: require.resolve('@repo/proto/knowledge.proto'),
           loader: {
@@ -144,7 +157,8 @@ const isProduction = process.env.NODE_ENV === 'production';
         name: 'SCHEDULING_PACKAGE',
         transport: Transport.GRPC,
         options: {
-          url: 'localhost:50053',
+          url: process.env.SCHEDULING_GRPC_URL || 'localhost:50053',
+          channelOptions: grpcChannelOptions,
           package: 'scheduling',
           protoPath: require.resolve('@repo/proto/scheduling.proto'),
           loader: {

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -112,19 +113,64 @@ class _TraceContextClientInterceptor(grpc.aio.UnaryUnaryClientInterceptor):
         return await continuation(client_call_details, request)
 
 
+_channel: grpc.aio.Channel | None = None
+_channel_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_channel_options() -> list[tuple[str, Any]]:
+    return [
+        ("grpc.lb_policy_name", "round_robin"),
+        ("grpc.enable_retries", 1),
+        ("grpc.keepalive_time_ms", 30000),
+        ("grpc.keepalive_timeout_ms", 10000),
+        ("grpc.http2.max_pings_without_data", 0),
+        ("grpc.keepalive_permit_without_calls", 1),
+    ]
+
+
+def _format_target_url(raw_url: str) -> str:
+    cleaned = raw_url.strip()
+    if cleaned.startswith("dns:///") or cleaned.startswith("unix:"):
+        return cleaned
+    return f"dns:///{cleaned}"
+
+
+def get_scheduling_channel() -> grpc.aio.Channel:
+    global _channel, _channel_loop
+    try:
+        current_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        current_loop = None
+
+    if _channel is None or _channel_loop != current_loop:
+        _channel_loop = current_loop
+        target = _format_target_url(SCHEDULING_SERVICE_URL)
+        interceptors = [_TraceContextClientInterceptor()]
+        _channel = grpc.aio.insecure_channel(
+            target,
+            options=_get_channel_options(),
+            interceptors=interceptors,
+        )
+    return _channel
+
+
+async def close_scheduling_channel() -> None:
+    global _channel, _channel_loop
+    if _channel is not None:
+        await _channel.close()
+        _channel = None
+        _channel_loop = None
+
+
 async def _execute_scheduling_rpc[T](
     rpc_caller: Callable[[scheduling_pb2_grpc.SchedulingInventoryServiceStub], Awaitable[T]],
     operation_name: str,
     fallback_on_open: dict[str, Any],
 ) -> T | dict[str, Any]:
-    
-    target_url = SCHEDULING_SERVICE_URL
-    interceptors = [_TraceContextClientInterceptor()]
-
     async def _do_rpc() -> T:
-        async with grpc.aio.insecure_channel(target_url, interceptors=interceptors) as channel:
-            stub = scheduling_pb2_grpc.SchedulingInventoryServiceStub(channel)
-            return await rpc_caller(stub)
+        channel = get_scheduling_channel()
+        stub = scheduling_pb2_grpc.SchedulingInventoryServiceStub(channel)
+        return await rpc_caller(stub)
 
     try:
         return await scheduling_breaker.call_async(_do_rpc)

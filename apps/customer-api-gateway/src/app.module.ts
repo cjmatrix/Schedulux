@@ -15,6 +15,12 @@ import { ThrottlerStorageRedisService } from './services/throttler-storage-redis
 
 const isProduction = process.env.NODE_ENV === 'production';
 
+const grpcChannelOptions = {
+  'grpc.service_config': JSON.stringify({
+    loadBalancingConfig: [{ round_robin: {} }],
+  }),
+};
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -79,7 +85,11 @@ const isProduction = process.env.NODE_ENV === 'production';
         name: 'KNOWLEDGE_PACKAGE',
         transport: Transport.GRPC,
         options: {
-          url: process.env.KNOWLEDGE_GRPC_URL || 'localhost:50052',
+          url:
+            process.env.AI_ORCHESTRATION_GRPC_URL ||
+            process.env.KNOWLEDGE_GRPC_URL ||
+            'localhost:50052',
+          channelOptions: grpcChannelOptions,
           package: 'knowledge',
           protoPath: require.resolve('@repo/proto/knowledge.proto'),
           loader: {

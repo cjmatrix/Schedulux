@@ -1,0 +1,209 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: schedulux
+  labels:
+    app: otel-collector
+    app.kubernetes.io/part-of: schedulux
+data:
+  config.yaml: |
+    extensions:
+      basicauth/grafana:
+        client_auth:
+          username: "${env:GRAFANA_CLOUD_INSTANCE_ID}"
+          password: "${env:GRAFANA_CLOUD_API_KEY}"
+
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 100
+        spike_limit_mib: 30
+
+      tail_sampling:
+        decision_wait: 15s
+        num_traces: 10000
+        expected_new_traces_per_sec: 50
+
+        policies:
+          - name: keep-all-errors
+            type: status_code
+            status_code:
+              status_codes: [ERROR]
+
+          - name: keep-slow-llm-traces
+            type: and
+            and:
+              and_sub_policy:
+                - name: is-llm-endpoint
+                  type: string_attribute
+                  string_attribute:
+                    key: http.route
+                    values:
+                      - /api/v1/public/chat
+                      - api/v1/public/chat
+                      - /api/v1/tenant/knowledge/onboarding/start
+                      - api/v1/tenant/knowledge/onboarding/start
+                      - /api/v1/tenant/knowledge/onboarding/message
+                      - api/v1/tenant/knowledge/onboarding/message
+                      - /api/v1/tenant/knowledge/onboarding/sandbox
+                      - api/v1/tenant/knowledge/onboarding/sandbox
+                - name: llm-latency-threshold
+                  type: latency
+                  latency:
+                    threshold_ms: 10000
+
+          - name: keep-slow-crud-traces
+            type: and
+            and:
+              and_sub_policy:
+                - name: not-llm-endpoint
+                  type: string_attribute
+                  string_attribute:
+                    key: http.route
+                    values:
+                      - /api/v1/public/chat
+                      - api/v1/public/chat
+                      - /api/v1/tenant/knowledge/onboarding/start
+                      - api/v1/tenant/knowledge/onboarding/start
+                      - /api/v1/tenant/knowledge/onboarding/message
+                      - api/v1/tenant/knowledge/onboarding/message
+                      - /api/v1/tenant/knowledge/onboarding/sandbox
+                      - api/v1/tenant/knowledge/onboarding/sandbox
+                    invert_match: true
+                - name: crud-latency-threshold
+                  type: latency
+                  latency:
+                    threshold_ms: 1000
+
+          - name: sample-normal-traffic
+            type: probabilistic
+            probabilistic:
+              sampling_percentage: 5
+
+      batch:
+        timeout: 2s
+        send_batch_size: 512
+
+    exporters:
+      kafka:
+        brokers: ["${env:KAFKA_BROKERS}"]
+        protocol_version: "2.1.0"
+        traces:
+          topic: "otel-traces"
+          encoding: "otlp_json"
+        logs:
+          topic: "otel-logs"
+          encoding: "otlp_json"
+        auth:
+          sasl:
+            mechanism: "SCRAM-SHA-256"
+            username: "${env:KAFKA_USERNAME}"
+            password: "${env:KAFKA_PASSWORD}"
+        tls:
+          insecure: false
+          insecure_skip_verify: true
+
+      debug:
+        verbosity: basic
+
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, tail_sampling, batch]
+          exporters: [kafka]
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [debug]
+        logs:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [kafka]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: schedulux
+  labels:
+    app: otel-collector
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: schedulux
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--config=/etc/otelcol-contrib/config.yaml"
+          ports:
+            - name: grpc-otlp
+              containerPort: 4317
+            - name: http-otlp
+              containerPort: 4318
+          envFrom:
+            - secretRef:
+                name: schedulux-secrets
+          resources:
+            requests:
+              cpu: 50m
+              memory: 60Mi
+            limits:
+              cpu: 200m
+              memory: 150Mi
+          volumeMounts:
+            - name: collector-config-volume
+              mountPath: /etc/otelcol-contrib/config.yaml
+              subPath: config.yaml
+          readinessProbe:
+            tcpSocket:
+              port: 4317
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 4317
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: collector-config-volume
+          configMap:
+            name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: schedulux
+  labels:
+    app: otel-collector
+spec:
+  type: ClusterIP
+  selector:
+    app: otel-collector
+  ports:
+    - name: grpc-otlp
+      port: 4317
+      targetPort: 4317
+    - name: http-otlp
+      port: 4318
+      targetPort: 4318

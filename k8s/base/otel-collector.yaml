@@ -112,10 +112,16 @@ data:
           insecure: false
           insecure_skip_verify: true
 
+      otlphttp/grafana:
+        endpoint: "${env:GRAFANA_CLOUD_OTLP_ENDPOINT}"
+        auth:
+          authenticator: basicauth/grafana
+
       debug:
         verbosity: basic
 
     service:
+      extensions: [basicauth/grafana]
       pipelines:
         traces:
           receivers: [otlp]
@@ -124,7 +130,7 @@ data:
         metrics:
           receivers: [otlp]
           processors: [memory_limiter, batch]
-          exporters: [debug]
+          exporters: [otlphttp/grafana]
         logs:
           receivers: [otlp]
           processors: [memory_limiter, batch]

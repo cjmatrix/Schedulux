@@ -16,9 +16,17 @@ COPY apps/AI-orchestration/pyproject.toml apps/AI-orchestration/uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev
 
-# Copy application source code and install the project
+# Copy application source code, compile Python gRPC protos, and install the project
 COPY apps/AI-orchestration/src ./src
 COPY apps/AI-orchestration/README.md ./README.md
+COPY packages/proto/src /tmp/proto-src
+RUN /app/.venv/bin/python -m grpc_tools.protoc \
+    --proto_path=/tmp/proto-src \
+    --python_out=src/agent_orchestrator/proto \
+    --pyi_out=src/agent_orchestrator/proto \
+    --grpc_python_out=src/agent_orchestrator/proto \
+    /tmp/proto-src/*.proto && \
+    rm -rf /tmp/proto-src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 

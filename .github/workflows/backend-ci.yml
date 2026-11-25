@@ -54,6 +54,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install protoc (Protocol Buffers compiler)
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
       # Non-blocking until pre-existing lint issues are cleaned via `pnpm lint:fix`
       - name: Biome lint & format check (backend packages)
         continue-on-error: true
@@ -86,11 +89,19 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Sync & syntax-check AI-orchestration
+      - name: Sync, compile protos & verify AI-orchestration imports
         working-directory: apps/AI-orchestration
         run: |
+          uv sync --frozen --no-install-project
+          .venv/bin/python -m grpc_tools.protoc \
+            --proto_path=../../packages/proto/src \
+            --python_out=src/agent_orchestrator/proto \
+            --pyi_out=src/agent_orchestrator/proto \
+            --grpc_python_out=src/agent_orchestrator/proto \
+            ../../packages/proto/src/*.proto
           uv sync --frozen
           uv run python -m compileall -q src
+          uv run python -c "import agent_orchestrator.main; print('ai-orchestration import OK')"
 
       # Non-blocking until pre-existing ruff/mypy issues are cleaned via `pnpm lint:py:fix`
       - name: Ruff & MyPy check (AI-orchestration)

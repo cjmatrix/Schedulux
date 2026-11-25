@@ -38,6 +38,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install protoc (Protocol Buffers compiler)
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
       - name: Build @repo/proto, @repo/widget & @repo/frontend-react
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL || 'https://api.schedulux.xyz' }}

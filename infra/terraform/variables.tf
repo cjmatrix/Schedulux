@@ -95,3 +95,16 @@ variable "enable_frontend_custom_domain" {
   default     = false
   description = "Set true AFTER adding the ACM DNS validation CNAME in GoDaddy"
 }
+
+# RAG PDF Uploads S3 Bucket Configuration
+variable "rag_s3_bucket_name" {
+  type        = string
+  default     = "my-client-pdf-uploads-mumbai"
+  description = "S3 bucket name for client PDF uploads"
+}
+
+variable "rag_s3_allowed_origins" {
+  type        = list(string)
+  default     = ["https://app.schedulux.xyz", "https://schedulux.xyz", "http://localhost:5173"]
+  description = "Allowed browser origins for presigned S3 PDF uploads"
+}

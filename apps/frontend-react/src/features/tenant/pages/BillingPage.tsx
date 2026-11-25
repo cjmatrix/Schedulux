@@ -13,9 +13,10 @@ import {
   Sparkles,
   Zap,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
+import type { TierConfig } from '../api/billingApi';
 import {
   useBillingConfig,
   useBillingSubscription,
@@ -23,8 +24,16 @@ import {
   useInvalidateBilling,
 } from '../hooks/useBilling';
 
+interface PlanPresentation {
+  price: string;
+  period: string;
+  badge?: string;
+  isPopular?: boolean;
+  defaultDescription: string;
+}
+
 interface PlanDefinition {
-  key: 'starter' | 'pro' | 'business' | 'enterprise';
+  key: string;
   name: string;
   price: string;
   period: string;
@@ -35,71 +44,162 @@ interface PlanDefinition {
   features: string[];
 }
 
-const PLANS: PlanDefinition[] = [
-  {
-    key: 'starter',
-    name: 'Starter',
+const TIER_ORDER = ['starter', 'pro', 'business', 'enterprise'] as const;
+
+const PLAN_PRESENTATION: Record<string, PlanPresentation> = {
+  starter: {
     price: '$0',
     period: 'forever',
     badge: 'Free Tier',
-    description: 'Starter tier matching free tier specifications.',
-    agentLimit: '1 Agent',
-    features: [
-      'Up to 2 Bookable Services',
-      'Up to 2 Staff / Inventory Resources',
-      '3 Knowledge Base Documents (5 MB max each)',
-      '100,000 Weekly AI Tokens',
-      '60 Requests / Minute API Rate Limit',
-    ],
+    defaultDescription: 'Starter tier for individual operators and evaluation.',
   },
-  {
-    key: 'pro',
-    name: 'Pro',
+  pro: {
     price: '$29',
     period: 'per month',
-    description: 'Professional tier for growing businesses with multiple services.',
-    agentLimit: '2 Agents',
-    features: [
-      'Up to 15 Bookable Services',
-      'Up to 10 Staff / Inventory Resources',
-      '10 Knowledge Base Documents (25 MB max each)',
-      '500,000 Weekly AI Tokens',
-      '120 Requests / Minute API Rate Limit',
-    ],
+    defaultDescription: 'Professional tier for growing businesses with multiple services.',
   },
-  {
-    key: 'business',
-    name: 'Business',
+  business: {
     price: '$79',
     period: 'per month',
     badge: 'Most Popular',
     isPopular: true,
-    description: 'High-capacity tier for established multi-location practices.',
-    agentLimit: '5 Agents',
-    features: [
-      'Up to 50 Bookable Services',
-      'Up to 50 Staff / Inventory Resources',
-      '50 Knowledge Base Documents (100 MB max each)',
-      '2,500,000 Weekly AI Tokens',
-      '300 Requests / Minute API Rate Limit',
-    ],
+    defaultDescription: 'High-capacity tier for established multi-location practices.',
   },
-  {
-    key: 'enterprise',
-    name: 'Enterprise',
+  enterprise: {
     price: '$199',
     period: 'per month',
-    description: 'Unlimited enterprise capability with bespoke rate limits.',
-    agentLimit: 'Unlimited',
-    features: [
-      'Unlimited Bookable Services',
-      'Unlimited Staff / Inventory Resources',
-      'Unlimited Knowledge Base Docs (250 MB max each)',
-      'Unlimited Weekly AI Tokens',
-      '1,000 Requests / Minute API Rate Limit',
-    ],
+    defaultDescription: 'Unlimited enterprise capability with bespoke rate limits.',
   },
-];
+};
+
+const FALLBACK_TIERS: Record<string, TierConfig> = {
+  starter: {
+    tier: 'starter',
+    name: 'Starter',
+    max_agents: 1,
+    max_services: 2,
+    max_resources: 2,
+    max_kb_docs: 3,
+    max_kb_doc_size_mb: 5,
+    weekly_token_limit: 100000,
+    rate_limit_rpm: 60,
+    weekly_crawl_limit: 5,
+    status: 'active',
+    description: PLAN_PRESENTATION.starter.defaultDescription,
+  },
+  pro: {
+    tier: 'pro',
+    name: 'Pro',
+    max_agents: 2,
+    max_services: 15,
+    max_resources: 10,
+    max_kb_docs: 10,
+    max_kb_doc_size_mb: 25,
+    weekly_token_limit: 500000,
+    rate_limit_rpm: 120,
+    weekly_crawl_limit: 5,
+    status: 'active',
+    description: PLAN_PRESENTATION.pro.defaultDescription,
+  },
+  business: {
+    tier: 'business',
+    name: 'Business',
+    max_agents: 5,
+    max_services: 30,
+    max_resources: 30,
+    max_kb_docs: 10,
+    max_kb_doc_size_mb: 100,
+    weekly_token_limit: 2500000,
+    rate_limit_rpm: 300,
+    weekly_crawl_limit: 5,
+    status: 'active',
+    description: PLAN_PRESENTATION.business.defaultDescription,
+  },
+  enterprise: {
+    tier: 'enterprise',
+    name: 'Enterprise',
+    max_agents: 10,
+    max_services: 50,
+    max_resources: 50,
+    max_kb_docs: 10,
+    max_kb_doc_size_mb: 250,
+    weekly_token_limit: 3000000,
+    rate_limit_rpm: 1000,
+    weekly_crawl_limit: 10,
+    status: 'active',
+    description: PLAN_PRESENTATION.enterprise.defaultDescription,
+  },
+};
+
+function formatLimitValue(value: number): string {
+  return value === -1 ? 'Unlimited' : value.toLocaleString();
+}
+
+function formatQuotaCount(value: number, singular: string, plural: string): string {
+  if (value === -1) return `Unlimited ${plural}`;
+  return `${value.toLocaleString()} ${value === 1 ? singular : plural}`;
+}
+
+function buildPlanFeatures(config: TierConfig): string[] {
+  const features = [
+    config.max_services === -1
+      ? 'Unlimited Bookable Services'
+      : `Up to ${formatQuotaCount(config.max_services, 'Bookable Service', 'Bookable Services')}`,
+    config.max_resources === -1
+      ? 'Unlimited Staff / Inventory Resources'
+      : `Up to ${formatQuotaCount(config.max_resources, 'Staff / Inventory Resource', 'Staff / Inventory Resources')}`,
+    `${formatQuotaCount(config.max_kb_docs, 'Knowledge Base Document', 'Knowledge Base Documents')} (${
+      config.max_kb_doc_size_mb === -1
+        ? 'Unlimited size'
+        : `${config.max_kb_doc_size_mb} MB max each`
+    })`,
+    formatQuotaCount(config.weekly_token_limit, 'Weekly AI Token', 'Weekly AI Tokens'),
+    config.rate_limit_rpm === -1
+      ? 'Unlimited API Rate Limit'
+      : `${config.rate_limit_rpm.toLocaleString()} Requests / Minute API Rate Limit`,
+  ];
+
+  if (typeof config.weekly_crawl_limit === 'number') {
+    features.push(
+      formatQuotaCount(config.weekly_crawl_limit, 'Weekly Website Crawl', 'Weekly Website Crawls'),
+    );
+  }
+
+  return features;
+}
+
+function buildPlanDefinitions(allTiers?: Record<string, TierConfig>): PlanDefinition[] {
+  const sourceTiers = allTiers && Object.keys(allTiers).length > 0 ? allTiers : FALLBACK_TIERS;
+  const knownKeys = TIER_ORDER.filter((key) => Boolean(sourceTiers[key]));
+  const extraKeys = Object.keys(sourceTiers).filter(
+    (key) => !TIER_ORDER.includes(key as (typeof TIER_ORDER)[number]),
+  );
+  const orderedKeys = [...knownKeys, ...extraKeys];
+
+  return orderedKeys.map((key) => {
+    const config = sourceTiers[key];
+    const meta = PLAN_PRESENTATION[key] || {
+      price: 'Custom',
+      period: 'per month',
+      defaultDescription: '',
+    };
+
+    return {
+      key,
+      name: config.name || key,
+      price: meta.price,
+      period: meta.period,
+      badge: meta.badge,
+      isPopular: meta.isPopular,
+      description: config.description || meta.defaultDescription,
+      agentLimit:
+        config.max_agents === -1
+          ? 'Unlimited'
+          : formatQuotaCount(config.max_agents, 'Agent', 'Agents'),
+      features: buildPlanFeatures(config),
+    };
+  });
+}
 
 export default function BillingPage() {
   const { agentId: routeAgentId } = useParams<{ agentId?: string }>();
@@ -155,6 +255,11 @@ export default function BillingPage() {
   }, [paymentSuccess, invalidateBilling, searchParams, setSearchParams]);
 
   const currentTier = (subscription?.tier || 'starter').toLowerCase();
+  const plans = useMemo(
+    () => buildPlanDefinitions(subscription?.all_tiers),
+    [subscription?.all_tiers],
+  );
+  const activeTierConfig = subscription?.tier_config;
 
   const handleCheckout = async (plan: PlanDefinition) => {
     if (plan.key === currentTier) {
@@ -446,13 +551,53 @@ export default function BillingPage() {
         </div>
 
         {/* Weekly Token Usage Overview */}
-        <div className="pt-2">
+        <div className="pt-2 space-y-4">
           {renderMeter(
             'Weekly AI Token Quota',
             subscription?.usage?.weekly_tokens || 0,
-            subscription?.tier_config?.weekly_token_limit ?? 100000,
+            activeTierConfig?.weekly_token_limit ?? 100000,
             Cpu,
             'tokens',
+          )}
+
+          {activeTierConfig && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {[
+                { label: 'AI Agents', value: formatLimitValue(activeTierConfig.max_agents) },
+                { label: 'Services', value: formatLimitValue(activeTierConfig.max_services) },
+                { label: 'Resources', value: formatLimitValue(activeTierConfig.max_resources) },
+                {
+                  label: 'KB Docs',
+                  value:
+                    activeTierConfig.max_kb_docs === -1
+                      ? 'Unlimited'
+                      : `${activeTierConfig.max_kb_docs.toLocaleString()} (${
+                          activeTierConfig.max_kb_doc_size_mb === -1
+                            ? 'Unlimited'
+                            : `${activeTierConfig.max_kb_doc_size_mb} MB`
+                        })`,
+                },
+                {
+                  label: 'Weekly Crawls',
+                  value:
+                    typeof activeTierConfig.weekly_crawl_limit === 'number'
+                      ? formatLimitValue(activeTierConfig.weekly_crawl_limit)
+                      : '—',
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className="bg-slate-50 rounded-xl px-3.5 py-2.5 border border-slate-200"
+                >
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block">
+                    {item.label}
+                  </span>
+                  <span className="text-sm font-bold text-slate-900 mt-0.5 block">
+                    {item.value}
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -470,7 +615,7 @@ export default function BillingPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
-          {PLANS.map((plan) => {
+          {plans.map((plan) => {
             const isCurrent = currentTier === plan.key;
             const isLoading = loadingTier === plan.key;
 

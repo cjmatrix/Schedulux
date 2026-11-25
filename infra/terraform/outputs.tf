@@ -87,3 +87,14 @@ output "frontend_acm_validation_cnames" {
   value       = module.frontend.acm_validation_dns_records
   description = "CNAME record(s) to add in GoDaddy to validate the SSL certificate"
 }
+
+# RAG Storage Outputs
+output "rag_s3_bucket" {
+  value       = module.rag_storage.bucket_name
+  description = "S3 bucket name for RAG PDF uploads"
+}
+
+output "rag_s3_bucket_arn" {
+  value       = module.rag_storage.bucket_arn
+  description = "S3 bucket ARN for RAG PDF uploads"
+}

@@ -54,3 +54,12 @@ module "frontend" {
   domain_name          = var.frontend_domain_name
   enable_custom_domain = var.enable_frontend_custom_domain
 }
+
+module "rag_storage" {
+  source = "./modules/rag_storage"
+
+  project_name    = var.project_name
+  environment     = var.environment
+  bucket_name     = var.rag_s3_bucket_name
+  allowed_origins = var.rag_s3_allowed_origins
+}

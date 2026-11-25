@@ -1,4 +1,4 @@
-import { axiosClient, type ApiResponse } from '../../../api/axiosClient';
+import { type ApiResponse, axiosClient } from '../../../api/axiosClient';
 
 export interface TierConfig {
   tier: string;
@@ -10,6 +10,7 @@ export interface TierConfig {
   max_kb_doc_size_mb: number;
   weekly_token_limit: number;
   rate_limit_rpm: number;
+  weekly_crawl_limit?: number;
   status: string;
   description?: string;
 }

@@ -2,19 +2,18 @@ from __future__ import annotations
 
 import copy
 import json
-import os
 import secrets
 from datetime import UTC, datetime
 from typing import Any, cast
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 from agent_orchestrator.clients.redis_client import get_redis_client
 from agent_orchestrator.config.tier_constants import get_cached_tier_config
 from agent_orchestrator.domain.exceptions import TierQuotaExceededException
 from agent_orchestrator.models import StrictDraftPatchValidator
+from agent_orchestrator.workflows.llm_factory import get_fallback_chat_model
 from agent_orchestrator.workflows.tenant_agent.state import GraphState, SemanticAction
 from agent_orchestrator.workflows.tenant_agent.tools import apply_draft_merge
 from agent_orchestrator.workflows.tenant_agent.utils import (
@@ -277,7 +276,8 @@ STATIC_SYSTEM_PROMPT = _build_tenant_system_prompt()
 
 
 async def node_llm_semantic_review(state: GraphState, config: RunnableConfig) -> dict:
-    llm = _get_llm().with_structured_output(SemanticAction)
+    base_llm = _get_llm()
+    llm = base_llm.with_structured_output(SemanticAction)
 
     all_msgs = state.get("messages", [])
     last_msg = all_msgs[-1] if all_msgs else None
@@ -465,22 +465,27 @@ Decide your next action: choose 'update_schema', 'ask_user', or 'finalize' accor
     except Exception as e:
         print(f"[Semantic Agent Error] {e}", flush=True)
 
-        gemini_api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or ""
-        if gemini_api_key:
+        fallback_base = get_fallback_chat_model(
+            primary=base_llm,
+            temperature=0.1,
+            max_tokens=8192,
+        )
+        if fallback_base is not None:
             try:
-                print("[Semantic Agent] Attempting fallback to Gemini...", flush=True)
-                fallback_model = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
-                fallback_llm = ChatGoogleGenerativeAI(
-                    model=fallback_model,
-                    google_api_key=gemini_api_key,
-                    temperature=0.1,
-                    max_output_tokens=8192,
-                ).with_structured_output(SemanticAction)
+                fallback_name = type(fallback_base).__name__
+                print(
+                    f"[Semantic Agent] Attempting fallback ({fallback_name})...",
+                    flush=True,
+                )
+                fallback_llm = fallback_base.with_structured_output(SemanticAction)
                 resp = cast(
                     SemanticAction,
                     await fallback_llm.ainvoke(conversation, config=config),
                 )
-                print("[Semantic Agent] Fallback to Gemini succeeded!", flush=True)
+                print(
+                    f"[Semantic Agent] Fallback ({fallback_name}) succeeded!",
+                    flush=True,
+                )
             except Exception as fe:
                 print(f"[Semantic Agent Fallback Error] {fe}", flush=True)
                 return {

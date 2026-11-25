@@ -6,16 +6,10 @@ import os
 import uuid
 from typing import Any, AsyncIterator
 
-from dotenv import load_dotenv
-from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tracers import LangChainTracer
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_groq import ChatGroq
-from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
-from pydantic import SecretStr
 
 from agent_orchestrator.mcp.scheduling_mcp_server import get_scheduling_mcp_tools
 from agent_orchestrator.repositories.customer_message_repository import CustomerMessageRepository
@@ -30,55 +24,14 @@ from agent_orchestrator.workflows.customer_agent.subagents import (
     run_handoff_agent,
 )
 from agent_orchestrator.workflows.customer_agent.text_util import extract_text_content
+from agent_orchestrator.workflows.llm_factory import (
+    get_fallback_chat_model,
+    get_primary_chat_model,
+)
 
 logger = logging.getLogger(__name__)
 
-_env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env"))
-load_dotenv(_env_path)
-
 _customer_msg_repo = CustomerMessageRepository()
-
-
-def _get_gemini_model(temperature: float = 0.2, max_tokens: int = 4096) -> BaseChatModel | None:
-    gemini_api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not gemini_api_key:
-        return None
-    model_name = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
-    if "gemma" in model_name.lower():
-        model_name = "gemini-1.5-flash"
-    return ChatGoogleGenerativeAI(
-        model=model_name,
-        google_api_key=gemini_api_key,
-        temperature=temperature,
-        max_output_tokens=max_tokens,
-    )
-
-
-def _get_chat_model(temperature: float = 0.2) -> BaseChatModel:
-    groq_api_key = os.environ.get("GROQ_API_KEY")
-    gemini_api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-
-    if groq_api_key:
-        groq_model = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
-        return ChatGroq(
-            model=groq_model,
-            api_key=SecretStr(groq_api_key),
-            temperature=temperature,
-            max_tokens=4096,
-        )
-    elif gemini_api_key:
-        model_name = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
-        return ChatGoogleGenerativeAI(
-            model=model_name,
-            google_api_key=gemini_api_key,
-            temperature=temperature,
-            max_output_tokens=4096,
-        )
-    else:
-        return ChatOpenAI(
-            model="gpt-4o-mini",
-            temperature=temperature,
-        )
 
 
 async def node_supervisor(state: CustomerGraphState, config: RunnableConfig) -> dict[str, Any]:
@@ -154,7 +107,7 @@ async def node_synthesizer(state: CustomerGraphState, config: RunnableConfig) ->
 
     if booking_resp and faq_resp:
         logger.info("[CustomerGraph:SynthesizerNode] Merging compound FAQ + Booking responses")
-        model = _get_chat_model(temperature=0.2)
+        model = get_primary_chat_model(temperature=0.2, max_tokens=4096)
         biz_name = state.get("biz_context", {}).get("business_name", "our business")
         user_msg = state.get("message", "")
 
@@ -188,16 +141,23 @@ Your job is to merge specialist agent answers into a single, cohesive, seamless,
             final_text = extract_text_content(synth_result)
         except Exception as e:
             logger.warning(
-                "[CustomerGraph:SynthesizerNode] Primary LLM error (%s) → trying Gemini fallback", e
+                "[CustomerGraph:SynthesizerNode] Primary LLM (%s) error (%s) → trying fallback",
+                type(model).__name__,
+                e,
             )
-            gemini_model = _get_gemini_model(temperature=0.2, max_tokens=4096)
-            if gemini_model and not isinstance(model, ChatGoogleGenerativeAI):
+            fallback_model = get_fallback_chat_model(
+                primary=model,
+                temperature=0.2,
+                max_tokens=4096,
+            )
+            if fallback_model is not None:
                 try:
-                    synth_result = await gemini_model.ainvoke(synth_messages, config=config)
+                    synth_result = await fallback_model.ainvoke(synth_messages, config=config)
                     final_text = extract_text_content(synth_result)
                 except Exception as fb_err:
                     logger.error(
-                        "[CustomerGraph:SynthesizerNode] Gemini synthesis fallback failed (%s) → fallback join",
+                        "[CustomerGraph:SynthesizerNode] Fallback (%s) synthesis failed (%s) → fallback join",
+                        type(fallback_model).__name__,
                         fb_err,
                     )
                     final_text = (

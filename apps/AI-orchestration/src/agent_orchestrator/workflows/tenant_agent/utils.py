@@ -1,25 +1,12 @@
 from __future__ import annotations
 
-import os
 import re
 from typing import Any
 
-from dotenv import load_dotenv
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_groq import ChatGroq
-from langchain_openai import ChatOpenAI
-from pydantic import SecretStr
 
+from agent_orchestrator.workflows.llm_factory import get_primary_chat_model
 from agent_orchestrator.workflows.tenant_agent.state import STRUCTURAL_REQUIREMENTS
-
-_env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env"))
-load_dotenv(_env_path)
-
-_GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-_GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
-_GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY", "")
-_GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
 
 
 def _get_nested(d: dict, path: str) -> Any:
@@ -48,38 +35,7 @@ def _slugify(val: str) -> str:
 
 
 def _get_llm(temperature: float = 0.2) -> BaseChatModel:
-    groq_api_key = os.environ.get("GROQ_API_KEY") or _GROQ_API_KEY
-    gemini_api_key = (
-        os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or _GEMINI_API_KEY
-    )
-
-    if groq_api_key:
-        groq_model = os.environ.get("GROQ_MODEL") or _GROQ_MODEL or "openai/gpt-oss-120b"
-        if ChatGroq is not None:
-            return ChatGroq(  # type: ignore[call-arg]
-                model_name=groq_model,
-                groq_api_key=groq_api_key,
-                temperature=temperature,
-                max_tokens=8192,
-            )
-        else:
-            return ChatOpenAI(  # type: ignore[call-arg]
-                model=groq_model,
-                api_key=SecretStr(groq_api_key),
-                base_url="https://api.groq.com/openai/v1",
-                temperature=temperature,
-                max_tokens=8192,
-            )
-    else:
-        model_name = os.environ.get("GEMINI_MODEL") or _GEMINI_MODEL or "gemini-3.5-flash"
-        if "gemma" in model_name.lower():
-            model_name = "gemini-3.5-flash"
-        return ChatGoogleGenerativeAI(
-            model=model_name,
-            google_api_key=gemini_api_key,
-            temperature=temperature,
-            max_output_tokens=8192,
-        )
+    return get_primary_chat_model(temperature=temperature, max_tokens=8192)
 
 
 def _compute_structural_gaps(draft: dict) -> list[dict]:

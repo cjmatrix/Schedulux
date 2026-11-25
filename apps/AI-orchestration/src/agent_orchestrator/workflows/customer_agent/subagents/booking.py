@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -16,16 +15,16 @@ from langchain_core.messages import (
 )
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_groq import ChatGroq
-from langchain_openai import ChatOpenAI
-from pydantic import SecretStr
 
 from agent_orchestrator.clients.redis_client import get_session_auth
 from agent_orchestrator.workflows.customer_agent.fast_path import (
     format_deterministic_fast_path,
 )
 from agent_orchestrator.workflows.customer_agent.text_util import extract_text_content
+from agent_orchestrator.workflows.llm_factory import (
+    get_fallback_chat_model,
+    get_primary_chat_model,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -79,44 +78,8 @@ def _format_resources_catalog(resources: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _get_gemini_model(temperature: float = 0.0, max_tokens: int = 4096) -> Any | None:
-    gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not gemini_key:
-        return None
-    model_name = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
-    if "gemma" in model_name.lower():
-        model_name = "gemini-1.5-flash"
-    return ChatGoogleGenerativeAI(
-        model=model_name,
-        google_api_key=gemini_key,
-        temperature=temperature,
-        max_output_tokens=max_tokens,
-    )
-
-
 def _extract_content(msg: Any) -> str:
     return extract_text_content(msg)
-
-
-def _get_chat_model(temperature: float = 0.0) -> Any:
-    groq_key = os.environ.get("GROQ_API_KEY")
-    gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if groq_key:
-        return ChatGroq(
-            model=os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
-            api_key=SecretStr(groq_key),
-            temperature=temperature,
-            max_tokens=4096,
-        )
-    elif gemini_key:
-        return ChatGoogleGenerativeAI(
-            model=os.environ.get("GEMINI_MODEL", "gemini-1.5-flash"),
-            google_api_key=gemini_key,
-            temperature=temperature,
-            max_output_tokens=4096,
-        )
-    else:
-        return ChatOpenAI(model="gpt-4o-mini", temperature=temperature)
 
 
 def _build_booking_system_prompt(biz_context: dict[str, Any]) -> str:
@@ -578,7 +541,7 @@ async def run_booking_agent(
     current_human_msg = HumanMessage(content=f"{message}\n\n{dynamic_context}")
     langchain_msgs: list[BaseMessage] = [*prior_history, current_human_msg]
 
-    model = _get_chat_model(temperature=0.0)
+    model = get_primary_chat_model(temperature=0.0, max_tokens=4096)
 
     try:
         return await _execute_booking_turn(
@@ -594,19 +557,23 @@ async def run_booking_agent(
         )
     except Exception as e:
         logger.warning(
-            "[BookingAgent] Primary model (%s) failed: %s. Attempting fallback to Gemini...",
+            "[BookingAgent] Primary model (%s) failed: %s. Attempting fallback...",
             type(model).__name__,
             e,
         )
-        gemini_model = _get_gemini_model(temperature=0.0, max_tokens=4096)
-        if gemini_model and not isinstance(model, ChatGoogleGenerativeAI):
+        fallback_model = get_fallback_chat_model(
+            primary=model,
+            temperature=0.0,
+            max_tokens=4096,
+        )
+        if fallback_model is not None:
             try:
                 logger.info(
-                    "[BookingAgent] Retrying with Gemini fallback (%s)...",
-                    getattr(gemini_model, "model", "gemini"),
+                    "[BookingAgent] Retrying with fallback (%s)...",
+                    type(fallback_model).__name__,
                 )
                 return await _execute_booking_turn(
-                    model=gemini_model,
+                    model=fallback_model,
                     booking_tools=booking_tools,
                     system_prompt=system_prompt,
                     langchain_msgs=langchain_msgs,
@@ -618,7 +585,10 @@ async def run_booking_agent(
                 )
             except Exception as fb_err:
                 logger.error(
-                    "[BookingAgent] Gemini fallback also failed: %s", fb_err, exc_info=True
+                    "[BookingAgent] Fallback (%s) also failed: %s",
+                    type(fallback_model).__name__,
+                    fb_err,
+                    exc_info=True,
                 )
         else:
             logger.error("[BookingAgent] Error occurred without fallback: %s", e, exc_info=True)

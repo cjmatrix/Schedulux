@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any, Literal
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_groq import ChatGroq
-from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field
+
+from agent_orchestrator.workflows.llm_factory import (
+    get_fallback_chat_model,
+    get_primary_chat_model,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,42 +20,6 @@ class SupervisorRouting(BaseModel):
         default_factory=lambda: list[Literal["booking", "faq", "handoff"]](["booking"]),
         description="List of specialist agent intents to handle the customer query. Use ['faq', 'booking'] for compound queries.",
     )
-
-
-def _get_gemini_model(temperature: float = 0.0) -> Any | None:
-    gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not gemini_key:
-        return None
-    model_name = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
-    if "gemma" in model_name.lower():
-        model_name = "gemini-1.5-flash"
-    return ChatGoogleGenerativeAI(
-        model=model_name,
-        google_api_key=gemini_key,
-        temperature=temperature,
-        max_output_tokens=256,
-    )
-
-
-def _get_chat_model(temperature: float = 0.0) -> Any:
-    groq_key = os.environ.get("GROQ_API_KEY")
-    gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if groq_key:
-        return ChatGroq(
-            model=os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
-            api_key=SecretStr(groq_key),
-            temperature=temperature,
-            max_tokens=256,
-        )
-    elif gemini_key:
-        return ChatGoogleGenerativeAI(
-            model=os.environ.get("GEMINI_MODEL", "gemini-1.5-flash"),
-            google_api_key=gemini_key,
-            temperature=temperature,
-            max_output_tokens=256,
-        )
-    else:
-        return ChatOpenAI(model="gpt-4o-mini", temperature=temperature)
 
 
 def _check_emergency_keywords(message: str, guardrails: dict[str, Any]) -> bool:
@@ -130,7 +95,7 @@ async def classify_intent(
         )
         return ["booking"]
 
-    model = _get_chat_model(temperature=0.0)
+    model = get_primary_chat_model(temperature=0.0, max_tokens=256)
 
     prior: list[BaseMessage] = list(conversation_history)
     if prior and isinstance(prior[-1], HumanMessage) and prior[-1].content == message:
@@ -149,17 +114,25 @@ async def classify_intent(
         return intents
     except Exception as e:
         logger.warning(
-            "[Supervisor] Primary classifier (%s) failed: %s. Attempting Gemini fallback...",
+            "[Supervisor] Primary classifier (%s) failed: %s. Attempting fallback...",
             type(model).__name__,
             e,
         )
-        gemini_model = _get_gemini_model(temperature=0.0)
-        if gemini_model and not isinstance(model, ChatGoogleGenerativeAI):
+        fallback_model = get_fallback_chat_model(primary=model, temperature=0.0, max_tokens=256)
+        if fallback_model is not None:
             try:
-                intents = await _classify_with_model(gemini_model, classify_messages, config=config)
-                logger.info("[Supervisor] Classified intents via Gemini fallback: %s", intents)
+                intents = await _classify_with_model(fallback_model, classify_messages, config=config)
+                logger.info(
+                    "[Supervisor] Classified intents via fallback (%s): %s",
+                    type(fallback_model).__name__,
+                    intents,
+                )
                 return intents
             except Exception as fb_err:
-                logger.error("[Supervisor] Gemini fallback classifier also failed: %s", fb_err)
+                logger.error(
+                    "[Supervisor] Fallback classifier (%s) also failed: %s",
+                    type(fallback_model).__name__,
+                    fb_err,
+                )
 
         return ["booking"]

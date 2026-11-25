@@ -49,6 +49,13 @@ let TenantController = class TenantController {
         }
         return tenantId;
     }
+    testEndpoint() {
+        return {
+            status: 'ok',
+            service: 'api-gateway',
+            timestamp: new Date().toISOString(),
+        };
+    }
     async getProfile(req) {
         const tenantId = this._getTenantId(req);
         const response = await (0, rxjs_1.lastValueFrom)(this._tenantAuthService.getProfile({ tenant_id: tenantId }));
@@ -182,6 +189,12 @@ let TenantController = class TenantController {
     }
 };
 exports.TenantController = TenantController;
+__decorate([
+    (0, common_1.Get)('test'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], TenantController.prototype, "testEndpoint", null);
 __decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.TENANT.AUTH.ME),
     (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),

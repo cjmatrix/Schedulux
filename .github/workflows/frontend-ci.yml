@@ -1,0 +1,53 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "apps/frontend-react/**"
+      - "packages/widget/**"
+      - "packages/proto/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - ".github/workflows/frontend-ci.yml"
+  push:
+    branches: [main, master]
+    paths:
+      - "apps/frontend-react/**"
+      - "packages/widget/**"
+      - "packages/proto/**"
+
+concurrency:
+  group: frontend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-ci:
+    name: Frontend & Widget Lint + Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Non-blocking until pre-existing lint issues are cleaned via `pnpm lint:fix`
+      - name: Biome lint & format check (frontend & widget)
+        continue-on-error: true
+        run: pnpm exec biome check apps/frontend-react packages/widget
+
+      - name: Build @repo/proto, @repo/widget & @repo/frontend-react
+        env:
+          VITE_API_URL: https://api.schedulux.xyz
+          VITE_CUSTOMER_GATEWAY_URL: https://client-api.schedulux.xyz
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID || 'placeholder-client-id' }}
+        run: pnpm exec turbo build --filter=@repo/frontend-react

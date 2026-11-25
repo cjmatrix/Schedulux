@@ -12,8 +12,24 @@ async function bootstrap() {
   const logger = app.get(Logger);
   app.useLogger(logger);
 
+  const envOrigins = (process.env.FRONTEND_URL || '')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+
+  const allowedOrigins = Array.from(
+    new Set([
+      ...envOrigins,
+      'https://app.schedulux.xyz',
+      'https://schedulux.xyz',
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'http://localhost:5000',
+    ]),
+  );
+
   app.enableCors({
-    origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5000'],
+    origin: allowedOrigins,
     credentials: true,
   });
 

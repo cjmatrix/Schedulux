@@ -1,0 +1,239 @@
+name: Deploy Backend Microservices
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "apps/api-gateway/**"
+      - "apps/customer-api-gateway/**"
+      - "apps/identity-tenant/**"
+      - "apps/scheduling-inventory/**"
+      - "apps/kafka-consumer/**"
+      - "apps/AI-orchestration/**"
+      - "apps/python-worker/**"
+      - "apps/crawler-worker/**"
+      - "packages/proto/**"
+      - "packages/circuit-breaker/**"
+      - "docker/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Specific backend service to deploy (or 'all')"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - api-gateway
+          - customer-api-gateway
+          - identity-tenant
+          - scheduling-inventory
+          - kafka-consumer
+          - ai-orchestration
+          - crawler-worker
+
+concurrency:
+  group: deploy-backend-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  detect-changes:
+    name: Detect Changed Backend Services
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
+      services: ${{ steps.build-matrix.outputs.services }}
+      has_changes: ${{ steps.build-matrix.outputs.has_changes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name == 'push'
+        with:
+          filters: |
+            node_shared:
+              - 'packages/proto/**'
+              - 'packages/circuit-breaker/**'
+              - 'docker/Dockerfile.node'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+            proto_shared:
+              - 'packages/proto/**'
+            api_gateway:
+              - 'apps/api-gateway/**'
+            customer_api_gateway:
+              - 'apps/customer-api-gateway/**'
+            identity_tenant:
+              - 'apps/identity-tenant/**'
+            scheduling_inventory:
+              - 'apps/scheduling-inventory/**'
+            kafka_consumer:
+              - 'apps/kafka-consumer/**'
+            ai_orchestration:
+              - 'apps/AI-orchestration/**'
+              - 'docker/Dockerfile.python'
+            crawler_worker:
+              - 'apps/python-worker/**'
+              - 'apps/crawler-worker/**'
+              - 'docker/Dockerfile.python-worker'
+
+      - name: Compute Deployment Matrix
+        id: build-matrix
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_SERVICE: ${{ inputs.service || 'all' }}
+          NODE_SHARED: ${{ steps.filter.outputs.node_shared || 'false' }}
+          PROTO_SHARED: ${{ steps.filter.outputs.proto_shared || 'false' }}
+          API_GATEWAY: ${{ steps.filter.outputs.api_gateway || 'false' }}
+          CUSTOMER_API_GATEWAY: ${{ steps.filter.outputs.customer_api_gateway || 'false' }}
+          IDENTITY_TENANT: ${{ steps.filter.outputs.identity_tenant || 'false' }}
+          SCHEDULING_INVENTORY: ${{ steps.filter.outputs.scheduling_inventory || 'false' }}
+          KAFKA_CONSUMER: ${{ steps.filter.outputs.kafka_consumer || 'false' }}
+          AI_ORCHESTRATION: ${{ steps.filter.outputs.ai_orchestration || 'false' }}
+          CRAWLER_WORKER: ${{ steps.filter.outputs.crawler_worker || 'false' }}
+        run: |
+          python3 - << 'EOF'
+          import json, os
+
+          CATALOG = [
+              {
+                  "name": "api-gateway",
+                  "dockerfile": "docker/Dockerfile.node",
+                  "is_node": True,
+                  "app_name": "@repo/api-gateway",
+                  "app_dir": "apps/api-gateway",
+                  "flag": os.environ["API_GATEWAY"] == "true" or os.environ["NODE_SHARED"] == "true",
+              },
+              {
+                  "name": "customer-api-gateway",
+                  "dockerfile": "docker/Dockerfile.node",
+                  "is_node": True,
+                  "app_name": "@repo/customer-api-gateway",
+                  "app_dir": "apps/customer-api-gateway",
+                  "flag": os.environ["CUSTOMER_API_GATEWAY"] == "true" or os.environ["NODE_SHARED"] == "true",
+              },
+              {
+                  "name": "identity-tenant",
+                  "dockerfile": "docker/Dockerfile.node",
+                  "is_node": True,
+                  "app_name": "@repo/identity-tenant",
+                  "app_dir": "apps/identity-tenant",
+                  "flag": os.environ["IDENTITY_TENANT"] == "true" or os.environ["NODE_SHARED"] == "true",
+              },
+              {
+                  "name": "scheduling-inventory",
+                  "dockerfile": "docker/Dockerfile.node",
+                  "is_node": True,
+                  "app_name": "@repo/scheduling-inventory",
+                  "app_dir": "apps/scheduling-inventory",
+                  "flag": os.environ["SCHEDULING_INVENTORY"] == "true" or os.environ["NODE_SHARED"] == "true",
+              },
+              {
+                  "name": "kafka-consumer",
+                  "dockerfile": "docker/Dockerfile.node",
+                  "is_node": True,
+                  "app_name": "@repo/kafka-consumer",
+                  "app_dir": "apps/kafka-consumer",
+                  "flag": os.environ["KAFKA_CONSUMER"] == "true" or os.environ["NODE_SHARED"] == "true",
+              },
+              {
+                  "name": "ai-orchestration",
+                  "dockerfile": "docker/Dockerfile.python",
+                  "is_node": False,
+                  "app_name": "",
+                  "app_dir": "",
+                  "flag": os.environ["AI_ORCHESTRATION"] == "true" or os.environ["PROTO_SHARED"] == "true",
+              },
+              {
+                  "name": "crawler-worker",
+                  "dockerfile": "docker/Dockerfile.python-worker",
+                  "is_node": False,
+                  "app_name": "",
+                  "app_dir": "",
+                  "flag": os.environ["CRAWLER_WORKER"] == "true",
+              },
+          ]
+
+          if os.environ["EVENT_NAME"] == "workflow_dispatch":
+              target = os.environ["MANUAL_SERVICE"]
+              selected = [s for s in CATALOG if target == "all" or s["name"] == target]
+          else:
+              selected = [s for s in CATALOG if s["flag"]]
+
+          matrix = {"include": [{k: v for k, v in s.items() if k != "flag"} for s in selected]}
+          service_names = [s["name"] for s in selected]
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"matrix={json.dumps(matrix)}\n")
+              fh.write(f"services={' '.join(service_names)}\n")
+              fh.write(f"has_changes={'true' if selected else 'false'}\n")
+
+          print("Selected services for deployment:", service_names)
+          EOF
+
+  build-and-push:
+    name: Build & Push (${{ matrix.name }})
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          build-args: |
+            APP_NAME=${{ matrix.app_name }}
+            APP_DIR=${{ matrix.app_dir }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.name }}:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.name }}:latest
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  deploy-k3s:
+    name: Rollout to EC2 K3s
+    needs: [detect-changes, build-and-push]
+    runs-on: ubuntu-latest
+    env:
+      SERVICES: ${{ needs.detect-changes.outputs.services }}
+      IMAGE_TAG: ${{ github.sha }}
+      DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+    steps:
+      - name: Rollout updated services sequentially on EC2 K3s
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key.pem
+          chmod 600 ~/.ssh/deploy_key.pem
+
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key.pem ubuntu@${{ secrets.EC2_HOST }} \
+            "DOCKER_USER='${DOCKER_USER}' IMAGE_TAG='${IMAGE_TAG}' SERVICES='${SERVICES}' bash -s" << 'REMOTE_EOF'
+          set -euo pipefail
+          for svc in $SERVICES; do
+            echo ">>> Updating deployment/${svc} -> ${DOCKER_USER}/${svc}:${IMAGE_TAG}"
+            kubectl set image deployment/${svc} ${svc}=${DOCKER_USER}/${svc}:${IMAGE_TAG} -n schedulux
+            kubectl rollout status deployment/${svc} -n schedulux --timeout=180s
+          done
+          echo ">>> Current pods in schedulux:"
+          kubectl get pods -n schedulux
+          REMOTE_EOF

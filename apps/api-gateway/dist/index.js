@@ -14,8 +14,20 @@ async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_js_1.AppModule, { bufferLogs: true, rawBody: true });
     const logger = app.get(nestjs_pino_1.Logger);
     app.useLogger(logger);
+    const envOrigins = (process.env.FRONTEND_URL || '')
+        .split(',')
+        .map((origin) => origin.trim().replace(/\/+$/, ''))
+        .filter(Boolean);
+    const allowedOrigins = Array.from(new Set([
+        ...envOrigins,
+        'https://app.schedulux.xyz',
+        'https://schedulux.xyz',
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'http://localhost:5000',
+    ]));
     app.enableCors({
-        origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5000'],
+        origin: allowedOrigins,
         credentials: true,
     });
     app.use((0, cookie_parser_1.default)());

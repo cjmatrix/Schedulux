@@ -1,0 +1,109 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "apps/api-gateway/**"
+      - "apps/customer-api-gateway/**"
+      - "apps/identity-tenant/**"
+      - "apps/scheduling-inventory/**"
+      - "apps/kafka-consumer/**"
+      - "apps/AI-orchestration/**"
+      - "apps/python-worker/**"
+      - "apps/crawler-worker/**"
+      - "packages/proto/**"
+      - "packages/circuit-breaker/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - ".github/workflows/backend-ci.yml"
+  push:
+    branches: [main, master]
+    paths:
+      - "apps/api-gateway/**"
+      - "apps/customer-api-gateway/**"
+      - "apps/identity-tenant/**"
+      - "apps/scheduling-inventory/**"
+      - "apps/kafka-consumer/**"
+      - "apps/AI-orchestration/**"
+      - "apps/python-worker/**"
+      - "apps/crawler-worker/**"
+      - "packages/proto/**"
+      - "packages/circuit-breaker/**"
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node-ci:
+    name: Node.js Lint & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Non-blocking until pre-existing lint issues are cleaned via `pnpm lint:fix`
+      - name: Biome lint & format check (backend packages)
+        continue-on-error: true
+        run: >
+          pnpm exec biome check
+          apps/api-gateway
+          apps/customer-api-gateway
+          apps/identity-tenant
+          apps/scheduling-inventory
+          apps/kafka-consumer
+          packages/proto
+          packages/circuit-breaker
+
+      - name: Build backend TypeScript packages & apps
+        run: >
+          pnpm exec turbo build
+          --filter=@repo/api-gateway
+          --filter=@repo/customer-api-gateway
+          --filter=@repo/identity-tenant
+          --filter=@repo/scheduling-inventory
+          --filter=@repo/kafka-consumer
+
+  python-ci:
+    name: Python Lint, Typecheck & Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync & syntax-check AI-orchestration
+        working-directory: apps/AI-orchestration
+        run: |
+          uv sync --frozen
+          uv run python -m compileall -q src
+
+      # Non-blocking until pre-existing ruff/mypy issues are cleaned via `pnpm lint:py:fix`
+      - name: Ruff & MyPy check (AI-orchestration)
+        continue-on-error: true
+        working-directory: apps/AI-orchestration
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy src
+
+      - name: Sync & syntax-check python-worker
+        working-directory: apps/python-worker
+        run: |
+          uv sync --frozen --no-dev
+          uv run python -m py_compile worker.py
+          uv run python -m compileall -q src

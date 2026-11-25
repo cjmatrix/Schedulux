@@ -66,3 +66,24 @@ output "ec2_private_key_path" {
   value       = module.ec2.private_key_path
   description = "Path to the generated SSH private key"
 }
+
+# Frontend (S3 + CloudFront + ACM) Outputs
+output "frontend_s3_bucket" {
+  value       = module.frontend.s3_bucket_name
+  description = "S3 bucket name for uploading apps/frontend-react/dist"
+}
+
+output "frontend_cloudfront_distribution_id" {
+  value       = module.frontend.cloudfront_distribution_id
+  description = "CloudFront Distribution ID for cache invalidation"
+}
+
+output "frontend_cloudfront_domain" {
+  value       = module.frontend.cloudfront_domain_name
+  description = "CloudFront domain (point GoDaddy CNAME 'app' to this)"
+}
+
+output "frontend_acm_validation_cnames" {
+  value       = module.frontend.acm_validation_dns_records
+  description = "CNAME record(s) to add in GoDaddy to validate the SSL certificate"
+}

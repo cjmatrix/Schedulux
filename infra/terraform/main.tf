@@ -40,3 +40,17 @@ module "ec2" {
   ssh_cidr_blocks     = var.ssh_cidr_blocks
   k8s_api_cidr_blocks = var.k8s_api_cidr_blocks
 }
+
+module "frontend" {
+  source = "./modules/frontend"
+
+  providers = {
+    aws           = aws
+    aws.us_east_1 = aws.us_east_1
+  }
+
+  project_name         = var.project_name
+  environment          = var.environment
+  domain_name          = var.frontend_domain_name
+  enable_custom_domain = var.enable_frontend_custom_domain
+}

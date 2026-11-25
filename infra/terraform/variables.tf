@@ -82,3 +82,16 @@ variable "k8s_api_cidr_blocks" {
   default     = ["0.0.0.0/0"]
   description = "Allowed CIDR blocks for remote kubectl access (port 6443)"
 }
+
+# Frontend (S3 + CloudFront + ACM) Configuration
+variable "frontend_domain_name" {
+  type        = string
+  default     = "app.schedulux.xyz"
+  description = "Custom domain for the React frontend + embeddable widget.js"
+}
+
+variable "enable_frontend_custom_domain" {
+  type        = bool
+  default     = false
+  description = "Set true AFTER adding the ACM DNS validation CNAME in GoDaddy"
+}

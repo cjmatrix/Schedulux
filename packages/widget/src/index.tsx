@@ -6,22 +6,45 @@ import { getWidgetStyles } from './styles';
 import type { ScheduluxWidgetInstance, WidgetConfig, WidgetInitOptions } from './types';
 
 export { ChatWidget } from './components/ChatWidget';
+export { renderMarkdown } from './markdown';
 export { getWidgetStyles } from './styles';
+export * from './theme';
 export * from './types';
 
 const activeInstances = new Map<string, ScheduluxWidgetInstance>();
 
-/**
- * Initializes a Schedulux booking chat widget encapsulated completely inside Shadow DOM.
- */
+function cleanUndefined<T extends Record<string, any>>(obj?: T): Partial<T> {
+  if (!obj || typeof obj !== 'object') return {};
+  const cleaned: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined && value !== null) {
+      if (typeof value === 'object' && !Array.isArray(value)) {
+        const sub = cleanUndefined(value);
+        if (Object.keys(sub).length > 0) {
+          cleaned[key] = sub;
+        }
+      } else {
+        cleaned[key] = value;
+      }
+    }
+  }
+  return cleaned as Partial<T>;
+}
+
 export function initScheduluxWidget(options: WidgetInitOptions): ScheduluxWidgetInstance {
   const instanceKey = `${options.tenantId}_${options.agentId}`;
   if (activeInstances.has(instanceKey)) {
     const existing = activeInstances.get(instanceKey);
-    if (existing) return existing;
+    if (existing) {
+      if (options.container) {
+        existing.destroy();
+      } else {
+        return existing;
+      }
+    }
   }
 
-  // 1. Resolve host container
+  
   const isCustomContainer = Boolean(options.container);
   const host = options.container || document.createElement('div');
   if (!isCustomContainer) {
@@ -29,21 +52,22 @@ export function initScheduluxWidget(options: WidgetInitOptions): ScheduluxWidget
     document.body.appendChild(host);
   }
 
-  // 2. Attach open Shadow DOM
-  const shadowRoot = host.attachShadow({ mode: 'open' });
+ 
+  const shadowRoot = host.shadowRoot || host.attachShadow({ mode: 'open' });
+  shadowRoot.innerHTML = '';
 
-  // 3. Inject encapsulated styles
+
   const styleEl = document.createElement('style');
-  let currentConfig: Partial<WidgetConfig> = { ...options.config };
+  let currentConfig: Partial<WidgetConfig> = cleanUndefined(options.config);
   styleEl.textContent = getWidgetStyles(currentConfig, options.inline);
   shadowRoot.appendChild(styleEl);
 
-  // 4. Create Preact mount point
+ 
   const mountPoint = document.createElement('div');
   mountPoint.className = 'schedulux-mount-root';
   shadowRoot.appendChild(mountPoint);
 
-  // 5. Setup QueryClient and mount Preact widget
+  
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -100,12 +124,13 @@ export function initScheduluxWidget(options: WidgetInitOptions): ScheduluxWidget
       resetBtn?.click();
     },
     updateConfig: (newConfig: Partial<WidgetConfig>) => {
+      const cleanNew = cleanUndefined(newConfig);
       currentConfig = {
         ...currentConfig,
-        ...newConfig,
+        ...cleanNew,
         theme: {
           ...(currentConfig.theme || {}),
-          ...(newConfig.theme || {}),
+          ...(cleanNew.theme || {}),
         },
       };
       styleEl.textContent = getWidgetStyles(currentConfig, options.inline);
@@ -125,7 +150,7 @@ export function initScheduluxWidget(options: WidgetInitOptions): ScheduluxWidget
 
   activeInstances.set(instanceKey, instance);
 
-  // Asynchronously fetch remote config to apply published theme from database
+  
   fetchWidgetConfig(
     options.apiBase || '',
     options.tenantId,
@@ -134,14 +159,14 @@ export function initScheduluxWidget(options: WidgetInitOptions): ScheduluxWidget
   )
     .then((remoteCfg) => {
       if (remoteCfg && Object.keys(remoteCfg).length > 0) {
-        const mergedTheme = {
-          ...(remoteCfg.theme || {}),
-          ...(options.config?.theme || {}),
-        };
+        const localOverrides = cleanUndefined(options.config);
         const mergedConfig: Partial<WidgetConfig> = {
           ...remoteCfg,
-          ...options.config,
-          theme: mergedTheme,
+          ...localOverrides,
+          theme: {
+            ...(remoteCfg.theme || {}),
+            ...(localOverrides.theme || {}),
+          },
         };
         instance.updateConfig(mergedConfig);
       }
@@ -161,7 +186,7 @@ export function destroyScheduluxWidget(tenantId: string, agentId: string): void 
   }
 }
 
-// Browser Global Window Attachment
+
 interface ScheduluxGlobalApi {
   init: typeof initScheduluxWidget;
   destroy: typeof destroyScheduluxWidget;
@@ -181,7 +206,7 @@ if (typeof window !== 'undefined') {
     instances: activeInstances,
   };
 
-  // Auto-initialize when embedded via `<script ... data-tenant-id="..." data-agent-id="...">`
+
   const currentScript =
     document.currentScript || document.querySelector('script[data-tenant-id][data-agent-id]');
 
@@ -198,21 +223,44 @@ if (typeof window !== 'undefined') {
       const themeMode = currentScript.getAttribute(
         'data-theme-mode',
       ) as WidgetConfig['theme'] extends { theme_mode?: infer M } ? M : never;
+      const containerSelector = currentScript.getAttribute('data-container');
+      const inlineAttr = currentScript.getAttribute('data-inline');
 
-      initScheduluxWidget({
-        tenantId,
-        agentId,
-        apiBase,
-        config: {
-          agent_name: agentName || undefined,
-          initial_greeting: greeting || undefined,
-          position: position || undefined,
-          theme: {
-            primary_color: primaryColor || undefined,
-            theme_mode: themeMode || undefined,
-          },
-        },
-      });
+      const scriptConfig: Partial<WidgetConfig> = {};
+      if (agentName) scriptConfig.agent_name = agentName;
+      if (greeting) scriptConfig.initial_greeting = greeting;
+      if (position) scriptConfig.position = position;
+      if (primaryColor || themeMode) {
+        scriptConfig.theme = {};
+        if (primaryColor) scriptConfig.theme.primary_color = primaryColor;
+        if (themeMode) scriptConfig.theme.theme_mode = themeMode;
+      }
+
+      const resolveAndInit = () => {
+        const containerEl = containerSelector
+          ? (document.querySelector(containerSelector) as HTMLElement | null)
+          : null;
+        const isInline = inlineAttr === 'true' || Boolean(containerEl);
+
+        initScheduluxWidget({
+          tenantId,
+          agentId,
+          apiBase,
+          container: containerEl || undefined,
+          inline: isInline,
+          config: scriptConfig,
+        });
+      };
+
+      if (
+        containerSelector &&
+        !document.querySelector(containerSelector) &&
+        document.readyState === 'loading'
+      ) {
+        document.addEventListener('DOMContentLoaded', resolveAndInit);
+      } else {
+        resolveAndInit();
+      }
     }
   }
 }

@@ -74,10 +74,70 @@ let SuperAdminAuthController = class SuperAdminAuthController {
         const lists = await this._superAdminService.ListTenants(data);
         return lists;
     }
+    async getTenantById(data) {
+        if (!data.tenant_id)
+            throw new Error(RESPONSE_MESSAGES.ERRORS.TENANT_ID_REQUIRED);
+        return this._superAdminService.getTenantById(data.tenant_id);
+    }
     async suspendTenant(data) {
         if (!data.tenant_id)
             throw new Error(RESPONSE_MESSAGES.ERRORS.TENANT_ID_REQUIRED);
         return this._superAdminService.suspendTenant(data.tenant_id);
+    }
+    async getSuperAdminOverview(data) {
+        const result = await this._superAdminService.getOverview(data.start_date, data.end_date);
+        return {
+            total_tenants: result.totalTenants,
+            active_tenants: result.activeTenants,
+            suspended_tenants: result.suspendedTenants,
+            total_revenue: result.totalRevenue,
+            currency: result.currency,
+            tenants_by_tier: result.tenantsByTier,
+            total_tokens: result.totalTokens ?? 0,
+        };
+    }
+    async getRevenueChart(data) {
+        const points = await this._superAdminService.getRevenueChart(data.start_date, data.end_date, data.interval);
+        return {
+            points: points.map((p) => ({
+                date: p.date,
+                amount: p.amount,
+                transaction_count: p.transactionCount,
+            })),
+        };
+    }
+    async getTokenChart(data) {
+        const points = await this._superAdminService.getTokenChart(data.start_date, data.end_date, data.interval);
+        return {
+            points: points.map((p) => ({
+                date: p.date,
+                total_tokens: p.total_tokens,
+                input_tokens: p.input_tokens,
+                output_tokens: p.output_tokens,
+            })),
+        };
+    }
+    async getTopTenants(data) {
+        const tenants = await this._superAdminService.getTopTenants(data.start_date, data.end_date, data.limit);
+        return {
+            tenants,
+        };
+    }
+    async listTierConfigs(_data) {
+        const configs = await this._superAdminService.listTierConfigs();
+        return { configs };
+    }
+    async getTierConfig(data) {
+        const config = await this._superAdminService.getTierConfig(data.tier);
+        return { config };
+    }
+    async updateTierConfig(data) {
+        const updated = await this._superAdminService.updateTierConfig(data.tier, data);
+        return {
+            success: true,
+            message: 'Tier configuration updated successfully',
+            config: updated,
+        };
     }
 };
 __decorate([
@@ -111,11 +171,59 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SuperAdminAuthController.prototype, "superAdminGetTenantList", null);
 __decorate([
+    GrpcMethod(GRPC_SERVICES.TENANT, GRPC_METHODS.TENANT.GET_TENANT_BY_ID),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], SuperAdminAuthController.prototype, "getTenantById", null);
+__decorate([
     GrpcMethod(GRPC_SERVICES.TENANT, GRPC_METHODS.TENANT.SUSPEND_TENANT),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], SuperAdminAuthController.prototype, "suspendTenant", null);
+__decorate([
+    GrpcMethod(GRPC_SERVICES.SUPERADMIN_DASHBOARD, GRPC_METHODS.SUPERADMIN_DASHBOARD.GET_OVERVIEW),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], SuperAdminAuthController.prototype, "getSuperAdminOverview", null);
+__decorate([
+    GrpcMethod(GRPC_SERVICES.SUPERADMIN_DASHBOARD, GRPC_METHODS.SUPERADMIN_DASHBOARD.GET_REVENUE_CHART),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], SuperAdminAuthController.prototype, "getRevenueChart", null);
+__decorate([
+    GrpcMethod(GRPC_SERVICES.SUPERADMIN_DASHBOARD, GRPC_METHODS.SUPERADMIN_DASHBOARD.GET_TOKEN_CHART),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], SuperAdminAuthController.prototype, "getTokenChart", null);
+__decorate([
+    GrpcMethod(GRPC_SERVICES.SUPERADMIN_DASHBOARD, GRPC_METHODS.SUPERADMIN_DASHBOARD.GET_TOP_TENANTS),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], SuperAdminAuthController.prototype, "getTopTenants", null);
+__decorate([
+    GrpcMethod(GRPC_SERVICES.SUPERADMIN_TIER_CONFIG, GRPC_METHODS.SUPERADMIN_TIER_CONFIG.LIST_TIER_CONFIGS),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], SuperAdminAuthController.prototype, "listTierConfigs", null);
+__decorate([
+    GrpcMethod(GRPC_SERVICES.SUPERADMIN_TIER_CONFIG, GRPC_METHODS.SUPERADMIN_TIER_CONFIG.GET_TIER_CONFIG),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], SuperAdminAuthController.prototype, "getTierConfig", null);
+__decorate([
+    GrpcMethod(GRPC_SERVICES.SUPERADMIN_TIER_CONFIG, GRPC_METHODS.SUPERADMIN_TIER_CONFIG.UPDATE_TIER_CONFIG),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], SuperAdminAuthController.prototype, "updateTierConfig", null);
 SuperAdminAuthController = __decorate([
     Controller(),
     UseFilters(new AllExceptionsFilter()),

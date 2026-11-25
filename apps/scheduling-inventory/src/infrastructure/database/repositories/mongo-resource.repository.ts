@@ -187,4 +187,15 @@ export class MongoResourceRepository implements IResourceRepository {
     const docs = await ResourceModel.find(query).lean().exec();
     return docs.map((doc) => ResourceMapper.toDomain(doc as unknown as IResourceDoc));
   }
+
+  async countByTenant(tenantId: string, agentId?: string): Promise<number> {
+    const query: Record<string, unknown> = {
+      tenant_id: tenantId,
+      is_deleted: { $ne: true },
+    };
+    if (agentId) {
+      query.agent_id = agentId;
+    }
+    return ResourceModel.countDocuments(query).exec();
+  }
 }

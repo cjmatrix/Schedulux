@@ -3,6 +3,7 @@ import {
   InviteUserResponse,
   ListWorkspaceUsersRequest,
   ListWorkspaceUsersResponse,
+  SuspendWorkspaceUserResponse,
 } from '@repo/proto/dashboard';
 import {
   ForgotPasswordResponse,
@@ -51,4 +52,9 @@ export interface ITenantService {
   inviteUser(data: InviteUserRequest): Promise<InviteUserResponse>;
 
   listWorkspaceUsers(options: ListWorkspaceUsersRequest): Promise<ListWorkspaceUsersResponse>;
+
+  suspendWorkspaceUser(
+    tenantId: string,
+    userId: string,
+  ): Promise<SuspendWorkspaceUserResponse>;
 }

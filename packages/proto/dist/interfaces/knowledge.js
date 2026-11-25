@@ -7,7 +7,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.KNOWLEDGE_SERVICE_NAME = exports.KNOWLEDGE_PACKAGE_NAME = exports.protobufPackage = void 0;
 exports.KnowledgeServiceControllerMethods = KnowledgeServiceControllerMethods;
-/* eslint-disable */
 const microservices_1 = require("@nestjs/microservices");
 exports.protobufPackage = "knowledge";
 exports.KNOWLEDGE_PACKAGE_NAME = "knowledge";
@@ -18,16 +17,21 @@ function KnowledgeServiceControllerMethods() {
             "getCrawlStatus",
             "startOnboardingSession",
             "resumeOnboardingSession",
+            "resumeOnboardingSessionStream",
             "saveInitialAgentDraft",
             "listTenantAgents",
+            "deleteAgent",
             "getAgentMessages",
             "customerChat",
+            "customerChatStream",
             "getCustomerMessages",
             "getWidgetConfig",
+            "updateWidgetConfig",
             "getDocumentUploadUrl",
             "confirmDocumentUpload",
             "listDocuments",
             "deleteDocument",
+            "getAgentStats",
         ];
         for (const method of grpcMethods) {
             const descriptor = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

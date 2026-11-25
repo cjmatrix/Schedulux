@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { UpdateResourceRequest } from '@repo/proto/scheduling';
 import {
   DispatchStatus,
@@ -17,6 +17,8 @@ import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-even
 
 @Injectable()
 export class UpdateResourceUseCase implements IUpdateResourceUseCase {
+  private readonly _logger = new Logger(UpdateResourceUseCase.name);
+
   constructor(
     @Inject(RESOURCE_REPOSITORY)
     private readonly _resourceRepository: IResourceRepository,
@@ -54,7 +56,11 @@ export class UpdateResourceUseCase implements IUpdateResourceUseCase {
       return { updated: updatedEntity, outbox: outboxDoc };
     });
 
-    await this._eventsProducer.publishOutboxEvent(outbox);
+    void this._eventsProducer.publishOutboxEvent(outbox).catch((err: unknown) => {
+      this._logger.warn(
+        `Immediate outbox dispatch failed for resource ${dto.resource_id}: ${err}. Recovery sweeper will retry.`,
+      );
+    });
 
     return updated;
   }

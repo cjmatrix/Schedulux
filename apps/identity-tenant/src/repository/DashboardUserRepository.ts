@@ -16,7 +16,46 @@ export class DashboardUserRepository
   }
 
   async findByEmail(email: string): Promise<IDashboardUser | null> {
-    return this.model.findOne({ email }).exec();
+    return this.model.findOne({ email: email.toLowerCase().trim() }).exec();
+  }
+
+  async findAllByEmail(email: string): Promise<IDashboardUser[]> {
+    return this.model.find({ email: email.toLowerCase().trim() }).exec();
+  }
+
+  async findByTenantAndEmail(tenantId: string, email: string): Promise<IDashboardUser | null> {
+    return this.model
+      .findOne({
+        tenant_id: tenantId,
+        email: email.toLowerCase().trim(),
+      })
+      .exec();
+  }
+
+  async findByTenantAgentAndEmail(
+    tenantId: string,
+    agentId: string,
+    email: string,
+  ): Promise<IDashboardUser | null> {
+    return this.model
+      .findOne({
+        tenant_id: tenantId,
+        agent_ids: agentId,
+        email: email.toLowerCase().trim(),
+      })
+      .exec();
+  }
+
+  async addAgentToUser(userId: string, agentId: string): Promise<IDashboardUser | null> {
+    return this.model
+      .findByIdAndUpdate(
+        userId,
+        {
+          $addToSet: { agent_ids: agentId },
+        },
+        { new: true },
+      )
+      .exec();
   }
 
   async findByTenantId(tenantId: string): Promise<IDashboardUser[]> {
@@ -26,8 +65,13 @@ export class DashboardUserRepository
   async findWorkspaceUsers(
     options: FindWorkspaceUsersOptions,
   ): Promise<{ users: IDashboardUser[]; total_count: number }> {
-    const { tenantId, page = 1, limit = 10, search, role } = options;
+    const { tenantId, page = 1, limit = 10, search, role, agentId } = options;
     const query: Record<string, unknown> = { tenant_id: tenantId };
+
+    if (agentId?.trim()) {
+      const cleanAgentId = agentId.trim();
+      query.agent_ids = cleanAgentId;
+    }
 
     if (search?.trim()) {
       const regex = new RegExp(search.trim(), 'i');
@@ -35,8 +79,7 @@ export class DashboardUserRepository
     }
 
     if (role && role !== 'all') {
-      const mappedRole = role === 'owner' ? 'root' : role;
-      query.system_role = mappedRole;
+      query.system_role = role;
     }
 
     const skip = (page - 1) * limit;
@@ -51,5 +94,19 @@ export class DashboardUserRepository
 
   async update(id: string, data: Partial<IDashboardUser>): Promise<IDashboardUser | null> {
     return this.model.findByIdAndUpdate(id, data, { new: true }).exec();
+  }
+
+  async updateStatus(
+    tenantId: string,
+    userId: string,
+    status: 'active' | 'suspended',
+  ): Promise<IDashboardUser | null> {
+    return this.model
+      .findOneAndUpdate(
+        { _id: userId, tenant_id: tenantId },
+        { $set: { status } },
+        { new: true },
+      )
+      .exec();
   }
 }

@@ -24,6 +24,7 @@ service SchedulingInventoryService {
   rpc CreateBooking (CreateBookingRequest) returns (BookingResponse);
   rpc CancelBooking (CancelBookingRequest) returns (BookingResponse);
   rpc RescheduleBooking (RescheduleBookingRequest) returns (BookingResponse);
+  rpc UpdateBookingStatus (UpdateBookingStatusRequest) returns (BookingResponse);
   rpc GetAvailability (GetAvailabilityRequest) returns (GetAvailabilityResponse);
   rpc ListBookings (ListBookingsRequest) returns (ListBookingsResponse);
 
@@ -40,16 +41,6 @@ message PriceInfo {
   string type = 1;
   double amount = 2;
   string currency = 3;
-}
-
-message DepositInfo {
-  bool required = 1;
-  double amount = 2;
-  string processor = 3;
-  string upi_id = 4;
-  string qr_code_url = 5;
-  string confirmation_method = 6;
-  string payment_instructions = 7;
 }
 
 message ServiceVerificationInfo {
@@ -73,7 +64,6 @@ message ServiceInfo {
   int32 duration_minutes = 6;
   int32 buffer_minutes = 7;
   PriceInfo price = 9;
-  DepositInfo deposit = 10;
   string created_at = 14;
   string updated_at = 15;
   string booking_mode = 16;
@@ -92,7 +82,6 @@ message CreateServiceRequest {
   int32 duration_minutes = 5;
   int32 buffer_minutes = 6;
   PriceInfo price = 8;
-  DepositInfo deposit = 9;
   optional string booking_mode = 13;
   string agent_id = 14;
   optional string service_id = 15;
@@ -119,7 +108,6 @@ message ListServicesRequest {
 message ServiceSummaryInfo {
   int32 total_count = 1;
   double avg_price = 2;
-  int32 deposit_count = 3;
   repeated string categories = 4;
 }
 
@@ -140,7 +128,6 @@ message UpdateServiceRequest {
   optional int32 duration_minutes = 6;
   optional int32 buffer_minutes = 7;
   PriceInfo price = 9;
-  DepositInfo deposit = 10;
   optional string booking_mode = 14;
   optional string agent_id = 15;
   optional ServiceVerificationInfo verification = 16;
@@ -334,9 +321,7 @@ message BookingInfo {
   int32 duration_minutes = 12;
   string source = 13;
   string status = 14;
-  string deposit_status = 15;
   PriceInfo price = 16;
-  optional DepositInfo deposit = 17;
   optional string notes = 18;
   optional string created_by = 19;
   string created_at = 20;
@@ -358,9 +343,10 @@ message CreateBookingRequest {
   optional string customer_email = 9;
   optional string notes = 10;
   optional string source = 11;
-  optional string deposit_status = 12;
   optional string created_by = 13;
   repeated string resource_ids = 14;
+  optional string hold_token = 15;
+  optional bool override_hold = 16;
 }
 
 message BookingResponse {
@@ -386,6 +372,17 @@ message RescheduleBookingRequest {
   repeated string resource_ids = 7;
   optional string rescheduled_by = 8;
   optional string notes = 9;
+  optional string hold_token = 10;
+  optional bool override_hold = 11;
+}
+
+message UpdateBookingStatusRequest {
+  string tenant_id = 1;
+  string booking_id = 2;
+  string agent_id = 3;
+  string status = 4;
+  optional string reason = 5;
+  optional string updated_by = 6;
 }
 
 message ListBookingsRequest {
@@ -402,11 +399,22 @@ message ListBookingsRequest {
   optional string customer_phone = 11;
 }
 
+message BookingSummaryInfo {
+  int32 total_count = 1;
+  int32 confirmed_count = 2;
+  int32 pending_count = 3;
+  int32 cancelled_count = 4;
+  int32 completed_count = 5;
+  int32 ai_inbound_count = 6;
+  int32 ai_inbound_percent = 7;
+}
+
 message ListBookingsResponse {
   repeated BookingInfo bookings = 1;
   int32 total = 2;
   int32 page = 3;
   int32 limit = 4;
+  optional BookingSummaryInfo summary = 5;
 }
 
 message GetAvailabilityRequest {
@@ -487,12 +495,19 @@ message CustomerDetails {
   string updated_at = 11;
 }
 
+message CustomerSummaryInfo {
+  int32 total_count = 1;
+  int32 verified_count = 2;
+  int32 guest_count = 3;
+}
+
 message ListCustomersResponse {
   repeated CustomerDetails customers = 1;
   int32 total = 2;
   int32 page = 3;
   int32 limit = 4;
   int32 total_pages = 5;
+  optional CustomerSummaryInfo summary = 6;
 }
 
 message TenantScheduleInfo {

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
@@ -10,6 +10,7 @@ from agent_orchestrator.models import (
     AgentRuntimeConfig,
     KnowledgeDocument,
     KnowledgeDocumentStatus,
+    OutboxEvent,
 )
 
 
@@ -42,6 +43,8 @@ class DraftRepository(Protocol):
 
     async def list_drafts(self, tenant_id: str) -> list[AgentDraft]: ...
 
+    async def count_drafts(self, tenant_id: str) -> int: ...
+
     async def upsert_agent_draft(
         self,
         tenant_id: str,
@@ -51,6 +54,8 @@ class DraftRepository(Protocol):
         draft_dict: dict[str, Any],
     ) -> AgentDraft: ...
 
+    async def delete_draft(self, tenant_id: str, agent_id: str) -> bool: ...
+
 
 class RuntimeConfigRepository(Protocol):
     async def get_runtime_config(
@@ -58,6 +63,8 @@ class RuntimeConfigRepository(Protocol):
     ) -> AgentRuntimeConfig | None: ...
 
     async def list_runtime_configs(self, tenant_id: str) -> list[AgentRuntimeConfig]: ...
+
+    async def delete_runtime_config(self, tenant_id: str, agent_id: str) -> bool: ...
 
 
 @runtime_checkable
@@ -81,6 +88,16 @@ class CacheRepository(Protocol):
     async def delete_cached_biz_context(self, tenant_id: str, agent_id: str) -> None: ...
 
     async def get_raw_crawl_draft(self, tenant_id: str) -> str | None: ...
+
+    async def get_cached_tenant_agents(
+        self, tenant_id: str
+    ) -> list[dict[str, Any]] | None: ...
+
+    async def set_cached_tenant_agents(
+        self, tenant_id: str, agents: list[dict[str, Any]], ttl: int = 3600
+    ) -> None: ...
+
+    async def delete_cached_tenant_agents(self, tenant_id: str) -> None: ...
 
 
 class CrawlerQueue(Protocol):
@@ -115,12 +132,20 @@ class DocumentIndexingQueue(Protocol):
 
 class AgentOrchestrator(Protocol):
     async def start_session(
-        self, tenant_id: str, initial_draft: dict[str, Any], agent_id: str
+        self,
+        tenant_id: str,
+        initial_draft: dict[str, Any],
+        agent_id: str,
+        tier: str | None = None,
     ) -> dict[str, Any]: ...
 
     async def resume_session(
-        self, tenant_id: str, user_answer: str, agent_id: str
+        self, tenant_id: str, user_answer: str, agent_id: str, tier: str | None = None
     ) -> dict[str, Any]: ...
+
+    async def resume_session_stream(
+        self, tenant_id: str, user_answer: str, agent_id: str, tier: str | None = None
+    ) -> AsyncIterator[dict[str, Any]]: ...
 
     async def get_current_draft(self, tenant_id: str, agent_id: str) -> dict[str, Any] | None: ...
 
@@ -129,7 +154,11 @@ class StorageService(Protocol):
     """Abstract cloud object storage provider (AWS S3, Cloudflare R2, MinIO, GCS)."""
 
     def generate_presigned_upload_url(
-        self, key: str, content_type: str = "application/pdf", expires_in: int = 900
+        self,
+        key: str,
+        content_type: str = "application/pdf",
+        expires_in: int = 900,
+        max_allowed_bytes: int | None = None,
     ) -> str: ...
 
     def delete_object(self, key: str, bucket: str | None = None) -> None: ...
@@ -166,6 +195,8 @@ class DocumentRepository(Protocol):
         self, tenant_id: str, agent_id: str | None = None
     ) -> list[KnowledgeDocument]: ...
 
+    async def count_documents(self, tenant_id: str, agent_id: str | None = None) -> int: ...
+
     async def delete_document(self, tenant_id: str, document_id: str) -> bool: ...
 
 
@@ -178,6 +209,20 @@ class EventSubscriber(Protocol):
     async def start(self) -> None: ...
 
     async def run(self) -> None: ...
+
+    async def stop(self) -> None: ...
+
+
+@runtime_checkable
+class EventPublisher(Protocol):
+    async def publish(
+        self,
+        topic: str,
+        payload: dict[str, Any],
+        key: str | None = None,
+    ) -> None: ...
+
+    async def start(self) -> None: ...
 
     async def stop(self) -> None: ...
 
@@ -209,8 +254,9 @@ class MemoryVectorStore(Protocol):
         self,
         query_vector: list[float],
         tenant_id: str,
-        agent_id: str | None,
-        limit: int,
+        agent_id: str | None = None,
+        limit: int = 4,
+        score_threshold: float | None = 0.45,
     ) -> list[str]: ...
 
 
@@ -224,3 +270,33 @@ class KnowledgeVectorStore(Protocol):
         agent_id: str | None,
         limit: int,
     ) -> list[dict[str, Any]]: ...
+
+    async def delete_by_document_id(self, tenant_id: str, document_id: str) -> bool: ...
+
+    async def delete_by_agent_id(self, tenant_id: str, agent_id: str) -> bool: ...
+
+
+@runtime_checkable
+class OutboxRepository(Protocol):
+    """Abstract persistence for transactional OutboxEvent entities."""
+
+    async def save_event(
+        self,
+        event_id: str,
+        aggregate_type: str,
+        aggregate_id: str,
+        event_type: str,
+        topic: str,
+        partition_key: str,
+        payload: dict[str, Any],
+    ) -> OutboxEvent: ...
+
+    async def mark_published(self, event_id: str, published_at: datetime | None = None) -> None: ...
+
+    async def mark_failed(self, event_id: str, error: str, max_retries: int = 5) -> None: ...
+
+    async def get_stuck_pending_events(
+        self, older_than: datetime, limit: int = 50
+    ) -> list[OutboxEvent]: ...
+
+    async def get_by_id(self, event_id: str) -> OutboxEvent | None: ...

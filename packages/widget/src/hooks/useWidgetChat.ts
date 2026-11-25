@@ -11,7 +11,7 @@ import {
   fetchChatMessages,
   fetchInitChat,
   loadStoredSession,
-  postChatMessage,
+  postChatMessageStream,
 } from '../api';
 import type { WidgetChatMessage, WidgetConfig, WidgetInitOptions } from '../types';
 
@@ -152,10 +152,79 @@ export function useWidgetChat({ options, config }: UseWidgetChatOptions) {
           booking_id: res.booking_id,
           booking_reference: res.booking_reference,
           status: res.status,
+          streamAgentId: undefined as string | undefined,
         };
       }
 
-      return postChatMessage(
+      const streamAgentId = `stream_${Date.now()}`;
+      let hasEmittedFirstToken = false;
+
+      const appendToken = (delta: string) => {
+        if (!delta) return;
+        if (!hasEmittedFirstToken) {
+          hasEmittedFirstToken = true;
+          setIsTyping(false);
+        }
+
+        queryClient.setQueryData<InfiniteData<FetchChatMessagesResult>>(queryKey, (oldData) => {
+          if (!oldData || oldData.pages.length === 0) {
+            return {
+              pageParams: [undefined],
+              pages: [
+                {
+                  messages: [
+                    {
+                      id: streamAgentId,
+                      role: 'agent',
+                      content: delta,
+                      created_at: new Date().toISOString(),
+                      delivery_status: 'pending',
+                    },
+                  ],
+                  next_cursor: null,
+                  has_more: false,
+                },
+              ],
+            };
+          }
+
+          const lastIndex = oldData.pages.length - 1;
+          const lastPage = oldData.pages[lastIndex];
+          const existingIdx = lastPage.messages.findIndex((m) => m.id === streamAgentId);
+
+          let updatedMessages: WidgetChatMessage[];
+          if (existingIdx >= 0) {
+            updatedMessages = [...lastPage.messages];
+            updatedMessages[existingIdx] = {
+              ...updatedMessages[existingIdx],
+              content: (updatedMessages[existingIdx].content || '') + delta,
+            };
+          } else {
+            updatedMessages = [
+              ...lastPage.messages,
+              {
+                id: streamAgentId,
+                role: 'agent',
+                content: delta,
+                created_at: new Date().toISOString(),
+                delivery_status: 'pending',
+              },
+            ];
+          }
+
+          const updatedPages = [...oldData.pages];
+          updatedPages[lastIndex] = {
+            ...lastPage,
+            messages: updatedMessages,
+          };
+          return {
+            ...oldData,
+            pages: updatedPages,
+          };
+        });
+      };
+
+      const result = await postChatMessageStream(
         options.apiBase || '',
         options.tenantId,
         options.agentId,
@@ -165,7 +234,13 @@ export function useWidgetChat({ options, config }: UseWidgetChatOptions) {
         options.customerName,
         options.customerPhone,
         mode,
+        appendToken,
       );
+
+      return {
+        ...result,
+        streamAgentId: hasEmittedFirstToken ? streamAgentId : undefined,
+      };
     },
     onMutate: async (text: string) => {
       setIsTyping(true);
@@ -208,6 +283,7 @@ export function useWidgetChat({ options, config }: UseWidgetChatOptions) {
       return { tempId };
     },
     onSuccess: (res, _text, context) => {
+      setIsTyping(false);
       const isNewSession = Boolean(res.sessionId && res.sessionId !== sessionId);
       if (isNewSession && res.sessionId) {
         setSessionId(res.sessionId);
@@ -219,7 +295,7 @@ export function useWidgetChat({ options, config }: UseWidgetChatOptions) {
       const agentReply = res.response || 'I would be happy to help you with that!';
 
       const agentMsg: WidgetChatMessage = {
-        id: res.agent_message_id || `agent_${Date.now()}`,
+        id: res.agent_message_id || res.streamAgentId || `agent_${Date.now()}`,
         role: 'agent',
         content: agentReply,
         created_at: res.created_at || new Date().toISOString(),
@@ -246,7 +322,7 @@ export function useWidgetChat({ options, config }: UseWidgetChatOptions) {
         const lastPage = oldData.pages[lastIndex];
 
         // 1. Swap tempId with the real user_message_id and mark sent
-        const reconciledMessages = lastPage.messages.map((m) => {
+        let reconciledMessages = lastPage.messages.map((m) => {
           if (context?.tempId && m.id === context.tempId) {
             return {
               ...m,
@@ -257,19 +333,29 @@ export function useWidgetChat({ options, config }: UseWidgetChatOptions) {
           return m;
         });
 
-        // 2. Append agentMsg (with deduplication)
-        const isDuplicate = reconciledMessages.some(
-          (m) =>
-            m.id === agentMsg.id ||
-            (m.role === 'agent' &&
-              m.content === agentMsg.content &&
-              Math.abs(
-                new Date(m.created_at || 0).getTime() -
-                  new Date(agentMsg.created_at || 0).getTime(),
-              ) < 3000),
-        );
-        if (!isDuplicate) {
-          reconciledMessages.push(agentMsg);
+        // 2. If streamAgentId exists in messages, reconcile it with final agentMsg
+        if (res.streamAgentId && reconciledMessages.some((m) => m.id === res.streamAgentId)) {
+          reconciledMessages = reconciledMessages.map((m) => {
+            if (m.id === res.streamAgentId) {
+              return agentMsg;
+            }
+            return m;
+          });
+        } else {
+          // 3. Otherwise append agentMsg (with deduplication)
+          const isDuplicate = reconciledMessages.some(
+            (m) =>
+              m.id === agentMsg.id ||
+              (m.role === 'agent' &&
+                m.content === agentMsg.content &&
+                Math.abs(
+                  new Date(m.created_at || 0).getTime() -
+                    new Date(agentMsg.created_at || 0).getTime(),
+                ) < 3000),
+          );
+          if (!isDuplicate) {
+            reconciledMessages.push(agentMsg);
+          }
         }
 
         const updatedLastPage = {

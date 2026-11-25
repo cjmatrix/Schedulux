@@ -22,15 +22,17 @@ const routes_constant_js_1 = require("../../constants/routes.constant.js");
 const superadmin_auth_guard_js_1 = require("../../guards/superadmin-auth.guard.js");
 const cookie_util_js_1 = require("../../utils/cookie.util.js");
 const superAdmin_dto_js_1 = require("./dtos/superAdmin.dto.js");
+const circuit_breaker_1 = require("@repo/circuit-breaker");
 let SuperAdminController = class SuperAdminController {
     _client;
+    _circuitBreakerService;
     _superAdminAuthService;
-    constructor(_client) {
+    constructor(_client, _circuitBreakerService) {
         this._client = _client;
+        this._circuitBreakerService = _circuitBreakerService;
     }
     onModuleInit() {
-        this._superAdminAuthService =
-            this._client.getService('SuperAdminAuthService');
+        this._superAdminAuthService = this._circuitBreakerService.wrapGrpcClient('superadmin-service', this._client.getService('SuperAdminAuthService'));
     }
     async login(body, res) {
         const response = await (0, rxjs_1.lastValueFrom)(this._superAdminAuthService.login(body));
@@ -114,5 +116,6 @@ __decorate([
 exports.SuperAdminController = SuperAdminController = __decorate([
     (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.SUPERADMIN.AUTH.BASE),
     __param(0, (0, common_1.Inject)('SUPERADMIN_PACKAGE')),
-    __metadata("design:paramtypes", [Object])
+    __param(1, (0, common_1.Inject)(circuit_breaker_1.CIRCUIT_BREAKER_SERVICE)),
+    __metadata("design:paramtypes", [Object, Object])
 ], SuperAdminController);

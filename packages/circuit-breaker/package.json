@@ -1,0 +1,28 @@
+{
+  "name": "@repo/circuit-breaker",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nestjs/common": "^12.1.0",
+    "opossum": "^10.0.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/opossum": "^8.1.9",
+    "typescript": "~5.9.3"
+  }
+}

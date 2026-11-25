@@ -1,3 +1,4 @@
+import { Metadata } from '@grpc/grpc-js';
 import { Controller, Inject, UseFilters } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import {
@@ -29,6 +30,7 @@ import {
   ResourceResponse,
   ServiceResponse,
   TenantScheduleResponse,
+  UpdateBookingStatusRequest,
   UpdateResourceRequest,
   UpdateServiceRequest,
   UpdateTenantScheduleRequest,
@@ -49,10 +51,12 @@ import {
   IListBookingsUseCase,
   IListCustomersUseCase,
   IRescheduleBookingUseCase,
+  IUpdateBookingStatusUseCase,
   IVerifyCustomerUseCase,
   LIST_BOOKINGS_USE_CASE,
   LIST_CUSTOMERS_USE_CASE,
   RESCHEDULE_BOOKING_USE_CASE,
+  UPDATE_BOOKING_STATUS_USE_CASE,
   VERIFY_CUSTOMER_USE_CASE,
 } from '../../application/interfaces/booking-use-cases.interface.js';
 import {
@@ -124,6 +128,8 @@ export class SchedulingInventoryGrpcController {
     private readonly _cancelBookingUseCase: ICancelBookingUseCase,
     @Inject(RESCHEDULE_BOOKING_USE_CASE)
     private readonly _rescheduleBookingUseCase: IRescheduleBookingUseCase,
+    @Inject(UPDATE_BOOKING_STATUS_USE_CASE)
+    private readonly _updateBookingStatusUseCase: IUpdateBookingStatusUseCase,
     @Inject(GET_AVAILABILITY_USE_CASE)
     private readonly _getAvailabilityUseCase: IGetAvailabilityUseCase,
     @Inject(LIST_BOOKINGS_USE_CASE)
@@ -139,8 +145,12 @@ export class SchedulingInventoryGrpcController {
   ) {}
 
   @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.CREATE_SERVICE)
-  async createService(request: CreateServiceRequest): Promise<ServiceResponse> {
-    const service = await this._createServiceUseCase.execute(request);
+  async createService(
+    request: CreateServiceRequest,
+    metadata?: Metadata,
+  ): Promise<ServiceResponse> {
+    const tier = metadata?.get?.('x-tenant-tier')?.[0]?.toString();
+    const service = await this._createServiceUseCase.execute(request, tier);
     return {
       service: ServiceMapper.toProto(service),
       message: RESPONSE_MESSAGES.SERVICE.CREATED,
@@ -168,7 +178,6 @@ export class SchedulingInventoryGrpcController {
         ? {
             total_count: result.summary.totalCount,
             avg_price: result.summary.avgPrice,
-            deposit_count: result.summary.depositCount,
             categories: result.summary.categories,
           }
         : undefined,
@@ -194,8 +203,12 @@ export class SchedulingInventoryGrpcController {
   }
 
   @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.CREATE_RESOURCE)
-  async createResource(request: CreateResourceRequest): Promise<ResourceResponse> {
-    const resource = await this._createResourceUseCase.execute(request);
+  async createResource(
+    request: CreateResourceRequest,
+    metadata?: Metadata,
+  ): Promise<ResourceResponse> {
+    const tier = metadata?.get?.('x-tenant-tier')?.[0]?.toString();
+    const resource = await this._createResourceUseCase.execute(request, tier);
     return {
       resource: ResourceMapper.toProto(resource),
       message: RESPONSE_MESSAGES.RESOURCE.CREATED,
@@ -254,8 +267,10 @@ export class SchedulingInventoryGrpcController {
   )
   async batchSyncInventory(
     request: BatchSyncInventoryRequest,
+    metadata?: Metadata,
   ): Promise<BatchSyncInventoryResponse> {
-    return this._batchSyncInventoryUseCase.execute(request);
+    const tier = metadata?.get?.('x-tenant-tier')?.[0]?.toString();
+    return this._batchSyncInventoryUseCase.execute(request, tier);
   }
 
   @GrpcMethod(GRPC_SERVICES.SCHEDULING_INVENTORY, GRPC_METHODS.SCHEDULING_INVENTORY.CREATE_BOOKING)
@@ -290,6 +305,22 @@ export class SchedulingInventoryGrpcController {
 
   @GrpcMethod(
     GRPC_SERVICES.SCHEDULING_INVENTORY,
+    GRPC_METHODS.SCHEDULING_INVENTORY.UPDATE_BOOKING_STATUS,
+  )
+  async updateBookingStatus(request: UpdateBookingStatusRequest): Promise<BookingResponse> {
+    const booking = await this._updateBookingStatusUseCase.execute(request);
+    const msg =
+      booking.status === 'completed'
+        ? RESPONSE_MESSAGES.BOOKING.COMPLETED
+        : RESPONSE_MESSAGES.BOOKING.STATUS_UPDATED;
+    return {
+      booking: BookingMapper.toProto(booking),
+      message: msg,
+    };
+  }
+
+  @GrpcMethod(
+    GRPC_SERVICES.SCHEDULING_INVENTORY,
     GRPC_METHODS.SCHEDULING_INVENTORY.GET_AVAILABILITY,
   )
   async getAvailability(request: GetAvailabilityRequest): Promise<GetAvailabilityResponse> {
@@ -304,6 +335,17 @@ export class SchedulingInventoryGrpcController {
       total: result.total,
       page: result.page,
       limit: result.limit,
+      summary: result.summary
+        ? {
+            total_count: result.summary.totalCount,
+            confirmed_count: result.summary.confirmedCount,
+            pending_count: result.summary.pendingCount,
+            cancelled_count: result.summary.cancelledCount,
+            completed_count: result.summary.completedCount,
+            ai_inbound_count: result.summary.aiInboundCount,
+            ai_inbound_percent: result.summary.aiInboundPercent,
+          }
+        : undefined,
     };
   }
 

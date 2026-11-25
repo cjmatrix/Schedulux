@@ -1,12 +1,18 @@
+import asyncio
 import json
 import logging
 import os
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import Any, TypeVar
 
 import grpc
+from opentelemetry import trace
 
+from agent_orchestrator.circuit_breaker import (
+    CircuitBreakerError,
+    get_circuit_breaker,
+)
 from agent_orchestrator.models import (
-    DepositEmbed,
     PriceEmbed,
     ResourceEmbed,
     ResourceRequirementEmbed,
@@ -19,6 +25,14 @@ logger = logging.getLogger(__name__)
 
 SCHEDULING_SERVICE_URL = os.environ.get("SCHEDULING_SERVICE_URL", "localhost:50053")
 GRPC_TIMEOUT_SECONDS = float(os.environ.get("SCHEDULING_GRPC_TIMEOUT", 15.0))
+
+scheduling_breaker = get_circuit_breaker(
+    name="scheduling-inventory",
+    failure_threshold=int(os.environ.get("SCHEDULING_CB_FAILURE_THRESHOLD", 5)),
+    recovery_timeout=float(os.environ.get("SCHEDULING_CB_RECOVERY_TIMEOUT", 10.0)),
+)
+
+T = TypeVar("T")
 
 
 def build_embedded_resources(raw_resources: list[dict[str, Any]]) -> list[ResourceEmbed]:
@@ -44,7 +58,6 @@ def build_embedded_services(raw_services: list[dict[str, Any]]) -> list[ServiceE
     services_list: list[ServiceEmbed] = []
     for svc in raw_services:
         price_d = svc.get("price", {}) or {}
-        deposit_d = svc.get("deposit", {}) or {}
         verif_d = svc.get("verification", {}) or {}
         services_list.append(
             ServiceEmbed(
@@ -62,17 +75,6 @@ def build_embedded_services(raw_services: list[dict[str, Any]]) -> list[ServiceE
                 )
                 if price_d
                 else PriceEmbed(),
-                deposit=DepositEmbed(
-                    required=bool(deposit_d.get("required", False)),
-                    amount=float(deposit_d.get("amount", 0.0)),
-                    processor=deposit_d.get("processor") or "",
-                    upi_id=deposit_d.get("upi_id") or "",
-                    qr_code_url=deposit_d.get("qr_code_url") or "",
-                    confirmation_method=deposit_d.get("confirmation_method") or "automatic",
-                    payment_instructions=deposit_d.get("payment_instructions") or "",
-                )
-                if deposit_d
-                else DepositEmbed(),
                 verification=ServiceVerificationEmbed(require_otp=verif_d.get("require_otp"))
                 if verif_d
                 else ServiceVerificationEmbed(),
@@ -82,6 +84,12 @@ def build_embedded_services(raw_services: list[dict[str, Any]]) -> list[ServiceE
                         resource_type=req.get("resource_type", "staff"),
                         count=int(req.get("count") or 1),
                         eligible_resource_ids=req.get("eligible_resource_ids", []),
+                        selection_mode=req.get("selection_mode")
+                        or (
+                            "user_selectable"
+                            if (req.get("resource_type") or "").lower() == "staff"
+                            else "auto_assign"
+                        ),
                     )
                     for req in (svc.get("resource_requirements") or [])
                 ],
@@ -90,12 +98,108 @@ def build_embedded_services(raw_services: list[dict[str, Any]]) -> list[ServiceE
     return services_list
 
 
+class _TraceContextClientInterceptor(grpc.aio.UnaryUnaryClientInterceptor):
+    
+
+    async def intercept_unary_unary(self, continuation, client_call_details, request):
+        current_span = trace.get_current_span()
+        span_ctx = current_span.get_span_context() if current_span else None
+        if span_ctx and span_ctx.is_valid:
+            traceparent = f"00-{format(span_ctx.trace_id, '032x')}-{format(span_ctx.span_id, '016x')}-{span_ctx.trace_flags:02x}"
+            metadata = list(client_call_details.metadata or [])
+            metadata.append(("traceparent", traceparent))
+            metadata.append(("trace_id", format(span_ctx.trace_id, "032x")))
+            client_call_details = client_call_details._replace(metadata=metadata)
+        return await continuation(client_call_details, request)
+
+
+_channel: grpc.aio.Channel | None = None
+_channel_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_channel_options() -> list[tuple[str, Any]]:
+    return [
+        ("grpc.lb_policy_name", "round_robin"),
+        ("grpc.enable_retries", 1),
+        ("grpc.keepalive_time_ms", 30000),
+        ("grpc.keepalive_timeout_ms", 10000),
+        ("grpc.http2.max_pings_without_data", 0),
+        ("grpc.keepalive_permit_without_calls", 1),
+    ]
+
+
+def _format_target_url(raw_url: str) -> str:
+    cleaned = raw_url.strip()
+    if cleaned.startswith("dns:///") or cleaned.startswith("unix:"):
+        return cleaned
+    return f"dns:///{cleaned}"
+
+
+def get_scheduling_channel() -> grpc.aio.Channel:
+    global _channel, _channel_loop
+    try:
+        current_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        current_loop = None
+
+    if _channel is None or _channel_loop != current_loop:
+        _channel_loop = current_loop
+        target = _format_target_url(SCHEDULING_SERVICE_URL)
+        interceptors = [_TraceContextClientInterceptor()]
+        _channel = grpc.aio.insecure_channel(
+            target,
+            options=_get_channel_options(),
+            interceptors=interceptors,
+        )
+    return _channel
+
+
+async def close_scheduling_channel() -> None:
+    global _channel, _channel_loop
+    if _channel is not None:
+        await _channel.close()
+        _channel = None
+        _channel_loop = None
+
+
+async def _execute_scheduling_rpc[T](
+    rpc_caller: Callable[[scheduling_pb2_grpc.SchedulingInventoryServiceStub], Awaitable[T]],
+    operation_name: str,
+    fallback_on_open: dict[str, Any],
+) -> T | dict[str, Any]:
+    async def _do_rpc() -> T:
+        channel = get_scheduling_channel()
+        stub = scheduling_pb2_grpc.SchedulingInventoryServiceStub(channel)
+        return await rpc_caller(stub)
+
+    try:
+        return await scheduling_breaker.call_async(_do_rpc)
+    except CircuitBreakerError as cb_err:
+        logger.warning(
+            "[SchedulingClient] %s fast-failed (circuit open): %s",
+            operation_name,
+            cb_err,
+        )
+        return fallback_on_open
+    except grpc.RpcError as rpc_err:
+        err_msg = f"gRPC error ({rpc_err.code()}): {rpc_err.details()}"
+        logger.error("[SchedulingClient Error] Failed %s: %s", operation_name, err_msg)
+        fallback = dict(fallback_on_open)
+        fallback["error"] = err_msg
+        return fallback
+    except Exception as e:
+        err_msg = str(e)
+        logger.error("[SchedulingClient Error] Unexpected %s error: %s", operation_name, err_msg)
+        fallback = dict(fallback_on_open)
+        fallback["error"] = err_msg
+        return fallback
+
+
 async def sync_agent_inventory(
     tenant_id: str,
     agent_id: str,
     draft: dict[str, Any],
 ) -> dict[str, Any]:
-
     if not tenant_id:
         return {
             "success": False,
@@ -105,255 +209,208 @@ async def sync_agent_inventory(
             "draft": draft,
         }
 
-    target_url = SCHEDULING_SERVICE_URL
     raw_resources = [r for r in draft.get("resources", []) if isinstance(r, dict)]
     raw_services = [s for s in draft.get("services", []) if isinstance(s, dict)]
 
     logger.info(
-        "[SchedulingClient] Initiating atomic BatchSyncInventory to %s (tenant: %s, agent: %s, %d resources, %d services)",
-        target_url,
+        "[SchedulingClient] Initiating atomic BatchSyncInventory (tenant: %s, agent: %s, %d resources, %d services)",
         tenant_id,
         agent_id,
         len(raw_resources),
         len(raw_services),
     )
 
-    try:
-        proto_resources: list[scheduling_pb2.CreateResourceRequest] = []
-        for res in raw_resources:
-            custom_shifts = res.get("custom_shift_overrides") or {}
-            shifts_json = (
-                json.dumps(custom_shifts)
-                if isinstance(custom_shifts, (dict, list))
-                else str(custom_shifts)
+    proto_resources: list[scheduling_pb2.CreateResourceRequest] = []
+    for res in raw_resources:
+        custom_shifts = res.get("custom_shift_overrides") or {}
+        shifts_json = (
+            json.dumps(custom_shifts)
+            if isinstance(custom_shifts, (dict, list))
+            else str(custom_shifts)
+        )
+        proto_resources.append(
+            scheduling_pb2.CreateResourceRequest(
+                tenant_id=tenant_id,
+                agent_id=agent_id or None,
+                resource_id=res.get("resource_id") or None,
+                resource_type=res.get("resource_type") or "staff",
+                name=(res.get("name") or "Unnamed").strip(),
+                title=res.get("title") or "",
+                category=res.get("category") or "General",
+                description=res.get("description") or "",
+                is_bookable=res.get("is_bookable", True),
+                dispatch_status=res.get("dispatch_status") or "active",
+                custom_shift_overrides_json=shifts_json,
+                is_deleted=bool(res.get("is_deleted", False)),
+                deleted_at=str(res.get("deleted_at")) if res.get("deleted_at") else None,
             )
-            proto_resources.append(
-                scheduling_pb2.CreateResourceRequest(
-                    tenant_id=tenant_id,
-                    agent_id=agent_id or None,
-                    resource_id=res.get("resource_id") or None,
-                    resource_type=res.get("resource_type") or "staff",
-                    name=(res.get("name") or "Unnamed").strip(),
-                    title=res.get("title") or "",
-                    category=res.get("category") or "General",
-                    description=res.get("description") or "",
-                    is_bookable=res.get("is_bookable", True),
-                    dispatch_status=res.get("dispatch_status") or "active",
-                    custom_shift_overrides_json=shifts_json,
-                    is_deleted=bool(res.get("is_deleted", False)),
-                    deleted_at=str(res.get("deleted_at")) if res.get("deleted_at") else None,
-                )
+        )
+
+    proto_services: list[scheduling_pb2.CreateServiceRequest] = []
+    for svc in raw_services:
+        price_d = svc.get("price") or {}
+        verif_d = svc.get("verification") or {}
+        verif_info = None
+        if verif_d and verif_d.get("require_otp") is not None:
+            verif_info = scheduling_pb2.ServiceVerificationInfo(
+                require_otp=bool(verif_d["require_otp"])
             )
 
-        proto_services: list[scheduling_pb2.CreateServiceRequest] = []
-        for svc in raw_services:
-            price_d = svc.get("price") or {}
-            deposit_d = svc.get("deposit") or {}
-            verif_d = svc.get("verification") or {}
-            verif_info = None
-            if verif_d and verif_d.get("require_otp") is not None:
-                verif_info = scheduling_pb2.ServiceVerificationInfo(
-                    require_otp=bool(verif_d["require_otp"])
-                )
-
-            proto_services.append(
-                scheduling_pb2.CreateServiceRequest(
-                    tenant_id=tenant_id,
-                    agent_id=agent_id or None,
-                    service_id=svc.get("service_id") or None,
-                    name=(svc.get("name") or "Unnamed").strip(),
-                    category=svc.get("category") or "General",
-                    description=svc.get("description") or "",
-                    duration_minutes=int(svc.get("duration_minutes") or 30),
-                    buffer_minutes=int(svc.get("buffer_minutes") or 0),
-                    booking_mode=str(svc.get("booking_mode") or "time_slot"),
-                    price=scheduling_pb2.PriceInfo(
-                        type=str(price_d.get("type") or "fixed"),
-                        amount=float(price_d.get("amount") or 0.0),
-                        currency=str(price_d.get("currency") or "USD"),
-                    ),
-                    deposit=scheduling_pb2.DepositInfo(
-                        required=bool(deposit_d.get("required", False)),
-                        amount=float(deposit_d.get("amount") or 0.0),
-                        processor=str(deposit_d.get("processor") or ""),
-                        upi_id=str(deposit_d.get("upi_id") or ""),
-                        qr_code_url=str(deposit_d.get("qr_code_url") or ""),
-                        confirmation_method=str(
-                            deposit_d.get("confirmation_method") or "automatic"
-                        ),
-                        payment_instructions=str(deposit_d.get("payment_instructions") or ""),
-                    ),
-                    verification=verif_info,
-                    resource_requirements=[
-                        scheduling_pb2.ResourceRequirementInfo(
-                            role=req.get("role") or "Staff",
-                            resource_type=req.get("resource_type") or "staff",
-                            count=int(req.get("count") or 1),
-                            eligible_resource_ids=req.get("eligible_resource_ids") or [],
-                            selection_mode=req.get("selection_mode")
-                            or (
-                                "user_selectable"
-                                if (req.get("resource_type") or "").lower() == "staff"
-                                else "auto_assign"
-                            ),
-                        )
-                        for req in (svc.get("resource_requirements") or [])
-                    ],
-                    is_deleted=bool(svc.get("is_deleted", False)),
-                    deleted_at=str(svc.get("deleted_at")) if svc.get("deleted_at") else None,
+        proto_requirements: list[scheduling_pb2.ResourceRequirement] = []
+        for req in svc.get("resource_requirements", []):
+            proto_requirements.append(
+                scheduling_pb2.ResourceRequirement(
+                    role=req.get("role", "Staff"),
+                    resource_type=req.get("resource_type", "staff"),
+                    count=int(req.get("count") or 1),
+                    eligible_resource_ids=req.get("eligible_resource_ids", []),
+                    selection_mode=req.get("selection_mode") or "auto_assign",
                 )
             )
 
-        biz = draft.get("business_profile") or {}
-        timezone = biz.get("timezone") or "UTC"
-        currency = biz.get("currency") or "USD"
-
-        op_raw = draft.get("operating_hours") or {}
-        blackout_raw = op_raw.get("blackout_dates") or []
-
-        def build_intervals(day_slots: Any) -> list[scheduling_pb2.TimeIntervalInfo]:
-            if not isinstance(day_slots, list):
-                return []
-            return [
-                scheduling_pb2.TimeIntervalInfo(
-                    start=s.get("start", "08:00"), end=s.get("end", "17:00")
+        proto_services.append(
+            scheduling_pb2.CreateServiceRequest(
+                tenant_id=tenant_id,
+                agent_id=agent_id or None,
+                service_id=svc.get("service_id") or None,
+                name=(svc.get("name") or "Unnamed").strip(),
+                category=svc.get("category") or "General",
+                description=svc.get("description") or "",
+                duration_minutes=int(svc.get("duration_minutes") or 30),
+                buffer_minutes=int(svc.get("buffer_minutes") or 0),
+                booking_mode=svc.get("booking_mode", "time_slot"),
+                price=scheduling_pb2.Price(
+                    type=price_d.get("type", "fixed"),
+                    amount=float(price_d.get("amount", 0.0)),
+                    currency=price_d.get("currency", "USD"),
                 )
-                for s in day_slots
-                if isinstance(s, dict) and s.get("start") and s.get("end")
+                if price_d
+                else None,
+                verification=verif_info,
+                resource_requirements=proto_requirements,
+                is_deleted=bool(svc.get("is_deleted", False)),
+                deleted_at=str(svc.get("deleted_at")) if svc.get("deleted_at") else None,
+            )
+        )
+
+    timezone = draft.get("timezone", "UTC")
+    currency = draft.get("currency", "USD")
+
+    proto_operating_hours: list[scheduling_pb2.OperatingHoursDay] = []
+    for day in draft.get("operating_hours", []):
+        proto_operating_hours.append(
+            scheduling_pb2.OperatingHoursDay(
+                day_of_week=day.get("day_of_week", ""),
+                is_open=day.get("is_open", True),
+                time_ranges=[
+                    scheduling_pb2.TimeRange(start=tr.get("start", ""), end=tr.get("end", ""))
+                    for tr in day.get("time_ranges", [])
+                ],
+            )
+        )
+
+    proto_blackout_dates: list[scheduling_pb2.BlackoutDateInfo] = []
+    for bo in draft.get("blackout_dates", []):
+        proto_blackout_dates.append(
+            scheduling_pb2.BlackoutDateInfo(
+                start_date=bo.get("start_date", ""),
+                end_date=bo.get("end_date", ""),
+                reason=bo.get("reason", ""),
+            )
+        )
+
+    se_raw = draft.get("scheduling_engine") or {}
+    proto_scheduling_engine = scheduling_pb2.SchedulingEngineConfigInfo(
+        slot_interval_minutes=int(se_raw.get("slot_interval_minutes") or 30),
+        min_advance_booking_hours=int(se_raw.get("min_advance_booking_hours") or 2),
+        max_advance_booking_days=int(se_raw.get("max_advance_booking_days") or 60),
+        cancellation_window_hours=int(se_raw.get("cancellation_window_hours") or 24),
+        hold_duration_minutes=int(se_raw.get("hold_duration_minutes") or 10),
+    )
+
+    guard_raw = draft.get("guardrails") or {}
+    verif_pol_raw = guard_raw.get("verification_policy") or {}
+    proto_verification_policy = scheduling_pb2.VerificationPolicyConfigInfo(
+        require_otp_for_new_booking=bool(verif_pol_raw.get("require_otp_for_new_booking", False)),
+    )
+
+    batch_request = scheduling_pb2.BatchSyncInventoryRequest(
+        tenant_id=tenant_id,
+        agent_id=agent_id or "",
+        resources=proto_resources,
+        services=proto_services,
+        timezone=timezone,
+        currency=currency,
+        operating_hours=proto_operating_hours,
+        blackout_dates=proto_blackout_dates,
+        scheduling_engine=proto_scheduling_engine,
+        verification_policy=proto_verification_policy,
+    )
+
+    resp = await _execute_scheduling_rpc(
+        lambda stub: stub.BatchSyncInventory(batch_request, timeout=GRPC_TIMEOUT_SECONDS),
+        operation_name="BatchSyncInventory",
+        fallback_on_open={
+            "success": False,
+            "error": "Scheduling inventory service is temporarily unavailable (circuit open).",
+            "resources_synced": 0,
+            "services_synced": 0,
+            "resources": build_embedded_resources(raw_resources),
+            "services": build_embedded_services(raw_services),
+            "draft": draft,
+        },
+    )
+
+    if isinstance(resp, dict) and not resp.get("success", True):
+        return resp
+
+    if not resp.success:
+        logger.error("[SchedulingClient] BatchSyncInventory returned failure: %s", resp.message)
+        return {
+            "success": False,
+            "error": resp.message,
+            "resources_synced": 0,
+            "services_synced": 0,
+            "resources": build_embedded_resources(raw_resources),
+            "services": build_embedded_services(raw_services),
+            "draft": draft,
+        }
+
+    for res, proto_res in zip(raw_resources, resp.resources, strict=False):
+        res["resource_id"] = proto_res.resource_id
+
+    for svc, proto_svc in zip(raw_services, resp.services, strict=False):
+        svc["service_id"] = proto_svc.service_id
+        if proto_svc.resource_requirements:
+            svc["resource_requirements"] = [
+                {
+                    "role": req.role,
+                    "resource_type": req.resource_type,
+                    "count": req.count,
+                    "eligible_resource_ids": list(req.eligible_resource_ids),
+                    "selection_mode": req.selection_mode or "auto_assign",
+                }
+                for req in proto_svc.resource_requirements
             ]
 
-        proto_operating_hours = scheduling_pb2.OperatingHoursInfo(
-            monday=build_intervals(op_raw.get("monday")),
-            tuesday=build_intervals(op_raw.get("tuesday")),
-            wednesday=build_intervals(op_raw.get("wednesday")),
-            thursday=build_intervals(op_raw.get("thursday")),
-            friday=build_intervals(op_raw.get("friday")),
-            saturday=build_intervals(op_raw.get("saturday")),
-            sunday=build_intervals(op_raw.get("sunday")),
-        )
+    resources_list = build_embedded_resources(raw_resources)
+    services_list = build_embedded_services(raw_services)
 
-        proto_blackout_dates = [
-            scheduling_pb2.BlackoutDateInfo(
-                date=str(b.get("date", "")),
-                reason=str(b.get("reason", "")),
-                is_closed=bool(b.get("is_closed", True)),
-            )
-            for b in blackout_raw
-            if isinstance(b, dict) and b.get("date")
-        ]
+    logger.info(
+        "[SchedulingClient] BatchSyncInventory succeeded atomically (%d resources, %d services synced)",
+        len(resp.resources),
+        len(resp.services),
+    )
 
-        se_raw = draft.get("scheduling_engine") or {}
-        proto_scheduling_engine = scheduling_pb2.SchedulingEngineConfigInfo(
-            booking_mode=str(se_raw.get("booking_mode", "time_slot")),
-            default_lead_time_hours=int(se_raw.get("default_lead_time_hours") or 2),
-            max_advance_booking_days=int(se_raw.get("max_advance_booking_days") or 60),
-            cancellation_window_hours=int(se_raw.get("cancellation_window_hours") or 24),
-            hold_duration_minutes=int(se_raw.get("hold_duration_minutes") or 10),
-        )
-
-        guard_raw = draft.get("guardrails") or {}
-        verif_pol_raw = guard_raw.get("verification_policy") or {}
-        proto_verification_policy = scheduling_pb2.VerificationPolicyConfigInfo(
-            require_otp_for_new_booking=bool(
-                verif_pol_raw.get("require_otp_for_new_booking", False)
-            ),
-        )
-
-        batch_request = scheduling_pb2.BatchSyncInventoryRequest(
-            tenant_id=tenant_id,
-            agent_id=agent_id or "",
-            resources=proto_resources,
-            services=proto_services,
-            timezone=timezone,
-            currency=currency,
-            operating_hours=proto_operating_hours,
-            blackout_dates=proto_blackout_dates,
-            scheduling_engine=proto_scheduling_engine,
-            verification_policy=proto_verification_policy,
-        )
-
-        async with grpc.aio.insecure_channel(target_url) as channel:
-            stub = scheduling_pb2_grpc.SchedulingInventoryServiceStub(channel)
-            resp: scheduling_pb2.BatchSyncInventoryResponse = await stub.BatchSyncInventory(
-                batch_request,
-                timeout=GRPC_TIMEOUT_SECONDS,
-            )
-
-        if not resp.success:
-            logger.error("[SchedulingClient] BatchSyncInventory returned failure: %s", resp.message)
-            return {
-                "success": False,
-                "error": resp.message,
-                "resources_synced": 0,
-                "services_synced": 0,
-                "resources": build_embedded_resources(raw_resources),
-                "services": build_embedded_services(raw_services),
-                "draft": draft,
-            }
-
-        for res, proto_res in zip(raw_resources, resp.resources, strict=False):
-            res["resource_id"] = proto_res.resource_id
-
-        for svc, proto_svc in zip(raw_services, resp.services, strict=False):
-            svc["service_id"] = proto_svc.service_id
-            if proto_svc.resource_requirements:
-                svc["resource_requirements"] = [
-                    {
-                        "role": req.role,
-                        "resource_type": req.resource_type,
-                        "count": req.count,
-                        "eligible_resource_ids": list(req.eligible_resource_ids),
-                    }
-                    for req in proto_svc.resource_requirements
-                ]
-
-        resources_list = build_embedded_resources(raw_resources)
-        services_list = build_embedded_services(raw_services)
-
-        logger.info(
-            "[SchedulingClient] BatchSyncInventory succeeded atomically (%d resources, %d services synced)",
-            len(resp.resources),
-            len(resp.services),
-        )
-
-        return {
-            "success": True,
-            "error": None,
-            "resources_synced": len(resp.resources),
-            "services_synced": len(resp.services),
-            "resources": resources_list,
-            "services": services_list,
-            "draft": draft,
-        }
-
-    except grpc.RpcError as rpc_err:
-        err_msg = f"gRPC error ({rpc_err.code()}): {rpc_err.details()}"
-        logger.error(
-            "[SchedulingClient Error] Failed BatchSyncInventory to %s: %s", target_url, err_msg
-        )
-        return {
-            "success": False,
-            "error": err_msg,
-            "resources_synced": 0,
-            "services_synced": 0,
-            "resources": build_embedded_resources(raw_resources),
-            "services": build_embedded_services(raw_services),
-            "draft": draft,
-        }
-    except Exception as e:
-        err_msg = str(e)
-        logger.error(
-            "[SchedulingClient Error] Unexpected error during BatchSyncInventory: %s", err_msg
-        )
-        return {
-            "success": False,
-            "error": err_msg,
-            "resources_synced": 0,
-            "services_synced": 0,
-            "resources": build_embedded_resources(raw_resources),
-            "services": build_embedded_services(raw_services),
-            "draft": draft,
-        }
+    return {
+        "success": True,
+        "error": None,
+        "resources_synced": len(resp.resources),
+        "services_synced": len(resp.services),
+        "resources": resources_list,
+        "services": services_list,
+        "draft": draft,
+    }
 
 
 async def get_availability(
@@ -367,7 +424,6 @@ async def get_availability(
     timezone: str | None = None,
 ) -> dict[str, Any]:
     """Query scheduling-inventory service for available slots."""
-    target_url = SCHEDULING_SERVICE_URL
     req = scheduling_pb2.GetAvailabilityRequest(
         tenant_id=tenant_id,
         agent_id=agent_id,
@@ -378,16 +434,27 @@ async def get_availability(
         timezone=timezone or None,
         resource_ids=resource_ids or [],
     )
-    try:
-        async with grpc.aio.insecure_channel(target_url) as channel:
-            stub = scheduling_pb2_grpc.SchedulingInventoryServiceStub(channel)
-            resp: scheduling_pb2.GetAvailabilityResponse = await stub.GetAvailability(
-                req, timeout=GRPC_TIMEOUT_SECONDS
-            )
 
-        days_data = []
-        for d in resp.days:
-            slots_data = [
+    resp = await _execute_scheduling_rpc(
+        lambda stub: stub.GetAvailability(req, timeout=GRPC_TIMEOUT_SECONDS),
+        operation_name="GetAvailability",
+        fallback_on_open={
+            "success": False,
+            "error": "Scheduling calendar is temporarily offline. Please try again shortly.",
+            "days": [],
+        },
+    )
+
+    if isinstance(resp, dict) and not resp.get("success", True):
+        return resp
+
+    days_data = [
+        {
+            "date": d.date,
+            "is_closed": d.is_closed,
+            "closure_reason": d.closure_reason or None,
+            "has_availability": d.has_availability,
+            "slots": [
                 {
                     "start_time": s.start_time,
                     "end_time": s.end_time,
@@ -396,32 +463,19 @@ async def get_availability(
                     "reason": s.reason or None,
                 }
                 for s in d.slots
-            ]
-            days_data.append(
-                {
-                    "date": d.date,
-                    "is_closed": d.is_closed,
-                    "closure_reason": d.closure_reason or None,
-                    "has_availability": d.has_availability,
-                    "slots": slots_data,
-                }
-            )
-
-        return {
-            "success": True,
-            "service_id": resp.service_id,
-            "booking_mode": resp.booking_mode,
-            "timezone": resp.timezone,
-            "days": days_data,
-            "blocked_dates": list(resp.blocked_dates),
+            ],
         }
-    except grpc.RpcError as rpc_err:
-        err_msg = f"gRPC error ({rpc_err.code()}): {rpc_err.details()}"
-        logger.error("[SchedulingClient Error] Failed GetAvailability: %s", err_msg)
-        return {"success": False, "error": err_msg, "days": []}
-    except Exception as e:
-        logger.error("[SchedulingClient Error] Unexpected GetAvailability error: %s", e)
-        return {"success": False, "error": str(e), "days": []}
+        for d in resp.days
+    ]
+
+    return {
+        "success": True,
+        "service_id": resp.service_id,
+        "booking_mode": resp.booking_mode,
+        "timezone": resp.timezone,
+        "days": days_data,
+        "blocked_dates": list(resp.blocked_dates),
+    }
 
 
 async def create_booking(
@@ -437,9 +491,10 @@ async def create_booking(
     resource_ids: list[str] | None = None,
     notes: str | None = None,
     source: str = "customer_agent",
+    hold_token: str | None = None,
+    override_hold: bool = False,
 ) -> dict[str, Any]:
     """Execute booking creation in scheduling-inventory service."""
-    target_url = SCHEDULING_SERVICE_URL
     req = scheduling_pb2.CreateBookingRequest(
         tenant_id=tenant_id,
         agent_id=agent_id,
@@ -454,43 +509,43 @@ async def create_booking(
         source=source or "customer_agent",
         created_by="customer_agent",
         resource_ids=resource_ids or [],
+        hold_token=hold_token or None,
+        override_hold=bool(override_hold),
     )
-    try:
-        async with grpc.aio.insecure_channel(target_url) as channel:
-            stub = scheduling_pb2_grpc.SchedulingInventoryServiceStub(channel)
-            resp: scheduling_pb2.BookingResponse = await stub.CreateBooking(
-                req, timeout=GRPC_TIMEOUT_SECONDS
-            )
 
-        bk = resp.booking
-        return {
-            "success": True,
-            "message": resp.message,
-            "booking": {
-                "booking_id": bk.booking_id,
-                "booking_reference": bk.booking_reference,
-                "tenant_id": bk.tenant_id,
-                "service_id": bk.service_id,
-                "start_time": bk.start_time,
-                "end_time": bk.end_time,
-                "status": bk.status,
-                "deposit_status": bk.deposit_status,
-                "price": {
-                    "type": bk.price.type,
-                    "amount": bk.price.amount,
-                    "currency": bk.price.currency,
-                }
-                if bk.price
-                else None,
-            },
-        }
-    except grpc.RpcError as rpc_err:
-        err_msg = f"gRPC error ({rpc_err.code()}): {rpc_err.details()}"
-        logger.error("[SchedulingClient Error] Failed CreateBooking: %s", err_msg)
-        return {"success": False, "error": err_msg}
-    except Exception as e:
-        logger.error("[SchedulingClient Error] Unexpected CreateBooking error: %s", e)
-        return {"success": False, "error": str(e)}
+    resp = await _execute_scheduling_rpc(
+        lambda stub: stub.CreateBooking(req, timeout=GRPC_TIMEOUT_SECONDS),
+        operation_name="CreateBooking",
+        fallback_on_open={
+            "success": False,
+            "error": "Booking service is temporarily unavailable (circuit open). Please try again shortly.",
+        },
+    )
+
+    if isinstance(resp, dict) and not resp.get("success", True):
+        return resp
+
+    bk = resp.booking
+    return {
+        "success": True,
+        "message": resp.message,
+        "booking": {
+            "booking_id": bk.booking_id,
+            "booking_reference": bk.booking_reference,
+            "tenant_id": bk.tenant_id,
+            "service_id": bk.service_id,
+            "start_time": bk.start_time,
+            "end_time": bk.end_time,
+            "status": bk.status,
+            "price": {
+                "type": bk.price.type,
+                "amount": bk.price.amount,
+                "currency": bk.price.currency,
+            }
+            if bk.price
+            else None,
+        },
+    }
 
 
 async def cancel_booking(
@@ -501,7 +556,6 @@ async def cancel_booking(
     cancelled_by: str = "customer_agent",
 ) -> dict[str, Any]:
     """Execute booking cancellation in scheduling-inventory service."""
-    target_url = SCHEDULING_SERVICE_URL
     req = scheduling_pb2.CancelBookingRequest(
         tenant_id=tenant_id,
         agent_id=agent_id,
@@ -509,30 +563,29 @@ async def cancel_booking(
         reason=reason.strip() if reason else None,
         cancelled_by=cancelled_by,
     )
-    try:
-        async with grpc.aio.insecure_channel(target_url) as channel:
-            stub = scheduling_pb2_grpc.SchedulingInventoryServiceStub(channel)
-            resp: scheduling_pb2.BookingResponse = await stub.CancelBooking(
-                req, timeout=GRPC_TIMEOUT_SECONDS
-            )
 
-        bk = resp.booking
-        return {
-            "success": True,
-            "message": resp.message,
-            "booking": {
-                "booking_id": bk.booking_id,
-                "booking_reference": bk.booking_reference,
-                "status": bk.status,
-            },
-        }
-    except grpc.RpcError as rpc_err:
-        err_msg = f"gRPC error ({rpc_err.code()}): {rpc_err.details()}"
-        logger.error("[SchedulingClient Error] Failed CancelBooking: %s", err_msg)
-        return {"success": False, "error": err_msg}
-    except Exception as e:
-        logger.error("[SchedulingClient Error] Unexpected CancelBooking error: %s", e)
-        return {"success": False, "error": str(e)}
+    resp = await _execute_scheduling_rpc(
+        lambda stub: stub.CancelBooking(req, timeout=GRPC_TIMEOUT_SECONDS),
+        operation_name="CancelBooking",
+        fallback_on_open={
+            "success": False,
+            "error": "Cancellation service is temporarily unavailable (circuit open).",
+        },
+    )
+
+    if isinstance(resp, dict) and not resp.get("success", True):
+        return resp
+
+    bk = resp.booking
+    return {
+        "success": True,
+        "message": resp.message,
+        "booking": {
+            "booking_id": bk.booking_id,
+            "booking_reference": bk.booking_reference,
+            "status": bk.status,
+        },
+    }
 
 
 async def reschedule_booking(
@@ -545,9 +598,10 @@ async def reschedule_booking(
     resource_ids: list[str] | None = None,
     notes: str | None = None,
     rescheduled_by: str = "customer_agent",
+    hold_token: str | None = None,
+    override_hold: bool = False,
 ) -> dict[str, Any]:
     """Execute booking rescheduling in scheduling-inventory service."""
-    target_url = SCHEDULING_SERVICE_URL
     req = scheduling_pb2.RescheduleBookingRequest(
         tenant_id=tenant_id,
         agent_id=agent_id,
@@ -558,33 +612,34 @@ async def reschedule_booking(
         resource_ids=resource_ids or [],
         notes=notes or None,
         rescheduled_by=rescheduled_by,
+        hold_token=hold_token or None,
+        override_hold=bool(override_hold),
     )
-    try:
-        async with grpc.aio.insecure_channel(target_url) as channel:
-            stub = scheduling_pb2_grpc.SchedulingInventoryServiceStub(channel)
-            resp: scheduling_pb2.BookingResponse = await stub.RescheduleBooking(
-                req, timeout=GRPC_TIMEOUT_SECONDS
-            )
 
-        bk = resp.booking
-        return {
-            "success": True,
-            "message": resp.message,
-            "booking": {
-                "booking_id": bk.booking_id,
-                "booking_reference": bk.booking_reference,
-                "start_time": bk.start_time,
-                "end_time": bk.end_time,
-                "status": bk.status,
-            },
-        }
-    except grpc.RpcError as rpc_err:
-        err_msg = f"gRPC error ({rpc_err.code()}): {rpc_err.details()}"
-        logger.error("[SchedulingClient Error] Failed RescheduleBooking: %s", err_msg)
-        return {"success": False, "error": err_msg}
-    except Exception as e:
-        logger.error("[SchedulingClient Error] Unexpected RescheduleBooking error: %s", e)
-        return {"success": False, "error": str(e)}
+    resp = await _execute_scheduling_rpc(
+        lambda stub: stub.RescheduleBooking(req, timeout=GRPC_TIMEOUT_SECONDS),
+        operation_name="RescheduleBooking",
+        fallback_on_open={
+            "success": False,
+            "error": "Rescheduling service is temporarily unavailable (circuit open).",
+        },
+    )
+
+    if isinstance(resp, dict) and not resp.get("success", True):
+        return resp
+
+    bk = resp.booking
+    return {
+        "success": True,
+        "message": resp.message,
+        "booking": {
+            "booking_id": bk.booking_id,
+            "booking_reference": bk.booking_reference,
+            "start_time": bk.start_time,
+            "end_time": bk.end_time,
+            "status": bk.status,
+        },
+    }
 
 
 async def list_bookings(
@@ -601,7 +656,6 @@ async def list_bookings(
     limit: int = 50,
 ) -> dict[str, Any]:
     """Query bookings from scheduling-inventory service via gRPC."""
-    target_url = SCHEDULING_SERVICE_URL
     req = scheduling_pb2.ListBookingsRequest(
         tenant_id=tenant_id.strip(),
         agent_id=agent_id.strip() if agent_id else None,
@@ -615,49 +669,64 @@ async def list_bookings(
         page=page,
         limit=limit,
     )
-    try:
-        async with grpc.aio.insecure_channel(target_url) as channel:
-            stub = scheduling_pb2_grpc.SchedulingInventoryServiceStub(channel)
-            resp: scheduling_pb2.ListBookingsResponse = await stub.ListBookings(
-                req, timeout=GRPC_TIMEOUT_SECONDS
-            )
 
-        items = []
-        for bk in resp.bookings:
-            c_name = bk.customer.name if bk.HasField("customer") else ""
-            c_phone = bk.customer.phone if bk.HasField("customer") else ""
-            c_email = bk.customer.email if (bk.HasField("customer") and bk.customer.email) else None
-            items.append(
-                {
-                    "booking_id": bk.booking_id,
-                    "booking_reference": bk.booking_reference,
-                    "tenant_id": bk.tenant_id,
-                    "agent_id": bk.agent_id,
-                    "service_id": bk.service_id,
-                    "resource_id": bk.resource_id if bk.resource_id else None,
-                    "start_time": bk.start_time,
-                    "end_time": bk.end_time,
-                    "customer_name": c_name,
-                    "customer_phone": c_phone,
-                    "customer_email": c_email,
-                    "status": bk.status,
-                }
-            )
+    resp = await _execute_scheduling_rpc(
+        lambda stub: stub.ListBookings(req, timeout=GRPC_TIMEOUT_SECONDS),
+        operation_name="ListBookings",
+        fallback_on_open={
+            "success": False,
+            "error": "Booking history service is temporarily unavailable (circuit open).",
+            "bookings": [],
+            "total": 0,
+        },
+    )
 
-        return {
-            "success": True,
-            "bookings": items,
-            "total": resp.total,
-            "page": resp.page,
-            "limit": resp.limit,
-        }
-    except grpc.RpcError as rpc_err:
-        err_msg = f"gRPC error ({rpc_err.code()}): {rpc_err.details()}"
-        logger.error("[SchedulingClient Error] Failed ListBookings: %s", err_msg)
-        return {"success": False, "error": err_msg, "bookings": [], "total": 0}
-    except Exception as e:
-        logger.error("[SchedulingClient Error] Unexpected ListBookings error: %s", e)
-        return {"success": False, "error": str(e), "bookings": [], "total": 0}
+    if isinstance(resp, dict) and not resp.get("success", True):
+        return resp
+
+    items = []
+    for bk in resp.bookings:
+        c_name = bk.customer.name if bk.HasField("customer") else ""
+        c_phone = bk.customer.phone if bk.HasField("customer") else ""
+        c_email = bk.customer.email if (bk.HasField("customer") and bk.customer.email) else None
+        price_info = (
+            {
+                "amount": bk.price.amount,
+                "currency": bk.price.currency,
+                "type": bk.price.type,
+            }
+            if bk.HasField("price")
+            else None
+        )
+        items.append(
+            {
+                "booking_id": bk.booking_id,
+                "booking_reference": bk.booking_reference,
+                "tenant_id": bk.tenant_id,
+                "agent_id": bk.agent_id,
+                "service_id": bk.service_id,
+                "resource_id": bk.resource_id if bk.resource_id else None,
+                "resource_ids": list(bk.resource_ids) if bk.resource_ids else [],
+                "booking_mode": bk.booking_mode or "time_slot",
+                "duration_minutes": bk.duration_minutes,
+                "price": price_info,
+                "start_time": bk.start_time,
+                "end_time": bk.end_time,
+                "customer_name": c_name,
+                "customer_phone": c_phone,
+                "customer_email": c_email,
+                "notes": bk.notes if bk.notes else None,
+                "status": bk.status,
+            }
+        )
+
+    return {
+        "success": True,
+        "bookings": items,
+        "total": resp.total,
+        "page": resp.page,
+        "limit": resp.limit,
+    }
 
 
 async def verify_customer(
@@ -666,7 +735,6 @@ async def verify_customer(
     agent_id: str | None = None,
 ) -> dict[str, Any]:
     """Mark a customer as verified (is_guest: false) in scheduling-inventory service via gRPC."""
-    target_url = SCHEDULING_SERVICE_URL
     kwargs: dict[str, Any] = {
         "tenant_id": tenant_id.strip(),
         "customer_phone": customer_phone.strip(),
@@ -674,21 +742,22 @@ async def verify_customer(
     if agent_id and agent_id.strip():
         kwargs["agent_id"] = agent_id.strip()
     req = scheduling_pb2.VerifyCustomerRequest(**kwargs)
-    try:
-        async with grpc.aio.insecure_channel(target_url) as channel:
-            stub = scheduling_pb2_grpc.SchedulingInventoryServiceStub(channel)
-            resp: scheduling_pb2.VerifyCustomerResponse = await stub.VerifyCustomer(
-                req, timeout=GRPC_TIMEOUT_SECONDS
-            )
-        return {
-            "success": resp.success,
-            "message": resp.message,
-            "updated_count": resp.updated_count,
-        }
-    except grpc.RpcError as rpc_err:
-        err_msg = f"gRPC error ({rpc_err.code()}): {rpc_err.details()}"
-        logger.error("[SchedulingClient Error] Failed VerifyCustomer: %s", err_msg)
-        return {"success": False, "error": err_msg, "updated_count": 0}
-    except Exception as e:
-        logger.error("[SchedulingClient Error] Unexpected VerifyCustomer error: %s", e)
-        return {"success": False, "error": str(e), "updated_count": 0}
+
+    resp = await _execute_scheduling_rpc(
+        lambda stub: stub.VerifyCustomer(req, timeout=GRPC_TIMEOUT_SECONDS),
+        operation_name="VerifyCustomer",
+        fallback_on_open={
+            "success": False,
+            "error": "Verification service is temporarily unavailable (circuit open).",
+            "updated_count": 0,
+        },
+    )
+
+    if isinstance(resp, dict) and not resp.get("success", True):
+        return resp
+
+    return {
+        "success": resp.success,
+        "message": resp.message,
+        "updated_count": resp.updated_count,
+    }

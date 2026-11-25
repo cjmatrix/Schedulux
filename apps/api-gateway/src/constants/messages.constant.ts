@@ -22,6 +22,8 @@ export const RESPONSE_MESSAGES = {
     SUCCESS: 'successfull',
     TENANT_SUSPENDED: 'Tenant suspended successfully',
     WORKSPACE_USERS_RETRIEVED: 'Workspace users retrieved successfully',
+    WORKSPACE_USER_STATUS_UPDATED: 'Workspace user status updated successfully',
+    DASHBOARD_OVERVIEW_RETRIEVED: 'Tenant dashboard overview retrieved successfully',
   },
   SCHEDULING: {
     SERVICES_RETRIEVED: 'Services retrieved successfully',
@@ -45,6 +47,7 @@ export const RESPONSE_MESSAGES = {
     MESSAGE_PROCESSED: 'Message processed',
     SANDBOX_CHAT_PROCESSED: 'Sandbox chat processed successfully',
     AGENTS_RETRIEVED: 'Agents retrieved successfully',
+    AGENT_DELETED: 'Agent deleted successfully',
   },
   WEBSOCKET: {
     JOINED: 'joined',
@@ -52,6 +55,16 @@ export const RESPONSE_MESSAGES = {
     MISSING_JOB_ID: 'Missing job_id',
     MISSING_TENANT_ID: 'Missing tenant_id',
     SCHEMA_GENERATION_FAILED: 'Failed to generate agent schema',
+  },
+  DASHBOARD: {
+    OVERVIEW_RETRIEVED: 'Dashboard overview retrieved successfully',
+    REVENUE_CHART_RETRIEVED: 'Revenue chart data retrieved successfully',
+    TOKEN_CHART_RETRIEVED: 'Token chart data retrieved successfully',
+    TOP_TENANTS_RETRIEVED: 'Top tenants data retrieved successfully',
+  },
+  TIER_CONFIG: {
+    LIST_RETRIEVED: 'Tier configurations retrieved successfully',
+    UPDATED: 'Tier configuration updated successfully',
   },
   ERROR: {
     INTERNAL_SERVER_ERROR: 'Internal Server Error',

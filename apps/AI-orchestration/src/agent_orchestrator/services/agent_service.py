@@ -4,10 +4,16 @@ import json
 import secrets
 from typing import Any
 
-from agent_orchestrator.domain.exceptions import InvalidDraftException
+from agent_orchestrator.clients.redis_client import get_redis_client
+from agent_orchestrator.config.tier_constants import get_cached_tier_config
+from agent_orchestrator.domain.exceptions import (
+    InvalidDraftException,
+    TierQuotaExceededException,
+)
 from agent_orchestrator.domain.protocols import (
     CacheRepository,
     DraftRepository,
+    KnowledgeVectorStore,
     RuntimeConfigRepository,
 )
 from agent_orchestrator.domain.templates import build_default_agent_template
@@ -23,14 +29,35 @@ class AgentManagementService(AgentManagementServiceProtocol):
         draft_repo: DraftRepository,
         runtime_repo: RuntimeConfigRepository,
         cache_repo: CacheRepository,
+        knowledge_store: KnowledgeVectorStore | None = None,
     ):
         self.draft_repo = draft_repo
         self.runtime_repo = runtime_repo
         self.cache_repo = cache_repo
+        self.knowledge_store = knowledge_store
 
     async def save_initial_draft(
-        self, tenant_id: str, creation_source: str, draft_json: str | None, name: str | None
+        self,
+        tenant_id: str,
+        creation_source: str,
+        draft_json: str | None,
+        name: str | None,
+        tier: str | None = None,
     ) -> tuple[str, str]:
+        redis_client = get_redis_client()
+        if not tier:
+            tier = await redis_client.get(f"tenant:{tenant_id}:tier")
+        tier_cfg = await get_cached_tier_config(tier, redis_client)
+        max_agents = tier_cfg["max_agents"]
+
+        if max_agents != -1:
+            current_count = await self.draft_repo.count_drafts(tenant_id)
+            if current_count >= max_agents:
+                raise TierQuotaExceededException(
+                    f"Maximum agent limit reached ({max_agents} agents) for your tier ({tier_cfg['name']}). "
+                    f"You currently have {current_count} agent(s). Please upgrade your tier."
+                )
+
         source = (creation_source or "web_crawl").strip().lower()
         agent_id = f"agent_{secrets.token_urlsafe(16)}"
         draft_dict: dict[str, Any] = {}
@@ -54,14 +81,38 @@ class AgentManagementService(AgentManagementServiceProtocol):
                 name=name,
             )
 
+        from agent_orchestrator.models import AgentDraftConfig, canonicalize_agent_schema
+
         draft_dict["tenant_id"] = tenant_id
         draft_dict["agent_id"] = agent_id
-        from agent_orchestrator.models import canonicalize_agent_schema
+        draft_dict["creation_source"] = source
+        canonical_draft = canonicalize_agent_schema(draft_dict, status="draft")
+        validated_config = AgentDraftConfig.model_validate(canonical_draft)
 
-        draft_dict = canonicalize_agent_schema(draft_dict, status="draft")
+        max_services = tier_cfg.get("max_services", -1)
+        max_resources = tier_cfg.get("max_resources", -1)
 
-        bp = draft_dict.get("business_profile")
-        bp_name = bp.get("name") if isinstance(bp, dict) else None
+        if max_resources != -1:
+            active_resources = [r for r in validated_config.resources if not r.is_deleted]
+            if len(active_resources) > max_resources:
+                validated_config.resources = active_resources[:max_resources]
+
+        if max_services != -1:
+            active_services = [s for s in validated_config.services if not s.is_deleted]
+            if len(active_services) > max_services:
+                validated_config.services = active_services[:max_services]
+
+        valid_rids = {r.resource_id for r in validated_config.resources if r.resource_id}
+        for svc in validated_config.services:
+            for req in svc.resource_requirements:
+                req.eligible_resource_ids = [
+                    rid for rid in req.eligible_resource_ids if rid in valid_rids
+                ]
+
+        draft_dict = validated_config.model_dump(mode="json")
+
+        bp = validated_config.business_profile
+        bp_name = bp.name if bp else None
         final_name = name or bp_name or "Primary Assistant"
 
         await self.draft_repo.upsert_agent_draft(
@@ -74,6 +125,7 @@ class AgentManagementService(AgentManagementServiceProtocol):
 
         try:
             await self.cache_repo.set_cached_draft(tenant_id, agent_id, draft_dict)
+            await self.cache_repo.delete_cached_tenant_agents(tenant_id)
         except Exception as re:
             print(
                 f"[AgentManagementService] Warning: Failed to cache draft in Redis: {re}",
@@ -83,6 +135,13 @@ class AgentManagementService(AgentManagementServiceProtocol):
         return agent_id, "pending"
 
     async def list_tenant_agents(self, tenant_id: str) -> list[AgentSummaryDTO]:
+        try:
+            cached = await self.cache_repo.get_cached_tenant_agents(tenant_id)
+            if cached is not None:
+                return [AgentSummaryDTO(**item) for item in cached]
+        except Exception as ce:
+            print(f"[AgentManagementService] Redis get_cached_tenant_agents error: {ce}", flush=True)
+
         agents_map: dict[str, AgentSummaryDTO] = {}
 
         drafts = await self.draft_repo.list_drafts(tenant_id)
@@ -133,8 +192,55 @@ class AgentManagementService(AgentManagementServiceProtocol):
                 created_at=d.created_at.isoformat() if d.created_at else "",
             )
 
-        return sorted(
+        result = sorted(
             list(agents_map.values()),
             key=lambda x: x.updated_at or x.created_at,
             reverse=True,
         )
+
+        try:
+            serialized = [
+                {
+                    "agent_id": a.agent_id,
+                    "name": a.name,
+                    "status": a.status,
+                    "creation_source": a.creation_source,
+                    "services_count": a.services_count,
+                    "updated_at": a.updated_at,
+                    "created_at": a.created_at,
+                }
+                for a in result
+            ]
+            await self.cache_repo.set_cached_tenant_agents(tenant_id, serialized)
+        except Exception as ce:
+            print(f"[AgentManagementService] Redis set_cached_tenant_agents error: {ce}", flush=True)
+
+        return result
+
+    async def delete_agent(self, tenant_id: str, agent_id: str) -> tuple[bool, str]:
+        deleted_draft = await self.draft_repo.delete_draft(tenant_id, agent_id)
+        deleted_runtime = await self.runtime_repo.delete_runtime_config(tenant_id, agent_id)
+
+        try:
+            await self.cache_repo.delete_cached_draft(tenant_id, agent_id)
+            await self.cache_repo.delete_cached_biz_context(tenant_id, agent_id)
+            await self.cache_repo.delete_cached_tenant_agents(tenant_id)
+        except Exception as ce:
+            print(
+                f"[AgentManagementService] Warning: Failed to clear Redis cache for agent '{agent_id}': {ce}",
+                flush=True,
+            )
+
+        if self.knowledge_store:
+            try:
+                await self.knowledge_store.delete_by_agent_id(tenant_id, agent_id)
+            except Exception as ke:
+                print(
+                    f"[AgentManagementService] Warning: Failed to delete Qdrant vectors for agent '{agent_id}': {ke}",
+                    flush=True,
+                )
+
+        if not deleted_draft and not deleted_runtime:
+            return False, f"Agent '{agent_id}' not found"
+
+        return True, f"Agent '{agent_id}' deleted successfully"

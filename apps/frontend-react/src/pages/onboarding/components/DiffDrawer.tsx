@@ -9,7 +9,7 @@ interface DiffDrawerProps {
 
 export const DiffDrawer: React.FC<DiffDrawerProps> = ({ diffPatches, onClose }) => {
   return (
-    <div className="absolute top-[96px] left-6 right-6 z-40 bg-white border border-amber-200 rounded-3xl shadow-2xl p-5 max-h-[300px] flex flex-col animate-in fade-in slide-in-from-top-2 duration-150">
+    <div className="fixed inset-x-3 bottom-16 sm:absolute sm:top-[96px] sm:inset-x-6 sm:bottom-auto z-40 bg-white border border-amber-200 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-5 max-h-[60vh] sm:max-h-[300px] flex flex-col animate-in fade-in slide-in-from-top-2 duration-150">
       <div className="flex items-center justify-between pb-3 border-b border-slate-100">
         <div className="flex items-center gap-2">
           <FileDiff className="w-4 h-4 text-amber-600" />

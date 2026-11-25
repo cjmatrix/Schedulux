@@ -7,17 +7,31 @@ service KnowledgeService {
   rpc GetCrawlStatus (GetCrawlStatusRequest) returns (GetCrawlStatusResponse);
   rpc StartOnboardingSession (StartOnboardingRequest) returns (OnboardingResponse);
   rpc ResumeOnboardingSession (ResumeOnboardingRequest) returns (OnboardingResponse);
+  rpc ResumeOnboardingSessionStream (ResumeOnboardingRequest) returns (stream OnboardingStreamChunk);
   rpc SaveInitialAgentDraft (SaveInitialAgentDraftRequest) returns (SaveInitialAgentDraftResponse);
   rpc ListTenantAgents (ListTenantAgentsRequest) returns (ListTenantAgentsResponse);
+  rpc DeleteAgent (DeleteAgentRequest) returns (DeleteAgentResponse);
   rpc GetAgentMessages (GetAgentMessagesRequest) returns (GetAgentMessagesResponse);
   rpc CustomerChat (CustomerChatRequest) returns (CustomerChatResponse);
+  rpc CustomerChatStream (CustomerChatRequest) returns (stream CustomerChatStreamChunk);
   rpc GetCustomerMessages (GetCustomerMessagesRequest) returns (GetCustomerMessagesResponse);
   rpc GetWidgetConfig (GetWidgetConfigRequest) returns (GetWidgetConfigResponse);
+  rpc UpdateWidgetConfig (UpdateWidgetConfigRequest) returns (UpdateWidgetConfigResponse);
 
   rpc GetDocumentUploadUrl (GetDocumentUploadUrlRequest) returns (GetDocumentUploadUrlResponse);
   rpc ConfirmDocumentUpload (ConfirmDocumentUploadRequest) returns (ConfirmDocumentUploadResponse);
   rpc ListDocuments (ListDocumentsRequest) returns (ListDocumentsResponse);
   rpc DeleteDocument (DeleteDocumentRequest) returns (DeleteDocumentResponse);
+
+  rpc GetAgentStats (GetAgentStatsRequest) returns (GetAgentStatsResponse);
+}
+
+message GetAgentStatsRequest {}
+
+message GetAgentStatsResponse {
+  int32 total_agents = 1;
+  int32 active_agents = 2;
+  int32 draft_agents = 3;
 }
 
 message CrawlSiteRequest {
@@ -71,6 +85,18 @@ message OnboardingResponse {
   string live_schema_json = 6;
 }
 
+message OnboardingStreamChunk {
+  string event_type = 1; // "token", "done", "error"
+  string delta = 2;
+  string status = 3;
+  string question = 4;
+  string field = 5;
+  string type = 6;
+  string draft_schema_json = 7;
+  string live_schema_json = 8;
+  optional string error = 9;
+}
+
 message SaveInitialAgentDraftRequest {
   string tenant_id = 1;
   string draft_json = 2;
@@ -100,6 +126,17 @@ message AgentSummaryInfo {
 
 message ListTenantAgentsResponse {
   repeated AgentSummaryInfo agents = 1;
+}
+
+message DeleteAgentRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+}
+
+message DeleteAgentResponse {
+  bool success = 1;
+  string message = 2;
+  string agent_id = 3;
 }
 
 message ChatMessageInfo {
@@ -156,6 +193,20 @@ message CustomerChatResponse {
   string created_at = 8;
 }
 
+message CustomerChatStreamChunk {
+  string session_id = 1;
+  string delta = 2;
+  string event_type = 3; // "token" | "status" | "done" | "error"
+  optional string booking_id = 4;
+  optional string booking_reference = 5;
+  optional string status = 6;
+  optional string user_message_id = 7;
+  optional string agent_message_id = 8;
+  optional string created_at = 9;
+  optional string error = 10;
+  optional string response = 11;
+}
+
 message GetCustomerMessagesRequest {
   string tenant_id = 1;
   string agent_id = 2;
@@ -179,6 +230,19 @@ message GetWidgetConfigRequest {
 message GetWidgetConfigResponse {
   string tenant_id = 1;
   string agent_id = 2;
+  string widget_config_json = 3;
+}
+
+message UpdateWidgetConfigRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+  repeated string whitelisted_domains = 3;
+  optional string widget_config_json = 4;
+}
+
+message UpdateWidgetConfigResponse {
+  string message = 1;
+  bool success = 2;
   string widget_config_json = 3;
 }
 

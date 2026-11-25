@@ -8,16 +8,20 @@ service DashboardAuthService {
   rpc RefreshToken (DashboardUserRefreshTokenRequest) returns (DashboardUserRefreshTokenResponse);
   rpc ForgotPassword (DashboardUserForgotPasswordRequest) returns (DashboardUserForgotPasswordResponse);
   rpc ResetPassword (DashboardUserResetPasswordRequest) returns (DashboardUserResetPasswordResponse);
+  rpc AcceptInvitation (AcceptInvitationRequest) returns (AcceptInvitationResponse);
+  rpc GetInvitationDetails (GetInvitationDetailsRequest) returns (GetInvitationDetailsResponse);
 }
 
 service DashboardUserService {
   rpc InviteUser (InviteUserRequest) returns (InviteUserResponse);
   rpc ListWorkspaceUsers (ListWorkspaceUsersRequest) returns (ListWorkspaceUsersResponse);
+  rpc SuspendWorkspaceUser (SuspendWorkspaceUserRequest) returns (SuspendWorkspaceUserResponse);
 }
 
 message DashboardUserLoginRequest {
   string email = 1;
   string password = 2;
+  optional string agent_id = 3;
 }
 
 message DashboardUserLoginResponse {
@@ -62,11 +66,34 @@ message DashboardUserResetPasswordResponse {
   string message = 1;
 }
 
+message AcceptInvitationRequest {
+  string token = 1;
+  string password = 2;
+}
+
+message AcceptInvitationResponse {
+  string message = 1;
+  WorkspaceUserInfo user = 2;
+}
+
+message GetInvitationDetailsRequest {
+  string token = 1;
+}
+
+message GetInvitationDetailsResponse {
+  string email = 1;
+  string name = 2;
+  string business_name = 3;
+  string agent_id = 4;
+  string system_role = 5;
+}
+
 message InviteUserRequest {
   string tenant_id = 1;
   string email = 2;
   string name = 3;
   string system_role = 4;
+  string agent_id = 5;
 }
 
 message InviteUserResponse {
@@ -75,6 +102,8 @@ message InviteUserResponse {
   string email = 3;
   string name = 4;
   string system_role = 5;
+  string agent_id = 6;
+  repeated string agent_ids = 7;
 }
 
 message WorkspaceUserInfo {
@@ -84,6 +113,9 @@ message WorkspaceUserInfo {
   string name = 4;
   string system_role = 5;
   string created_at = 6;
+  string agent_id = 7;
+  optional string status = 8;
+  repeated string agent_ids = 9;
 }
 
 message ListWorkspaceUsersRequest {
@@ -92,9 +124,20 @@ message ListWorkspaceUsersRequest {
   optional int32 limit = 3;
   optional string search = 4;
   optional string role = 5;
+  optional string agent_id = 6;
 }
 
 message ListWorkspaceUsersResponse {
   repeated WorkspaceUserInfo users = 1;
   int32 total_count = 2;
+}
+
+message SuspendWorkspaceUserRequest {
+  string tenant_id = 1;
+  string user_id = 2;
+}
+
+message SuspendWorkspaceUserResponse {
+  string message = 1;
+  WorkspaceUserInfo user = 2;
 }

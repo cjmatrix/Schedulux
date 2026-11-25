@@ -129,7 +129,6 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
     });
     const allEligibleIds = Array.from(allEligibleIdsSet);
 
-   
     if (requestedResourceIds.length > 0) {
       const hasIneligible =
         requirements.length === 0 || requestedResourceIds.some((id) => !allEligibleIdsSet.has(id));
@@ -164,7 +163,7 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
       }
     }
 
-    const [rawEligibleResources, activeBookings] = await Promise.all([
+    const [rawEligibleResources, activeBookings, activeHolds] = await Promise.all([
       allEligibleIds.length > 0
         ? this._resourceRepository.findActiveBookableByIds(tenantId, allEligibleIds, agentId)
         : Promise.resolve([]),
@@ -176,10 +175,24 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
             totalEndDate,
           )
         : Promise.resolve([]),
+      this._cacheRepo.getActiveHolds(tenantId, agentId),
     ]);
 
     const activeEligibleResources = rawEligibleResources;
     const activeEligibleIdsSet = new Set(activeEligibleResources.map((r) => r.id));
+
+ 
+    const holdsByResourceId = new Map<string, Array<{ startTimeMs: number; holdToken: string }>>();
+    for (const hold of activeHolds) {
+      if (activeEligibleIdsSet.has(hold.resourceId)) {
+        let list = holdsByResourceId.get(hold.resourceId);
+        if (!list) {
+          list = [];
+          holdsByResourceId.set(hold.resourceId, list);
+        }
+        list.push({ startTimeMs: hold.startTimeMs, holdToken: hold.holdToken });
+      }
+    }
 
     const blackoutMap = new Map<string, { reason: string; is_closed: boolean }>();
     (tenantSchedule?.blackout_dates || []).forEach((b) => {
@@ -210,6 +223,20 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
           }
         }
       }
+
+    
+      const startMs = start.getTime();
+      const endMs = end.getTime();
+      for (const [resId, holds] of holdsByResourceId.entries()) {
+        if (busy.has(resId)) continue;
+        for (const h of holds) {
+          if (h.startTimeMs >= startMs && h.startTimeMs < endMs) {
+            busy.add(resId);
+            break;
+          }
+        }
+      }
+
       return busy;
     };
 
@@ -296,10 +323,7 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
             const minSlotTime = Date.now() + leadTimeHours * 3600 * 1000;
             const isSlotPast = slotStartDate.getTime() < minSlotTime;
 
-            const busyResourceIds = getBusyResourceIdsInMemory(
-              slotStartDate,
-              effectiveEndDate,
-            );
+            const busyResourceIds = getBusyResourceIdsInMemory(slotStartDate, effectiveEndDate);
 
             const isResAvailable = (id: string): boolean => {
               if (busyResourceIds.has(id)) return false;
@@ -409,10 +433,7 @@ export class GetAvailabilityUseCase implements IGetAvailabilityUseCase {
         const dayStartIso = dayStart.format();
         const dayEndIso = dayEnd.format();
 
-        const busyResourceIds = getBusyResourceIdsInMemory(
-          dayStart.toDate(),
-          dayEnd.toDate(),
-        );
+        const busyResourceIds = getBusyResourceIdsInMemory(dayStart.toDate(), dayEnd.toDate());
 
         const todayZoned = dayjs().tz(timezone).format('YYYY-MM-DD');
         const isPastDay = dateStr < todayZoned;

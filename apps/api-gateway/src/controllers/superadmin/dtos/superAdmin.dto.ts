@@ -23,11 +23,12 @@ export const SuperAdminLogoutSchema: z.ZodType<LogoutRequest> = z.object({
 export class SuperAdminLogoutDto extends createZodDto(SuperAdminLogoutSchema) {}
 
 export const ListTenantsSchema: z.ZodType<ListTenantsRequest> = z.object({
-  page: z.coerce.number().default(1),
-  limit: z.coerce.number().default(10),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
   search: z.string().optional(),
   tier: z.string().optional(),
   status: z.string().optional(),
+  tenant_ids: z.array(z.string()).default([]),
 });
 
 export class ListTenantsDto extends createZodDto(ListTenantsSchema) {}

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { nanoid } from 'nanoid';
+export const TENANT_TIERS = ['starter', 'pro', 'business', 'enterprise', 'free'];
 const tenantSchema = new mongoose.Schema({
     _id: { type: String },
     business_name: { type: String, required: true, trim: true },
@@ -9,8 +10,16 @@ const tenantSchema = new mongoose.Schema({
     google_id: { type: String, default: null },
     timezone: { type: String, default: 'UTC' },
     currency: { type: String, default: 'USD' },
-    tier: { type: String, required: true },
+    tier: {
+        type: String,
+        enum: TENANT_TIERS,
+        default: 'starter',
+        required: true,
+    },
     stripe_customer_id: { type: String, default: null },
+    paddle_customer_id: { type: String, default: null, index: true },
+    paddle_subscription_id: { type: String, default: null, index: true },
+    subscription_status: { type: String, default: 'active' },
     status: { type: String, default: 'active' },
     monthly_token_limit: { type: Number, default: null },
     created_at: { type: Date, default: Date.now },

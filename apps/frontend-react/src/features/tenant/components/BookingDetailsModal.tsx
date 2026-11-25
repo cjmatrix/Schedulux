@@ -2,6 +2,7 @@ import type { BookingInfo, ResourceInfo, ServiceInfo } from '@repo/proto/schedul
 import {
   Bot,
   CalendarX,
+  CheckCircle2,
   Clock,
   Globe,
   Mail,
@@ -21,6 +22,7 @@ interface BookingDetailsModalProps {
   resources: ResourceInfo[];
   onReschedule: (booking: BookingInfo) => void;
   onCancel: (booking: BookingInfo) => void;
+  onComplete?: (booking: BookingInfo) => void;
 }
 
 export function BookingDetailsModal({
@@ -31,11 +33,14 @@ export function BookingDetailsModal({
   resources,
   onReschedule,
   onCancel,
+  onComplete,
 }: BookingDetailsModalProps) {
   if (!isOpen || !booking) return null;
 
   const matchedService = services.find((s) => s.service_id === booking.service_id);
   const serviceName = matchedService?.name || 'Scheduled Service';
+  const isDateRange =
+    booking.booking_mode === 'date_range' || matchedService?.booking_mode === 'date_range';
 
   const resId = booking.resource_id || (booking.resource_ids && booking.resource_ids[0]);
   const matchedResource = resId ? resources.find((r) => r.resource_id === resId) : undefined;
@@ -64,11 +69,62 @@ export function BookingDetailsModal({
   const startFormatted = formatDate(booking.start_time);
   const endFormatted = formatDate(booking.end_time);
 
+  const dateRangeSchedule = () => {
+    if (!isDateRange) return null;
+    try {
+      const sDate = new Date(booking.start_time);
+      const sFormatted = sDate.toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+      if (!booking.end_time) {
+        return {
+          checkIn: sFormatted,
+          checkOut: sFormatted,
+          nights: 1,
+          label: `${sFormatted} (1 Night stay)`,
+        };
+      }
+      const eDate = new Date(booking.end_time);
+      const eFormatted = eDate.toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+      const diffDays = Math.max(
+        1,
+        Math.round((eDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24)),
+      );
+      return {
+        checkIn: sFormatted,
+        checkOut: eFormatted,
+        nights: diffDays,
+        label: `${sFormatted} – ${eFormatted} (${diffDays === 1 ? '1 Night stay' : `${diffDays} Nights stay`})`,
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  const schedInfo = dateRangeSchedule();
+
+  const formatPrice = (price?: { amount?: number; currency?: string }) => {
+    if (!price?.amount) return 'Free / Included';
+    const currency = price.currency || '$';
+    if (currency === 'INR' || currency === '₹') return `₹${price.amount} INR`;
+    if (currency === 'USD' || currency === '$') return `$${price.amount} USD`;
+    if (currency === 'EUR' || currency === '€') return `€${price.amount} EUR`;
+    return `${currency} ${price.amount}`;
+  };
+
   const formatSource = (source?: string) => {
     switch (source) {
       case 'customer_agent':
         return {
-          label: 'AI Voice Agent',
+          label: 'AI Agent',
           icon: <PhoneCall className="w-3.5 h-3.5 text-indigo-600" />,
         };
       case 'sandbox_simulation':
@@ -136,11 +192,30 @@ export function BookingDetailsModal({
             <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
               <span>
-                {startFormatted.date} • {startFormatted.time} – {endFormatted.time} (
-                {booking.duration_minutes || 60} mins)
+                {isDateRange && schedInfo
+                  ? schedInfo.label
+                  : `${startFormatted.date} • ${startFormatted.time} – ${endFormatted.time} (${booking.duration_minutes || 60} mins)`}
               </span>
             </p>
           </div>
+
+          {/* Date Range Check-in / Check-out banner */}
+          {isDateRange && schedInfo && (
+            <div className="grid grid-cols-2 gap-3 p-3 bg-indigo-50/40 border border-indigo-100/80 rounded-2xl text-xs">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 block mb-0.5">
+                  Check-in
+                </span>
+                <span className="font-semibold text-slate-800">{schedInfo.checkIn}</span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 block mb-0.5">
+                  Check-out
+                </span>
+                <span className="font-semibold text-slate-800">{schedInfo.checkOut}</span>
+              </div>
+            </div>
+          )}
 
           {/* Customer Card */}
           <div className="bg-slate-50/80 rounded-2xl p-4 space-y-2 text-xs border border-slate-100">
@@ -169,7 +244,7 @@ export function BookingDetailsModal({
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className="p-3 border border-slate-100 rounded-xl bg-white shadow-2xs">
               <span className="block text-[10px] font-bold text-slate-400 uppercase">
-                Staff / Provider
+                {isDateRange ? 'Assigned Room / Unit' : 'Staff / Provider'}
               </span>
               <span className="font-semibold text-slate-800 mt-0.5 block">{staffName}</span>
             </div>
@@ -185,25 +260,12 @@ export function BookingDetailsModal({
             </div>
           </div>
 
-          {/* Price / Deposit details */}
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="p-3 border border-slate-100 rounded-xl bg-white shadow-2xs">
-              <span className="block text-[10px] font-bold text-slate-400 uppercase">Pricing</span>
-              <span className="font-semibold text-slate-800 mt-0.5 block">
-                {booking.price?.amount
-                  ? `$${booking.price.amount} ${booking.price.currency || 'USD'}`
-                  : 'Free / Included'}
-              </span>
-            </div>
-
-            <div className="p-3 border border-slate-100 rounded-xl bg-white shadow-2xs">
-              <span className="block text-[10px] font-bold text-slate-400 uppercase">
-                Deposit Status
-              </span>
-              <span className="font-semibold text-slate-800 mt-0.5 block capitalize">
-                {booking.deposit_status?.replace('_', ' ') || 'Not Required'}
-              </span>
-            </div>
+          {/* Pricing details */}
+          <div className="p-3 border border-slate-100 rounded-xl bg-white shadow-2xs text-xs">
+            <span className="block text-[10px] font-bold text-slate-400 uppercase">Pricing</span>
+            <span className="font-semibold text-slate-800 mt-0.5 block">
+              {formatPrice(booking.price)}
+            </span>
           </div>
 
           {/* Notes */}
@@ -221,7 +283,7 @@ export function BookingDetailsModal({
             <div className="p-3.5 bg-indigo-50/60 border border-indigo-100 rounded-2xl text-xs text-indigo-900 space-y-1">
               <div className="flex items-center gap-1.5 font-bold">
                 <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                <span>AI Voice Assistant Interaction</span>
+                <span>AI Assistant Interaction</span>
               </div>
               <p className="text-[11px] text-indigo-700 leading-relaxed">
                 Customer connected via the inbound AI agent line. Automated natural language
@@ -235,6 +297,19 @@ export function BookingDetailsModal({
         <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-2.5">
           {canModify ? (
             <div className="flex items-center gap-2">
+              {onComplete && booking.status !== 'completed' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onComplete(booking);
+                  }}
+                  className="px-4 py-2 rounded-full border border-emerald-200 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Mark Completed</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {

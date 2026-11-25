@@ -1,12 +1,10 @@
 import { BookingInfo } from '@repo/proto/scheduling';
 import {
-  BookingDepositStatus,
   BookingEntity,
   BookingMode,
   BookingSource,
   BookingStatus,
 } from '../../../domain/entities/booking.entity.js';
-import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
 import { PriceVO } from '../../../domain/value-objects/price.vo.js';
 import { IBookingDoc } from '../schemas/booking.schema.js';
 
@@ -35,17 +33,7 @@ export class BookingMapper {
       durationMinutes: doc.duration_minutes,
       source: (doc.source as BookingSource) ?? 'manual',
       status: (doc.status as BookingStatus) ?? 'confirmed',
-      depositStatus: (doc.deposit_status as BookingDepositStatus) ?? 'not_required',
       price: PriceVO.create(doc.price?.type, doc.price?.amount, doc.price?.currency),
-      deposit: DepositVO.create({
-        required: doc.deposit?.required,
-        amount: doc.deposit?.amount,
-        processor: doc.deposit?.processor,
-        upiId: doc.deposit?.upi_id,
-        qrCodeUrl: doc.deposit?.qr_code_url,
-        confirmationMethod: doc.deposit?.confirmation_method,
-        paymentInstructions: doc.deposit?.payment_instructions,
-      }),
       notes: doc.notes ?? '',
       createdBy: doc.created_by ?? '',
       isDeleted: doc.is_deleted ?? false,
@@ -79,20 +67,10 @@ export class BookingMapper {
       duration_minutes: entity.durationMinutes,
       source: entity.source,
       status: entity.status,
-      deposit_status: entity.depositStatus,
       price: {
         type: entity.price.type,
         amount: entity.price.amount,
         currency: entity.price.currency,
-      },
-      deposit: {
-        required: entity.deposit.required,
-        amount: entity.deposit.amount,
-        processor: entity.deposit.processor,
-        upi_id: entity.deposit.upiId,
-        qr_code_url: entity.deposit.qrCodeUrl,
-        confirmation_method: entity.deposit.confirmationMethod,
-        payment_instructions: entity.deposit.paymentInstructions,
       },
       notes: entity.notes,
       created_by: entity.createdBy,
@@ -126,20 +104,10 @@ export class BookingMapper {
       duration_minutes: entity.durationMinutes,
       source: entity.source,
       status: entity.status,
-      deposit_status: entity.depositStatus,
       price: {
         type: entity.price.type,
         amount: entity.price.amount,
         currency: entity.price.currency,
-      },
-      deposit: {
-        required: entity.deposit.required,
-        amount: entity.deposit.amount,
-        processor: entity.deposit.processor,
-        upi_id: entity.deposit.upiId,
-        qr_code_url: entity.deposit.qrCodeUrl,
-        confirmation_method: entity.deposit.confirmationMethod,
-        payment_instructions: entity.deposit.paymentInstructions,
       },
       notes: entity.notes || undefined,
       created_by: entity.createdBy || undefined,

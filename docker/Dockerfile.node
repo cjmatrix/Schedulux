@@ -1,0 +1,61 @@
+# syntax=docker/dockerfile:1
+
+# Stage 1: Base Alpine Image with pnpm
+FROM node:22-alpine AS base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable && corepack prepare pnpm@11.20.0 --activate
+
+# Stage 2: Pruner (Turborepo Docker Pruning)
+FROM base AS pruner
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+COPY . .
+ARG APP_NAME
+RUN npx turbo prune ${APP_NAME} --docker
+
+# Stage 3: Builder
+FROM base AS builder
+RUN apk add --no-cache libc6-compat protobuf
+WORKDIR /app
+ENV CI=true
+
+# Layer cache: install dependencies using lockfile and package manifests
+COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=pruner /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
+
+# Force pnpm v11 to create a flat, real node_modules directory (no symlinks)
+RUN echo "node-linker=hoisted" >> .npmrc && \
+    pnpm install --frozen-lockfile
+
+# Copy source code and build
+COPY --from=pruner /app/out/full/ .
+
+# Ensure packages directory exists even if app has no internal workspace dependencies
+RUN mkdir -p /app/packages
+
+ARG APP_NAME
+RUN npx turbo build --filter=${APP_NAME}
+
+# Stage 4: Production Runner (Lean & Non-Root)
+FROM node:22-alpine AS runner
+WORKDIR /app
+
+# Security: non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nestjs
+
+USER nestjs
+
+ARG APP_DIR
+ENV APP_DIR_ENV=${APP_DIR}
+
+# Copy hoisted node_modules, workspace packages, and built app
+COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nestjs:nodejs /app/packages ./packages
+COPY --from=builder --chown=nestjs:nodejs /app/${APP_DIR} ./${APP_DIR}
+
+WORKDIR /app/${APP_DIR}
+
+CMD ["node", "dist/index.js"]

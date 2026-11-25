@@ -20,12 +20,14 @@ export const tenantApi = {
     limit?: number,
     search?: string,
     role?: string,
+    agentId?: string,
   ): Promise<ApiResponse<ListWorkspaceUsersResponse>> => {
     const { data } = await axiosClient.get<ApiResponse<ListWorkspaceUsersResponse>>(
       '/api/v1/tenant/auth/workspace-users',
       {
         params: {
           tenant_id: tenantId,
+          agent_id: agentId,
           page,
           limit,
           search,
@@ -40,6 +42,13 @@ export const tenantApi = {
     const { data } = await axiosClient.post<ApiResponse<InviteUserResponse>>(
       '/api/v1/tenant/auth/invite-user',
       payload,
+    );
+    return data;
+  },
+
+  suspendWorkspaceUser: async (userId: string): Promise<ApiResponse<WorkspaceUserInfo>> => {
+    const { data } = await axiosClient.patch<ApiResponse<WorkspaceUserInfo>>(
+      `/api/v1/tenant/auth/workspace-users/${userId}/suspend`,
     );
     return data;
   },

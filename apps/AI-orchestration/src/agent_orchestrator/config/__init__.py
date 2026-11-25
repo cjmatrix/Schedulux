@@ -1,5 +1,6 @@
 from agent_orchestrator.config.memory_constants import (
     AGENT_MEMORY_QUEUE_NAME,
+    AGENT_MEMORY_DLQ_NAME,
     MEMORY_CHUNK_SIZE,
     MEMORY_CHUNK_TOKEN_SIZE,
     MEMORY_KEEP_RECENT,
@@ -13,10 +14,13 @@ from agent_orchestrator.config.memory_constants import (
     QDRANT_PORT,
     QDRANT_URL,
     QDRANT_VECTOR_SIZE,
+    RETRIEVAL_CANDIDATE_POOL_SIZE,
+    RETRIEVAL_TOP_K,
     VOYAGE_API_KEY,
     VOYAGE_API_URL,
     VOYAGE_BATCH_SIZE,
     VOYAGE_EMBEDDING_MODEL,
+    VOYAGE_RERANK_MODEL,
 )
 
 __all__ = [
@@ -31,6 +35,9 @@ __all__ = [
     "VOYAGE_API_KEY",
     "VOYAGE_API_URL",
     "VOYAGE_BATCH_SIZE",
+    "VOYAGE_RERANK_MODEL",
+    "RETRIEVAL_TOP_K",
+    "RETRIEVAL_CANDIDATE_POOL_SIZE",
     "QDRANT_URL",
     "QDRANT_API_KEY",
     "QDRANT_HOST",
@@ -38,4 +45,5 @@ __all__ = [
     "QDRANT_COLLECTION_NAME",
     "QDRANT_VECTOR_SIZE",
     "AGENT_MEMORY_QUEUE_NAME",
+    "AGENT_MEMORY_DLQ_NAME",
 ]

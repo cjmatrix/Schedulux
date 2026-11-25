@@ -18,12 +18,15 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { ConfirmationModal } from '../../../components/ConfirmationModal.js';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import type {
   CreateResourcePayload,
   DaySchedule,
   UpdateResourcePayload,
   WeeklySchedule,
 } from '../api/resourcesApi';
+import { useTenantAgents } from '../hooks/useKnowledgeDocuments';
 import {
   useCreateResource,
   useDeleteResource,
@@ -126,6 +129,8 @@ function normalizeWeeklySchedule(rawJson?: string): WeeklySchedule {
 export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPageProps) {
   const navigate = useNavigate();
   const { id: resourceIdFromParams, agentId } = useParams<{ id: string; agentId?: string }>();
+  const { user: authUser, isManager } = useCurrentUser();
+  const { data: agents = [] } = useTenantAgents();
 
   const isCreateMode = mode === 'create' || !resourceIdFromParams || resourceIdFromParams === 'new';
 
@@ -133,7 +138,19 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
     isCreateMode ? undefined : resourceIdFromParams,
   );
 
-  const effectiveAgentId = agentId || resourceResponse?.data?.agent_id || '';
+  const effectiveAgentId =
+    agentId ||
+    authUser?.agent_id ||
+    resourceResponse?.data?.agent_id ||
+    (agents.length > 0 ? agents[0].agent_id : '');
+
+  const navigateToResources = () => {
+    if (effectiveAgentId) {
+      navigate(`/tenant/agents/${effectiveAgentId}/resources`);
+    } else {
+      navigate('/tenant/inventory');
+    }
+  };
 
   const createResourceMutation = useCreateResource();
   const updateResourceMutation = useUpdateResource();
@@ -151,6 +168,7 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
   const [description, setDescription] = useState('');
   const [isBookable, setIsBookable] = useState(true);
 
+  const [hasCustomOverrides, setHasCustomOverrides] = useState<boolean>(false);
   const [schedule, setSchedule] = useState<WeeklySchedule>(DEFAULT_WEEKLY_SCHEDULE);
 
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -181,8 +199,24 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
       setDescription(res.description || '');
       setIsBookable(res.is_bookable !== undefined ? res.is_bookable : true);
 
-      if (res.custom_shift_overrides_json) {
-        setSchedule(normalizeWeeklySchedule(res.custom_shift_overrides_json));
+      const rawOverrides = res.custom_shift_overrides_json?.trim();
+      let hasCustom = false;
+      if (rawOverrides && rawOverrides !== '{}') {
+        try {
+          const parsed = JSON.parse(rawOverrides);
+          if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+            hasCustom = true;
+          }
+        } catch {
+          hasCustom = false;
+        }
+      }
+
+      setHasCustomOverrides(hasCustom);
+      if (hasCustom && rawOverrides) {
+        setSchedule(normalizeWeeklySchedule(rawOverrides));
+      } else {
+        setSchedule(DEFAULT_WEEKLY_SCHEDULE);
       }
     }
   }, [resourceResponse, isCreateMode]);
@@ -294,15 +328,22 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
       return;
     }
 
-    const cleanShiftOverrides: Record<string, { start: string; end: string }[]> = {};
-    for (const { key } of DAYS_OF_WEEK) {
-      const day = schedule[key];
-      if (day?.enabled && day.shifts && day.shifts.length > 0) {
-        cleanShiftOverrides[key] = day.shifts.map((s) => ({
-          start: s.start,
-          end: s.end,
-        }));
+    let customShiftOverridesJson = '{}';
+
+    if (hasCustomOverrides) {
+      const cleanShiftOverrides: Record<string, { start: string; end: string }[]> = {};
+      for (const { key } of DAYS_OF_WEEK) {
+        const day = schedule[key];
+        if (day?.enabled && day.shifts && day.shifts.length > 0) {
+          cleanShiftOverrides[key] = day.shifts.map((s) => ({
+            start: s.start,
+            end: s.end,
+          }));
+        } else {
+          cleanShiftOverrides[key] = [];
+        }
       }
+      customShiftOverridesJson = JSON.stringify(cleanShiftOverrides);
     }
 
     const payload: CreateResourcePayload | UpdateResourcePayload = {
@@ -314,7 +355,7 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
       dispatch_status: dispatchStatus,
       description: description.trim(),
       is_bookable: isBookable,
-      custom_shift_overrides_json: JSON.stringify(cleanShiftOverrides),
+      custom_shift_overrides_json: customShiftOverridesJson,
     };
 
     try {
@@ -322,11 +363,11 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
         const created = await createResourceMutation.mutateAsync(payload as CreateResourcePayload);
         setSaveSuccess(true);
         setTimeout(() => {
-          navigate(
-            effectiveAgentId
-              ? `/tenant/agents/${effectiveAgentId}/resources/${created.data.resource_id}`
-              : `/tenant/inventory/${created.data.resource_id}`,
-          );
+          if (effectiveAgentId) {
+            navigate(`/tenant/agents/${effectiveAgentId}/resources/${created.data.resource_id}`);
+          } else {
+            navigate(`/tenant/inventory/${created.data.resource_id}`);
+          }
         }, 600);
       } else {
         await updateResourceMutation.mutateAsync({
@@ -347,9 +388,7 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
     if (!resourceIdFromParams) return;
     try {
       await deleteResourceMutation.mutateAsync(resourceIdFromParams);
-      navigate(
-        effectiveAgentId ? `/tenant/agents/${effectiveAgentId}/resources` : '/tenant/inventory',
-      );
+      navigateToResources();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to delete resource.';
       setErrorMsg(message);
@@ -380,28 +419,22 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
       {/* Top Header Bar */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 pb-4">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3">
+        <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-medium text-slate-500 mb-3 flex-wrap">
           <button
             type="button"
-            onClick={() =>
-              navigate(
-                effectiveAgentId
-                  ? `/tenant/agents/${effectiveAgentId}/resources`
-                  : '/tenant/inventory',
-              )
-            }
+            onClick={navigateToResources}
             className="flex items-center gap-1 hover:text-slate-900 transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back</span>
           </button>
           <span>/</span>
-          {effectiveAgentId && (
+          {!isManager && effectiveAgentId && (
             <>
               <button
                 type="button"
                 onClick={() => navigate(`/tenant/agents/${effectiveAgentId}/dashboard`)}
-                className="hover:text-slate-900 font-bold transition-colors cursor-pointer"
+                className="hover:text-slate-900 font-bold transition-colors cursor-pointer truncate max-w-[140px] sm:max-w-none"
               >
                 {effectiveAgentId}
               </button>
@@ -410,29 +443,23 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
           )}
           <button
             type="button"
-            onClick={() =>
-              navigate(
-                effectiveAgentId
-                  ? `/tenant/agents/${effectiveAgentId}/resources`
-                  : '/tenant/inventory',
-              )
-            }
-            className="hover:text-slate-900 transition-colors cursor-pointer"
+            onClick={navigateToResources}
+            className="hover:text-slate-900 transition-colors cursor-pointer truncate"
           >
             Resources & Inventory
           </button>
           <span>/</span>
           <span className="capitalize">{resourceType}</span>
           <span>/</span>
-          <span className="text-slate-900 font-semibold truncate max-w-xs">
+          <span className="text-slate-900 font-semibold truncate max-w-[140px] sm:max-w-xs">
             {name || (isCreateMode ? 'New Resource' : 'Resource Profile')}
           </span>
         </div>
 
         {/* Title & Actions Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 sm:pb-6 border-b border-slate-200">
+          <div className="flex items-center gap-3 min-w-0">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight truncate">
               {isCreateMode ? 'Create New Resource' : `Edit Profile: ${name || 'Resource'}`}
             </h1>
           </div>
@@ -682,7 +709,7 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
               className="w-full p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all leading-relaxed resize-none"
             />
             <p className="text-[11px] text-slate-400 mt-1.5">
-              Schedulux automatically inserts dynamic padding into Google Calendar and voice-booking
+              Schedulux automatically inserts dynamic padding into Google Calendar and Ai-booking
               agent reservations.
             </p>
           </div>
@@ -692,150 +719,219 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
 
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-2xs space-y-6">
           {/* Section Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
             <div>
-              <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-                Custom Working Hours
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Override the organization's default operating hours for this specific resource.
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+                  Custom Working Hours
+                </h2>
+                <span
+                  className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                    hasCustomOverrides
+                      ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                      : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                  }`}
+                >
+                  {hasCustomOverrides
+                    ? 'Custom Shift Overrides Active'
+                    : 'Inheriting Standard Workspace Hours'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {hasCustomOverrides
+                  ? 'This resource has dedicated shift hours overriding the standard organization schedule.'
+                  : 'This resource follows the standard operating hours of your organization or agent.'}
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={handleResetToDefault}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 text-[11px] font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors self-start sm:self-auto cursor-pointer"
-            >
-              <RotateCcw className="w-3 h-3 text-slate-400" />
-              <span>Reset to Default Hours</span>
-            </button>
-          </div>
-
-          {/* Daily Schedule Rows */}
-          <div className="space-y-2.5">
-            {DAYS_OF_WEEK.map(({ key, label }) => {
-              const dayData: DaySchedule = schedule[key] || {
-                enabled: false,
-                shifts: [],
-                reason: 'Closed',
-              };
-              const isEnabled = Boolean(dayData.enabled);
-              const shifts = dayData.shifts || [];
-              const availableHours = isEnabled ? calculateShiftHours(shifts) : 0;
-
-              return (
-                <div
-                  key={key}
-                  className={`flex flex-col md:flex-row md:items-center justify-between gap-3 p-3.5 rounded-2xl border transition-all ${
-                    isEnabled
-                      ? 'bg-white border-slate-200/90 shadow-2xs'
-                      : 'bg-slate-50/60 border-slate-200/60 opacity-80'
-                  }`}
+            <div className="flex items-center gap-2.5">
+              {hasCustomOverrides && (
+                <button
+                  type="button"
+                  onClick={handleResetToDefault}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 text-[11px] font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer"
                 >
-                  {/* Left: Checkbox & Day Name */}
-                  <div className="flex items-center gap-3 min-w-[130px]">
-                    <input
-                      type="checkbox"
-                      id={`day-${key}`}
-                      checked={isEnabled}
-                      onChange={() => handleToggleDay(key)}
-                      className="w-4 h-4 rounded text-slate-900 border-slate-300 focus:ring-0 cursor-pointer"
-                    />
-                    <label
-                      htmlFor={`day-${key}`}
-                      className="text-xs font-bold text-slate-900 cursor-pointer select-none"
-                    >
-                      {label}
-                    </label>
-                  </div>
+                  <RotateCcw className="w-3 h-3 text-slate-400" />
+                  <span>Reset to 9–5 Template</span>
+                </button>
+              )}
 
-                  {/* Center: Shifts or Closed Reason */}
-                  <div className="flex-1 flex flex-wrap items-center gap-2">
-                    {isEnabled ? (
-                      <>
-                        {shifts.map((shift, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 px-2.5 py-1.5 rounded-xl text-xs"
-                          >
-                            <Clock className="w-3.5 h-3.5 text-slate-400" />
-                            <input
-                              type="time"
-                              value={shift.start}
-                              onChange={(e) => handleShiftChange(key, idx, 'start', e.target.value)}
-                              className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none"
-                            />
-                            <span className="text-slate-400 font-medium">to</span>
-                            <input
-                              type="time"
-                              value={shift.end}
-                              onChange={(e) => handleShiftChange(key, idx, 'end', e.target.value)}
-                              className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none"
-                            />
-                            {shifts.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveShift(key, idx)}
-                                className="text-slate-400 hover:text-red-500 transition-colors p-0.5 cursor-pointer ml-1"
-                                title="Remove shift"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-
-                        {shifts.length < 2 && (
-                          <button
-                            type="button"
-                            onClick={() => handleAddSplitShift(key)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-dashed border-slate-300 text-[11px] font-semibold text-slate-600 hover:text-slate-900 hover:border-slate-400 hover:bg-slate-50 transition-colors cursor-pointer"
-                          >
-                            <Plus className="w-3 h-3" />
-                            <span>Split Shift</span>
-                          </button>
-                        )}
-                      </>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-1 rounded-lg bg-slate-200/60 text-slate-600 text-xs font-medium">
-                          {dayData.reason || 'Closed / Off'}
-                        </span>
-                        <input
-                          type="text"
-                          value={dayData.reason || ''}
-                          onChange={(e) => handleChangeReason(key, e.target.value)}
-                          placeholder="Override reason (e.g. Day Off, Training)"
-                          className="text-[11px] px-2 py-0.5 rounded border border-slate-200 text-slate-600 focus:outline-none focus:border-slate-400 max-w-[200px]"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Right: Hours badge */}
-                  <div className="text-right shrink-0">
-                    <span
-                      className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                        isEnabled && availableHours > 0
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : 'bg-slate-100 text-slate-500'
-                      }`}
-                    >
-                      {isEnabled ? `${availableHours} hrs available` : '0.0 hrs'}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+              <button
+                type="button"
+                onClick={() => setHasCustomOverrides(!hasCustomOverrides)}
+                className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                  hasCustomOverrides
+                    ? 'bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100'
+                    : 'bg-slate-950 text-white hover:bg-black shadow-xs'
+                }`}
+              >
+                {hasCustomOverrides ? (
+                  <>
+                    <X className="w-3.5 h-3.5" />
+                    <span>Revert to Standard Hours</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Customize Shift Hours</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
+
+          {!hasCustomOverrides ? (
+            <div className="p-6 rounded-2xl bg-slate-50 border border-dashed border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 shrink-0">
+                  <Clock className="w-5 h-5 text-slate-600" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">
+                    Standard Organization Schedule Active
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5 max-w-lg">
+                    No custom shift overrides are applied. The AI booking agent will automatically
+                    use your organization's general operating hours for scheduling.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHasCustomOverrides(true)}
+                className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 text-xs font-semibold rounded-xl transition cursor-pointer shrink-0 shadow-2xs"
+              >
+                Configure Custom Shifts
+              </button>
+            </div>
+          ) : (
+            /* Daily Schedule Rows */
+            <div className="space-y-2.5">
+              {DAYS_OF_WEEK.map(({ key, label }) => {
+                const dayData: DaySchedule = schedule[key] || {
+                  enabled: false,
+                  shifts: [],
+                  reason: 'Closed',
+                };
+                const isEnabled = Boolean(dayData.enabled);
+                const shifts = dayData.shifts || [];
+                const availableHours = isEnabled ? calculateShiftHours(shifts) : 0;
+
+                return (
+                  <div
+                    key={key}
+                    className={`flex flex-col md:flex-row md:items-center justify-between gap-3 p-3.5 rounded-2xl border transition-all ${
+                      isEnabled
+                        ? 'bg-white border-slate-200/90 shadow-2xs'
+                        : 'bg-slate-50/60 border-slate-200/60 opacity-80'
+                    }`}
+                  >
+                    {/* Left: Checkbox & Day Name */}
+                    <div className="flex items-center gap-3 min-w-[130px]">
+                      <input
+                        type="checkbox"
+                        id={`day-${key}`}
+                        checked={isEnabled}
+                        onChange={() => handleToggleDay(key)}
+                        className="w-4 h-4 rounded text-slate-900 border-slate-300 focus:ring-0 cursor-pointer"
+                      />
+                      <label
+                        htmlFor={`day-${key}`}
+                        className="text-xs font-bold text-slate-900 cursor-pointer select-none"
+                      >
+                        {label}
+                      </label>
+                    </div>
+
+                    {/* Center: Shifts or Closed Reason */}
+                    <div className="flex-1 flex flex-wrap items-center gap-2">
+                      {isEnabled ? (
+                        <>
+                          {shifts.map((shift, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 px-2.5 py-1.5 rounded-xl text-xs"
+                            >
+                              <Clock className="w-3.5 h-3.5 text-slate-400" />
+                              <input
+                                type="time"
+                                value={shift.start}
+                                onChange={(e) =>
+                                  handleShiftChange(key, idx, 'start', e.target.value)
+                                }
+                                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none"
+                              />
+                              <span className="text-slate-400 font-medium">to</span>
+                              <input
+                                type="time"
+                                value={shift.end}
+                                onChange={(e) => handleShiftChange(key, idx, 'end', e.target.value)}
+                                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none"
+                              />
+                              {shifts.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveShift(key, idx)}
+                                  className="text-slate-400 hover:text-red-500 transition-colors p-0.5 cursor-pointer ml-1"
+                                  title="Remove shift"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+
+                          {shifts.length < 2 && (
+                            <button
+                              type="button"
+                              onClick={() => handleAddSplitShift(key)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-dashed border-slate-300 text-[11px] font-semibold text-slate-600 hover:text-slate-900 hover:border-slate-400 hover:bg-slate-50 transition-colors cursor-pointer"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>Split Shift</span>
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-200/60 text-slate-600 text-xs font-medium">
+                            {dayData.reason || 'Closed / Off'}
+                          </span>
+                          <input
+                            type="text"
+                            value={dayData.reason || ''}
+                            onChange={(e) => handleChangeReason(key, e.target.value)}
+                            placeholder="Override reason (e.g. Day Off, Training)"
+                            className="text-[11px] px-2 py-0.5 rounded border border-slate-200 text-slate-600 focus:outline-none focus:border-slate-400 max-w-[200px]"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right: Hours badge */}
+                    <div className="text-right shrink-0">
+                      <span
+                        className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                          isEnabled && availableHours > 0
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : 'bg-slate-100 text-slate-500'
+                        }`}
+                      >
+                        {isEnabled ? `${availableHours} hrs available` : '0.0 hrs'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Autonomous Notice Footer */}
           <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 text-slate-600 text-xs">
             <Shield className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
             <span className="text-[11px] leading-relaxed">
-              Schedulux AI voice and autonomous text agents will strictly offer appointment slots
-              within these confirmed operating hours.
+              Schedulux AI and autonomous text agents will strictly offer appointment slots within
+              these confirmed operating hours.
             </span>
           </div>
         </div>
@@ -887,39 +983,16 @@ export default function ResourceEditorPage({ mode = 'edit' }: ResourceEditorPage
       </div>
 
       {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
-            <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
-              <Trash2 className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900">Delete "{name || 'Resource'}"?</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Are you sure you want to permanently delete this resource? Services assigned to this
-                resource will no longer be able to book slots with it.
-              </p>
-            </div>
-            <div className="flex items-center justify-end gap-2.5 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowDeleteModal(false)}
-                className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleteResourceMutation.isPending}
-                className="px-4 py-2 rounded-full bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors shadow-2xs cursor-pointer disabled:opacity-60"
-              >
-                {deleteResourceMutation.isPending ? 'Deleting...' : 'Confirm Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDelete}
+        title={`Delete "${name || 'Resource'}"?`}
+        description="Are you sure you want to permanently delete this resource? Services assigned to this resource will no longer be able to book slots with it."
+        variant="delete"
+        confirmText="Confirm Delete"
+        isLoading={deleteResourceMutation.isPending}
+      />
     </div>
   );
 }

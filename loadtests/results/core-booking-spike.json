@@ -1,0 +1,522 @@
+{
+  "setup_data": {
+    "services": [
+      {
+        "service_id": "srv_root_canal",
+        "agent_id": "agent_LqL13cpkZY3zVDhc1pLi1A",
+        "name": "Root Canal Treatment (RCT)"
+      },
+      {
+        "agent_id": "agent_LqL13cpkZY3zVDhc1pLi1A",
+        "name": "Dental Implants Consultation",
+        "service_id": "srv_dental_implants"
+      },
+      {
+        "agent_id": "agent_LqL13cpkZY3zVDhc1pLi1A",
+        "name": "Laminate Veneers & Smile Makeover",
+        "service_id": "srv_laminate_veneers"
+      },
+      {
+        "name": "Dental Checkup & Cleaning",
+        "service_id": "srv_dental_checkup_cleaning",
+        "agent_id": "agent_LqL13cpkZY3zVDhc1pLi1A"
+      },
+      {
+        "agent_id": "agent_LqL13cpkZY3zVDhc1pLi1A",
+        "name": "Invisalign & Clear Aligners Consultation",
+        "service_id": "srv_invisalign_aligners"
+      },
+      {
+        "agent_id": "agent_LqL13cpkZY3zVDhc1pLi1A",
+        "name": "Philips Zoom Teeth Whitening",
+        "service_id": "srv_zoom_whitening"
+      },
+      {
+        "agent_id": "agent_LqL13cpkZY3zVDhc1pLi1A",
+        "name": "Dental Second Opinion",
+        "service_id": "srv_second_opinion"
+      },
+      {
+        "agent_id": "agent_LqL13cpkZY3zVDhc1pLi1A",
+        "name": "Paediatric Dental Treatment",
+        "service_id": "srv_paediatric_dental"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Timing Belt & Water Pump Replacement",
+        "service_id": "srv_timing_belt_water_pu_b7d8c1"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "AC System Recharge & Leak Test",
+        "service_id": "srv_ac_system_recharge_l_9f0e58"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Ultimate Full Detail Package",
+        "service_id": "srv_ultimate_full_detail_ab0e47"
+      },
+      {
+        "name": "Complete Interior Detailing",
+        "service_id": "srv_complete_interior_de_8a5ab9",
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Engine & Cabin Air Filter Replacement",
+        "service_id": "srv_engine_cabin_air_fil_05983c"
+      },
+      {
+        "service_id": "srv_heavy_pet_hair_remov_1d1185",
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Heavy Pet Hair Removal"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Engine Bay Degreasing & Detail",
+        "service_id": "srv_engine_bay_degreasin_4328c2"
+      },
+      {
+        "name": "State Emissions Inspection",
+        "service_id": "srv_state_emissions_insp_530835",
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Ozone Odor Elimination Treatment",
+        "service_id": "srv_ozone_odor_eliminati_8e992a"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Fuel Injector Cleaning & Service",
+        "service_id": "srv_fuel_injector_cleani_a98621"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Express Conventional Oil Change",
+        "service_id": "srv_express_conventional_74e1fb"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Annual Comprehensive Safety Check",
+        "service_id": "srv_annual_comprehensive_381ea5"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Transmission Fluid Service",
+        "service_id": "srv_transmission_fluid_s_8ea45c"
+      },
+      {
+        "name": "4-Wheel Alignment",
+        "service_id": "srv_4_wheel_alignment_679cb8",
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ"
+      },
+      {
+        "service_id": "srv_spark_plug_replaceme_0fd168",
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Spark Plug Replacement"
+      },
+      {
+        "service_id": "srv_battery_testing_repl_b22147",
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Battery Testing & Replacement"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Check Engine Light Diagnostics",
+        "service_id": "srv_check_engine_light_d_049caa"
+      },
+      {
+        "name": "Steering Rack & Tie Rod Repair",
+        "service_id": "srv_steering_rack_tie_ro_d83026",
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Power Steering Fluid Flush",
+        "service_id": "srv_power_steering_fluid_dc200a"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Brake Fluid Flush",
+        "service_id": "srv_brake_fluid_flush_3f1d33"
+      },
+      {
+        "service_id": "srv_deluxe_hand_wash_wax_0c0971",
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Deluxe Hand Wash & Wax"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Brake Rotor Resurfacing & Replacement",
+        "service_id": "srv_brake_rotor_resurfac_b428c3"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Paint Correction & Swirl Removal",
+        "service_id": "srv_paint_correction_swi_75d053"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Tire Puncture Repair & Patch",
+        "service_id": "srv_tire_puncture_repair_873e24"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Pre-Purchase Vehicle Inspection (PPI)",
+        "service_id": "srv_pre_purchase_vehicle_e3bd13"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Serpentine Belt Replacement",
+        "service_id": "srv_serpentine_belt_repl_6352d4"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Road Trip Vacation Safety Inspection",
+        "service_id": "srv_road_trip_vacation_s_af7165"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Headlight Restoration",
+        "service_id": "srv_headlight_restoratio_c87291"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Commercial Fleet Maintenance Check",
+        "service_id": "srv_commercial_fleet_mai_4742f0"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Tire Rotation & Balance",
+        "service_id": "srv_tire_rotation_balanc_f90deb"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Coolant / Radiator Flush",
+        "service_id": "srv_coolant_radiator_flu_a20553"
+      },
+      {
+        "name": "Brake Pad Replacement (Axle)",
+        "service_id": "srv_brake_pad_replacemen_554d18",
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ"
+      },
+      {
+        "name": "Exhaust System & Muffler Repair",
+        "service_id": "srv_exhaust_system_muffl_eb24a5",
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Wiper Blade Replacement",
+        "service_id": "srv_wiper_blade_replacem_996a68"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Ceramic Coating Application",
+        "service_id": "srv_ceramic_coating_appl_d7aa24"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Full Synthetic Oil Change",
+        "service_id": "srv_full_synthetic_oil_c_cec09f"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Express Exterior Wash",
+        "service_id": "srv_express_exterior_was_a6e99d"
+      },
+      {
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Starter & Alternator Replacement",
+        "service_id": "srv_starter_alternator_r_55d298"
+      },
+      {
+        "service_id": "srv_suspension_shocks_in_c609d9",
+        "agent_id": "agent_eWCxKYjUMk1DL_yfVEhfEQ",
+        "name": "Suspension & Shocks Inspection/Repair"
+      },
+      {
+        "service_id": "srv_car_wash_c5faa4",
+        "agent_id": "agent_bPZJykRSDsIdfbKC7rb15w",
+        "name": "Car Wash premium"
+      }
+    ]
+  },
+  "root_group": {
+    "groups": [],
+    "checks": [
+        {
+          "fails": 0,
+          "name": "availability status 200",
+          "path": "::availability status 200",
+          "id": "373d6e5f4c27a9e88b1fd2da5f488c6e",
+          "passes": 21
+        },
+        {
+          "name": "booking resolved (201 Created or 409 Conflict)",
+          "path": "::booking resolved (201 Created or 409 Conflict)",
+          "id": "a57fb5ed08a273d9211d5d53962580c8",
+          "passes": 21,
+          "fails": 0
+        },
+        {
+          "name": "no 5xx server errors",
+          "path": "::no 5xx server errors",
+          "id": "c7f91d235e05913ba26289218fdb8572",
+          "passes": 21,
+          "fails": 0
+        }
+      ],
+    "name": "",
+    "path": "",
+    "id": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "options": {
+    "summaryTrendStats": [
+      "avg",
+      "min",
+      "med",
+      "max",
+      "p(90)",
+      "p(95)"
+    ],
+    "summaryTimeUnit": "",
+    "noColor": false
+  },
+  "state": {
+    "isStdErrTTY": false,
+    "testRunDurationMs": 12710.94151,
+    "isStdOutTTY": false
+  },
+  "metrics": {
+    "http_req_blocked": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 0.007036,
+        "max": 1.541379,
+        "p(90)": 0.7886274000000003,
+        "p(95)": 1.0808267999999996,
+        "avg": 0.1570018372093023,
+        "min": 0.003141
+      }
+    },
+    "http_req_sending": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 0.037225,
+        "max": 0.270758,
+        "p(90)": 0.11841720000000001,
+        "p(95)": 0.14530649999999998,
+        "avg": 0.05437416279069768,
+        "min": 0.014018
+      }
+    },
+    "http_req_failed": {
+      "contains": "default",
+      "values": {
+        "rate": 0.4186046511627907,
+        "passes": 18,
+        "fails": 25
+      },
+      "type": "rate"
+    },
+    "data_received": {
+      "type": "counter",
+      "contains": "data",
+      "values": {
+        "count": 265136,
+        "rate": 20858.879713309296
+      }
+    },
+    "iterations": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 21,
+        "rate": 1.6521199459126454
+      }
+    },
+    "http_req_tls_handshaking": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 0,
+        "min": 0,
+        "med": 0,
+        "max": 0,
+        "p(90)": 0,
+        "p(95)": 0
+      }
+    },
+    "data_sent": {
+      "contains": "data",
+      "values": {
+        "count": 48414,
+        "rate": 3808.844526734039
+      },
+      "type": "counter"
+    },
+    "successful_bookings": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 3,
+        "rate": 0.23601713513037792
+      }
+    },
+    "http_req_duration{endpoint:booking_write}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 1097.6585398095235,
+        "min": 491.587224,
+        "med": 1092.7857,
+        "max": 2296.544083,
+        "p(90)": 1962.187296,
+        "p(95)": 1976.393554
+      },
+      "thresholds": {
+        "p(95)<2500": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_duration{expected_response:true}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 1234.914806,
+        "max": 2296.544083,
+        "p(90)": 1792.3432692000006,
+        "p(95)": 1975.4658756,
+        "avg": 1254.96339716,
+        "min": 555.594537
+      }
+    },
+    "vus_max": {
+      "type": "gauge",
+      "contains": "default",
+      "values": {
+        "value": 5,
+        "min": 5,
+        "max": 5
+      }
+    },
+    "checks": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "fails": 0,
+        "rate": 1,
+        "passes": 63
+      }
+    },
+    "http_req_connecting": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(90)": 0.38474680000000017,
+        "p(95)": 0.43312439999999996,
+        "avg": 0.0737316046511628,
+        "min": 0,
+        "med": 0,
+        "max": 0.859069
+      }
+    },
+    "vus": {
+      "type": "gauge",
+      "contains": "default",
+      "values": {
+        "value": 4,
+        "min": 4,
+        "max": 5
+      }
+    },
+    "iteration_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(95)": 3820.791697,
+        "avg": 2817.4709318095242,
+        "min": 1657.526681,
+        "med": 2694.220526,
+        "max": 3886.149818,
+        "p(90)": 3747.139548
+      }
+    },
+    "http_req_waiting": {
+      "values": {
+        "p(95)": 1975.2238935,
+        "avg": 1165.1483136279069,
+        "min": 491.372937,
+        "med": 1169.758362,
+        "max": 2296.422213,
+        "p(90)": 1873.172965800002
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "concurrency_conflicts": {
+      "values": {
+        "count": 18,
+        "rate": 1.4161028107822675
+      },
+      "type": "counter",
+      "contains": "default"
+    },
+    "http_req_receiving": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "max": 0.689318,
+        "p(90)": 0.229337,
+        "p(95)": 0.3028546,
+        "avg": 0.15890644186046513,
+        "min": 0.056827,
+        "med": 0.128239
+      }
+    },
+    "http_reqs": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 43,
+        "rate": 3.3829122702020835
+      }
+    },
+    "http_req_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "max": 2296.544083,
+        "p(90)": 1873.345987200002,
+        "p(95)": 1975.4926583,
+        "avg": 1165.3615942325582,
+        "min": 491.587224,
+        "med": 1169.996022
+      },
+      "thresholds": {
+        "p(95)<2500": {
+          "ok": true
+        }
+      }
+    },
+    "system_errors": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 21
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    }
+  }
+}

@@ -1,20 +1,36 @@
-import { ArrowRight, Calendar, Loader2, Shield, X } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowRight, Calendar, Loader2, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useTenantAgents } from '../hooks/useKnowledgeDocuments';
 import { useInviteUser } from '../hooks/useTenant';
 
 interface InviteUserModalProps {
   isOpen: boolean;
   onClose: () => void;
   tenantId: string;
+  defaultAgentId?: string;
 }
 
-export function InviteUserModal({ isOpen, onClose, tenantId }: InviteUserModalProps) {
+export function InviteUserModal({
+  isOpen,
+  onClose,
+  tenantId,
+  defaultAgentId,
+}: InviteUserModalProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [systemRole, setSystemRole] = useState<'manager' | 'root'>('manager');
+  const [selectedAgentId, setSelectedAgentId] = useState(defaultAgentId || '');
   const [errorMsg, setErrorMsg] = useState('');
 
+  const { data: agents = [], isLoading: isLoadingAgents } = useTenantAgents();
   const inviteUserMutation = useInviteUser();
+
+  useEffect(() => {
+    if (defaultAgentId) {
+      setSelectedAgentId(defaultAgentId);
+    } else if (agents.length > 0 && !selectedAgentId) {
+      setSelectedAgentId(agents[0].agent_id);
+    }
+  }, [agents, defaultAgentId, selectedAgentId]);
 
   if (!isOpen) return null;
 
@@ -27,18 +43,24 @@ export function InviteUserModal({ isOpen, onClose, tenantId }: InviteUserModalPr
       return;
     }
 
+    if (!selectedAgentId) {
+      setErrorMsg('Please select an agent to assign this team member.');
+      return;
+    }
+
     inviteUserMutation.mutate(
       {
         tenant_id: tenantId,
+        agent_id: selectedAgentId,
         name: name.trim(),
         email: email.trim(),
-        system_role: systemRole,
+        system_role: 'manager',
       },
       {
         onSuccess: () => {
           setName('');
           setEmail('');
-          setSystemRole('manager');
+          setSelectedAgentId(agents[0]?.agent_id || '');
           onClose();
         },
         onError: (err: unknown) => {
@@ -65,10 +87,11 @@ export function InviteUserModal({ isOpen, onClose, tenantId }: InviteUserModalPr
         {/* Title Header */}
         <div className="mb-6">
           <h2 className="text-xl font-bold text-slate-900 tracking-tight mb-1">
-            Invite to Workspace
+            Invite Team Member
           </h2>
           <p className="text-xs text-slate-500 leading-relaxed max-w-md">
-            Send an email invitation to a new team member and set their access level.
+            Send an email invitation link to your staff. They will set their own password and will
+            be restricted to the assigned agent.
           </p>
         </div>
 
@@ -109,79 +132,60 @@ export function InviteUserModal({ isOpen, onClose, tenantId }: InviteUserModalPr
             />
           </div>
 
-          {/* Select Role & Permissions */}
+          {/* Assign to Agent */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 tracking-wider uppercase mb-1.5">
+              ASSIGN TO AI AGENT
+            </label>
+            {isLoadingAgents ? (
+              <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Loading agents...
+              </div>
+            ) : (
+              <div className="relative">
+                <select
+                  value={selectedAgentId}
+                  onChange={(e) => setSelectedAgentId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-xs text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
+                  required
+                >
+                  {agents.map((agent) => (
+                    <option key={agent.agent_id} value={agent.agent_id}>
+                      {agent.name} ({agent.agent_id.slice(-6)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <p className="text-[11px] text-slate-400 mt-1">
+              Staff can only view and manage bookings, services, resources, and customers for this
+              agent.
+            </p>
+          </div>
+
+          {/* System Role Info */}
           <div>
             <label className="block text-[10px] font-bold text-slate-500 tracking-wider uppercase mb-2">
-              SELECT ROLE & PERMISSIONS
+              ASSIGNED ROLE
             </label>
-
-            <div className="flex flex-col gap-3">
-              {/* Option 1: Manager */}
-              <div
-                onClick={() => setSystemRole('manager')}
-                className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex items-start gap-3.5 ${
-                  systemRole === 'manager'
-                    ? 'border-slate-900 bg-slate-50/70 shadow-sm'
-                    : 'border-slate-200 hover:border-slate-300 bg-white'
-                }`}
-              >
-                <div className="mt-0.5">
-                  <div
-                    className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
-                      systemRole === 'manager'
-                        ? 'border-slate-900 bg-slate-900'
-                        : 'border-slate-300 bg-white'
-                    }`}
-                  >
-                    {systemRole === 'manager' && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-1">
-                    <Calendar className="w-3.5 h-3.5 text-slate-700" />
-                    <span>Manager (Front Desk / Operations)</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-normal">
-                    Can manage the calendar, view customer data, and take over live AI chats. Cannot
-                    change billing or edit the AI Agent.
-                  </p>
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex items-start gap-3.5">
+              <div className="mt-0.5">
+                <div className="w-4 h-4 rounded-full border border-slate-900 bg-slate-900 flex items-center justify-center">
+                  <div className="w-1.5 h-1.5 rounded-full bg-white" />
                 </div>
               </div>
 
-              {/* Option 2: Owner (Root) */}
-              <div
-                onClick={() => setSystemRole('root')}
-                className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex items-start gap-3.5 ${
-                  systemRole === 'root'
-                    ? 'border-slate-900 bg-slate-50/70 shadow-sm'
-                    : 'border-slate-200 hover:border-slate-300 bg-white'
-                }`}
-              >
-                <div className="mt-0.5">
-                  <div
-                    className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
-                      systemRole === 'root'
-                        ? 'border-slate-900 bg-slate-900'
-                        : 'border-slate-300 bg-white'
-                    }`}
-                  >
-                    {systemRole === 'root' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                  </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-1">
+                  <Calendar className="w-3.5 h-3.5 text-slate-700" />
+                  <span>Operations Manager</span>
                 </div>
-
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-1">
-                    <Shield className="w-3.5 h-3.5 text-slate-700" />
-                    <span>Owner (Full Admin Access)</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-normal">
-                    Has absolute control. Can configure the AI Agent Studio, edit Stripe billing,
-                    and delete the workspace.
-                  </p>
-                </div>
+                <p className="text-[11px] text-slate-500 leading-normal">
+                  Staff members have operational access to Calendar & Bookings, Services, Resources,
+                  and Customers. They cannot access billing, invite other users, or edit agent
+                  knowledge base.
+                </p>
               </div>
             </div>
           </div>
@@ -197,13 +201,13 @@ export function InviteUserModal({ isOpen, onClose, tenantId }: InviteUserModalPr
             </button>
             <button
               type="submit"
-              disabled={inviteUserMutation.isPending}
+              disabled={inviteUserMutation.isPending || !selectedAgentId}
               className="px-5 py-2.5 text-xs font-medium text-white bg-slate-950 hover:bg-black rounded-full transition-all flex items-center gap-1.5 shadow-md active:scale-95 disabled:opacity-50"
             >
               {inviteUserMutation.isPending ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Sending...
+                  Sending Invite...
                 </>
               ) : (
                 <>

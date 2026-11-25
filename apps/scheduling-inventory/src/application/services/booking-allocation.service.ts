@@ -138,6 +138,9 @@ export class BookingAllocationService implements IBookingAllocationService {
       excludeBookingId,
       resourceRepository,
       bookingRepository,
+      cacheRepository,
+      holdToken,
+      overrideHold = false,
       timezone = 'UTC',
       tenantOperatingHours,
       blackoutDates = [],
@@ -169,7 +172,7 @@ export class BookingAllocationService implements IBookingAllocationService {
     }
     const allCandidateIds = Array.from(allCandidateIdsSet);
 
-    const [rawActiveResources, busyResourceIds] = await Promise.all([
+    const [rawActiveResources, busyResourceIds, activeHolds] = await Promise.all([
       allCandidateIds.length > 0
         ? resourceRepository.findActiveBookableByIds(tenantId, allCandidateIds, agentId)
         : Promise.resolve([]),
@@ -182,7 +185,25 @@ export class BookingAllocationService implements IBookingAllocationService {
             excludeBookingId,
           )
         : Promise.resolve(new Set<string>()),
+      cacheRepository && !overrideHold
+        ? cacheRepository.getActiveHolds(tenantId, agentId)
+        : Promise.resolve([]),
     ]);
+
+    const heldByOtherResourceIds = new Set<string>();
+    if (!overrideHold && activeHolds.length > 0) {
+      const startMs = effectiveStartTime.getTime();
+      const endMs = effectiveEndTime.getTime();
+      for (const hold of activeHolds) {
+        if (allCandidateIdsSet.has(hold.resourceId)) {
+          if (hold.startTimeMs >= startMs && hold.startTimeMs < endMs) {
+            if (!holdToken || hold.holdToken !== holdToken) {
+              heldByOtherResourceIds.add(hold.resourceId);
+            }
+          }
+        }
+      }
+    }
 
     const activeResourceMap = new Map<string, ResourceEntity>();
     for (const res of rawActiveResources) {
@@ -227,6 +248,11 @@ export class BookingAllocationService implements IBookingAllocationService {
             `Resource "${res.name || 'Resource'}" for role "${req.role}" is already booked for this time slot`,
           );
         }
+        if (heldByOtherResourceIds.has(id)) {
+          throw new ConflictException(
+            `Resource "${res.name || 'Resource'}" for role "${req.role}" is currently held provisionally by another customer checkout`,
+          );
+        }
         allocatedResourceIds.push(id);
         usedResourceIds.add(id);
         if (req.resourceType !== 'staff') assignedAssetIds.push(id);
@@ -254,6 +280,7 @@ export class BookingAllocationService implements IBookingAllocationService {
         const freeCandidates = activeCandidates.filter(
           (c) =>
             !busyResourceIds.has(c.id) &&
+            !heldByOtherResourceIds.has(c.id) &&
             isResourceOnShift(
               c,
               effectiveStartTime,

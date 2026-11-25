@@ -1,11 +1,20 @@
 import { axiosClient } from '../../../api/axiosClient';
 
+export interface TenantStats {
+  total: number;
+  active: number;
+  suspended: number;
+}
+
 export interface TenantItem {
   tenant_id: string;
   business_name: string;
   contact_email: string;
   tier: string;
   status: string;
+  weekly_token_limit?: number;
+  weekly_token_usage?: number;
+  weekly_token_remaining?: number;
 }
 
 export interface ListTenantsResponseData {
@@ -13,6 +22,7 @@ export interface ListTenantsResponseData {
   data: {
     tenants: TenantItem[];
     total_count: number;
+    stats?: TenantStats;
   };
 }
 

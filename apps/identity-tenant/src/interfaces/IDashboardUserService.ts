@@ -1,4 +1,6 @@
 import {
+  AcceptInvitationRequest,
+  AcceptInvitationResponse,
   DashboardUserForgotPasswordResponse,
   DashboardUserLoginRequest,
   DashboardUserLoginResponse,
@@ -7,6 +9,7 @@ import {
   DashboardUserRefreshTokenRequest,
   DashboardUserRefreshTokenResponse,
   DashboardUserResetPasswordResponse,
+  GetInvitationDetailsResponse,
 } from '@repo/proto/dashboard';
 
 export interface IDashboardUserService {
@@ -19,4 +22,8 @@ export interface IDashboardUserService {
   forgotPassword(email: string): Promise<DashboardUserForgotPasswordResponse>;
 
   resetPassword(token: string, new_password: string): Promise<DashboardUserResetPasswordResponse>;
+
+  acceptInvitation(data: AcceptInvitationRequest): Promise<AcceptInvitationResponse>;
+
+  getInvitationDetails(token: string): Promise<GetInvitationDetailsResponse>;
 }

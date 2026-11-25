@@ -5,8 +5,10 @@ import {
   Inject,
   OnModuleInit,
   Post,
+  Query,
   Req,
   Res,
+  UnauthorizedException,
   UseGuards,
   UsePipes,
 } from '@nestjs/common';
@@ -19,25 +21,36 @@ import { COOKIE_NAMES } from '../../constants/cookies.constant.js';
 import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
 import { API_ROUTES } from '../../constants/routes.constant.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
+import { CIRCUIT_BREAKER_SERVICE, ICircuitBreakerService } from '@repo/circuit-breaker';
 import {
   getAccessTokenCookieOptions,
+  getClearCookieOptions,
   getRefreshTokenCookieOptions,
 } from '../../utils/cookie.util.js';
 import {
+  AcceptInvitationDto,
   DashboardUserForgotPasswordDto,
   DashboardUserLoginDto,
   DashboardUserRefreshTokenDto,
   DashboardUserResetPasswordDto,
+  GetInvitationDetailsDto,
 } from './dtos/dashboard-user.dto.js';
 
 @Controller(API_ROUTES.DASHBOARD_USER.AUTH.BASE)
 export class DashboardUserAuthController implements OnModuleInit {
   private _dashboardUserAuthClient!: DashboardAuthServiceClient;
 
-  constructor(@Inject('DASHBOARD_PACKAGE') private readonly _client: ClientGrpc) {}
+  constructor(
+    @Inject('DASHBOARD_PACKAGE') private readonly _client: ClientGrpc,
+    @Inject(CIRCUIT_BREAKER_SERVICE)
+    private readonly _circuitBreakerService: ICircuitBreakerService,
+  ) {}
 
   onModuleInit() {
-    this._dashboardUserAuthClient = this._client.getService('DashboardAuthService');
+    this._dashboardUserAuthClient = this._circuitBreakerService.wrapGrpcClient(
+      'dashboard-service',
+      this._client.getService<DashboardAuthServiceClient>('DashboardAuthService'),
+    );
   }
 
   @Post(API_ROUTES.DASHBOARD_USER.AUTH.LOGIN)
@@ -45,7 +58,15 @@ export class DashboardUserAuthController implements OnModuleInit {
   async Login(@Body() data: DashboardUserLoginDto, @Res({ passthrough: true }) res: Response) {
     const response = await lastValueFrom(this._dashboardUserAuthClient.login(data));
 
-    res.cookie(COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN, response.access_token, getAccessTokenCookieOptions());
+    // Clear any existing tenant cookies to prevent session collision on shared origins
+    res.clearCookie(COOKIE_NAMES.TENANT_ACCESS_TOKEN, getClearCookieOptions());
+    res.clearCookie(COOKIE_NAMES.TENANT_REFRESH_TOKEN, getClearCookieOptions());
+
+    res.cookie(
+      COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN,
+      response.access_token,
+      getAccessTokenCookieOptions(),
+    );
     res.cookie(
       COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN,
       response.refresh_token,
@@ -58,6 +79,16 @@ export class DashboardUserAuthController implements OnModuleInit {
     };
   }
 
+  @Post(API_ROUTES.DASHBOARD_USER.AUTH.LOGOUT)
+  async logout(@Res({ passthrough: true }) res: Response) {
+    res.clearCookie(COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN, getClearCookieOptions());
+    res.clearCookie(COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN, getClearCookieOptions());
+    return {
+      message: RESPONSE_MESSAGES.AUTH.LOGGED_OUT,
+      data: null,
+    };
+  }
+
   @Post(API_ROUTES.DASHBOARD_USER.AUTH.REFRESH_TOKEN)
   @UsePipes(ZodValidationPipe)
   async refreshToken(
@@ -67,14 +98,18 @@ export class DashboardUserAuthController implements OnModuleInit {
   ) {
     const token = req.cookies?.[COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN] || body?.refresh_token || '';
     if (!token) {
-      throw new Error(RESPONSE_MESSAGES.AUTH.NO_REFRESH_TOKEN);
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.NO_REFRESH_TOKEN);
     }
 
     const response = await lastValueFrom(
       this._dashboardUserAuthClient.refreshToken({ refresh_token: token }),
     );
 
-    res.cookie(COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN, response.access_token, getAccessTokenCookieOptions());
+    res.cookie(
+      COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN,
+      response.access_token,
+      getAccessTokenCookieOptions(),
+    );
     res.cookie(
       COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN,
       response.refresh_token,
@@ -112,12 +147,41 @@ export class DashboardUserAuthController implements OnModuleInit {
     };
   }
 
+  @Post(API_ROUTES.DASHBOARD_USER.AUTH.ACCEPT_INVITE)
+  @UsePipes(ZodValidationPipe)
+  async acceptInvitation(@Body() body: AcceptInvitationDto) {
+    const response = await lastValueFrom(
+      this._dashboardUserAuthClient.acceptInvitation({
+        token: body.token,
+        password: body.password,
+      }),
+    );
+    return {
+      message: response.message,
+      data: response.user,
+    };
+  }
+
+  @Get(API_ROUTES.DASHBOARD_USER.AUTH.INVITATION_INFO)
+  @UsePipes(ZodValidationPipe)
+  async getInvitationDetails(@Query() query: GetInvitationDetailsDto) {
+    const response = await lastValueFrom(
+      this._dashboardUserAuthClient.getInvitationDetails({
+        token: query.token,
+      }),
+    );
+    return {
+      message: 'Invitation details retrieved successfully',
+      data: response,
+    };
+  }
+
   @Get(API_ROUTES.DASHBOARD_USER.AUTH.ME)
   @UseGuards(TenantAuthGuard)
   async getProfile(@Req() req: AuthenticatedTenantRequest) {
     const userId = req.dashboardUser?.user_id;
     if (!userId) {
-      throw new Error(RESPONSE_MESSAGES.AUTH.USER_ID_NOT_FOUND);
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.USER_ID_NOT_FOUND);
     }
 
     const response = await lastValueFrom(
@@ -130,4 +194,3 @@ export class DashboardUserAuthController implements OnModuleInit {
     };
   }
 }
-

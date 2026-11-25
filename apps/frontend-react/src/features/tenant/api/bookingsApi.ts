@@ -29,7 +29,6 @@ export interface CreateBookingPayload {
   customer_email?: string;
   notes?: string;
   source?: 'manual' | 'customer_agent' | 'web_portal' | 'sandbox_simulation';
-  deposit_status?: 'not_required' | 'pending' | 'verified' | 'waived';
   created_by?: string;
 }
 
@@ -45,6 +44,16 @@ export interface ListBookingsParams {
   search?: string;
 }
 
+export interface BookingSummaryInfo {
+  total_count: number;
+  confirmed_count: number;
+  pending_count: number;
+  cancelled_count: number;
+  completed_count: number;
+  ai_inbound_count: number;
+  ai_inbound_percent: number;
+}
+
 export interface ListBookingsResponseData {
   message: string;
   data: BookingInfo[];
@@ -53,6 +62,7 @@ export interface ListBookingsResponseData {
     page: number;
     limit: number;
   };
+  summary?: BookingSummaryInfo;
 }
 
 export interface GetAvailabilityParams {
@@ -116,6 +126,35 @@ export const bookingsApi = {
   ): Promise<ApiResponse<BookingInfo>> => {
     const { data } = await axiosClient.post<ApiResponse<BookingInfo>>(
       `/api/v1/tenant/scheduling/bookings/${bookingId}/reschedule`,
+      payload,
+    );
+    return data;
+  },
+
+  updateBookingStatus: async (
+    bookingId: string,
+    payload: {
+      agent_id: string;
+      status: 'confirmed' | 'cancelled' | 'completed' | 'no_show';
+      reason?: string;
+    },
+  ): Promise<ApiResponse<BookingInfo>> => {
+    const { data } = await axiosClient.patch<ApiResponse<BookingInfo>>(
+      `/api/v1/tenant/scheduling/bookings/${bookingId}/status`,
+      payload,
+    );
+    return data;
+  },
+
+  completeBooking: async (
+    bookingId: string,
+    payload: {
+      agent_id: string;
+      reason?: string;
+    },
+  ): Promise<ApiResponse<BookingInfo>> => {
+    const { data } = await axiosClient.post<ApiResponse<BookingInfo>>(
+      `/api/v1/tenant/scheduling/bookings/${bookingId}/complete`,
       payload,
     );
     return data;

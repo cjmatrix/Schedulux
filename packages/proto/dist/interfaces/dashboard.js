@@ -8,13 +8,20 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DASHBOARD_USER_SERVICE_NAME = exports.DASHBOARD_AUTH_SERVICE_NAME = exports.DASHBOARD_PACKAGE_NAME = exports.protobufPackage = void 0;
 exports.DashboardAuthServiceControllerMethods = DashboardAuthServiceControllerMethods;
 exports.DashboardUserServiceControllerMethods = DashboardUserServiceControllerMethods;
-/* eslint-disable */
 const microservices_1 = require("@nestjs/microservices");
 exports.protobufPackage = "dashboard";
 exports.DASHBOARD_PACKAGE_NAME = "dashboard";
 function DashboardAuthServiceControllerMethods() {
     return function (constructor) {
-        const grpcMethods = ["login", "getProfile", "refreshToken", "forgotPassword", "resetPassword"];
+        const grpcMethods = [
+            "login",
+            "getProfile",
+            "refreshToken",
+            "forgotPassword",
+            "resetPassword",
+            "acceptInvitation",
+            "getInvitationDetails",
+        ];
         for (const method of grpcMethods) {
             const descriptor = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
             (0, microservices_1.GrpcMethod)("DashboardAuthService", method)(constructor.prototype[method], method, descriptor);
@@ -31,7 +38,7 @@ function DashboardAuthServiceControllerMethods() {
 exports.DASHBOARD_AUTH_SERVICE_NAME = "DashboardAuthService";
 function DashboardUserServiceControllerMethods() {
     return function (constructor) {
-        const grpcMethods = ["inviteUser", "listWorkspaceUsers"];
+        const grpcMethods = ["inviteUser", "listWorkspaceUsers", "suspendWorkspaceUser"];
         for (const method of grpcMethods) {
             const descriptor = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
             (0, microservices_1.GrpcMethod)("DashboardUserService", method)(constructor.prototype[method], method, descriptor);

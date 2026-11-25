@@ -5,6 +5,7 @@
 // source: superadmin.proto
 
 /* eslint-disable */
+import type { Metadata } from "@grpc/grpc-js";
 import { GrpcMethod, GrpcStreamMethod } from "@nestjs/microservices";
 import { Observable } from "rxjs";
 
@@ -56,29 +57,159 @@ export interface GetProfileResponse {
   superAdmin: SuperAdminInfo | undefined;
 }
 
+export interface SuperAdminOverviewRequest {
+  start_date: string;
+  end_date: string;
+}
+
+export interface SuperAdminOverviewResponse {
+  total_tenants: number;
+  active_tenants: number;
+  suspended_tenants: number;
+  total_revenue: number;
+  currency: string;
+  tenants_by_tier: { [key: string]: number };
+  total_tokens: number;
+}
+
+export interface SuperAdminOverviewResponse_TenantsByTierEntry {
+  key: string;
+  value: number;
+}
+
+export interface RevenueChartRequest {
+  start_date: string;
+  end_date: string;
+  interval: string;
+}
+
+export interface RevenueDataPoint {
+  date: string;
+  amount: number;
+  transaction_count: number;
+}
+
+export interface RevenueChartResponse {
+  points: RevenueDataPoint[];
+}
+
+export interface TokenChartRequest {
+  start_date: string;
+  end_date: string;
+  interval: string;
+}
+
+export interface TokenDatePoint {
+  date: string;
+  total_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+
+export interface TokenChartResponse {
+  points: TokenDatePoint[];
+}
+
+export interface TopTenantsRequest {
+  start_date: string;
+  end_date: string;
+  limit: number;
+}
+
+export interface TopTenantTokenUsage {
+  tenant_id: string;
+  business_name: string;
+  email: string;
+  tier: string;
+  total_tokens: number;
+}
+
+export interface TopTenantsResponse {
+  tenants: TopTenantTokenUsage[];
+}
+
+export interface TierConfigItem {
+  id: string;
+  tier: string;
+  name: string;
+  max_agents: number;
+  max_services: number;
+  max_resources: number;
+  max_kb_docs: number;
+  max_kb_doc_size_mb: number;
+  weekly_token_limit: number;
+  rate_limit_rpm: number;
+  status: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+  weekly_crawl_limit?: number | undefined;
+}
+
+export interface ListTierConfigsRequest {
+}
+
+export interface ListTierConfigsResponse {
+  configs: TierConfigItem[];
+}
+
+export interface GetTierConfigRequest {
+  tier: string;
+}
+
+export interface GetTierConfigResponse {
+  config: TierConfigItem | undefined;
+}
+
+export interface UpdateTierConfigRequest {
+  tier: string;
+  name?: string | undefined;
+  max_agents?: number | undefined;
+  max_services?: number | undefined;
+  max_resources?: number | undefined;
+  max_kb_docs?: number | undefined;
+  max_kb_doc_size_mb?: number | undefined;
+  weekly_token_limit?: number | undefined;
+  rate_limit_rpm?: number | undefined;
+  status?: string | undefined;
+  description?: string | undefined;
+  weekly_crawl_limit?: number | undefined;
+}
+
+export interface UpdateTierConfigResponse {
+  success: boolean;
+  message: string;
+  config: TierConfigItem | undefined;
+}
+
 export const SUPERADMIN_PACKAGE_NAME = "superadmin";
 
 export interface SuperAdminAuthServiceClient {
-  login(request: LoginRequest): Observable<LoginResponse>;
+  login(request: LoginRequest, metadata?: Metadata): Observable<LoginResponse>;
 
-  logout(request: LogoutRequest): Observable<LogoutResponse>;
+  logout(request: LogoutRequest, metadata?: Metadata): Observable<LogoutResponse>;
 
-  refreshToken(request: RefreshTokenRequest): Observable<RefreshTokenResponse>;
+  refreshToken(request: RefreshTokenRequest, metadata?: Metadata): Observable<RefreshTokenResponse>;
 
-  getProfile(request: GetProfileRequest): Observable<GetProfileResponse>;
+  getProfile(request: GetProfileRequest, metadata?: Metadata): Observable<GetProfileResponse>;
 }
 
 export interface SuperAdminAuthServiceController {
-  login(request: LoginRequest): Promise<LoginResponse> | Observable<LoginResponse> | LoginResponse;
+  login(request: LoginRequest, metadata?: Metadata): Promise<LoginResponse> | Observable<LoginResponse> | LoginResponse;
 
-  logout(request: LogoutRequest): Promise<LogoutResponse> | Observable<LogoutResponse> | LogoutResponse;
+  logout(
+    request: LogoutRequest,
+    metadata?: Metadata,
+  ): Promise<LogoutResponse> | Observable<LogoutResponse> | LogoutResponse;
 
   refreshToken(
     request: RefreshTokenRequest,
+    metadata?: Metadata,
   ): Promise<RefreshTokenResponse> | Observable<RefreshTokenResponse> | RefreshTokenResponse;
 
   getProfile(
     request: GetProfileRequest,
+    metadata?: Metadata,
   ): Promise<GetProfileResponse> | Observable<GetProfileResponse> | GetProfileResponse;
 }
 
@@ -100,3 +231,101 @@ export function SuperAdminAuthServiceControllerMethods() {
 }
 
 export const SUPER_ADMIN_AUTH_SERVICE_NAME = "SuperAdminAuthService";
+
+export interface SuperAdminDashboardServiceClient {
+  getSuperAdminOverview(
+    request: SuperAdminOverviewRequest,
+    metadata?: Metadata,
+  ): Observable<SuperAdminOverviewResponse>;
+
+  getRevenueChart(request: RevenueChartRequest, metadata?: Metadata): Observable<RevenueChartResponse>;
+
+  getTokenChart(request: TokenChartRequest, metadata?: Metadata): Observable<TokenChartResponse>;
+
+  getTopTenants(request: TopTenantsRequest, metadata?: Metadata): Observable<TopTenantsResponse>;
+}
+
+export interface SuperAdminDashboardServiceController {
+  getSuperAdminOverview(
+    request: SuperAdminOverviewRequest,
+    metadata?: Metadata,
+  ): Promise<SuperAdminOverviewResponse> | Observable<SuperAdminOverviewResponse> | SuperAdminOverviewResponse;
+
+  getRevenueChart(
+    request: RevenueChartRequest,
+    metadata?: Metadata,
+  ): Promise<RevenueChartResponse> | Observable<RevenueChartResponse> | RevenueChartResponse;
+
+  getTokenChart(
+    request: TokenChartRequest,
+    metadata?: Metadata,
+  ): Promise<TokenChartResponse> | Observable<TokenChartResponse> | TokenChartResponse;
+
+  getTopTenants(
+    request: TopTenantsRequest,
+    metadata?: Metadata,
+  ): Promise<TopTenantsResponse> | Observable<TopTenantsResponse> | TopTenantsResponse;
+}
+
+export function SuperAdminDashboardServiceControllerMethods() {
+  return function (constructor: Function) {
+    const grpcMethods: string[] = ["getSuperAdminOverview", "getRevenueChart", "getTokenChart", "getTopTenants"];
+    for (const method of grpcMethods) {
+      const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
+      GrpcMethod("SuperAdminDashboardService", method)(constructor.prototype[method], method, descriptor);
+      Object.defineProperty(constructor.prototype, method, descriptor);
+    }
+    const grpcStreamMethods: string[] = [];
+    for (const method of grpcStreamMethods) {
+      const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
+      GrpcStreamMethod("SuperAdminDashboardService", method)(constructor.prototype[method], method, descriptor);
+      Object.defineProperty(constructor.prototype, method, descriptor);
+    }
+  };
+}
+
+export const SUPER_ADMIN_DASHBOARD_SERVICE_NAME = "SuperAdminDashboardService";
+
+export interface SuperAdminTierConfigServiceClient {
+  listTierConfigs(request: ListTierConfigsRequest, metadata?: Metadata): Observable<ListTierConfigsResponse>;
+
+  getTierConfig(request: GetTierConfigRequest, metadata?: Metadata): Observable<GetTierConfigResponse>;
+
+  updateTierConfig(request: UpdateTierConfigRequest, metadata?: Metadata): Observable<UpdateTierConfigResponse>;
+}
+
+export interface SuperAdminTierConfigServiceController {
+  listTierConfigs(
+    request: ListTierConfigsRequest,
+    metadata?: Metadata,
+  ): Promise<ListTierConfigsResponse> | Observable<ListTierConfigsResponse> | ListTierConfigsResponse;
+
+  getTierConfig(
+    request: GetTierConfigRequest,
+    metadata?: Metadata,
+  ): Promise<GetTierConfigResponse> | Observable<GetTierConfigResponse> | GetTierConfigResponse;
+
+  updateTierConfig(
+    request: UpdateTierConfigRequest,
+    metadata?: Metadata,
+  ): Promise<UpdateTierConfigResponse> | Observable<UpdateTierConfigResponse> | UpdateTierConfigResponse;
+}
+
+export function SuperAdminTierConfigServiceControllerMethods() {
+  return function (constructor: Function) {
+    const grpcMethods: string[] = ["listTierConfigs", "getTierConfig", "updateTierConfig"];
+    for (const method of grpcMethods) {
+      const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
+      GrpcMethod("SuperAdminTierConfigService", method)(constructor.prototype[method], method, descriptor);
+      Object.defineProperty(constructor.prototype, method, descriptor);
+    }
+    const grpcStreamMethods: string[] = [];
+    for (const method of grpcStreamMethods) {
+      const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
+      GrpcStreamMethod("SuperAdminTierConfigService", method)(constructor.prototype[method], method, descriptor);
+      Object.defineProperty(constructor.prototype, method, descriptor);
+    }
+  };
+}
+
+export const SUPER_ADMIN_TIER_CONFIG_SERVICE_NAME = "SuperAdminTierConfigService";

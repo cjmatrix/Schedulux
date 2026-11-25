@@ -215,7 +215,9 @@ def _format_draft_toon(draft: dict) -> str:
                 lines.append(f"  {day[:3]}: {', '.join(slot_strs)}")
         blackouts = oh.get("blackout_dates")
         if isinstance(blackouts, list) and blackouts:
-            b_strs = [b.get("date") for b in blackouts if isinstance(b, dict) and b.get("date")]
+            b_strs = [
+                str(b.get("date")) for b in blackouts if isinstance(b, dict) and b.get("date")
+            ]
             if b_strs:
                 lines.append(f"  blackouts: [{', '.join(b_strs)}]")
 
@@ -248,7 +250,7 @@ def _format_draft_toon(draft: dict) -> str:
             buf = f"{s.get('buffer_minutes', 0)}m"
             price = s.get("price") or {}
             price_str = f"${price.get('amount', 0)} {price.get('currency', 'USD')}"
-            r_ids = []
+            r_ids: list[str] = []
             for req in s.get("resource_requirements") or []:
                 if isinstance(req, dict):
                     r_ids.extend(req.get("eligible_resource_ids") or [])
@@ -315,3 +317,92 @@ def _extract_payload(snapshot: Any) -> dict:
         "field": values.get("pending_field") or "",
         "type": "semantic_review",
     }
+
+
+def generate_deterministic_onboarding_greeting(
+    draft: dict[str, Any], gaps: list[dict[str, Any]]
+) -> str:
+    source = str(draft.get("creation_source") or "custom").lower().strip()
+    bp = draft.get("business_profile") or {}
+    biz_name = bp.get("name") or "your business"
+    vertical = str(bp.get("vertical") or source or "custom").lower().strip()
+
+    active_services = [
+        s for s in draft.get("services", []) if isinstance(s, dict) and not s.get("is_deleted")
+    ]
+    active_resources = [
+        r for r in draft.get("resources", []) if isinstance(r, dict) and not r.get("is_deleted")
+    ]
+    svc_count = len(active_services)
+    res_count = len(active_resources)
+
+    first_gap = (
+        gaps[0]["question"]
+        if gaps
+        else "Everything looks complete! Would you like to review your configuration or make any adjustments before going live?"
+    )
+
+    if source == "web_crawl":
+        if svc_count > 0:
+            staff_str = f" and **{res_count} staff/resources**" if res_count > 0 else ""
+            return (
+                f"Welcome! I’ve analyzed your website and pre-configured your AI booking assistant for **{biz_name}** "
+                f"with **{svc_count} services**{staff_str} and your operating schedule.\n\n"
+                f"Take a look at your canvas on the right to inspect the extracted services, hours, and settings.\n\n"
+                f"To ensure your booking concierge is ready to go live, let's verify:\n"
+                f"👉 **{first_gap}**"
+            )
+        else:
+            return (
+                f"Welcome! I’ve initialized your business profile for **{biz_name}** from your website.\n\n"
+                f"Take a look at your canvas on the right. To get your booking assistant ready for clients, let's configure your offerings:\n"
+                f"👉 **{first_gap}**"
+            )
+
+    if vertical in ("medical", "dental", "clinic") or source == "medical":
+        return (
+            f"Welcome to Schedulux! I’ve initialized your **Medical & Dental Clinic** booking assistant for **{biz_name}**.\n\n"
+            f"This setup is optimized for clinical workflows, including doctor/practitioner shifts, chair & room allocations, "
+            f"and patient intake buffers.\n\n"
+            f"Let's tailor your clinic's booking rules to match your practice. First:\n"
+            f"👉 **{first_gap}**"
+        )
+
+    if vertical in ("auto", "repair", "mechanic") or source == "auto":
+        return (
+            f"Welcome to Schedulux! I’ve initialized your **Auto Repair & Services** booking assistant for **{biz_name}**.\n\n"
+            f"This setup is modeled for physical service bays, technician allocations, parts lead times, and diagnostic scaling.\n\n"
+            f"Let's configure your shop's schedule and service bays. First:\n"
+            f"👉 **{first_gap}**"
+        )
+
+    if vertical in ("hospitality", "hotel", "rooms") or source == "hospitality":
+        return (
+            f"Welcome to Schedulux! I’ve initialized your **Hospitality & Rooms** booking assistant for **{biz_name}**.\n\n"
+            f"This setup is structured for multi-day reservations, room categories, check-in/check-out windows, and turnover blocks.\n\n"
+            f"Let's configure your property's booking parameters. First:\n"
+            f"👉 **{first_gap}**"
+        )
+
+    if vertical in ("salon", "spa", "barbershop", "salons") or source == "salons":
+        return (
+            f"Welcome to Schedulux! I’ve initialized your **Salon & Wellness** booking assistant for **{biz_name}**.\n\n"
+            f"This setup is optimized for stylist stations, chair allocations, service durations, and cleanup buffers.\n\n"
+            f"Let's customize your salon's services and schedule. First:\n"
+            f"👉 **{first_gap}**"
+        )
+
+    if vertical in ("consulting", "legal", "coaching") or source == "consulting":
+        return (
+            f"Welcome to Schedulux! I’ve initialized your **Professional Consulting & Practice** booking assistant for **{biz_name}**.\n\n"
+            f"This setup is structured for 1-on-1 consultations, advisory sessions, and automated scheduling buffers.\n\n"
+            f"Let's configure your availability and consultation types. First:\n"
+            f"👉 **{first_gap}**"
+        )
+
+    return (
+        f"Welcome to Schedulux! I’m your AI Booking Architect, and I’ve created your assistant workspace for **{biz_name}**.\n\n"
+        f"I'll help you configure your services, staff, operating hours, and custom booking rules to automate your appointments seamlessly.\n\n"
+        f"To get started:\n"
+        f"👉 **{first_gap}**"
+    )

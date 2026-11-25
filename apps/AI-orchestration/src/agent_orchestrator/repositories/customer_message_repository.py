@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from typing import Any
 
@@ -14,17 +15,29 @@ class CustomerMessageRepository:
         tenant_id: str,
         agent_id: str,
     ) -> CustomerConversation:
+        now_utc = datetime.utcnow()
+        await CustomerConversation.get_pymongo_collection().update_one(
+            {"session_id": session_id},
+            {
+                "$setOnInsert": {
+                    "tenant_id": tenant_id,
+                    "agent_id": agent_id,
+                    "status": "active",
+                    "is_verified": False,
+                    "created_at": now_utc,
+                    "updated_at": now_utc,
+                }
+            },
+            upsert=True,
+        )
         conv = await CustomerConversation.find_one({"session_id": session_id})
-        if conv:
+        if conv is not None:
             return conv
-
-        conv = CustomerConversation(
+        return CustomerConversation(
             session_id=session_id,
             tenant_id=tenant_id,
             agent_id=agent_id,
         )
-        await conv.insert()
-        return conv
 
     async def save_message(
         self,
@@ -33,6 +46,9 @@ class CustomerMessageRepository:
         agent_id: str,
         role: str,
         content: str,
+        customer_id: str | None = None,
+        customer_name: str | None = None,
+        customer_phone: str | None = None,
     ) -> CustomerMessage:
         token_count = estimate_tokens(content)
         msg = CustomerMessage(
@@ -43,10 +59,35 @@ class CustomerMessageRepository:
             content=content,
             token_count=token_count,
         )
-        await msg.insert()
 
-        await CustomerConversation.find({"session_id": session_id}).update(
-            {"$set": {"updated_at": datetime.utcnow()}}
+        now_utc = datetime.utcnow()
+        set_fields: dict[str, Any] = {"updated_at": now_utc}
+        if customer_id:
+            set_fields["customer_id"] = customer_id
+        if customer_name:
+            set_fields["customer_name"] = customer_name
+        if customer_phone:
+            set_fields["customer_phone"] = customer_phone
+
+        set_on_insert: dict[str, Any] = {
+            "tenant_id": tenant_id,
+            "agent_id": agent_id,
+            "status": "active",
+            "is_verified": False,
+            "created_at": now_utc,
+        }
+
+        # Concurrently persist message and upsert conversation document
+        await asyncio.gather(
+            msg.insert(),
+            CustomerConversation.get_pymongo_collection().update_one(
+                {"session_id": session_id},
+                {
+                    "$set": set_fields,
+                    "$setOnInsert": set_on_insert,
+                },
+                upsert=True,
+            ),
         )
         return msg
 
@@ -94,7 +135,12 @@ class CustomerMessageRepository:
             updates["customer_id"] = customer_id
         if customer_name:
             updates["customer_name"] = customer_name
-        await CustomerConversation.find({"session_id": session_id}).update({"$set": updates})
+        if customer_phone:
+            updates["customer_phone"] = customer_phone
+        await CustomerConversation.get_pymongo_collection().update_one(
+            {"session_id": session_id},
+            {"$set": updates},
+        )
 
     async def mark_conversation_verified(
         self,
@@ -112,4 +158,7 @@ class CustomerMessageRepository:
         if customer_id:
             updates["customer_id"] = customer_id
 
-        await CustomerConversation.find({"session_id": session_id}).update({"$set": updates})
+        await CustomerConversation.get_pymongo_collection().update_one(
+            {"session_id": session_id},
+            {"$set": updates},
+        )

@@ -1,24 +1,37 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
-from langgraph.prebuilt import create_react_agent
 from pydantic import SecretStr
 
 from agent_orchestrator.clients.redis_client import get_session_auth
+from agent_orchestrator.workflows.customer_agent.fast_path import (
+    format_deterministic_fast_path,
+)
+from agent_orchestrator.workflows.customer_agent.text_util import extract_text_content
 
 logger = logging.getLogger(__name__)
 
 _BOOKING_TOOLS = {
     "check_availability",
+    "hold_slot",
     "book_appointment",
     "cancel_appointment",
     "reschedule_appointment",
@@ -31,10 +44,11 @@ _BOOKING_TOOLS = {
 def _format_services_catalog(services: list[dict[str, Any]]) -> str:
     if not services:
         return "No services listed."
-    lines = [f"services[{len(services)}]{{id, name, staff_requirements}}:"]
+    lines = [f"services[{len(services)}]{{id, name, mode, staff_requirements}}:"]
     for s in services:
         sid = s.get("id") or s.get("service_id") or "unassigned"
         name = s.get("name") or "Unnamed"
+        mode = s.get("booking_mode") or "time_slot"
         reqs = s.get("resource_requirements") or s.get("requirements") or []
         staff_roles = []
         for r in reqs:
@@ -47,7 +61,7 @@ def _format_services_catalog(services: list[dict[str, Any]]) -> str:
                 else:
                     staff_roles.append(f"{role}")
         staff_str = f"staff: [{', '.join(staff_roles)}]" if staff_roles else "general service"
-        lines.append(f"  {sid} | {name} | {staff_str}")
+        lines.append(f"  {sid} | {name} | {mode} | {staff_str}")
     return "\n".join(lines)
 
 
@@ -80,17 +94,8 @@ def _get_gemini_model(temperature: float = 0.0, max_tokens: int = 4096) -> Any |
     )
 
 
-def _extract_response_text(result: dict[str, Any]) -> str:
-    final = result["messages"][-1]
-    if isinstance(final.content, str):
-        return final.content
-    if isinstance(final.content, list):
-        texts = [
-            item["text"] if isinstance(item, dict) and item.get("text") else str(item)
-            for item in final.content
-        ]
-        return "\n".join(texts)
-    return str(final.content)
+def _extract_content(msg: Any) -> str:
+    return extract_text_content(msg)
 
 
 def _get_chat_model(temperature: float = 0.0) -> Any:
@@ -151,23 +156,30 @@ Business Timezone: {biz_timezone}
 Operating Hours & Schedule:
 {formatted_hours}
 
-[Services Catalog (Compact TOON: id, name, staff_requirements)]
+[Services Catalog (Compact TOON: id, name, mode, staff_requirements)]
 {services_catalog}
 
 [Staff & Resources Catalog (Compact TOON: id, name, type, role)]
 {resources_catalog}
 
 [CRITICAL ANTI-HALLUCINATION & ANTI-PREMATURE BOOKING RULES — ZERO TOLERANCE]
-1. ZERO ASSUMPTIONS:
+1. ZERO ASSUMPTIONS & MANDATORY DAY/DATE DOUBLE-CONFIRMATION:
    - NEVER assume, guess, or auto-select a service. The customer MUST explicitly choose or name the service.
    - NEVER invent, guess, or assume an appointment date or time. Slots MUST be returned by `check_availability` and explicitly confirmed by the customer.
    - NEVER invent or hallucinate booking reference codes (e.g. `BK-...`). Only provide real references returned in tool outputs.
+   - MANDATORY DAY & DATE DOUBLE-CONFIRMATION:
+     Whenever offering time slots, asking about a date, or confirming a booking, ALWAYS state BOTH the day of the week AND the full date (e.g., "Monday, November 16, 2026 at 10:00 AM").
+     NEVER state just the time (e.g. "10:00 AM") or just the date without the day of week.
+     If the customer used relative terms like "next Monday", "tomorrow", or "this weekend", resolve the exact date using [Pre-Calculated Local Calendar Reference] and explicitly reflect both the day and date back to the customer:
+     (e.g., "I checked availability for Monday, November 16th — here are the available slots:...").
+     This double-confirmation guarantees the customer and agent are 100% aligned on the calendar day.
 2. STRICT BOOKING PREREQUISITES:
    - You are STRICTLY FORBIDDEN from invoking `book_appointment` unless ALL FOUR prerequisites are explicitly established:
      (1) Confirmed `service_id` chosen by the customer.
      (2) Confirmed appointment date and `start_time` selected from genuine availability.
      (3) Customer's full name.
      (4) Customer's valid mobile phone number.
+   - If the customer chooses or confirms a time slot but has not yet provided their full name and mobile phone number, you are STRICTLY FORBIDDEN from invoking `book_appointment` or supplying placeholder values (such as 'Customer', 'User', or dummy numbers). You must pause and prompt the customer for their missing name and phone number.
    - If the customer only asks "Can I book?" or only provides their contact details without having chosen a service or date/time:
      DO NOT call `book_appointment`! Acknowledge their details and guide them to Phase 1 (Service Selection) or Phase 2 (Time Slot Selection).
 3. OTP VERIFICATION & ATOMIC SINGLE-STEP EXECUTION:
@@ -183,7 +195,7 @@ Operating Hours & Schedule:
      You are STRICTLY FORBIDDEN from invoking `verify_booking_otp` when any booking, cancellation, rescheduling, or booking history request is in progress!
      Invoke `verify_booking_otp(phone=customer_phone, code=user_code, session_id=..., tenant_id=..., agent_id=...)` ONLY in the rare case of a "Pure Login / Verify First" request (e.g. if a customer explicitly says "Please verify my phone number first / log me in" and has NOT requested any specific booking action yet).
    - If any tool returns `status: "failed"` due to invalid code: inform the customer immediately and do NOT assume verification succeeded.
-4. EXACT TOOL NAMES: You must use the exact registered tool names without typos or extra characters (e.g. `check_availability`, `book_appointment`, `cancel_appointment`, `reschedule_appointment`, `get_customer_bookings`, `send_booking_otp`, `verify_booking_otp`).
+4. EXACT TOOL NAMES: You must use the exact registered tool names without typos or extra characters (e.g. `check_availability`, `hold_slot`, `book_appointment`, `cancel_appointment`, `reschedule_appointment`, `get_customer_bookings`, `send_booking_otp`, `verify_booking_otp`).
 5. SERVICE CHANGEOVER & SPECIALIST RE-BINDING (ZERO SPECIALIST CARRYOVER):
    - When a customer switches or changes the service they want (e.g. from 'Tire Puncture Repair' to 'Car Wash'):
      You MUST IMMEDIATELY CLEAR any previously selected specialist (e.g. Mithul GP)!
@@ -210,30 +222,62 @@ Phase 1 — Service Selection:
   Introduce or list the available services from [Services Catalog] and ask which one they would like.
 - If only one service exists, ask: "Would you like to book our [Service Name]?"
 
-Phase 2 — Date & Time Availability:
-- Once the service is determined, ask for their preferred day or time of day (morning, afternoon, evening).
-- Call `check_availability(service_id=..., start_date=..., tenant_id=..., agent_id=...)` using tenant_id and agent_id from [Active Request Context].
-- If no specific staff member was requested for this service, DO NOT pass `resource_id`. Let the system check all available slots.
-- Present the available slots in business timezone ({biz_timezone}).
-- Wait for the customer to confirm which specific time slot they prefer.
+Phase 2 — Date & Time Availability & Provisional Slot Hold:
+- Once the service is determined, check the service's `mode` from [Services Catalog]:
+
+  A. IF MODE IS "date_range" (e.g. Room / Accommodation Stay, Daily/Multi-Day Rental):
+     * NEVER ask for time of day (morning, afternoon, evening) or hour slots!
+     * MANDATORY STAY QUESTIONS:
+       1. Ask the customer for their Check-in date (arrival date).
+       2. Ask the customer how many days / nights they need (e.g. "How many nights will you be staying?" or "What is your check-out date?").
+     * When resolving relative days ("next Monday", "tomorrow"), look up the exact date from [Pre-Calculated Local Calendar Reference].
+     * Calculate or confirm the Check-out date (e.g. Check-in Sunday, Nov 22 for 2 nights = Check-out Tuesday, Nov 24).
+     * Call `check_availability(service_id=..., start_date=check_in_date, end_date=check_out_date, tenant_id=..., agent_id=...)`.
+     * Check if rooms/units are available. If available, call `hold_slot(tenant_id=..., agent_id=..., service_id=..., start_time=check_in_date + "T00:00:00Z", session_id=...)`.
+     * Inform the customer warmly of availability and total stay pricing (e.g. "We have AC Rooms available from Sunday, Nov 22 to Tuesday, Nov 24 (2 nights). The rate is 2500 INR/night, totaling 5000 INR. Would you like me to reserve this for you?").
+     * When executing `book_appointment`, pass `start_time` (check-in ISO) AND `end_time` (check-out ISO)!
+
+  B. IF MODE IS "time_slot" (e.g. Consultation, Haircut, Appointment, Clinic):
+     * Ask for their preferred day or time of day (morning, afternoon, evening).
+     * When resolving relative days ("next Monday", "tomorrow", "this Friday"), look up the exact date from [Pre-Calculated Local Calendar Reference].
+     * Call `check_availability(service_id=..., start_date=..., tenant_id=..., agent_id=...)` using tenant_id and agent_id from [Active Request Context].
+     * If no specific staff member was requested for this service, DO NOT pass `resource_id`. Let the system check all available slots.
+     * Present available slots using their explicit local time from `display` (e.g. "09:00 AM IST") along with Day of the Week and Date in business timezone ({biz_timezone}).
+     * PROVISIONAL SLOT LOCKING UPON SLOT SELECTION:
+       As soon as the customer selects, chooses, or expresses a clear preference for a specific time slot:
+       Pass the EXACT `start` ISO string returned by `check_availability` for that slot (e.g. '2026-11-16T09:00:00+05:30').
+       NEVER append 'Z' or manually alter the timezone offset!
+       Call `hold_slot(tenant_id=tenant_id, agent_id=agent_id, service_id=service_id, start_time=selected_slot_iso, session_id=session_id)`.
+       This provisionally locks the slot in Redis so no other user can take it while you collect their details or verify their phone!
+       Inform the customer warmly that the slot is temporarily held for them (e.g., "I've placed a temporary hold on Monday, Nov 16 at 09:00 AM IST for you while we confirm your details.").
+     * If the customer switches slots or changes their mind, calling `hold_slot` with the new slot will automatically release the previous hold in the background.
 
 Phase 3 — Customer Identification & Assignment:
 - If not already authenticated or collected, ask for the customer's full name and mobile phone number.
-- If the customer requested a specific staff member or specialist:
-  Check [Staff & Resources Catalog] and ensure they are a HUMAN STAFF member (`type: staff`) AND that they are eligible for the chosen service.
-  If eligible, pass their `resource_id` to `check_availability` and `book_appointment`.
-  If they are NOT eligible for that service (or if they are a physical bay/room):
-  Politely explain that they are not assigned to this service, and offer the eligible staff specialist (e.g. "Arun GP handles Car Wash") or proceed without a specific specialist preference.
+- Resource / Staff / Unit Selection:
+  * Check [Staff & Resources Catalog] and ensure the selected staff or physical unit is eligible for the chosen service.
+  * If the service requires staff or specific physical resources (e.g. room, VIP card, equipment):
+    - When the customer expresses a preference (e.g. "Blue VIP Card", "Room 301", "Stylist John"):
+      Pass their ID in `resource_id` (or in `resource_ids` if multiple resources are selected) to `check_availability`, `hold_slot`, and `book_appointment`.
+    - If multiple resource requirements are specified for a service (e.g. Room + VIP card):
+      Pass all selected resource IDs in `resource_ids: [id1, id2, ...]` to `check_availability`, `hold_slot`, and `book_appointment`.
+  * If a requested specialist or resource is NOT eligible for that service, politely explain and offer the eligible options.
 
 Phase 4 — Execution & Security Verification:
 - Always pass the `session_id`, `tenant_id`, and `agent_id` from [Active Request Context] into `book_appointment`.
 - If `book_appointment` returns `status: "requires_verification"`:
   Immediately call `send_booking_otp(phone=customer_phone, session_id=session_id, tenant_id=..., agent_id=...)` and ask the customer to reply with the 6-digit code.
 - ATOMIC CONFIRMATION UPON RECEIVING CODE:
-  Once the customer provides the 6-digit code, immediately re-invoke `book_appointment` with `otp_code="<6-digit code>"`! This verifies the code and confirms the booking in a single atomic call.
+  Once the customer provides the 6-digit code, immediately re-invoke `book_appointment` with `otp_code="<6-digit code>"`! This verifies the code, claims the held slot, and confirms the booking in a single atomic call.
 - If `book_appointment` returns `status: "failed"`:
-  Politely explain the issue. If the OTP code was invalid, ask them to re-check the code. If the session was already verified and a system error occurred, re-execute `book_appointment` without re-verifying.
-- Once confirmed: share the booking reference code and present the appointment date and time in the customer's local business timezone using `start_time_local`.
+  * RESOURCE / SLOT CONFLICT (ALREADY BOOKED):
+    If the error indicates that a resource, card, or time slot is already booked or conflicting (e.g. "already booked for this time slot", "ALREADY_EXISTS", "Conflict"):
+    DO NOT retry calling `book_appointment` with the exact same conflicting parameters!
+    Immediately inform the customer politely that their requested resource or slot (e.g. "Blue VIP Card" or room) is already booked for those dates.
+    Offer available alternatives (e.g. "The Blue VIP Card is currently booked for Nov 18–20. Would you like to reserve with the Pink VIP Card instead, or consider different dates?").
+  * If the OTP code was invalid, ask them to re-check the code.
+  * If the session was already verified and an unexpected transient network error occurred, re-execute `book_appointment` without re-verifying.
+- Once confirmed: share the booking reference code and present the appointment date and time in the customer's local business timezone using `start_time_local` with full double-confirmation of Day of the Week, Date, and Time (e.g. "Your booking is confirmed for Monday, Nov 16, 2026 at 10:00 AM IST").
 
 [Scheduling Engine Rules]
 1. Minimum Lead Time: Slots can only be booked at least {lead_time_hours} hours from current time. Never offer slots earlier than this lead time.
@@ -243,7 +287,7 @@ Phase 4 — Execution & Security Verification:
 [Two-Layer Verification Rules (Strict Security)]
 1. Cancellation & Reschedule: ALWAYS requires phone verification via OTP to protect appointments against unauthorized cancellation or tampering.
 2. Viewing Booking History: ALWAYS requires phone verification via OTP before disclosing past or pending appointments.
-3. New Bookings: {"Requires OTP verification before confirmation." if require_otp_new else "Direct booking permitted unless the specific service requires deposit/verification."}
+3. New Bookings: {"Requires OTP verification before confirmation." if require_otp_new else "Direct booking permitted unless the specific service requires verification."}
 4. OTP Protocol:
    - When verification is required (or when a tool returns `requires_verification`):
      Call `send_booking_otp(phone=customer_phone, session_id=session_id, tenant_id=..., agent_id=...)`.
@@ -268,11 +312,24 @@ Phase 4 — Execution & Security Verification:
    - Available services and staff are listed in [Services Catalog] and [Staff & Resources Catalog] above.
    - Answer questions about available services, pricing, or specialists directly from these catalogs without invoking tools, and guide the customer to choose a service or appointment time.
    - If the customer asks detailed questions about business policies, procedures, or in-depth descriptions, address their scheduling needs directly.
-2. Checking Existing Bookings:
+2. Checking Existing Bookings & Full Details:
    - Ask for customer's phone number if not yet known.
    - Call `get_customer_bookings(phone=customer_phone, session_id=..., tenant_id=..., agent_id=...)`.
    - If the tool returns `status: "requires_verification"`, call `send_booking_otp`. Once the user shares their 6-digit code, immediately re-invoke `get_customer_bookings(..., otp_code=user_code)`!
-   - Display ONLY real appointments returned by `get_customer_bookings`. ALWAYS present appointment dates and times using the pre-calculated `start_time_local` (e.g. "03 Nov 2026, 03:00 PM IST"). NEVER display raw UTC strings (ending in 'Z') as the customer's local appointment time!
+   - PRESENTING BOOKING DETAILS (Zero Lazy 1-Liners):
+     When the customer asks to see their bookings, view details, or asks "give me full details":
+     NEVER output a lazy 1-line reference and stop!
+     Provide a clear, detailed, and beautifully structured booking card using the enriched fields returned by `get_customer_bookings`:
+     * 📋 **Booking Reference**: `<booking_reference>` (Status: `<status>`)
+     * 🏷️ **Service**: `<service_name>`
+     * 📅 **Schedule / Stay Dates**:
+       - For date_range: Check-in: `<start_time_local>` — Check-out: `<end_time_local>` (`<stay_duration>`)
+       - For time_slot: `<start_time_local>`
+     * 🚪 **Assigned Unit / Specialist**: `<resource_name>`
+     * 💰 **Pricing**: `<price.amount> <price.currency>`
+     * 👤 **Customer**: `<customer_name>` (`<customer_phone>`)
+     * 📝 **Special Notes**: `<notes>` (only if provided)
+     Then offer next steps warmly: "Would you like to modify, reschedule, or cancel this booking?"
 3. Cancellation:
    - Ask for booking reference and customer's phone number.
    - Pass `session_id` and `customer_phone` into `cancel_appointment`.
@@ -289,9 +346,36 @@ def _build_booking_request_context(
     agent_id: str,
     session_id: str = "",
     session_auth: dict[str, Any] | None = None,
+    biz_timezone: str = "UTC",
 ) -> str:
+    try:
+        tz = ZoneInfo(biz_timezone)
+    except Exception:
+        tz = ZoneInfo("UTC")
 
-    now_iso = datetime.now(UTC).strftime("%A, %Y-%m-%d %H:%M:%S UTC")
+    now_utc = datetime.now(UTC)
+    now_local = now_utc.astimezone(tz)
+    local_time_str = now_local.strftime("%A, %Y-%m-%d %I:%M %p") + f" ({biz_timezone})"
+    utc_time_str = now_utc.strftime("%A, %Y-%m-%d %H:%M:%S UTC")
+
+    calendar_lines: list[str] = []
+    for day_offset in range(14):
+        target_date = now_local + timedelta(days=day_offset)
+        iso_date = target_date.strftime("%Y-%m-%d")
+        day_name = target_date.strftime("%A")
+        if day_offset == 0:
+            label = f"Today ({day_name})"
+        elif day_offset == 1:
+            label = f"Tomorrow ({day_name})"
+        elif day_offset < 7:
+            label = f"This Coming {day_name}"
+        elif day_offset == 7:
+            label = f"Next {day_name} (in 7 days)"
+        else:
+            label = f"Next Week {day_name}"
+        calendar_lines.append(f"  - {label}: {iso_date}")
+
+    calendar_block = "\n".join(calendar_lines)
 
     session_auth_block = ""
     if session_auth and session_auth.get("is_verified"):
@@ -310,11 +394,146 @@ Instructions for Authenticated Customer:
 """
 
     return f"""[Active Request Context]
-Current UTC Time: {now_iso}
+Current Business Local Time: {local_time_str}
+Current UTC Time: {utc_time_str}
+Business Timezone: {biz_timezone}
 Tenant ID: {tenant_id}
 Agent ID: {agent_id}
 Session ID: {session_id}
+
+[Pre-Calculated Local Calendar Reference (Zero-Hallucination Anchor — ALWAYS use these exact dates)]
+{calendar_block}
 {session_auth_block}""".rstrip()
+
+
+async def _execute_booking_turn(
+    model: Any,
+    booking_tools: list[BaseTool],
+    system_prompt: str,
+    langchain_msgs: list[BaseMessage],
+    biz_context: dict[str, Any],
+    tenant_id: str,
+    agent_id: str,
+    session_id: str,
+    max_steps: int = 10,
+    config: RunnableConfig | None = None,
+) -> str:
+    model_with_tools = model.bind_tools(booking_tools)
+    tool_map = {t.name: t for t in booking_tools}
+
+    messages: list[BaseMessage] = [SystemMessage(content=system_prompt), *langchain_msgs]
+    current_turn_ai_messages: list[AIMessage] = []
+
+    for step in range(max_steps):
+        ai_msg = await model_with_tools.ainvoke(messages, config=config)
+        messages.append(ai_msg)
+        if isinstance(ai_msg, AIMessage):
+            current_turn_ai_messages.append(ai_msg)
+
+        tool_calls = getattr(ai_msg, "tool_calls", None)
+        if not tool_calls:
+            content = _extract_content(ai_msg)
+            if content.strip():
+                return content
+            break
+
+        for tool_call in tool_calls:
+            tool_name = tool_call["name"]
+            tool_args = tool_call.get("args") or {}
+            tool = tool_map.get(tool_name)
+
+            if not tool:
+                logger.error(
+                    "[BookingAgent] Tool '%s' requested by model but not found in tools", tool_name
+                )
+                raw_output_str = json.dumps(
+                    {"status": "error", "message": f"Tool '{tool_name}' not available."}
+                )
+            else:
+                logger.info(
+                    "[BookingAgent] Executing tool '%s' (step %d) with args: %s",
+                    tool_name,
+                    step + 1,
+                    tool_args,
+                )
+                try:
+                    raw_output = await tool.ainvoke(tool_args, config=config)
+                    raw_output_str = str(raw_output)
+                except Exception as t_err:
+                    logger.error("[BookingAgent] Tool '%s' raised exception: %s", tool_name, t_err)
+                    raw_output_str = json.dumps({"status": "error", "error": str(t_err)})
+
+            _VERIFICATION_TOOLS = {
+                "book_appointment",
+                "cancel_appointment",
+                "reschedule_appointment",
+                "get_customer_bookings",
+            }
+            if tool_name in _VERIFICATION_TOOLS:
+                try:
+                    parsed_out = json.loads(raw_output_str)
+                    if parsed_out.get("status") == "requires_verification":
+                        phone_to_verify = (
+                            parsed_out.get("phone")
+                            or tool_args.get("customer_phone")
+                            or tool_args.get("phone")
+                        )
+                        if phone_to_verify:
+                            otp_tool = tool_map.get("send_booking_otp")
+                            if otp_tool:
+                                logger.info(
+                                    "[BookingAgent:FastPath] %s requires verification -> auto-dispatching OTP for %s",
+                                    tool_name,
+                                    phone_to_verify,
+                                )
+                                await otp_tool.ainvoke(
+                                    {
+                                        "tenant_id": tenant_id,
+                                        "agent_id": agent_id,
+                                        "phone": phone_to_verify,
+                                        "session_id": session_id,
+                                    },
+                                    config=config,
+                                )
+                                raw_output_str = json.dumps(
+                                    {
+                                        "status": "sent",
+                                        "phone": phone_to_verify,
+                                    }
+                                )
+                                tool_name = "send_booking_otp"
+                except Exception as ex:
+                    logger.warning("[BookingAgent] Auto-dispatch OTP check exception: %s", ex)
+
+            fast_path_text = format_deterministic_fast_path(tool_name, raw_output_str, biz_context)
+            if fast_path_text:
+                logger.info(
+                    "[BookingAgent:FastPath] Intercepted '%s' with deterministic template (<5ms bypass)",
+                    tool_name,
+                )
+                return fast_path_text
+
+            tool_msg = ToolMessage(
+                content=raw_output_str,
+                tool_call_id=tool_call.get("id", f"call_{step}_{tool_name}"),
+                name=tool_name,
+            )
+            messages.append(tool_msg)
+
+    for msg in reversed(current_turn_ai_messages):
+        content = _extract_content(msg)
+        if content.strip():
+            return content
+
+    try:
+        final_synth_msg = await model.ainvoke(messages, config=config)
+        final_content = _extract_content(final_synth_msg)
+        if final_content.strip():
+            return final_content
+    except Exception as e:
+        logger.warning("[BookingAgent] Final summary ainvoke failed: %s", e)
+
+    return "I have processed your request. Could you please confirm your preferred time or details so we can complete your booking?"
 
 
 async def run_booking_agent(
@@ -325,6 +544,7 @@ async def run_booking_agent(
     biz_context: dict[str, Any],
     all_tools: list[BaseTool],
     session_id: str = "",
+    config: RunnableConfig | None = None,
 ) -> str:
     booking_tools = [t for t in all_tools if t.name in _BOOKING_TOOLS]
 
@@ -346,27 +566,32 @@ async def run_booking_agent(
             logger.warning("[BookingAgent] Error retrieving session auth: %s", e)
 
     system_prompt = _build_booking_system_prompt(biz_context)
+    biz_timezone = biz_context.get("timezone") or "UTC"
 
     dynamic_context = _build_booking_request_context(
         tenant_id=tenant_id,
         agent_id=agent_id,
         session_id=session_id,
         session_auth=session_auth,
+        biz_timezone=biz_timezone,
     )
     current_human_msg = HumanMessage(content=f"{message}\n\n{dynamic_context}")
     langchain_msgs: list[BaseMessage] = [*prior_history, current_human_msg]
 
     model = _get_chat_model(temperature=0.0)
 
-    agent = create_react_agent(
-        model=model,
-        tools=booking_tools,
-        prompt=SystemMessage(content=system_prompt),
-    )
-
     try:
-        result = await agent.ainvoke({"messages": langchain_msgs})
-        return _extract_response_text(result)
+        return await _execute_booking_turn(
+            model=model,
+            booking_tools=booking_tools,
+            system_prompt=system_prompt,
+            langchain_msgs=langchain_msgs,
+            biz_context=biz_context,
+            tenant_id=tenant_id,
+            agent_id=agent_id,
+            session_id=session_id,
+            config=config,
+        )
     except Exception as e:
         logger.warning(
             "[BookingAgent] Primary model (%s) failed: %s. Attempting fallback to Gemini...",
@@ -380,14 +605,17 @@ async def run_booking_agent(
                     "[BookingAgent] Retrying with Gemini fallback (%s)...",
                     getattr(gemini_model, "model", "gemini"),
                 )
-                fallback_agent = create_react_agent(
+                return await _execute_booking_turn(
                     model=gemini_model,
-                    tools=booking_tools,
-                    prompt=SystemMessage(content=system_prompt),
+                    booking_tools=booking_tools,
+                    system_prompt=system_prompt,
+                    langchain_msgs=langchain_msgs,
+                    biz_context=biz_context,
+                    tenant_id=tenant_id,
+                    agent_id=agent_id,
+                    session_id=session_id,
+                    config=config,
                 )
-                result = await fallback_agent.ainvoke({"messages": langchain_msgs})
-                logger.info("[BookingAgent] Successfully recovered using Gemini fallback!")
-                return _extract_response_text(result)
             except Exception as fb_err:
                 logger.error(
                     "[BookingAgent] Gemini fallback also failed: %s", fb_err, exc_info=True

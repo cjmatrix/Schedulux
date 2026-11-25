@@ -1,0 +1,14 @@
+{
+  "name": "@schedulux/loadtests",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Enterprise-grade k6 load testing suite for Schedulux microservices",
+  "scripts": {
+    "test:core:ramp": "node run.js core:ramp",
+    "test:core:spike": "node run.js core:spike",
+    "test:chat:mocked": "node run.js chat:mocked",
+    "test:chat:live": "node run.js chat:live",
+    "test:core:quick": "node run.js core:ramp --duration 15s",
+    "test:chat:quick": "node run.js chat:mocked --duration 15s"
+  }
+}

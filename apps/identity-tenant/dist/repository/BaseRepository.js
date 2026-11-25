@@ -1,11 +1,14 @@
 export class BaseRepository {
     model;
-    constructor(model) {
+    unitOfWork;
+    constructor(model, unitOfWork) {
         this.model = model;
+        this.unitOfWork = unitOfWork;
     }
     async create(item) {
+        const session = this.unitOfWork?.getSession();
         const newEntity = new this.model(item);
-        return (await newEntity.save());
+        return (await newEntity.save({ session }));
     }
     async findById(id) {
         return await this.model.findById(id).exec();
@@ -17,10 +20,14 @@ export class BaseRepository {
         return await this.model.find(filter).exec();
     }
     async update(id, item) {
-        return await this.model.findByIdAndUpdate(id, item, { returnDocument: 'after' }).exec();
+        const session = this.unitOfWork?.getSession();
+        return await this.model
+            .findByIdAndUpdate(id, item, { returnDocument: 'after', session })
+            .exec();
     }
     async delete(id) {
-        const result = await this.model.findByIdAndDelete(id).exec();
+        const session = this.unitOfWork?.getSession();
+        const result = await this.model.findByIdAndDelete(id, { session }).exec();
         return result !== null;
     }
 }

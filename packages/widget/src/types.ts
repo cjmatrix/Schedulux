@@ -36,6 +36,7 @@ export interface WidgetConfig {
 
 export interface WidgetChatMessage {
   id?: string;
+  client_id?: string;
   role: 'user' | 'agent' | 'system';
   content: string;
   created_at?: string;

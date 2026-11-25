@@ -6,12 +6,12 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Download,
   Loader2,
   RefreshCw,
   Search,
 } from 'lucide-react';
 import { useState } from 'react';
+import { ConfirmationModal } from '../../../components/ConfirmationModal.js';
 import useDebounceHook from '../../../shared/hooks/useDebounceHook';
 import { useSuperAdminTenants, useSuspendTenant } from '../hooks/useSuperAdmin';
 
@@ -49,6 +49,11 @@ export default function TenantListPage() {
   const [debouncedSearch] = useDebounceHook(searchTerm);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [tierFilter, setTierFilter] = useState<string>('all tiers');
+  const [actionTenant, setActionTenant] = useState<{
+    id: string;
+    name: string;
+    type: 'suspend' | 'reactivate';
+  } | null>(null);
 
   const suspendTenantMutation = useSuspendTenant();
 
@@ -56,7 +61,7 @@ export default function TenantListPage() {
     data: tenantsData,
     isLoading,
     isError,
-    refetch,
+    refetch: refetchTenants,
   } = useSuperAdminTenants(
     page,
     limit,
@@ -68,6 +73,11 @@ export default function TenantListPage() {
   const rawTenants = tenantsData?.data?.tenants ?? [];
   const totalCount = tenantsData?.data?.total_count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / limit));
+  const stats = tenantsData?.data?.stats;
+
+  const handleSync = () => {
+    void refetchTenants();
+  };
 
   return (
     <div className="flex flex-col min-h-full bg-[#111111] font-sans text-slate-300 p-8">
@@ -75,13 +85,10 @@ export default function TenantListPage() {
         <div>
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-3xl font-semibold text-white tracking-tight">Service Owners</h1>
-            <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-800/80 text-slate-400 border border-slate-700/50">
-              v2.4.12-prod
-            </span>
           </div>
           <p className="text-sm text-slate-400 max-w-xl leading-relaxed">
-            Manage tenants, impersonate sessions, and monitor tenant quota ceilings across runtime
-            clusters.
+            Manage tenants, view active plan tiers, and control workspace status across the
+            platform.
           </p>
         </div>
 
@@ -132,7 +139,7 @@ export default function TenantListPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="bg-[#18181b] border border-slate-800/80 rounded-lg p-5 flex flex-col justify-between">
           <div className="flex justify-between items-start mb-4">
             <span className="text-xs font-medium text-slate-400 tracking-wider uppercase">
@@ -141,19 +148,35 @@ export default function TenantListPage() {
             <Building2 className="w-4 h-4 text-indigo-400" />
           </div>
           <div className="flex items-end justify-between">
-            <span className="text-4xl font-light text-white">{tenantsData?.data.total_count}</span>
+            <span className="text-3xl font-light text-white">{stats?.total ?? totalCount}</span>
           </div>
         </div>
 
         <div className="bg-[#18181b] border border-slate-800/80 rounded-lg p-5 flex flex-col justify-between">
           <div className="flex justify-between items-start mb-4">
             <span className="text-xs font-medium text-slate-400 tracking-wider uppercase">
-              Suspended / At Limit
+              Active Tenants
             </span>
-            <AlertTriangle className="w-4 h-4 text-rose-400" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="flex items-end justify-between">
-            <span className="text-4xl font-light text-rose-400">4</span>
+            <span className="text-3xl font-light text-emerald-400">
+              {stats?.active ?? rawTenants.filter((t) => t.status === 'active').length}
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-[#18181b] border border-slate-800/80 rounded-lg p-5 flex flex-col justify-between">
+          <div className="flex justify-between items-start mb-4">
+            <span className="text-xs font-medium text-slate-400 tracking-wider uppercase">
+              Suspended
+            </span>
+            <Ban className="w-4 h-4 text-rose-400" />
+          </div>
+          <div className="flex items-end justify-between">
+            <span className="text-3xl font-light text-rose-400">
+              {stats?.suspended ?? rawTenants.filter((t) => t.status === 'suspended').length}
+            </span>
           </div>
         </div>
       </div>
@@ -165,15 +188,12 @@ export default function TenantListPage() {
               Tenant Fleet Roster
             </h2>
             <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800/60 text-slate-400 border border-slate-700/50">
-              Cluster: us-east-1a
+              {totalCount} {totalCount === 1 ? 'Tenant' : 'Tenants'}
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1a1a1a] border border-slate-700 rounded text-[11px] font-medium text-slate-300 hover:bg-slate-800 transition-colors">
-              <Download className="w-3.5 h-3.5" /> Export CSV
-            </button>
             <button
-              onClick={() => refetch()}
+              onClick={handleSync}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1a1a1a] border border-slate-700 rounded text-[11px] font-medium text-slate-300 hover:bg-slate-800 transition-colors"
             >
               <RefreshCw className="w-3.5 h-3.5" /> Sync
@@ -204,7 +224,7 @@ export default function TenantListPage() {
                   </th>
                   <th className="px-5 py-3 font-semibold uppercase tracking-wider">Plan Tier</th>
                   <th className="px-5 py-3 font-semibold uppercase tracking-wider">
-                    AI Usage (30D)
+                    Weekly Tokens
                   </th>
                   <th className="px-5 py-3 font-semibold uppercase tracking-wider">Status</th>
                   <th className="px-5 py-3 font-semibold uppercase tracking-wider text-right">
@@ -213,20 +233,13 @@ export default function TenantListPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
-                {rawTenants.map((tenant, index) => {
+                {rawTenants.map((tenant) => {
                   const statusInfo =
                     STATUS_CONFIG[tenant.status.toLowerCase()] ?? STATUS_CONFIG.pending;
                   const tierStyle = TIER_COLOR[tenant.tier] ?? TIER_COLOR.Starter;
-
-                  const isEnterprise = tenant.tier.toLowerCase() === 'enterprise';
-                  const usageRatio = isEnterprise ? 60 : index % 2 === 0 ? 85 : 42;
-                  const usageText = isEnterprise
-                    ? '6.1k / 10k'
-                    : index % 2 === 0
-                      ? '850 / 1k'
-                      : '420 / 1k';
-                  const usageColor = usageRatio > 80 ? 'bg-orange-400' : 'bg-emerald-500';
-                  const usageMsg = usageRatio > 80 ? 'Approaching limit' : 'Optimal capacity';
+                  const isUnlimited = tenant.weekly_token_limit === -1;
+                  const remaining = tenant.weekly_token_remaining ?? tenant.weekly_token_limit ?? 0;
+                  const limit = tenant.weekly_token_limit ?? 0;
 
                   return (
                     <tr
@@ -251,11 +264,7 @@ export default function TenantListPage() {
                       </td>
 
                       <td className="px-5 py-3.5">
-                        <span className="block text-slate-300 mb-1">{tenant.contact_email}</span>
-                        <div className="flex items-center gap-1 text-[10px] text-emerald-500">
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>Verified 2FA</span>
-                        </div>
+                        <span className="text-slate-300">{tenant.contact_email}</span>
                       </td>
 
                       <td className="px-5 py-3.5">
@@ -266,22 +275,27 @@ export default function TenantListPage() {
                         </span>
                       </td>
 
-                      {/* AI Usage */}
+                      {/* Weekly Tokens (Limit / Remaining) */}
                       <td className="px-5 py-3.5">
-                        <div className="flex items-center justify-between text-[10px] mb-1.5">
-                          <span className="text-slate-300 font-medium">{usageText}</span>
-                          <span
-                            className={`${usageRatio > 80 ? 'text-orange-400' : 'text-emerald-500'}`}
-                          >
-                            {usageMsg}
-                          </span>
-                        </div>
-                        <div className="w-48 h-1 bg-slate-800 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full ${usageColor} rounded-full`}
-                            style={{ width: `${usageRatio}%` }}
-                          />
-                        </div>
+                        {isUnlimited ? (
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="font-mono text-xs font-medium text-emerald-400">
+                              Unlimited
+                            </span>
+                            <span className="text-[10px] text-slate-500">
+                              ({(tenant.weekly_token_usage ?? 0).toLocaleString()} used)
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="font-mono text-xs font-medium text-slate-200">
+                              {remaining.toLocaleString()}
+                            </span>
+                            <span className="text-[10px] text-slate-500">
+                              / {limit.toLocaleString()} left
+                            </span>
+                          </div>
+                        )}
                       </td>
 
                       <td className="px-5 py-3.5">
@@ -291,27 +305,20 @@ export default function TenantListPage() {
                             {statusInfo.label}
                           </span>
                         </div>
-                        {tenant.status === 'suspended' && (
-                          <span className="block text-[10px] text-rose-500/70 mt-0.5 ml-3.5">
-                            (Limit Exceeded)
-                          </span>
-                        )}
                       </td>
 
                       <td className="px-5 py-3.5 text-right">
                         {tenant.status === 'active' ? (
                           <button
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  `Are you sure you want to suspend tenant "${tenant.business_name}"?`,
-                                )
-                              ) {
-                                suspendTenantMutation.mutate(tenant.tenant_id);
-                              }
-                            }}
+                            onClick={() =>
+                              setActionTenant({
+                                id: tenant.tenant_id,
+                                name: tenant.business_name,
+                                type: 'suspend',
+                              })
+                            }
                             disabled={suspendTenantMutation.isPending}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-rose-300 hover:text-white bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/50 rounded transition-colors disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-rose-300 hover:text-white bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/50 rounded transition-colors disabled:opacity-50 cursor-pointer"
                           >
                             {suspendTenantMutation.isPending &&
                             suspendTenantMutation.variables === tenant.tenant_id ? (
@@ -323,17 +330,15 @@ export default function TenantListPage() {
                           </button>
                         ) : tenant.status === 'suspended' ? (
                           <button
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  `Are you sure you want to reactivate tenant "${tenant.business_name}"?`,
-                                )
-                              ) {
-                                suspendTenantMutation.mutate(tenant.tenant_id);
-                              }
-                            }}
+                            onClick={() =>
+                              setActionTenant({
+                                id: tenant.tenant_id,
+                                name: tenant.business_name,
+                                type: 'reactivate',
+                              })
+                            }
                             disabled={suspendTenantMutation.isPending}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-emerald-300 hover:text-white bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/50 rounded transition-colors disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-emerald-300 hover:text-white bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/50 rounded transition-colors disabled:opacity-50 cursor-pointer"
                           >
                             {suspendTenantMutation.isPending &&
                             suspendTenantMutation.variables === tenant.tenant_id ? (
@@ -387,6 +392,38 @@ export default function TenantListPage() {
           </div>
         </div>
       </div>
+
+      {/* Confirmation Modal for Suspend / Reactivate */}
+      <ConfirmationModal
+        isOpen={Boolean(actionTenant)}
+        onClose={() => setActionTenant(null)}
+        onConfirm={() => {
+          if (actionTenant) {
+            suspendTenantMutation.mutate(actionTenant.id, {
+              onSuccess: () => setActionTenant(null),
+            });
+          }
+        }}
+        title={actionTenant?.type === 'suspend' ? 'Suspend Tenant?' : 'Reactivate Tenant?'}
+        description={
+          actionTenant?.type === 'suspend' ? (
+            <span>
+              Are you sure you want to suspend tenant{' '}
+              <strong className="text-slate-800">{actionTenant.name}</strong>? Their autonomous
+              agents and API access will be temporarily halted.
+            </span>
+          ) : (
+            <span>
+              Are you sure you want to reactivate tenant{' '}
+              <strong className="text-slate-800">{actionTenant?.name}</strong>? Their autonomous
+              agents and API access will be restored.
+            </span>
+          )
+        }
+        variant={actionTenant?.type === 'suspend' ? 'warn' : 'confirm'}
+        confirmText={actionTenant?.type === 'suspend' ? 'Suspend Tenant' : 'Reactivate'}
+        isLoading={suspendTenantMutation.isPending}
+      />
     </div>
   );
 }

@@ -244,12 +244,64 @@ export function useAgentOnboarding({
         };
       });
 
-      try {
-        const res = await onboardingApi.sendMessage({
-          tenant_id: tenantId,
-          agent_id: agentId,
-          user_answer: userMsg,
+      const streamAgentId = 'agent-' + Date.now();
+
+      const appendToken = (delta: string) => {
+        if (!delta) return;
+
+        queryClient.setQueryData<InfiniteData<MessagesPage, string | undefined>>(queryKey, (old) => {
+          if (!old || old.pages.length === 0) {
+            return {
+              pages: [
+                {
+                  messages: [{ id: streamAgentId, role: 'agent', text: delta }],
+                  next_cursor: null,
+                  has_more: false,
+                },
+              ],
+              pageParams: [undefined],
+            };
+          }
+
+          const lastIdx = old.pages.length - 1;
+          const lastPage = old.pages[lastIdx];
+          const existingIdx = lastPage.messages.findIndex((m) => m.id === streamAgentId);
+
+          let updatedMessages: Message[];
+          if (existingIdx >= 0) {
+            updatedMessages = [...lastPage.messages];
+            updatedMessages[existingIdx] = {
+              ...updatedMessages[existingIdx],
+              text: (updatedMessages[existingIdx].text || '') + delta,
+            };
+          } else {
+            updatedMessages = [
+              ...lastPage.messages,
+              { id: streamAgentId, role: 'agent', text: delta },
+            ];
+          }
+
+          const updatedPages = [...old.pages];
+          updatedPages[lastIdx] = {
+            ...lastPage,
+            messages: updatedMessages,
+          };
+          return {
+            ...old,
+            pages: updatedPages,
+          };
         });
+      };
+
+      try {
+        const res = await onboardingApi.sendMessageStream(
+          {
+            tenant_id: tenantId,
+            agent_id: agentId,
+            user_answer: userMsg,
+          },
+          appendToken,
+        );
 
         const resData = res.data;
         if (resData?.draft_schema) {
@@ -286,20 +338,36 @@ export function useAgentOnboarding({
             : '');
 
         if (agentReplyText) {
-          const agentReply: Message = {
-            id: 'agent-' + Date.now(),
-            role: 'agent',
-            text: agentReplyText,
-          };
           queryClient.setQueryData<InfiniteData<MessagesPage, string | undefined>>(
             queryKey,
             (old) => {
               if (!old || old.pages.length === 0) return old;
               const lastIdx = old.pages.length - 1;
+              const lastPage = old.pages[lastIdx];
+              const existingIdx = lastPage.messages.findIndex((m) => m.id === streamAgentId);
+
+              let updatedMessages: Message[];
+              if (existingIdx >= 0) {
+                updatedMessages = [...lastPage.messages];
+                updatedMessages[existingIdx] = {
+                  ...updatedMessages[existingIdx],
+                  text: agentReplyText,
+                };
+              } else {
+                updatedMessages = [
+                  ...lastPage.messages,
+                  {
+                    id: streamAgentId,
+                    role: 'agent',
+                    text: agentReplyText,
+                  },
+                ];
+              }
+
               const updatedPages = [...old.pages];
               updatedPages[lastIdx] = {
-                ...old.pages[lastIdx],
-                messages: [...old.pages[lastIdx].messages, agentReply],
+                ...lastPage,
+                messages: updatedMessages,
               };
               return {
                 ...old,
@@ -324,10 +392,13 @@ export function useAgentOnboarding({
           (old) => {
             if (!old || old.pages.length === 0) return old;
             const lastIdx = old.pages.length - 1;
+            const lastPage = old.pages[lastIdx];
+            // Filter out any partial stream message if failed
+            const cleanedMessages = lastPage.messages.filter((m) => m.id !== streamAgentId);
             const updatedPages = [...old.pages];
             updatedPages[lastIdx] = {
-              ...old.pages[lastIdx],
-              messages: [...old.pages[lastIdx].messages, errorMessage],
+              ...lastPage,
+              messages: [...cleanedMessages, errorMessage],
             };
             return {
               ...old,

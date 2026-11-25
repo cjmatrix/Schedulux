@@ -1,11 +1,16 @@
 import { Model, UpdateQuery } from 'mongoose';
+import type { IUnitOfWork } from '../interfaces/IUnitOfWork.js';
 
 export abstract class BaseRepository<T> {
-  protected constructor(protected readonly model: Model<T>) {}
+  protected constructor(
+    protected readonly model: Model<T>,
+    protected readonly unitOfWork?: IUnitOfWork,
+  ) {}
 
   async create(item: Partial<T>): Promise<T> {
+    const session = this.unitOfWork?.getSession();
     const newEntity = new this.model(item);
-    return (await newEntity.save()) as unknown as T;
+    return (await newEntity.save({ session })) as unknown as T;
   }
 
   async findById(id: string): Promise<T | null> {
@@ -21,11 +26,15 @@ export abstract class BaseRepository<T> {
   }
 
   async update(id: string, item: UpdateQuery<T>): Promise<T | null> {
-    return await this.model.findByIdAndUpdate(id, item, { returnDocument: 'after' }).exec();
+    const session = this.unitOfWork?.getSession();
+    return await this.model
+      .findByIdAndUpdate(id, item, { returnDocument: 'after', session })
+      .exec();
   }
 
   async delete(id: string): Promise<boolean> {
-    const result = await this.model.findByIdAndDelete(id).exec();
+    const session = this.unitOfWork?.getSession();
+    const result = await this.model.findByIdAndDelete(id, { session }).exec();
     return result !== null;
   }
 }

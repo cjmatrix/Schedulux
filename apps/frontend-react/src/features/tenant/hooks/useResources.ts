@@ -15,10 +15,11 @@ export const RESOURCE_KEYS = {
   detail: (id: string) => ['scheduling-resource', id] as const,
 };
 
-export function useResourcesList(params?: ListResourcesParams) {
+export function useResourcesList(params?: ListResourcesParams, options?: { enabled?: boolean }) {
   return useQuery<ListResourcesResponseData, Error>({
     queryKey: RESOURCE_KEYS.list(params),
     queryFn: () => resourcesApi.listResources(params),
+    enabled: options?.enabled !== undefined ? options.enabled : Boolean(params?.agent_id),
     staleTime: 30 * 1000,
   });
 }

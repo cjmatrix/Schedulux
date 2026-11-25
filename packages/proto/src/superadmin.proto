@@ -54,3 +54,136 @@ message GetProfileRequest {
 message GetProfileResponse {
   SuperAdminInfo superAdmin = 1;
 }
+
+service SuperAdminDashboardService {
+  rpc GetSuperAdminOverview (SuperAdminOverviewRequest) returns (SuperAdminOverviewResponse);
+  rpc GetRevenueChart (RevenueChartRequest) returns (RevenueChartResponse);
+  rpc GetTokenChart (TokenChartRequest) returns (TokenChartResponse);
+  rpc GetTopTenants (TopTenantsRequest) returns (TopTenantsResponse);
+}
+
+message SuperAdminOverviewRequest {
+  string start_date = 1;
+  string end_date = 2;
+}
+
+message SuperAdminOverviewResponse {
+  int32 total_tenants = 1;
+  int32 active_tenants = 2;
+  int32 suspended_tenants = 3;
+  double total_revenue = 4;
+  string currency = 5;
+  map<string, int32> tenants_by_tier = 6;
+  int64 total_tokens = 7;
+}
+
+message RevenueChartRequest {
+  string start_date = 1;
+  string end_date = 2;
+  string interval = 3;
+}
+
+message RevenueDataPoint {
+  string date = 1;
+  double amount = 2;
+  int32 transaction_count = 3;
+}
+
+message RevenueChartResponse {
+  repeated RevenueDataPoint points = 1;
+}
+
+message TokenChartRequest {
+  string start_date = 1;
+  string end_date = 2;
+  string interval = 3;
+}
+
+message TokenDatePoint {
+  string date = 1;
+  int64 total_tokens = 2;
+  int64 input_tokens = 3;
+  int64 output_tokens = 4;
+}
+
+message TokenChartResponse {
+  repeated TokenDatePoint points = 1;
+}
+
+message TopTenantsRequest {
+  string start_date = 1;
+  string end_date = 2;
+  int32 limit = 3;
+}
+
+message TopTenantTokenUsage {
+  string tenant_id = 1;
+  string business_name = 2;
+  string email = 3;
+  string tier = 4;
+  int64 total_tokens = 5;
+}
+
+message TopTenantsResponse {
+  repeated TopTenantTokenUsage tenants = 1;
+}
+
+service SuperAdminTierConfigService {
+  rpc ListTierConfigs (ListTierConfigsRequest) returns (ListTierConfigsResponse);
+  rpc GetTierConfig (GetTierConfigRequest) returns (GetTierConfigResponse);
+  rpc UpdateTierConfig (UpdateTierConfigRequest) returns (UpdateTierConfigResponse);
+}
+
+message TierConfigItem {
+  string id = 1;
+  string tier = 2;
+  string name = 3;
+  int32 max_agents = 4;
+  int32 max_services = 5;
+  int32 max_resources = 6;
+  int32 max_kb_docs = 7;
+  int32 max_kb_doc_size_mb = 8;
+  int64 weekly_token_limit = 9;
+  int32 rate_limit_rpm = 10;
+  string status = 11;
+  string description = 12;
+  string created_at = 13;
+  string updated_at = 14;
+  optional int32 weekly_crawl_limit = 15;
+}
+
+message ListTierConfigsRequest {}
+
+message ListTierConfigsResponse {
+  repeated TierConfigItem configs = 1;
+}
+
+message GetTierConfigRequest {
+  string tier = 1;
+}
+
+message GetTierConfigResponse {
+  TierConfigItem config = 1;
+}
+
+message UpdateTierConfigRequest {
+  string tier = 1;
+  optional string name = 2;
+  optional int32 max_agents = 3;
+  optional int32 max_services = 4;
+  optional int32 max_resources = 5;
+  optional int32 max_kb_docs = 6;
+  optional int32 max_kb_doc_size_mb = 7;
+  optional int64 weekly_token_limit = 8;
+  optional int32 rate_limit_rpm = 9;
+  optional string status = 10;
+  optional string description = 11;
+  optional int32 weekly_crawl_limit = 12;
+}
+
+message UpdateTierConfigResponse {
+  bool success = 1;
+  string message = 2;
+  TierConfigItem config = 3;
+}
+

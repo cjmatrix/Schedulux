@@ -13,6 +13,8 @@ export const RESPONSE_MESSAGES = {
     PASSWORD_RESET_SENT: 'If that email exists, a password reset link has been sent.',
     PASSWORD_RESET_SUCCESS: 'Password has been successfully reset. You can now log in.',
     USER_INVITED_SUCCESS: 'Dashboard user invited successfully',
+    WORKSPACE_USER_STATUS_UPDATED: (status: string) =>
+      `Workspace user ${status === 'active' ? 'unsuspended' : 'suspended'} successfully`,
     TENANT_STATUS_UPDATED: (status: string) =>
       `Tenant ${status === 'active' ? 'reactivated' : 'suspended'} successfully`,
   },
@@ -31,6 +33,9 @@ export const RESPONSE_MESSAGES = {
     SUPERADMIN_NOT_FOUND: 'SUPERADMIN_NOT_FOUND',
     SUPERADMIN_ALREADY_EXISTS: 'SUPERADMIN_ALREADY_EXISTS',
     TENANT_NOT_FOUND: 'TENANT_NOT_FOUND',
+    WORKSPACE_USER_NOT_FOUND: 'WORKSPACE_USER_NOT_FOUND',
+    FAILED_TO_UPDATE_WORKSPACE_USER_STATUS: 'FAILED_TO_UPDATE_WORKSPACE_USER_STATUS',
+    USER_ACCOUNT_SUSPENDED: 'Your account has been suspended. Please contact your workspace administrator.',
     FAILED_TO_UPDATE_TENANT_STATUS: 'FAILED_TO_UPDATE_TENANT_STATUS',
     EMAIL_NOT_VERIFIED: 'EMAIL_NOT_VERIFIED',
     ACCOUNT_INACTIVE: 'ACCOUNT_INACTIVE',

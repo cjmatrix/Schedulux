@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { BatchSyncInventoryRequest, BatchSyncInventoryResponse } from '@repo/proto/scheduling';
+import { getTierConfig, resolveTierConfigWithCache } from '../../../domain/constants/tiers.constant.js';
 import { RESPONSE_MESSAGES } from '../../../constants/index.js';
 import {
   DispatchStatus,
@@ -17,7 +18,6 @@ import {
   TENANT_SCHEDULE_REPOSITORY,
 } from '../../../domain/tokens.js';
 import { generateSemanticId } from '../../../domain/utils/id-generator.js';
-import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
 import { PriceVO } from '../../../domain/value-objects/price.vo.js';
 import type { ICacheRepository } from '../../../infrastructure/cache/cache-repository.interface.js';
 import { ResourceMapper } from '../../../infrastructure/database/mappers/resource.mapper.js';
@@ -40,7 +40,10 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
     private readonly _cacheRepo: ICacheRepository,
   ) {}
 
-  async execute(dto: BatchSyncInventoryRequest): Promise<BatchSyncInventoryResponse> {
+  async execute(
+    dto: BatchSyncInventoryRequest,
+    propagatedTier?: string,
+  ): Promise<BatchSyncInventoryResponse> {
     const tenantId = dto.tenant_id;
     const agentId = dto.agent_id || '';
 
@@ -56,6 +59,40 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
     this._logger.log(
       `Starting BatchSyncInventory for tenant: ${tenantId}, agent: ${agentId} (${dto.resources.length} resources, ${dto.services.length} services)`,
     );
+
+    const tier =
+      propagatedTier || (await this._cacheRepo.get(`tenant:${tenantId}:tier`)) || 'starter';
+    const tierConfig = await resolveTierConfigWithCache(this._cacheRepo, tier);
+
+    const activeIncomingResources = dto.resources.filter((r) => !r.is_deleted);
+    const activeIncomingServices = dto.services.filter((s) => !s.is_deleted);
+
+    if (
+      tierConfig.max_resources !== -1 &&
+      activeIncomingResources.length > tierConfig.max_resources
+    ) {
+      this._logger.warn(
+        `BatchSyncInventory rejected: ${activeIncomingResources.length} resources exceeds max_resources (${tierConfig.max_resources}) for tier ${tierConfig.name}`,
+      );
+      return {
+        resources: [],
+        services: [],
+        success: false,
+        message: `Resource limit exceeded (${tierConfig.max_resources} resources allowed) for your tier (${tierConfig.name}). Attempted to sync ${activeIncomingResources.length} resources.`,
+      };
+    }
+
+    if (tierConfig.max_services !== -1 && activeIncomingServices.length > tierConfig.max_services) {
+      this._logger.warn(
+        `BatchSyncInventory rejected: ${activeIncomingServices.length} services exceeds max_services (${tierConfig.max_services}) for tier ${tierConfig.name}`,
+      );
+      return {
+        resources: [],
+        services: [],
+        success: false,
+        message: `Service limit exceeded (${tierConfig.max_services} services allowed) for your tier (${tierConfig.name}). Attempted to sync ${activeIncomingServices.length} services.`,
+      };
+    }
 
     const [existingResources, existingServices] = await Promise.all([
       this._resourceRepository.findByTenant(tenantId, agentId || undefined),
@@ -135,15 +172,6 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
       });
 
       const price = PriceVO.create(s.price?.type, s.price?.amount, s.price?.currency);
-      const deposit = DepositVO.create({
-        required: s.deposit?.required,
-        amount: s.deposit?.amount,
-        processor: s.deposit?.processor,
-        upiId: s.deposit?.upi_id,
-        qrCodeUrl: s.deposit?.qr_code_url,
-        confirmationMethod: s.deposit?.confirmation_method,
-        paymentInstructions: s.deposit?.payment_instructions,
-      });
 
       const isDelSvc = s.is_deleted ?? false;
       const entity = new ServiceEntity({
@@ -157,7 +185,6 @@ export class BatchSyncInventoryUseCase implements IBatchSyncInventoryUseCase {
         bufferMinutes: s.buffer_minutes || 0,
         bookingMode: s.booking_mode || 'time_slot',
         price,
-        deposit,
         verification: s.verification ? { require_otp: s.verification.require_otp } : undefined,
         resourceRequirements: mappedRequirements,
         isDeleted: isDelSvc,

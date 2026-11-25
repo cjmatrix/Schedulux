@@ -3,6 +3,7 @@ import type {
   BookingInfo,
   DayAvailabilityInfo,
   ResourceInfo,
+  ResourceRequirementInfo,
   ServiceInfo,
 } from '@repo/proto/scheduling';
 import {
@@ -53,7 +54,11 @@ export function CreateBookingModal({
   const resources = useMemo(() => resourcesData?.data || [], [resourcesData]);
 
   const [selectedServiceId, setSelectedServiceId] = useState<string>('');
-  const [selectedResourceId, setSelectedResourceId] = useState<string>('');
+  const [selectedResourceMap, setSelectedResourceMap] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setSelectedResourceMap({});
+  }, [selectedServiceId]);
 
   const [viewMonthDate, setViewMonthDate] = useState<Date>(() => new Date());
 
@@ -74,7 +79,6 @@ export function CreateBookingModal({
   const [customerPhone, setCustomerPhone] = useState<string>('');
   const [customerEmail, setCustomerEmail] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
-  const [depositStatus, setDepositStatus] = useState<'pending' | 'verified' | 'waived'>('pending');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   useEffect(() => {
@@ -89,50 +93,55 @@ export function CreateBookingModal({
 
   const bookingMode = selectedService?.booking_mode || 'time_slot';
 
-  const eligibleResources = useMemo<ResourceInfo[]>(() => {
-    if (!selectedService || !selectedService.resource_requirements?.length) {
-      return resources.filter((r) => r.is_bookable);
-    }
-    const allEligibleIds = new Set<string>();
-    selectedService.resource_requirements.forEach((req) => {
-      const isUserSelectable =
-        req.selection_mode === 'user_selectable' ||
-        (!req.selection_mode && req.resource_type === 'staff');
-      if (isUserSelectable) {
-        req.eligible_resource_ids?.forEach((id) => {
-          allEligibleIds.add(id);
-        });
-      }
-    });
+  const requirements = useMemo<ResourceRequirementInfo[]>(() => {
+    return selectedService?.resource_requirements || [];
+  }, [selectedService]);
 
-    if (allEligibleIds.size === 0) {
-      const staffResources = resources.filter((r) => r.is_bookable && r.resource_type === 'staff');
-      return staffResources.length > 0 ? staffResources : resources.filter((r) => r.is_bookable);
-    }
-    return resources.filter((r) => allEligibleIds.has(r.resource_id));
-  }, [selectedService, resources]);
+  const selectedResourceIds = useMemo(() => {
+    return Object.values(selectedResourceMap).filter((id) => Boolean(id?.trim()));
+  }, [selectedResourceMap]);
+
+  const selectedResourceId = selectedResourceIds[0] || '';
+
+  const getEligibleResourcesForReq = useCallback(
+    (req?: ResourceRequirementInfo): ResourceInfo[] => {
+      if (!req) return resources.filter((r) => r.is_bookable);
+      if (req.eligible_resource_ids && req.eligible_resource_ids.length > 0) {
+        const idSet = new Set(req.eligible_resource_ids);
+        return resources.filter((r) => r.is_bookable && idSet.has(r.resource_id));
+      }
+      if (req.resource_type) {
+        const typeLower = req.resource_type.toLowerCase();
+        const matching = resources.filter(
+          (r) => r.is_bookable && (r.resource_type || 'staff').toLowerCase() === typeLower,
+        );
+        if (matching.length > 0) return matching;
+      }
+      return resources.filter((r) => r.is_bookable);
+    },
+    [resources],
+  );
 
   const availabilityParams = useMemo(() => {
     if (!selectedServiceId || !selectedDate) return undefined;
 
-    if (bookingMode === 'date_range') {
-      return {
-        service_id: selectedServiceId,
-        start_date: selectedDate,
-        end_date: checkOutDate || selectedDate,
-        agent_id: agentId,
-        resource_id: selectedResourceId || undefined,
-      };
-    }
-
     return {
       service_id: selectedServiceId,
       start_date: selectedDate,
-      end_date: selectedDate,
+      end_date: bookingMode === 'date_range' ? checkOutDate || selectedDate : selectedDate,
       agent_id: agentId,
       resource_id: selectedResourceId || undefined,
+      resource_ids: selectedResourceIds.length > 0 ? selectedResourceIds : undefined,
     };
-  }, [selectedServiceId, bookingMode, selectedDate, checkOutDate, agentId, selectedResourceId]);
+  }, [
+    selectedServiceId,
+    bookingMode,
+    selectedDate,
+    checkOutDate,
+    agentId,
+    selectedResourceId,
+    selectedResourceIds,
+  ]);
 
   const { data: availabilityData, isLoading: isLoadingAvailability } = useAvailability(
     availabilityParams,
@@ -192,7 +201,7 @@ export function CreateBookingModal({
 
   useEffect(() => {
     setSelectedSlot(null);
-  }, [selectedServiceId, selectedDate, selectedResourceId]);
+  }, [selectedServiceId, selectedDate, selectedResourceIds.join(',')]);
 
   const createBookingMutation = useCreateBooking();
 
@@ -311,6 +320,7 @@ export function CreateBookingModal({
       agent_id: agentId,
       service_id: selectedService.service_id,
       resource_id: selectedResourceId || undefined,
+      resource_ids: selectedResourceIds.length > 0 ? selectedResourceIds : undefined,
       start_time: startTimeIso,
       end_time: endTimeIso,
       customer_name: customerName.trim(),
@@ -318,7 +328,6 @@ export function CreateBookingModal({
       customer_email: customerEmail.trim() || undefined,
       notes: notes.trim() || undefined,
       source: 'manual',
-      deposit_status: selectedService.deposit?.required ? depositStatus : 'not_required',
     };
 
     try {
@@ -355,10 +364,10 @@ export function CreateBookingModal({
         onClick={onClose}
       />
 
-      <div className="fixed inset-y-0 right-0 max-w-2xl w-full flex pl-10">
+      <div className="fixed inset-y-0 right-0 max-w-2xl w-full flex sm:pl-10">
         <div className="w-full bg-white shadow-2xl flex flex-col h-full overflow-hidden border-l border-slate-200">
           {/* Header */}
-          <div className="p-6 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+          <div className="p-4 sm:p-6 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
             <div>
               <div className="flex items-center gap-2">
                 <span className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
@@ -432,39 +441,140 @@ export function CreateBookingModal({
                       {selectedService.price?.currency || 'USD'}
                     </strong>
                   </span>
-                  {selectedService.deposit?.required && (
-                    <span className="text-amber-700 font-medium">
-                      Deposit: ${selectedService.deposit.amount}
-                    </span>
-                  )}
                 </div>
               )}
             </div>
 
-            {/* 2. Resource Assignment */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  2. Resource / Provider
-                </label>
-                <span className="text-[11px] text-slate-400">Optional</span>
+            {/* 2. Resource Assignment (Multi-requirement & Single-requirement adaptive) */}
+            {requirements.length > 1 ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      2. Resource & Unit Assignments
+                    </label>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      This service requires {requirements.length} distinct resources. Auto-assign
+                      will optimally dispatch available resources, or you can manually override
+                      specific units.
+                    </p>
+                  </div>
+                  <span className="text-[11px] text-slate-400 shrink-0">Optional</span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {requirements.map((req, reqIdx) => {
+                    const pool = getEligibleResourcesForReq(req);
+                    const isAutoAssign = req.selection_mode === 'auto_assign';
+                    const reqCount = Math.max(1, req.count || 1);
+
+                    return Array.from({ length: reqCount }).map((_, slotIdx) => {
+                      const key = `${reqIdx}_${slotIdx}`;
+                      const slotLabel =
+                        reqCount > 1
+                          ? `${req.role || 'Resource'} #${slotIdx + 1}`
+                          : req.role || 'Resource';
+
+                      return (
+                        <div
+                          key={key}
+                          className="p-3 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-1.5"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-slate-800">{slotLabel}</span>
+                              <span className="text-[10px] uppercase font-bold text-slate-400 px-1.5 py-0.5 rounded bg-white border border-slate-200/60">
+                                {req.resource_type || 'staff'}
+                              </span>
+                            </div>
+                            {isAutoAssign ? (
+                              <span className="text-[10px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded-full border border-slate-200/80">
+                                Auto-Assign Policy (Override)
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200/60">
+                                Customer Selectable
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="relative">
+                            <select
+                              value={selectedResourceMap[key] || ''}
+                              onChange={(e) =>
+                                setSelectedResourceMap((prev) => ({
+                                  ...prev,
+                                  [key]: e.target.value,
+                                }))
+                              }
+                              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-slate-900 transition cursor-pointer appearance-none"
+                            >
+                              <option value="">
+                                Auto-Assign Optimal Available {req.role || 'Resource'} (Recommended)
+                              </option>
+                              {pool.map((res) => (
+                                <option key={res.resource_id} value={res.resource_id}>
+                                  {res.name} — {res.title || res.resource_type}
+                                </option>
+                              ))}
+                            </select>
+                            <Users className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          </div>
+                        </div>
+                      );
+                    });
+                  })}
+                </div>
               </div>
-              <div className="relative">
-                <select
-                  value={selectedResourceId}
-                  onChange={(e) => setSelectedResourceId(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition cursor-pointer appearance-none"
-                >
-                  <option value="">Auto-Assign Optimal Available Resource (Recommended)</option>
-                  {eligibleResources.map((res) => (
-                    <option key={res.resource_id} value={res.resource_id}>
-                      {res.name} — {res.title || res.resource_type}
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      2.{' '}
+                      {bookingMode === 'date_range'
+                        ? 'Assigned Room / Unit'
+                        : requirements[0]?.role || 'Resource / Provider'}
+                    </label>
+                    {requirements[0]?.selection_mode === 'auto_assign' && (
+                      <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200/60">
+                        Auto-Assign Policy (Override)
+                      </span>
+                    )}
+                    {requirements[0]?.selection_mode === 'user_selectable' && (
+                      <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200/60">
+                        Customer Selectable
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-slate-400">Optional</span>
+                </div>
+                <div className="relative">
+                  <select
+                    value={selectedResourceMap['0_0'] || ''}
+                    onChange={(e) =>
+                      setSelectedResourceMap((prev) => ({
+                        ...prev,
+                        '0_0': e.target.value,
+                      }))
+                    }
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition cursor-pointer appearance-none"
+                  >
+                    <option value="">
+                      {bookingMode === 'date_range'
+                        ? 'Auto-Assign Optimal Available Room (Recommended)'
+                        : `Auto-Assign Optimal Available ${requirements[0]?.role || 'Resource'} (Recommended)`}
                     </option>
-                  ))}
-                </select>
-                <Users className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    {getEligibleResourcesForReq(requirements[0]).map((res) => (
+                      <option key={res.resource_id} value={res.resource_id}>
+                        {res.name} — {res.title || res.resource_type}
+                      </option>
+                    ))}
+                  </select>
+                  <Users className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
               </div>
-            </div>
+            )}
 
             {/* 3. Live Interactive Calendar & Availability */}
             <div className="space-y-3 pt-2 border-t border-slate-100">
@@ -811,26 +921,6 @@ export function CreateBookingModal({
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white"
                 />
               </div>
-
-              {selectedService?.deposit?.required && (
-                <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl flex items-center justify-between text-xs">
-                  <div>
-                    <span className="font-bold text-amber-900">Deposit Status:</span>
-                    <span className="text-amber-700 ml-1.5">
-                      ${selectedService.deposit.amount} required
-                    </span>
-                  </div>
-                  <select
-                    value={depositStatus}
-                    onChange={(e) => setDepositStatus(e.target.value as any)}
-                    className="px-2.5 py-1 bg-white border border-amber-300 rounded-lg text-xs font-bold text-amber-900"
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="verified">Verified (Paid)</option>
-                    <option value="waived">Waived by Staff</option>
-                  </select>
-                </div>
-              )}
             </div>
 
             {/* Footer Buttons */}

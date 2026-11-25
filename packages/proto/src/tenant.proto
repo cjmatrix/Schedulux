@@ -28,7 +28,20 @@ message TenantGetProfileResponse {
 
 service TenantService {
   rpc ListTenants (ListTenantsRequest) returns (ListTenantsResponse);
+  rpc GetTenantById (GetTenantByIdRequest) returns (GetTenantByIdResponse);
   rpc SuspendTenant (SuspendTenantRequest) returns (SuspendTenantResponse);
+  rpc UpdateTenantSubscription (UpdateTenantSubscriptionRequest) returns (UpdateTenantSubscriptionResponse);
+  rpc GetTenantBillingInfo (GetTenantBillingInfoRequest) returns (GetTenantBillingInfoResponse);
+  rpc ProcessPaddleWebhook (PaddleWebhookRequest) returns (PaddleWebhookResponse);
+  rpc CreatePaddleCheckout (CreatePaddleCheckoutRequest) returns (CreatePaddleCheckoutResponse);
+}
+
+message GetTenantByIdRequest {
+  string tenant_id = 1;
+}
+
+message GetTenantByIdResponse {
+  TenantInfo tenant = 1;
 }
 
 
@@ -56,6 +69,12 @@ message TenantInfo {
   string contact_email = 3;
   string tier = 4;
   string status = 5;
+  optional string paddle_customer_id = 6;
+  optional string paddle_subscription_id = 7;
+  optional string subscription_status = 8;
+  optional int64 weekly_token_limit = 9;
+  optional int64 weekly_token_usage = 10;
+  optional int64 weekly_token_remaining = 11;
 }
 
 message ListTenantsRequest {
@@ -64,11 +83,19 @@ message ListTenantsRequest {
   optional string search = 3;
   optional string tier = 4;
   optional string status = 5;
+  repeated string tenant_ids = 6;
+}
+
+message TenantStats {
+  int32 total = 1;
+  int32 active = 2;
+  int32 suspended = 3;
 }
 
 message ListTenantsResponse {
   repeated TenantInfo tenants = 1;
   int32 total_count = 2; 
+  optional TenantStats stats = 3;
 }
 
 message SuspendTenantRequest {
@@ -131,3 +158,53 @@ message ResetPasswordRequest {
 message ResetPasswordResponse {
   string message = 1;
 }
+
+message UpdateTenantSubscriptionRequest {
+  string tenant_id = 1;
+  string tier = 2;
+  optional string subscription_status = 3;
+}
+
+message UpdateTenantSubscriptionResponse {
+  bool success = 1;
+  string message = 2;
+  TenantInfo tenant = 3;
+}
+
+message GetTenantBillingInfoRequest {
+  string tenant_id = 1;
+}
+
+message GetTenantBillingInfoResponse {
+  string tenant_id = 1;
+  string tier = 2;
+  string paddle_customer_id = 3;
+  string paddle_subscription_id = 4;
+  string subscription_status = 5;
+}
+
+message PaddleWebhookRequest {
+  string event_id = 1;
+  string event_type = 2;
+  string occurred_at = 3;
+  string data_json = 4;
+}
+
+message PaddleWebhookResponse {
+  bool success = 1;
+  string message = 2;
+  string event_type = 3;
+}
+
+message CreatePaddleCheckoutRequest {
+  string tenant_id = 1;
+  string plan = 2;
+}
+
+message CreatePaddleCheckoutResponse {
+  bool success = 1;
+  string transaction_id = 2;
+  string message = 3;
+}
+
+

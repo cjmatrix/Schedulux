@@ -84,9 +84,6 @@ export class MongoServiceRepository implements IServiceRepository {
             _id: null,
             totalCount: { $sum: 1 },
             avgPrice: { $avg: '$price.amount' },
-            depositCount: {
-              $sum: { $cond: [{ $eq: ['$deposit.required', true] }, 1, 0] },
-            },
             categories: { $addToSet: '$category' },
           },
         },
@@ -97,13 +94,11 @@ export class MongoServiceRepository implements IServiceRepository {
       (statsResult[0] as {
         totalCount?: number;
         avgPrice?: number;
-        depositCount?: number;
         categories?: unknown[];
       }) || {};
     const summary: ServiceSummary = {
       totalCount: stat.totalCount ?? 0,
       avgPrice: stat.avgPrice ? Number(stat.avgPrice.toFixed(2)) : 0,
-      depositCount: stat.depositCount ?? 0,
       categories: (stat.categories ?? []).filter(
         (c: unknown): c is string => typeof c === 'string' && c.trim().length > 0,
       ),
@@ -168,5 +163,16 @@ export class MongoServiceRepository implements IServiceRepository {
     }
     const docs = await ServiceModel.find(query).lean().exec();
     return docs.map((doc) => ServiceMapper.toDomain(doc as unknown as IServiceDoc));
+  }
+
+  async countByTenant(tenantId: string, agentId?: string): Promise<number> {
+    const query: Record<string, unknown> = {
+      tenant_id: tenantId,
+      is_deleted: { $ne: true },
+    };
+    if (agentId) {
+      query.agent_id = agentId;
+    }
+    return ServiceModel.countDocuments(query).exec();
   }
 }

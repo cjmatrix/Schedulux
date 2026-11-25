@@ -15,7 +15,6 @@ from agent_orchestrator.models import (
     BlackoutDateEmbed,
     BookingMode,
     BusinessProfileEmbed,
-    DepositEmbed,
     DispatchStatus,
     GuardrailsEmbed,
     OperatingHoursEmbed,
@@ -36,7 +35,26 @@ load_dotenv(local_env)
 
 logger = logging.getLogger(__name__)
 
-TOPICS = ["scheduling.service.events", "scheduling.resource.events", "scheduling.schedule.events"]
+SCHEDULING_DOMAIN_TOPIC = os.environ.get(
+    "KAFKA_SCHEDULING_DOMAIN_TOPIC", "scheduling.domain.events"
+)
+TOPICS = [SCHEDULING_DOMAIN_TOPIC]
+
+
+async def handle_domain_event(payload: dict[str, Any]) -> None:
+    event_type = payload.get("event_type", "")
+    if event_type.startswith("service."):
+        await handle_service_event(payload)
+    elif event_type.startswith("resource."):
+        await handle_resource_event(payload)
+    elif event_type.startswith("schedule.") or event_type == "schedule.updated":
+        await handle_schedule_event(payload)
+    else:
+        logger.warning(
+            "[SchedulingConsumer] Unknown domain event type '%s' in payload: %s",
+            event_type,
+            payload,
+        )
 
 
 async def handle_service_event(payload: dict[str, Any]) -> None:
@@ -52,7 +70,6 @@ async def handle_service_event(payload: dict[str, Any]) -> None:
 
     data = payload.get("data")
     price_raw = data.get("price", {}) if data else {}
-    deposit_raw = data.get("deposit", {}) if data else {}
 
     config = await AgentRuntimeConfig.find_one({"agent_id": agent_id})
     agent_draft = await AgentDraft.find_one({"agent_id": agent_id})
@@ -63,15 +80,6 @@ async def handle_service_event(payload: dict[str, Any]) -> None:
             type=PriceType(price_raw.get("type", "fixed")),
             amount=float(price_raw.get("amount", 0)),
             currency=price_raw.get("currency", "USD"),
-        )
-        deposit = DepositEmbed(
-            required=bool(deposit_raw.get("required", False)),
-            amount=float(deposit_raw.get("amount", 0)),
-            processor=deposit_raw.get("processor", ""),
-            upi_id=deposit_raw.get("upi_id", ""),
-            qr_code_url=deposit_raw.get("qr_code_url", ""),
-            confirmation_method=deposit_raw.get("confirmation_method", "automatic"),
-            payment_instructions=deposit_raw.get("payment_instructions", ""),
         )
         verif_raw = data.get("verification")
         if verif_raw is not None and isinstance(verif_raw, dict):
@@ -108,7 +116,6 @@ async def handle_service_event(payload: dict[str, Any]) -> None:
             buffer_minutes=int(data.get("buffer_minutes") or 0),
             booking_mode=bm,
             price=price,
-            deposit=deposit,
             verification=verification,
             resource_requirements=[
                 ResourceRequirementEmbed(
@@ -316,7 +323,6 @@ async def handle_schedule_event(payload: dict[str, Any]) -> None:
         )
     )
 
-    # 1. Update live AgentRuntimeConfig
     query: dict[str, Any] = {"agent_id": agent_id} if agent_id else {"tenant_id": tenant_id}
     config = await AgentRuntimeConfig.find_one(query)
     if config:
@@ -345,7 +351,6 @@ async def handle_schedule_event(payload: dict[str, Any]) -> None:
             config.tenant_id,
         )
 
-    # 2. Update AgentDraft
     agent_draft = await AgentDraft.find_one(query)
     if agent_draft:
         cd = agent_draft.current_draft
@@ -382,14 +387,13 @@ class SchedulingConsumer:
     def __init__(
         self,
         subscriber: EventSubscriber,
-        service_topic: str = "scheduling.service.events",
-        resource_topic: str = "scheduling.resource.events",
-        schedule_topic: str = "scheduling.schedule.events",
+        domain_topic: str = "scheduling.domain.events",
     ) -> None:
         self.subscriber = subscriber
-        self.service_topic = service_topic
-        self.resource_topic = resource_topic
-        self.schedule_topic = schedule_topic
+        self.domain_topic = os.environ.get("KAFKA_SCHEDULING_DOMAIN_TOPIC", domain_topic)
+
+    async def handle_domain_event(self, payload: dict[str, Any]) -> None:
+        await handle_domain_event(payload)
 
     async def handle_service_event(self, payload: dict[str, Any]) -> None:
         await handle_service_event(payload)
@@ -401,17 +405,13 @@ class SchedulingConsumer:
         await handle_schedule_event(payload)
 
     async def start(self) -> None:
-        """Register topic handlers, start the subscriber connection, and listen."""
-        await self.subscriber.subscribe(self.service_topic, self.handle_service_event)
-        await self.subscriber.subscribe(self.resource_topic, self.handle_resource_event)
-        await self.subscriber.subscribe(self.schedule_topic, self.handle_schedule_event)
+        """Register domain topic handler, start the subscriber connection, and listen."""
+        await self.subscriber.subscribe(self.domain_topic, self.handle_domain_event)
         await self.subscriber.start()
         logger.info(
-            "[SchedulingConsumer] Listening for scheduling events via %s on topics: [%s, %s, %s]...",
+            "[SchedulingConsumer] Listening for consolidated scheduling domain events via %s on topic: %s...",
             type(self.subscriber).__name__,
-            self.service_topic,
-            self.resource_topic,
-            self.schedule_topic,
+            self.domain_topic,
         )
         await self.subscriber.run()
 

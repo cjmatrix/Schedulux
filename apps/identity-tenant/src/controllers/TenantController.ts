@@ -1,5 +1,5 @@
 import { Controller, Inject, UseFilters } from '@nestjs/common';
-import { GrpcMethod } from '@nestjs/microservices';
+import { GrpcMethod, RpcException } from '@nestjs/microservices';
 import {
   ForgotPasswordRequest,
   LoginRequest,
@@ -15,6 +15,7 @@ import { GRPC_METHODS, GRPC_SERVICES } from '../constants/grpc.constant.js';
 import { RESPONSE_MESSAGES } from '../constants/messages.constant.js';
 import type { ITenantService } from '../interfaces/ITenantService.js';
 import { AllExceptionsFilter } from './rpcExpetionFilter.js';
+import { status } from '@grpc/grpc-js';
 
 @Controller()
 @UseFilters(new AllExceptionsFilter())
@@ -46,6 +47,12 @@ export class TenantAuthController {
   async login(data: LoginRequest) {
     const { email, password } = data;
     if (!email || !password) throw new Error(RESPONSE_MESSAGES.ERRORS.EMAIL_AND_PASSWORD_REQUIRED);
+
+    // throw new RpcException({
+    //     code: status.INTERNAL, 
+    //     message: 'Simulated database failure in identity-tenant',
+    //   });
+
 
     const result = await this._tenantService.login(email, password);
     return {

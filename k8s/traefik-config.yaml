@@ -1,0 +1,23 @@
+# HelmChartConfig to enable Let's Encrypt ACME TLS on K3s built-in Traefik
+# On your EC2 server, place this file at:
+# /var/lib/rancher/k3s/server/manifests/traefik-config.yaml
+# K3s automatically detects this file and reconfigures Traefik in real-time.
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    additionalArguments:
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=cjmartingarrix@gmail.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json"
+    ports:
+      web:
+        redirectTo:
+          port: websecure
+    persistence:
+      enabled: true
+      path: /data
+      size: 128Mi

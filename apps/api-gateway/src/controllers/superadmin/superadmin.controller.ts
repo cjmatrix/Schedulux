@@ -32,16 +32,23 @@ import {
   SuperAdminLogoutDto,
   SuperAdminRefreshTokenDto,
 } from './dtos/superAdmin.dto.js';
+import { CIRCUIT_BREAKER_SERVICE, ICircuitBreakerService } from '@repo/circuit-breaker';
 
 @Controller(API_ROUTES.SUPERADMIN.AUTH.BASE)
 export class SuperAdminController implements OnModuleInit {
   private _superAdminAuthService!: SuperAdminAuthServiceClient;
 
-  constructor(@Inject('SUPERADMIN_PACKAGE') private readonly _client: ClientGrpc) {}
+  constructor(
+    @Inject('SUPERADMIN_PACKAGE') private readonly _client: ClientGrpc,
+    @Inject(CIRCUIT_BREAKER_SERVICE)
+    private readonly _circuitBreakerService: ICircuitBreakerService,
+  ) {}
 
   onModuleInit() {
-    this._superAdminAuthService =
-      this._client.getService<SuperAdminAuthServiceClient>('SuperAdminAuthService');
+    this._superAdminAuthService = this._circuitBreakerService.wrapGrpcClient(
+      'superadmin-service',
+      this._client.getService<SuperAdminAuthServiceClient>('SuperAdminAuthService'),
+    );
   }
 
   @Post(API_ROUTES.SUPERADMIN.AUTH.LOGIN)
@@ -49,8 +56,16 @@ export class SuperAdminController implements OnModuleInit {
   async login(@Body() body: SuperAdminLoginDto, @Res({ passthrough: true }) res: Response) {
     const response = await lastValueFrom(this._superAdminAuthService.login(body));
 
-    res.cookie(COOKIE_NAMES.SUPERADMIN_ACCESS_TOKEN, response.access_token, getAccessTokenCookieOptions());
-    res.cookie(COOKIE_NAMES.SUPERADMIN_REFRESH_TOKEN, response.refresh_token, getRefreshTokenCookieOptions());
+    res.cookie(
+      COOKIE_NAMES.SUPERADMIN_ACCESS_TOKEN,
+      response.access_token,
+      getAccessTokenCookieOptions(),
+    );
+    res.cookie(
+      COOKIE_NAMES.SUPERADMIN_REFRESH_TOKEN,
+      response.refresh_token,
+      getRefreshTokenCookieOptions(),
+    );
 
     return {
       message: response.message,
@@ -70,8 +85,16 @@ export class SuperAdminController implements OnModuleInit {
       this._superAdminAuthService.refreshToken({ refresh_token: token }),
     );
 
-    res.cookie(COOKIE_NAMES.SUPERADMIN_ACCESS_TOKEN, response.access_token, getAccessTokenCookieOptions());
-    res.cookie(COOKIE_NAMES.SUPERADMIN_REFRESH_TOKEN, response.refresh_token, getRefreshTokenCookieOptions());
+    res.cookie(
+      COOKIE_NAMES.SUPERADMIN_ACCESS_TOKEN,
+      response.access_token,
+      getAccessTokenCookieOptions(),
+    );
+    res.cookie(
+      COOKIE_NAMES.SUPERADMIN_REFRESH_TOKEN,
+      response.refresh_token,
+      getRefreshTokenCookieOptions(),
+    );
 
     return {
       message: response.message,
@@ -115,4 +138,3 @@ export class SuperAdminController implements OnModuleInit {
     };
   }
 }
-

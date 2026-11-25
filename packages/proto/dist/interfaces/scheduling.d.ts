@@ -1,18 +1,10 @@
+import type { Metadata } from "@grpc/grpc-js";
 import { Observable } from "rxjs";
 export declare const protobufPackage = "scheduling";
 export interface PriceInfo {
     type: string;
     amount: number;
     currency: string;
-}
-export interface DepositInfo {
-    required: boolean;
-    amount: number;
-    processor: string;
-    upi_id: string;
-    qr_code_url: string;
-    confirmation_method: string;
-    payment_instructions: string;
 }
 export interface ServiceVerificationInfo {
     require_otp?: boolean | undefined;
@@ -33,7 +25,6 @@ export interface ServiceInfo {
     duration_minutes: number;
     buffer_minutes: number;
     price: PriceInfo | undefined;
-    deposit: DepositInfo | undefined;
     created_at: string;
     updated_at: string;
     booking_mode: string;
@@ -51,7 +42,6 @@ export interface CreateServiceRequest {
     duration_minutes: number;
     buffer_minutes: number;
     price: PriceInfo | undefined;
-    deposit: DepositInfo | undefined;
     booking_mode?: string | undefined;
     agent_id: string;
     service_id?: string | undefined;
@@ -75,7 +65,6 @@ export interface ListServicesRequest {
 export interface ServiceSummaryInfo {
     total_count: number;
     avg_price: number;
-    deposit_count: number;
     categories: string[];
 }
 export interface ListServicesResponse {
@@ -94,7 +83,6 @@ export interface UpdateServiceRequest {
     duration_minutes?: number | undefined;
     buffer_minutes?: number | undefined;
     price: PriceInfo | undefined;
-    deposit: DepositInfo | undefined;
     booking_mode?: string | undefined;
     agent_id?: string | undefined;
     verification?: ServiceVerificationInfo | undefined;
@@ -266,9 +254,7 @@ export interface BookingInfo {
     duration_minutes: number;
     source: string;
     status: string;
-    deposit_status: string;
     price: PriceInfo | undefined;
-    deposit?: DepositInfo | undefined;
     notes?: string | undefined;
     created_by?: string | undefined;
     created_at: string;
@@ -289,9 +275,10 @@ export interface CreateBookingRequest {
     customer_email?: string | undefined;
     notes?: string | undefined;
     source?: string | undefined;
-    deposit_status?: string | undefined;
     created_by?: string | undefined;
     resource_ids: string[];
+    hold_token?: string | undefined;
+    override_hold?: boolean | undefined;
 }
 export interface BookingResponse {
     booking: BookingInfo | undefined;
@@ -314,6 +301,16 @@ export interface RescheduleBookingRequest {
     resource_ids: string[];
     rescheduled_by?: string | undefined;
     notes?: string | undefined;
+    hold_token?: string | undefined;
+    override_hold?: boolean | undefined;
+}
+export interface UpdateBookingStatusRequest {
+    tenant_id: string;
+    booking_id: string;
+    agent_id: string;
+    status: string;
+    reason?: string | undefined;
+    updated_by?: string | undefined;
 }
 export interface ListBookingsRequest {
     tenant_id: string;
@@ -328,11 +325,21 @@ export interface ListBookingsRequest {
     search?: string | undefined;
     customer_phone?: string | undefined;
 }
+export interface BookingSummaryInfo {
+    total_count: number;
+    confirmed_count: number;
+    pending_count: number;
+    cancelled_count: number;
+    completed_count: number;
+    ai_inbound_count: number;
+    ai_inbound_percent: number;
+}
 export interface ListBookingsResponse {
     bookings: BookingInfo[];
     total: number;
     page: number;
     limit: number;
+    summary?: BookingSummaryInfo | undefined;
 }
 export interface GetAvailabilityRequest {
     tenant_id: string;
@@ -403,12 +410,18 @@ export interface CustomerDetails {
     created_at: string;
     updated_at: string;
 }
+export interface CustomerSummaryInfo {
+    total_count: number;
+    verified_count: number;
+    guest_count: number;
+}
 export interface ListCustomersResponse {
     customers: CustomerDetails[];
     total: number;
     page: number;
     limit: number;
     total_pages: number;
+    summary?: CustomerSummaryInfo | undefined;
 }
 export interface TenantScheduleInfo {
     id: string;
@@ -445,59 +458,61 @@ export interface TenantScheduleResponse {
 export declare const SCHEDULING_PACKAGE_NAME = "scheduling";
 export interface SchedulingInventoryServiceClient {
     /** Service CRUD */
-    createService(request: CreateServiceRequest): Observable<ServiceResponse>;
-    getService(request: GetServiceRequest): Observable<ServiceResponse>;
-    listServices(request: ListServicesRequest): Observable<ListServicesResponse>;
-    updateService(request: UpdateServiceRequest): Observable<ServiceResponse>;
-    deleteService(request: DeleteServiceRequest): Observable<DeleteServiceResponse>;
+    createService(request: CreateServiceRequest, metadata?: Metadata): Observable<ServiceResponse>;
+    getService(request: GetServiceRequest, metadata?: Metadata): Observable<ServiceResponse>;
+    listServices(request: ListServicesRequest, metadata?: Metadata): Observable<ListServicesResponse>;
+    updateService(request: UpdateServiceRequest, metadata?: Metadata): Observable<ServiceResponse>;
+    deleteService(request: DeleteServiceRequest, metadata?: Metadata): Observable<DeleteServiceResponse>;
     /** Resource CRUD */
-    createResource(request: CreateResourceRequest): Observable<ResourceResponse>;
-    getResource(request: GetResourceRequest): Observable<ResourceResponse>;
-    listResources(request: ListResourcesRequest): Observable<ListResourcesResponse>;
-    updateResource(request: UpdateResourceRequest): Observable<ResourceResponse>;
-    deleteResource(request: DeleteResourceRequest): Observable<DeleteResourceResponse>;
+    createResource(request: CreateResourceRequest, metadata?: Metadata): Observable<ResourceResponse>;
+    getResource(request: GetResourceRequest, metadata?: Metadata): Observable<ResourceResponse>;
+    listResources(request: ListResourcesRequest, metadata?: Metadata): Observable<ListResourcesResponse>;
+    updateResource(request: UpdateResourceRequest, metadata?: Metadata): Observable<ResourceResponse>;
+    deleteResource(request: DeleteResourceRequest, metadata?: Metadata): Observable<DeleteResourceResponse>;
     /** Batch / Bulk Operations */
-    batchSyncInventory(request: BatchSyncInventoryRequest): Observable<BatchSyncInventoryResponse>;
+    batchSyncInventory(request: BatchSyncInventoryRequest, metadata?: Metadata): Observable<BatchSyncInventoryResponse>;
     /** Booking Operations */
-    createBooking(request: CreateBookingRequest): Observable<BookingResponse>;
-    cancelBooking(request: CancelBookingRequest): Observable<BookingResponse>;
-    rescheduleBooking(request: RescheduleBookingRequest): Observable<BookingResponse>;
-    getAvailability(request: GetAvailabilityRequest): Observable<GetAvailabilityResponse>;
-    listBookings(request: ListBookingsRequest): Observable<ListBookingsResponse>;
+    createBooking(request: CreateBookingRequest, metadata?: Metadata): Observable<BookingResponse>;
+    cancelBooking(request: CancelBookingRequest, metadata?: Metadata): Observable<BookingResponse>;
+    rescheduleBooking(request: RescheduleBookingRequest, metadata?: Metadata): Observable<BookingResponse>;
+    updateBookingStatus(request: UpdateBookingStatusRequest, metadata?: Metadata): Observable<BookingResponse>;
+    getAvailability(request: GetAvailabilityRequest, metadata?: Metadata): Observable<GetAvailabilityResponse>;
+    listBookings(request: ListBookingsRequest, metadata?: Metadata): Observable<ListBookingsResponse>;
     /** Customer Operations */
-    verifyCustomer(request: VerifyCustomerRequest): Observable<VerifyCustomerResponse>;
-    listCustomers(request: ListCustomersRequest): Observable<ListCustomersResponse>;
+    verifyCustomer(request: VerifyCustomerRequest, metadata?: Metadata): Observable<VerifyCustomerResponse>;
+    listCustomers(request: ListCustomersRequest, metadata?: Metadata): Observable<ListCustomersResponse>;
     /** Tenant Schedule Settings */
-    getTenantSchedule(request: GetTenantScheduleRequest): Observable<TenantScheduleResponse>;
-    updateTenantSchedule(request: UpdateTenantScheduleRequest): Observable<TenantScheduleResponse>;
+    getTenantSchedule(request: GetTenantScheduleRequest, metadata?: Metadata): Observable<TenantScheduleResponse>;
+    updateTenantSchedule(request: UpdateTenantScheduleRequest, metadata?: Metadata): Observable<TenantScheduleResponse>;
 }
 export interface SchedulingInventoryServiceController {
     /** Service CRUD */
-    createService(request: CreateServiceRequest): Promise<ServiceResponse> | Observable<ServiceResponse> | ServiceResponse;
-    getService(request: GetServiceRequest): Promise<ServiceResponse> | Observable<ServiceResponse> | ServiceResponse;
-    listServices(request: ListServicesRequest): Promise<ListServicesResponse> | Observable<ListServicesResponse> | ListServicesResponse;
-    updateService(request: UpdateServiceRequest): Promise<ServiceResponse> | Observable<ServiceResponse> | ServiceResponse;
-    deleteService(request: DeleteServiceRequest): Promise<DeleteServiceResponse> | Observable<DeleteServiceResponse> | DeleteServiceResponse;
+    createService(request: CreateServiceRequest, metadata?: Metadata): Promise<ServiceResponse> | Observable<ServiceResponse> | ServiceResponse;
+    getService(request: GetServiceRequest, metadata?: Metadata): Promise<ServiceResponse> | Observable<ServiceResponse> | ServiceResponse;
+    listServices(request: ListServicesRequest, metadata?: Metadata): Promise<ListServicesResponse> | Observable<ListServicesResponse> | ListServicesResponse;
+    updateService(request: UpdateServiceRequest, metadata?: Metadata): Promise<ServiceResponse> | Observable<ServiceResponse> | ServiceResponse;
+    deleteService(request: DeleteServiceRequest, metadata?: Metadata): Promise<DeleteServiceResponse> | Observable<DeleteServiceResponse> | DeleteServiceResponse;
     /** Resource CRUD */
-    createResource(request: CreateResourceRequest): Promise<ResourceResponse> | Observable<ResourceResponse> | ResourceResponse;
-    getResource(request: GetResourceRequest): Promise<ResourceResponse> | Observable<ResourceResponse> | ResourceResponse;
-    listResources(request: ListResourcesRequest): Promise<ListResourcesResponse> | Observable<ListResourcesResponse> | ListResourcesResponse;
-    updateResource(request: UpdateResourceRequest): Promise<ResourceResponse> | Observable<ResourceResponse> | ResourceResponse;
-    deleteResource(request: DeleteResourceRequest): Promise<DeleteResourceResponse> | Observable<DeleteResourceResponse> | DeleteResourceResponse;
+    createResource(request: CreateResourceRequest, metadata?: Metadata): Promise<ResourceResponse> | Observable<ResourceResponse> | ResourceResponse;
+    getResource(request: GetResourceRequest, metadata?: Metadata): Promise<ResourceResponse> | Observable<ResourceResponse> | ResourceResponse;
+    listResources(request: ListResourcesRequest, metadata?: Metadata): Promise<ListResourcesResponse> | Observable<ListResourcesResponse> | ListResourcesResponse;
+    updateResource(request: UpdateResourceRequest, metadata?: Metadata): Promise<ResourceResponse> | Observable<ResourceResponse> | ResourceResponse;
+    deleteResource(request: DeleteResourceRequest, metadata?: Metadata): Promise<DeleteResourceResponse> | Observable<DeleteResourceResponse> | DeleteResourceResponse;
     /** Batch / Bulk Operations */
-    batchSyncInventory(request: BatchSyncInventoryRequest): Promise<BatchSyncInventoryResponse> | Observable<BatchSyncInventoryResponse> | BatchSyncInventoryResponse;
+    batchSyncInventory(request: BatchSyncInventoryRequest, metadata?: Metadata): Promise<BatchSyncInventoryResponse> | Observable<BatchSyncInventoryResponse> | BatchSyncInventoryResponse;
     /** Booking Operations */
-    createBooking(request: CreateBookingRequest): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
-    cancelBooking(request: CancelBookingRequest): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
-    rescheduleBooking(request: RescheduleBookingRequest): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
-    getAvailability(request: GetAvailabilityRequest): Promise<GetAvailabilityResponse> | Observable<GetAvailabilityResponse> | GetAvailabilityResponse;
-    listBookings(request: ListBookingsRequest): Promise<ListBookingsResponse> | Observable<ListBookingsResponse> | ListBookingsResponse;
+    createBooking(request: CreateBookingRequest, metadata?: Metadata): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
+    cancelBooking(request: CancelBookingRequest, metadata?: Metadata): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
+    rescheduleBooking(request: RescheduleBookingRequest, metadata?: Metadata): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
+    updateBookingStatus(request: UpdateBookingStatusRequest, metadata?: Metadata): Promise<BookingResponse> | Observable<BookingResponse> | BookingResponse;
+    getAvailability(request: GetAvailabilityRequest, metadata?: Metadata): Promise<GetAvailabilityResponse> | Observable<GetAvailabilityResponse> | GetAvailabilityResponse;
+    listBookings(request: ListBookingsRequest, metadata?: Metadata): Promise<ListBookingsResponse> | Observable<ListBookingsResponse> | ListBookingsResponse;
     /** Customer Operations */
-    verifyCustomer(request: VerifyCustomerRequest): Promise<VerifyCustomerResponse> | Observable<VerifyCustomerResponse> | VerifyCustomerResponse;
-    listCustomers(request: ListCustomersRequest): Promise<ListCustomersResponse> | Observable<ListCustomersResponse> | ListCustomersResponse;
+    verifyCustomer(request: VerifyCustomerRequest, metadata?: Metadata): Promise<VerifyCustomerResponse> | Observable<VerifyCustomerResponse> | VerifyCustomerResponse;
+    listCustomers(request: ListCustomersRequest, metadata?: Metadata): Promise<ListCustomersResponse> | Observable<ListCustomersResponse> | ListCustomersResponse;
     /** Tenant Schedule Settings */
-    getTenantSchedule(request: GetTenantScheduleRequest): Promise<TenantScheduleResponse> | Observable<TenantScheduleResponse> | TenantScheduleResponse;
-    updateTenantSchedule(request: UpdateTenantScheduleRequest): Promise<TenantScheduleResponse> | Observable<TenantScheduleResponse> | TenantScheduleResponse;
+    getTenantSchedule(request: GetTenantScheduleRequest, metadata?: Metadata): Promise<TenantScheduleResponse> | Observable<TenantScheduleResponse> | TenantScheduleResponse;
+    updateTenantSchedule(request: UpdateTenantScheduleRequest, metadata?: Metadata): Promise<TenantScheduleResponse> | Observable<TenantScheduleResponse> | TenantScheduleResponse;
 }
 export declare function SchedulingInventoryServiceControllerMethods(): (constructor: Function) => void;
 export declare const SCHEDULING_INVENTORY_SERVICE_NAME = "SchedulingInventoryService";

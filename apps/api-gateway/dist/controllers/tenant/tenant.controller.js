@@ -19,27 +19,45 @@ const rxjs_1 = require("rxjs");
 const cookies_constant_js_1 = require("../../constants/cookies.constant.js");
 const messages_constant_js_1 = require("../../constants/messages.constant.js");
 const routes_constant_js_1 = require("../../constants/routes.constant.js");
+const roles_decorator_js_1 = require("../../decorators/roles.decorator.js");
+const roles_guard_js_1 = require("../../guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
+const circuit_breaker_1 = require("@repo/circuit-breaker");
 const cookie_util_js_1 = require("../../utils/cookie.util.js");
 const tenant_dto_js_1 = require("./dtos/tenant.dto.js");
 let TenantController = class TenantController {
     _client;
     _dashboardClient;
+    _circuitBreakerService;
     _tenantAuthService;
     _tenantServiceClient;
     _dashboardUserServiceClient;
-    constructor(_client, _dashboardClient) {
+    constructor(_client, _dashboardClient, _circuitBreakerService) {
         this._client = _client;
         this._dashboardClient = _dashboardClient;
+        this._circuitBreakerService = _circuitBreakerService;
     }
     onModuleInit() {
-        this._tenantAuthService = this._client.getService('TenantAuthService');
-        this._tenantServiceClient = this._client.getService('TenantService');
-        this._dashboardUserServiceClient =
-            this._dashboardClient.getService('DashboardUserService');
+        this._tenantAuthService = this._circuitBreakerService.wrapGrpcClient('tenant-service', this._client.getService('TenantAuthService'));
+        this._tenantServiceClient = this._circuitBreakerService.wrapGrpcClient('tenant-service', this._client.getService('TenantService'));
+        this._dashboardUserServiceClient = this._circuitBreakerService.wrapGrpcClient('dashboard-service', this._dashboardClient.getService('DashboardUserService'));
+    }
+    _getTenantId(req) {
+        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_CONTEXT_MISSING);
+        }
+        return tenantId;
+    }
+    testEndpoint() {
+        return {
+            status: 'ok',
+            service: 'api-gateway',
+            timestamp: new Date().toISOString(),
+        };
     }
     async getProfile(req) {
-        const tenantId = req.tenant?.tenant_id || '';
+        const tenantId = this._getTenantId(req);
         const response = await (0, rxjs_1.lastValueFrom)(this._tenantAuthService.getProfile({ tenant_id: tenantId }));
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.AUTH.PROFILE_RETRIEVED,
@@ -122,8 +140,15 @@ let TenantController = class TenantController {
             data: null,
         };
     }
-    async inviteUser(body) {
-        const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserServiceClient.inviteUser(body));
+    async inviteUser(req, body) {
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserServiceClient.inviteUser({
+            tenant_id: tenantId,
+            email: body.email,
+            name: body.name,
+            system_role: 'manager',
+            agent_id: body.agent_id,
+        }));
         return {
             message: response.message,
             data: {
@@ -131,12 +156,16 @@ let TenantController = class TenantController {
                 email: response.email,
                 name: response.name,
                 system_role: response.system_role,
+                agent_id: response.agent_id,
+                agent_ids: response.agent_ids,
             },
         };
     }
-    async listWorkspaceUsers(query) {
+    async listWorkspaceUsers(req, query) {
+        const tenantId = this._getTenantId(req);
         const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserServiceClient.listWorkspaceUsers({
-            tenant_id: query.tenant_id,
+            tenant_id: tenantId,
+            agent_id: query.agent_id,
             page: query.page,
             limit: query.limit,
             search: query.search,
@@ -147,11 +176,29 @@ let TenantController = class TenantController {
             data: response,
         };
     }
+    async suspendWorkspaceUser(req, params) {
+        const tenantId = this._getTenantId(req);
+        const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserServiceClient.suspendWorkspaceUser({
+            tenant_id: tenantId,
+            user_id: params.userId,
+        }));
+        return {
+            message: response.message || messages_constant_js_1.RESPONSE_MESSAGES.TENANT.WORKSPACE_USER_STATUS_UPDATED,
+            data: response.user,
+        };
+    }
 };
 exports.TenantController = TenantController;
 __decorate([
+    (0, common_1.Get)('test'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], TenantController.prototype, "testEndpoint", null);
+__decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.TENANT.AUTH.ME),
-    (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard),
+    (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),
+    (0, roles_decorator_js_1.Roles)('tenant_owner'),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -230,24 +277,42 @@ __decorate([
 ], TenantController.prototype, "resetPassword", null);
 __decorate([
     (0, common_1.Post)(routes_constant_js_1.API_ROUTES.TENANT.AUTH.INVITE_USER),
+    (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),
+    (0, roles_decorator_js_1.Roles)('tenant_owner'),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
-    __param(0, (0, common_1.Body)()),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [tenant_dto_js_1.InviteUserDto]),
+    __metadata("design:paramtypes", [Object, tenant_dto_js_1.InviteUserDto]),
     __metadata("design:returntype", Promise)
 ], TenantController.prototype, "inviteUser", null);
 __decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.TENANT.AUTH.WORKSPACE_USERS),
+    (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),
+    (0, roles_decorator_js_1.Roles)('tenant_owner'),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
-    __param(0, (0, common_1.Query)()),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [tenant_dto_js_1.ListWorkspaceUsersDto]),
+    __metadata("design:paramtypes", [Object, tenant_dto_js_1.ListWorkspaceUsersDto]),
     __metadata("design:returntype", Promise)
 ], TenantController.prototype, "listWorkspaceUsers", null);
+__decorate([
+    (0, common_1.Patch)(routes_constant_js_1.API_ROUTES.TENANT.AUTH.SUSPEND_WORKSPACE_USER),
+    (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),
+    (0, roles_decorator_js_1.Roles)('tenant_owner'),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, tenant_dto_js_1.SuspendWorkspaceUserParamDto]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "suspendWorkspaceUser", null);
 exports.TenantController = TenantController = __decorate([
     (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.TENANT.AUTH.BASE),
     __param(0, (0, common_1.Inject)('TENANT_PACKAGE')),
     __param(1, (0, common_1.Inject)('DASHBOARD_PACKAGE')),
-    __metadata("design:paramtypes", [Object, Object])
+    __param(2, (0, common_1.Inject)(circuit_breaker_1.CIRCUIT_BREAKER_SERVICE)),
+    __metadata("design:paramtypes", [Object, Object, Object])
 ], TenantController);

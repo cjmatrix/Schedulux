@@ -1,29 +1,93 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { CustomerChatController } from './controllers/agentOrchestrator/customer-chat.controller.js';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { LoggerModule } from 'nestjs-pino';
 import { KnowledgeController } from './controllers/agentOrchestrator/knowledge.controller.js';
+import { BillingController } from './controllers/billing/billing.controller.js';
 import { DashboardUserAuthController } from './controllers/dashboarduser/dashboard-user-auth.controller.js';
 import { SchedulingController } from './controllers/scheduling/scheduling.controller.js';
 import { SuperAdminController } from './controllers/superadmin/superadmin.controller.js';
+import { SuperAdminDashboardController } from './controllers/superadmin/superadmin-dashboard.controller.js';
 import { SuperAdminTenantController } from './controllers/superadmin/superadmin-tenant.controller.js';
+import { SuperAdminTierConfigController } from './controllers/superadmin/superadmin-tier-config.controller.js';
 import { TenantController } from './controllers/tenant/tenant.controller.js';
+import { TenantDashboardController } from './controllers/tenant/tenant-dashboard.controller.js';
+import { AppThrottlerGuard } from './guards/app-throttler.guard.js';
+import { CrawlQuotaGuard } from './guards/crawl-quota.guard.js';
+import { PaddleWebhookGuard } from './guards/paddle-webhook.guard.js';
 import { RolesGuard } from './guards/roles.guard.js';
 import { TenantAuthGuard } from './guards/tenant-auth.guard.js';
-import { RedisService } from './services/redis.service.js';
-import { SchemaGateway } from './websockets/schema.gateway.js';
+import { TenantTokenQuotaGuard } from './guards/tenant-token-quota.guard.js';
+import { RedisModule } from './modules/redis.module.js';
+import { CircuitBreakerModule } from '@repo/circuit-breaker';
+import { ThrottlerStorageRedisService } from './services/throttler-storage-redis.service.js';
+
+const isProduction = process.env.NODE_ENV === 'production';
+
+const grpcChannelOptions = {
+  'grpc.service_config': JSON.stringify({
+    loadBalancingConfig: [{ round_robin: {} }],
+  }),
+};
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    LoggerModule.forRoot({
+      pinoHttp: {
+        name: 'api-gateway',
+        level: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
+        transport: isProduction
+          ? undefined
+          : {
+              target: require.resolve('pino-pretty'),
+              options: {
+                colorize: true,
+                translateTime: 'SYS:standard',
+                ignore: 'pid,hostname',
+              },
+            },
+      },
+    }),
+    RedisModule,
+    CircuitBreakerModule,
+    ThrottlerModule.forRootAsync({
+      imports: [RedisModule],
+      inject: [ThrottlerStorageRedisService],
+      useFactory: (storage: ThrottlerStorageRedisService) => ({
+        throttlers: [
+          {
+            name: 'short',
+            ttl: 1000,
+            limit: 30,
+          },
+          {
+            name: 'default',
+            ttl: 60000,
+            limit: 100,
+          },
+          {
+            name: 'long',
+            ttl: 900000,
+            limit: 1000,
+          },
+        ],
+        storage,
+        errorMessage: (_context, detail) =>
+          `Rate limit of ${detail.limit} requests exceeded. Please try again in ${detail.timeToBlockExpire} seconds.`,
+      }),
+    }),
     ClientsModule.register([
       {
         name: 'TENANT_PACKAGE',
         transport: Transport.GRPC,
         options: {
-          url: 'localhost:50051',
+          url: process.env.IDENTITY_GRPC_URL || process.env.TENANT_SERVICE_URL || 'localhost:50051',
+          channelOptions: grpcChannelOptions,
           package: 'tenant',
           protoPath: require.resolve('@repo/proto/tenant.proto'),
           loader: {
@@ -39,7 +103,8 @@ import { SchemaGateway } from './websockets/schema.gateway.js';
         name: 'DASHBOARD_PACKAGE',
         transport: Transport.GRPC,
         options: {
-          url: 'localhost:50051',
+          url: process.env.IDENTITY_GRPC_URL || process.env.TENANT_SERVICE_URL || 'localhost:50051',
+          channelOptions: grpcChannelOptions,
           package: 'dashboard',
           protoPath: require.resolve('@repo/proto/dashboard.proto'),
           loader: {
@@ -55,7 +120,8 @@ import { SchemaGateway } from './websockets/schema.gateway.js';
         name: 'SUPERADMIN_PACKAGE',
         transport: Transport.GRPC,
         options: {
-          url: 'localhost:50051',
+          url: process.env.IDENTITY_GRPC_URL || process.env.TENANT_SERVICE_URL || 'localhost:50051',
+          channelOptions: grpcChannelOptions,
           package: 'superadmin',
           protoPath: require.resolve('@repo/proto/superadmin.proto'),
           loader: {
@@ -71,7 +137,11 @@ import { SchemaGateway } from './websockets/schema.gateway.js';
         name: 'KNOWLEDGE_PACKAGE',
         transport: Transport.GRPC,
         options: {
-          url: 'localhost:50052',
+          url:
+            process.env.AI_ORCHESTRATION_GRPC_URL ||
+            process.env.KNOWLEDGE_GRPC_URL ||
+            'localhost:50052',
+          channelOptions: grpcChannelOptions,
           package: 'knowledge',
           protoPath: require.resolve('@repo/proto/knowledge.proto'),
           loader: {
@@ -87,7 +157,8 @@ import { SchemaGateway } from './websockets/schema.gateway.js';
         name: 'SCHEDULING_PACKAGE',
         transport: Transport.GRPC,
         options: {
-          url: 'localhost:50053',
+          url: process.env.SCHEDULING_GRPC_URL || 'localhost:50053',
+          channelOptions: grpcChannelOptions,
           package: 'scheduling',
           protoPath: require.resolve('@repo/proto/scheduling.proto'),
           loader: {
@@ -103,26 +174,26 @@ import { SchemaGateway } from './websockets/schema.gateway.js';
   ],
   controllers: [
     TenantController,
+    TenantDashboardController,
+    BillingController,
     SuperAdminController,
+    SuperAdminDashboardController,
     SuperAdminTenantController,
+    SuperAdminTierConfigController,
     DashboardUserAuthController,
     KnowledgeController,
-    CustomerChatController,
     SchedulingController,
   ],
   providers: [
-    RedisService,
-    {
-      provide: 'ISchemaEventSubscriber',
-      useExisting: RedisService,
-    },
-    {
-      provide: 'ISchemaCacheService',
-      useExisting: RedisService,
-    },
-    SchemaGateway,
     RolesGuard,
     TenantAuthGuard,
+    PaddleWebhookGuard,
+    CrawlQuotaGuard,
+    TenantTokenQuotaGuard,
+    {
+      provide: APP_GUARD,
+      useClass: AppThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}

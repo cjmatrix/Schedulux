@@ -1,17 +1,27 @@
 import type { WorkspaceUserInfo } from '@repo/proto/dashboard';
-import { Filter, Plus, Search, Shield, ShieldCheck } from 'lucide-react';
+import { Filter, Plus, Search, Shield, ShieldCheck, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useParams, useSearchParams } from 'react-router';
+import { toast } from 'sonner';
 import useDebounceHook from '../../../shared/hooks/useDebounceHook';
 import { InviteUserModal } from '../components/InviteUserModal';
 import { WorkspaceUsersTable } from '../components/WorkspaceUsersTable';
 import { useTenantProfile } from '../hooks/useAuth';
-import { useWorkspaceUsers } from '../hooks/useTenant';
+import { useTenantAgents } from '../hooks/useKnowledgeDocuments';
+import { useSuspendWorkspaceUser, useWorkspaceUsers } from '../hooks/useTenant';
 
 export default function WorkspaceUsersPage() {
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [suspendingUserId, setSuspendingUserId] = useState<string | null>(null);
+
+  const { agentId: routeAgentId } = useParams<{ agentId?: string }>();
+  const [searchParams] = useSearchParams();
+  const { data: agents = [] } = useTenantAgents();
+  const currentAgentId = routeAgentId || searchParams.get('agent_id') || undefined;
+  const effectiveAgentId = currentAgentId || (agents.length > 0 ? agents[0].agent_id : undefined);
 
   const { data: profileData } = useTenantProfile();
   const tenantId = profileData?.data?.tenant_id || '';
@@ -24,7 +34,25 @@ export default function WorkspaceUsersPage() {
     5,
     finalInput || undefined,
     roleFilter === 'all' ? undefined : roleFilter,
+    effectiveAgentId,
   );
+
+  const suspendUserMutation = useSuspendWorkspaceUser();
+
+  const handleToggleSuspend = (user: { user_id: string; name: string; status: string }) => {
+    setSuspendingUserId(user.user_id);
+    const actionLabel = user.status === 'suspended' ? 'unsuspend' : 'suspend';
+    suspendUserMutation.mutate(user.user_id, {
+      onSuccess: (res) => {
+        toast.success(res.message || `Workspace user ${actionLabel}ed successfully`);
+        setSuspendingUserId(null);
+      },
+      onError: (err) => {
+        toast.error(err.message || `Failed to ${actionLabel} workspace user`);
+        setSuspendingUserId(null);
+      },
+    });
+  };
 
   const userList = useMemo(() => {
     const rawUsers = workspaceData?.data?.users;
@@ -33,8 +61,10 @@ export default function WorkspaceUsersPage() {
         user_id: u.user_id,
         name: u.name,
         email: u.email,
-        system_role: u.system_role as 'root' | 'manager',
-        status: 'active' as const,
+        system_role: (u.system_role || 'manager') as 'manager',
+        agent_id: u.agent_id,
+        agent_ids: u.agent_ids,
+        status: (u.status || 'active') as 'active' | 'suspended',
         last_active: u.created_at ? new Date(u.created_at).toLocaleDateString() : 'Recently',
       }));
     }
@@ -44,30 +74,36 @@ export default function WorkspaceUsersPage() {
   const totalCount = workspaceData?.data?.total_count ?? userList.length;
 
   return (
-    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6">
-      <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 tracking-wide">
-        <span>Settings & Team</span>
+    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto flex flex-col gap-6 sm:gap-8 font-sans">
+      <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 tracking-wide flex-wrap">
+        <span>Settings &amp; Team</span>
         <span>/</span>
-        <span className="text-slate-800">Workspace Users</span>
+        <span className="text-slate-800 font-bold truncate">Workspace Users</span>
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 sm:pb-6 border-b border-slate-200">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            <div className="p-1.5 sm:p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+              <Users className="w-4 h-4 sm:w-5 sm:h-5" />
+            </div>
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
               Workspace Users
             </h1>
+            <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold shrink-0">
+              {totalCount} Total
+            </span>
           </div>
-          <p className="text-xs text-slate-500 font-medium">
+          <p className="mt-1 text-xs sm:text-sm text-slate-500">
             Manage who has access to the Schedulux dashboard and their permissions.
           </p>
         </div>
 
         <button
           onClick={() => setIsInviteModalOpen(true)}
-          className="px-5 py-2.5 bg-slate-950 hover:bg-black text-white text-xs font-semibold rounded-full flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 self-start sm:self-auto"
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition cursor-pointer shadow-xs self-start sm:self-auto shrink-0"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-3.5 h-3.5" />
           <span>Invite User</span>
         </button>
       </div>
@@ -114,6 +150,9 @@ export default function WorkspaceUsersPage() {
         totalCount={totalCount}
         currentPage={page}
         onPageChange={setPage}
+        onToggleSuspend={handleToggleSuspend}
+        isSuspending={suspendUserMutation.isPending}
+        suspendingUserId={suspendingUserId}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -171,6 +210,7 @@ export default function WorkspaceUsersPage() {
         isOpen={isInviteModalOpen}
         onClose={() => setIsInviteModalOpen(false)}
         tenantId={tenantId}
+        defaultAgentId={effectiveAgentId}
       />
     </div>
   );

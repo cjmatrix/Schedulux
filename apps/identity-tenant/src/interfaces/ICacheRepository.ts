@@ -6,6 +6,7 @@ export interface SetOptions {
 
 export interface ICacheRepository {
   get(key: string): Promise<string | null>;
+  mget(...keys: string[]): Promise<(string | null)[]>;
   set(key: string, value: string, options?: SetOptions): Promise<void>;
   delete(key: string): Promise<boolean>;
   ttl(key: string): Promise<number>;

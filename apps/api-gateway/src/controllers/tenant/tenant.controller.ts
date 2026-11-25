@@ -6,10 +6,13 @@ import {
   HttpStatus,
   Inject,
   OnModuleInit,
+  Param,
+  Patch,
   Post,
   Query,
   Req,
   Res,
+  UnauthorizedException,
   UseGuards,
   UsePipes,
 } from '@nestjs/common';
@@ -22,7 +25,10 @@ import { lastValueFrom } from 'rxjs';
 import { COOKIE_NAMES } from '../../constants/cookies.constant.js';
 import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
 import { API_ROUTES } from '../../constants/routes.constant.js';
+import { Roles } from '../../decorators/roles.decorator.js';
+import { RolesGuard } from '../../guards/roles.guard.js';
 import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant-auth.guard.js';
+import { CIRCUIT_BREAKER_SERVICE, ICircuitBreakerService } from '@repo/circuit-breaker';
 import {
   getAccessTokenCookieOptions,
   getRefreshTokenCookieOptions,
@@ -34,6 +40,7 @@ import {
   LogoutDto,
   RefreshTokenDto,
   ResetPasswordDto,
+  SuspendWorkspaceUserParamDto,
   TenantGoogleLoginDto,
   TenantLoginDto,
   TenantRegisterDto,
@@ -49,19 +56,46 @@ export class TenantController implements OnModuleInit {
   constructor(
     @Inject('TENANT_PACKAGE') private readonly _client: ClientGrpc,
     @Inject('DASHBOARD_PACKAGE') private readonly _dashboardClient: ClientGrpc,
+    @Inject(CIRCUIT_BREAKER_SERVICE)
+    private readonly _circuitBreakerService: ICircuitBreakerService,
   ) {}
 
   onModuleInit() {
-    this._tenantAuthService = this._client.getService<TenantAuthServiceClient>('TenantAuthService');
-    this._tenantServiceClient = this._client.getService<TenantServiceClient>('TenantService');
-    this._dashboardUserServiceClient =
-      this._dashboardClient.getService<DashboardUserServiceClient>('DashboardUserService');
+    this._tenantAuthService = this._circuitBreakerService.wrapGrpcClient(
+      'tenant-service',
+      this._client.getService<TenantAuthServiceClient>('TenantAuthService'),
+    );
+    this._tenantServiceClient = this._circuitBreakerService.wrapGrpcClient(
+      'tenant-service',
+      this._client.getService<TenantServiceClient>('TenantService'),
+    );
+    this._dashboardUserServiceClient = this._circuitBreakerService.wrapGrpcClient(
+      'dashboard-service',
+      this._dashboardClient.getService<DashboardUserServiceClient>('DashboardUserService'),
+    );
   }
 
+  private _getTenantId(req: AuthenticatedTenantRequest): string {
+    const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException(RESPONSE_MESSAGES.AUTH.TENANT_CONTEXT_MISSING);
+    }
+    return tenantId;
+  }
+
+  @Get('test')
+  testEndpoint() {
+  return {
+    status: 'ok',
+    service: 'api-gateway', 
+    timestamp: new Date().toISOString(),
+  };
+}
   @Get(API_ROUTES.TENANT.AUTH.ME)
-  @UseGuards(TenantAuthGuard)
+  @UseGuards(TenantAuthGuard, RolesGuard)
+  @Roles('tenant_owner')
   async getProfile(@Req() req: AuthenticatedTenantRequest) {
-    const tenantId = req.tenant?.tenant_id || '';
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
       this._tenantAuthService.getProfile({ tenant_id: tenantId }),
     );
@@ -90,8 +124,16 @@ export class TenantController implements OnModuleInit {
   async login(@Body() body: TenantLoginDto, @Res({ passthrough: true }) res: Response) {
     const response = await lastValueFrom(this._tenantAuthService.login(body));
 
-    res.cookie(COOKIE_NAMES.TENANT_ACCESS_TOKEN, response.access_token, getAccessTokenCookieOptions());
-    res.cookie(COOKIE_NAMES.TENANT_REFRESH_TOKEN, response.refresh_token, getRefreshTokenCookieOptions());
+    res.cookie(
+      COOKIE_NAMES.TENANT_ACCESS_TOKEN,
+      response.access_token,
+      getAccessTokenCookieOptions(),
+    );
+    res.cookie(
+      COOKIE_NAMES.TENANT_REFRESH_TOKEN,
+      response.refresh_token,
+      getRefreshTokenCookieOptions(),
+    );
 
     return {
       message: response.message,
@@ -106,8 +148,16 @@ export class TenantController implements OnModuleInit {
       this._tenantAuthService.googleLogin({ id_token: body.id_token }),
     );
 
-    res.cookie(COOKIE_NAMES.TENANT_ACCESS_TOKEN, response.access_token, getAccessTokenCookieOptions());
-    res.cookie(COOKIE_NAMES.TENANT_REFRESH_TOKEN, response.refresh_token, getRefreshTokenCookieOptions());
+    res.cookie(
+      COOKIE_NAMES.TENANT_ACCESS_TOKEN,
+      response.access_token,
+      getAccessTokenCookieOptions(),
+    );
+    res.cookie(
+      COOKIE_NAMES.TENANT_REFRESH_TOKEN,
+      response.refresh_token,
+      getRefreshTokenCookieOptions(),
+    );
 
     return {
       message: response.message,
@@ -139,8 +189,16 @@ export class TenantController implements OnModuleInit {
       this._tenantAuthService.refreshToken({ refresh_token: token }),
     );
 
-    res.cookie(COOKIE_NAMES.TENANT_ACCESS_TOKEN, response.access_token, getAccessTokenCookieOptions());
-    res.cookie(COOKIE_NAMES.TENANT_REFRESH_TOKEN, response.refresh_token, getRefreshTokenCookieOptions());
+    res.cookie(
+      COOKIE_NAMES.TENANT_ACCESS_TOKEN,
+      response.access_token,
+      getAccessTokenCookieOptions(),
+    );
+    res.cookie(
+      COOKIE_NAMES.TENANT_REFRESH_TOKEN,
+      response.refresh_token,
+      getRefreshTokenCookieOptions(),
+    );
 
     return {
       message: response.message,
@@ -195,10 +253,21 @@ export class TenantController implements OnModuleInit {
   }
 
   @Post(API_ROUTES.TENANT.AUTH.INVITE_USER)
+  @UseGuards(TenantAuthGuard, RolesGuard)
+  @Roles('tenant_owner')
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(ZodValidationPipe)
-  async inviteUser(@Body() body: InviteUserDto) {
-    const response = await lastValueFrom(this._dashboardUserServiceClient.inviteUser(body));
+  async inviteUser(@Req() req: AuthenticatedTenantRequest, @Body() body: InviteUserDto) {
+    const tenantId = this._getTenantId(req);
+    const response = await lastValueFrom(
+      this._dashboardUserServiceClient.inviteUser({
+        tenant_id: tenantId,
+        email: body.email,
+        name: body.name,
+        system_role: 'manager',
+        agent_id: body.agent_id,
+      }),
+    );
     return {
       message: response.message,
       data: {
@@ -206,16 +275,25 @@ export class TenantController implements OnModuleInit {
         email: response.email,
         name: response.name,
         system_role: response.system_role,
+        agent_id: response.agent_id,
+        agent_ids: response.agent_ids,
       },
     };
   }
 
   @Get(API_ROUTES.TENANT.AUTH.WORKSPACE_USERS)
+  @UseGuards(TenantAuthGuard, RolesGuard)
+  @Roles('tenant_owner')
   @UsePipes(ZodValidationPipe)
-  async listWorkspaceUsers(@Query() query: ListWorkspaceUsersDto) {
+  async listWorkspaceUsers(
+    @Req() req: AuthenticatedTenantRequest,
+    @Query() query: ListWorkspaceUsersDto,
+  ) {
+    const tenantId = this._getTenantId(req);
     const response = await lastValueFrom(
       this._dashboardUserServiceClient.listWorkspaceUsers({
-        tenant_id: query.tenant_id,
+        tenant_id: tenantId,
+        agent_id: query.agent_id,
         page: query.page,
         limit: query.limit,
         search: query.search,
@@ -227,5 +305,25 @@ export class TenantController implements OnModuleInit {
       data: response,
     };
   }
-}
 
+  @Patch(API_ROUTES.TENANT.AUTH.SUSPEND_WORKSPACE_USER)
+  @UseGuards(TenantAuthGuard, RolesGuard)
+  @Roles('tenant_owner')
+  @UsePipes(ZodValidationPipe)
+  async suspendWorkspaceUser(
+    @Req() req: AuthenticatedTenantRequest,
+    @Param() params: SuspendWorkspaceUserParamDto,
+  ) {
+    const tenantId = this._getTenantId(req);
+    const response = await lastValueFrom(
+      this._dashboardUserServiceClient.suspendWorkspaceUser({
+        tenant_id: tenantId,
+        user_id: params.userId,
+      }),
+    );
+    return {
+      message: response.message || RESPONSE_MESSAGES.TENANT.WORKSPACE_USER_STATUS_UPDATED,
+      data: response.user,
+    };
+  }
+}

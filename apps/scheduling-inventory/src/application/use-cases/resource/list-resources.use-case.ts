@@ -15,18 +15,18 @@ export class ListResourcesUseCase implements IListResourcesUseCase {
   ) {}
 
   async execute(dto: ListResourcesRequest): Promise<ListResourcesOutput> {
-    if (!dto.agent_id?.trim()) throw new BadRequestException('agent_id is required');
+    if (!dto.tenant_id?.trim()) throw new BadRequestException('tenant_id is required');
 
     const page = dto.page > 0 ? dto.page : 1;
     const limit = dto.limit > 0 ? dto.limit : 20;
 
-    const { resources, total, summary } = await this._resourceRepository.findAll(dto.tenant_id, {
+    const { resources, total, summary } = await this._resourceRepository.findAll(dto.tenant_id.trim(), {
       page,
       limit,
       resourceType: dto.resource_type || undefined,
       dispatchStatus: dto.dispatch_status || undefined,
       category: dto.category || undefined,
-      agentId: dto.agent_id.trim(),
+      agentId: dto.agent_id?.trim() || undefined,
       search: dto.search || undefined,
     });
 

@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: identity-tenant
+  namespace: schedulux
+  labels:
+    app: identity-tenant
+    app.kubernetes.io/name: identity-tenant
+    app.kubernetes.io/part-of: schedulux
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: identity-tenant
+  template:
+    metadata:
+      labels:
+        app: identity-tenant
+    spec:
+      containers:
+        - name: identity-tenant
+          image: cjmatrix/identity-tenant:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 50051
+              name: grpc
+          envFrom:
+            - secretRef:
+                name: identity-tenant-secrets
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: "identity-tenant"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 150Mi
+            limits:
+              cpu: 200m
+              memory: 250Mi
+          readinessProbe:
+            tcpSocket:
+              port: 50051
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 50051
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+# Standard ClusterIP Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: identity-tenant-svc
+  namespace: schedulux
+  labels:
+    app: identity-tenant
+spec:
+  type: ClusterIP
+  selector:
+    app: identity-tenant
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+---
+# Headless Service for Client-Side gRPC Round-Robin Load Balancing
+apiVersion: v1
+kind: Service
+metadata:
+  name: identity-tenant-headless
+  namespace: schedulux
+  labels:
+    app: identity-tenant
+spec:
+  clusterIP: None
+  selector:
+    app: identity-tenant
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: identity-tenant-hpa
+  namespace: schedulux
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: identity-tenant
+  minReplicas: 1
+  maxReplicas: 2
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300

@@ -9,18 +9,35 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
+const core_1 = require("@nestjs/core");
 const microservices_1 = require("@nestjs/microservices");
-const customer_chat_controller_js_1 = require("./controllers/agentOrchestrator/customer-chat.controller.js");
+const throttler_1 = require("@nestjs/throttler");
+const nestjs_pino_1 = require("nestjs-pino");
 const knowledge_controller_js_1 = require("./controllers/agentOrchestrator/knowledge.controller.js");
+const billing_controller_js_1 = require("./controllers/billing/billing.controller.js");
 const dashboard_user_auth_controller_js_1 = require("./controllers/dashboarduser/dashboard-user-auth.controller.js");
 const scheduling_controller_js_1 = require("./controllers/scheduling/scheduling.controller.js");
 const superadmin_controller_js_1 = require("./controllers/superadmin/superadmin.controller.js");
+const superadmin_dashboard_controller_js_1 = require("./controllers/superadmin/superadmin-dashboard.controller.js");
 const superadmin_tenant_controller_js_1 = require("./controllers/superadmin/superadmin-tenant.controller.js");
+const superadmin_tier_config_controller_js_1 = require("./controllers/superadmin/superadmin-tier-config.controller.js");
 const tenant_controller_js_1 = require("./controllers/tenant/tenant.controller.js");
+const tenant_dashboard_controller_js_1 = require("./controllers/tenant/tenant-dashboard.controller.js");
+const app_throttler_guard_js_1 = require("./guards/app-throttler.guard.js");
+const crawl_quota_guard_js_1 = require("./guards/crawl-quota.guard.js");
+const paddle_webhook_guard_js_1 = require("./guards/paddle-webhook.guard.js");
 const roles_guard_js_1 = require("./guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("./guards/tenant-auth.guard.js");
-const redis_service_js_1 = require("./services/redis.service.js");
-const schema_gateway_js_1 = require("./websockets/schema.gateway.js");
+const tenant_token_quota_guard_js_1 = require("./guards/tenant-token-quota.guard.js");
+const redis_module_js_1 = require("./modules/redis.module.js");
+const circuit_breaker_1 = require("@repo/circuit-breaker");
+const throttler_storage_redis_service_js_1 = require("./services/throttler-storage-redis.service.js");
+const isProduction = process.env.NODE_ENV === 'production';
+const grpcChannelOptions = {
+    'grpc.service_config': JSON.stringify({
+        loadBalancingConfig: [{ round_robin: {} }],
+    }),
+};
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -30,12 +47,56 @@ exports.AppModule = AppModule = __decorate([
             config_1.ConfigModule.forRoot({
                 isGlobal: true,
             }),
+            nestjs_pino_1.LoggerModule.forRoot({
+                pinoHttp: {
+                    name: 'api-gateway',
+                    level: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
+                    transport: isProduction
+                        ? undefined
+                        : {
+                            target: require.resolve('pino-pretty'),
+                            options: {
+                                colorize: true,
+                                translateTime: 'SYS:standard',
+                                ignore: 'pid,hostname',
+                            },
+                        },
+                },
+            }),
+            redis_module_js_1.RedisModule,
+            circuit_breaker_1.CircuitBreakerModule,
+            throttler_1.ThrottlerModule.forRootAsync({
+                imports: [redis_module_js_1.RedisModule],
+                inject: [throttler_storage_redis_service_js_1.ThrottlerStorageRedisService],
+                useFactory: (storage) => ({
+                    throttlers: [
+                        {
+                            name: 'short',
+                            ttl: 1000,
+                            limit: 30,
+                        },
+                        {
+                            name: 'default',
+                            ttl: 60000,
+                            limit: 100,
+                        },
+                        {
+                            name: 'long',
+                            ttl: 900000,
+                            limit: 1000,
+                        },
+                    ],
+                    storage,
+                    errorMessage: (_context, detail) => `Rate limit of ${detail.limit} requests exceeded. Please try again in ${detail.timeToBlockExpire} seconds.`,
+                }),
+            }),
             microservices_1.ClientsModule.register([
                 {
                     name: 'TENANT_PACKAGE',
                     transport: microservices_1.Transport.GRPC,
                     options: {
-                        url: 'localhost:50051',
+                        url: process.env.IDENTITY_GRPC_URL || process.env.TENANT_SERVICE_URL || 'localhost:50051',
+                        channelOptions: grpcChannelOptions,
                         package: 'tenant',
                         protoPath: require.resolve('@repo/proto/tenant.proto'),
                         loader: {
@@ -51,7 +112,8 @@ exports.AppModule = AppModule = __decorate([
                     name: 'DASHBOARD_PACKAGE',
                     transport: microservices_1.Transport.GRPC,
                     options: {
-                        url: 'localhost:50051',
+                        url: process.env.IDENTITY_GRPC_URL || process.env.TENANT_SERVICE_URL || 'localhost:50051',
+                        channelOptions: grpcChannelOptions,
                         package: 'dashboard',
                         protoPath: require.resolve('@repo/proto/dashboard.proto'),
                         loader: {
@@ -67,7 +129,8 @@ exports.AppModule = AppModule = __decorate([
                     name: 'SUPERADMIN_PACKAGE',
                     transport: microservices_1.Transport.GRPC,
                     options: {
-                        url: 'localhost:50051',
+                        url: process.env.IDENTITY_GRPC_URL || process.env.TENANT_SERVICE_URL || 'localhost:50051',
+                        channelOptions: grpcChannelOptions,
                         package: 'superadmin',
                         protoPath: require.resolve('@repo/proto/superadmin.proto'),
                         loader: {
@@ -83,7 +146,10 @@ exports.AppModule = AppModule = __decorate([
                     name: 'KNOWLEDGE_PACKAGE',
                     transport: microservices_1.Transport.GRPC,
                     options: {
-                        url: 'localhost:50052',
+                        url: process.env.AI_ORCHESTRATION_GRPC_URL ||
+                            process.env.KNOWLEDGE_GRPC_URL ||
+                            'localhost:50052',
+                        channelOptions: grpcChannelOptions,
                         package: 'knowledge',
                         protoPath: require.resolve('@repo/proto/knowledge.proto'),
                         loader: {
@@ -99,7 +165,8 @@ exports.AppModule = AppModule = __decorate([
                     name: 'SCHEDULING_PACKAGE',
                     transport: microservices_1.Transport.GRPC,
                     options: {
-                        url: 'localhost:50053',
+                        url: process.env.SCHEDULING_GRPC_URL || 'localhost:50053',
+                        channelOptions: grpcChannelOptions,
                         package: 'scheduling',
                         protoPath: require.resolve('@repo/proto/scheduling.proto'),
                         loader: {
@@ -115,26 +182,26 @@ exports.AppModule = AppModule = __decorate([
         ],
         controllers: [
             tenant_controller_js_1.TenantController,
+            tenant_dashboard_controller_js_1.TenantDashboardController,
+            billing_controller_js_1.BillingController,
             superadmin_controller_js_1.SuperAdminController,
+            superadmin_dashboard_controller_js_1.SuperAdminDashboardController,
             superadmin_tenant_controller_js_1.SuperAdminTenantController,
+            superadmin_tier_config_controller_js_1.SuperAdminTierConfigController,
             dashboard_user_auth_controller_js_1.DashboardUserAuthController,
             knowledge_controller_js_1.KnowledgeController,
-            customer_chat_controller_js_1.CustomerChatController,
             scheduling_controller_js_1.SchedulingController,
         ],
         providers: [
-            redis_service_js_1.RedisService,
-            {
-                provide: 'ISchemaEventSubscriber',
-                useExisting: redis_service_js_1.RedisService,
-            },
-            {
-                provide: 'ISchemaCacheService',
-                useExisting: redis_service_js_1.RedisService,
-            },
-            schema_gateway_js_1.SchemaGateway,
             roles_guard_js_1.RolesGuard,
             tenant_auth_guard_js_1.TenantAuthGuard,
+            paddle_webhook_guard_js_1.PaddleWebhookGuard,
+            crawl_quota_guard_js_1.CrawlQuotaGuard,
+            tenant_token_quota_guard_js_1.TenantTokenQuotaGuard,
+            {
+                provide: core_1.APP_GUARD,
+                useClass: app_throttler_guard_js_1.AppThrottlerGuard,
+            },
         ],
     })
 ], AppModule);

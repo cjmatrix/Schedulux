@@ -4,6 +4,7 @@ import { BookingEntity } from '../../../domain/entities/booking.entity.js';
 import type { IBookingRepository } from '../../../domain/repositories/booking.repository.interface.js';
 import type { IResourceRepository } from '../../../domain/repositories/resource.repository.interface.js';
 import type { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
+import type { ITenantScheduleRepository } from '../../../domain/repositories/tenant-schedule.repository.interface.js';
 import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
 import {
   BOOKING_ALLOCATION_SERVICE,
@@ -15,7 +16,6 @@ import {
   TENANT_SCHEDULE_REPOSITORY,
   UNIT_OF_WORK,
 } from '../../../domain/tokens.js';
-import type { ITenantScheduleRepository } from '../../../domain/repositories/tenant-schedule.repository.interface.js';
 import type { ICacheRepository } from '../../../infrastructure/cache/cache-repository.interface.js';
 import type { IBookingAllocationService } from '../../interfaces/booking-allocation-service.interface.js';
 import { IRescheduleBookingUseCase } from '../../interfaces/booking-use-cases.interface.js';
@@ -140,6 +140,9 @@ export class RescheduleBookingUseCase implements IRescheduleBookingUseCase {
       excludeBookingId: booking.id,
       resourceRepository: this._resourceRepository,
       bookingRepository: this._bookingRepository,
+      cacheRepository: this._cacheRepo,
+      holdToken: dto.hold_token,
+      overrideHold: Boolean(dto.override_hold),
       timezone: tenantSchedule?.timezone || 'UTC',
       tenantOperatingHours: tenantSchedule?.operating_hours as unknown as Record<
         string,
@@ -186,6 +189,19 @@ export class RescheduleBookingUseCase implements IRescheduleBookingUseCase {
         `Immediate outbox dispatch failed for ${outboxDoc._id}: ${err}. Recovery sweeper will retry.`,
       );
     });
+
+   
+    void this._cacheRepo
+      .releaseSlotHolds(
+        tenantId,
+        agentId,
+        allocation.allocatedResourceIds,
+        interval.startTime.toISOString(),
+        dto.hold_token,
+      )
+      .catch((err: unknown) => {
+        this._logger.warn(`Failed to clean up provisional hold keys after reschedule: ${err}`);
+      });
 
     return updatedBooking;
   }

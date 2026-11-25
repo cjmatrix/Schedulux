@@ -1,21 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ListServicesQueryDto = exports.ListServicesQuerySchema = exports.UpdateServiceDto = exports.UpdateServiceDtoSchema = exports.CreateServiceDto = exports.CreateServiceDtoSchema = exports.ResourceRequirementDto = exports.ResourceRequirementDtoSchema = exports.ServiceVerificationDtoSchema = exports.DepositDtoSchema = exports.PriceDtoSchema = void 0;
+exports.ListServicesQueryDto = exports.ListServicesQuerySchema = exports.UpdateServiceDto = exports.UpdateServiceDtoSchema = exports.CreateServiceDto = exports.CreateServiceDtoSchema = exports.ResourceRequirementDto = exports.ResourceRequirementDtoSchema = exports.ServiceVerificationDtoSchema = exports.PriceDtoSchema = void 0;
 const nestjs_zod_1 = require("nestjs-zod");
 const zod_1 = require("zod");
 exports.PriceDtoSchema = zod_1.z.object({
     type: zod_1.z.enum(['fixed', 'starting_at', 'hourly', 'free', 'custom']).default('fixed'),
     amount: zod_1.z.number().nonnegative().default(0),
     currency: zod_1.z.string().default('USD'),
-});
-exports.DepositDtoSchema = zod_1.z.object({
-    required: zod_1.z.boolean().default(false),
-    amount: zod_1.z.number().nonnegative().default(0),
-    processor: zod_1.z.string().optional().default(''),
-    upi_id: zod_1.z.string().optional().default(''),
-    qr_code_url: zod_1.z.string().optional().default(''),
-    confirmation_method: zod_1.z.string().optional().default('automatic'),
-    payment_instructions: zod_1.z.string().optional().default(''),
 });
 exports.ServiceVerificationDtoSchema = zod_1.z.object({
     require_otp: zod_1.z.boolean().nullable().optional(),
@@ -39,15 +30,6 @@ exports.CreateServiceDtoSchema = zod_1.z.object({
     buffer_minutes: zod_1.z.number().int().min(0).default(0),
     booking_mode: zod_1.z.enum(['time_slot', 'date_range']).default('time_slot'),
     price: exports.PriceDtoSchema.optional().default({ type: 'fixed', amount: 0, currency: 'USD' }),
-    deposit: exports.DepositDtoSchema.optional().default({
-        required: false,
-        amount: 0,
-        processor: '',
-        upi_id: '',
-        qr_code_url: '',
-        confirmation_method: 'automatic',
-        payment_instructions: '',
-    }),
     verification: exports.ServiceVerificationDtoSchema.optional(),
     resource_requirements: zod_1.z.array(exports.ResourceRequirementDtoSchema).optional().default([]),
 });
@@ -63,7 +45,6 @@ exports.UpdateServiceDtoSchema = zod_1.z.object({
     buffer_minutes: zod_1.z.number().int().min(0).optional(),
     booking_mode: zod_1.z.enum(['time_slot', 'date_range']).optional(),
     price: exports.PriceDtoSchema.optional(),
-    deposit: exports.DepositDtoSchema.optional(),
     verification: exports.ServiceVerificationDtoSchema.optional(),
     resource_requirements: zod_1.z.array(exports.ResourceRequirementDtoSchema).optional(),
 });

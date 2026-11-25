@@ -117,7 +117,6 @@ def apply_draft_merge(base_draft: dict[str, Any], update_data: dict[str, Any]) -
                 if s.get("is_deleted"):
                     s.setdefault("deleted_at", datetime.now(UTC).isoformat())
 
-                # Remap eligible_resource_ids inside newly provided services
                 if "resource_requirements" in s and isinstance(s["resource_requirements"], list):
                     for rr in s["resource_requirements"]:
                         if isinstance(rr, dict) and "eligible_resource_ids" in rr:

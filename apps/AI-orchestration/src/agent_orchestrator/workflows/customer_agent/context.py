@@ -110,33 +110,22 @@ async def _load_from_db(
             guardrails = runtime.guardrails.model_dump()
 
         for r in runtime.resources:
-            if not getattr(r, "is_bookable", True) or getattr(r, "is_deleted", False):
+            if getattr(r, "is_deleted", False):
                 continue
+            r_dict = r.model_dump(mode="json") if hasattr(r, "model_dump") else dict(r)
+            r_dict["id"] = r.resource_id
             rtype = getattr(r, "resource_type", "staff")
             if hasattr(rtype, "value"):
                 rtype = rtype.value
-            resources.append(
-                {
-                    "id": r.resource_id,
-                    "name": r.name,
-                    "type": rtype or "staff",
-                    "title": getattr(r, "title", "") or "",
-                }
-            )
+            r_dict["type"] = str(rtype or "staff")
+            resources.append(r_dict)
 
         for s in runtime.services:
             if getattr(s, "is_deleted", False):
                 continue
-            reqs = getattr(s, "resource_requirements", []) or []
-            services.append(
-                {
-                    "id": s.service_id,
-                    "name": s.name,
-                    "resource_requirements": [
-                        req.model_dump() if hasattr(req, "model_dump") else req for req in reqs
-                    ],
-                }
-            )
+            s_dict = s.model_dump(mode="json") if hasattr(s, "model_dump") else dict(s)
+            s_dict["id"] = s.service_id
+            services.append(s_dict)
     else:
         draft = await AgentDraft.find_one(query)
         if draft and draft.current_draft:
@@ -163,37 +152,25 @@ async def _load_from_db(
 
             if cd.resources:
                 for r in cd.resources:
-                    if not getattr(r, "is_bookable", True) or getattr(r, "is_deleted", False):
+                    if getattr(r, "is_deleted", False):
                         continue
-                    if r.resource_id and r.name:
+                    if getattr(r, "resource_id", None) and getattr(r, "name", None):
+                        r_dict = r.model_dump(mode="json") if hasattr(r, "model_dump") else dict(r)
+                        r_dict["id"] = r.resource_id
                         rtype = getattr(r, "resource_type", "staff")
                         if hasattr(rtype, "value"):
                             rtype = rtype.value
-                        resources.append(
-                            {
-                                "id": r.resource_id,
-                                "name": r.name,
-                                "type": rtype or "staff",
-                                "title": getattr(r, "title", "") or "",
-                            }
-                        )
+                        r_dict["type"] = str(rtype or "staff")
+                        resources.append(r_dict)
 
             if cd.services:
                 for s in cd.services:
                     if getattr(s, "is_deleted", False):
                         continue
-                    if s.service_id and s.name:
-                        reqs = getattr(s, "resource_requirements", []) or []
-                        services.append(
-                            {
-                                "id": s.service_id,
-                                "name": s.name,
-                                "resource_requirements": [
-                                    req.model_dump() if hasattr(req, "model_dump") else req
-                                    for req in reqs
-                                ],
-                            }
-                        )
+                    if getattr(s, "service_id", None) and getattr(s, "name", None):
+                        s_dict = s.model_dump(mode="json") if hasattr(s, "model_dump") else dict(s)
+                        s_dict["id"] = s.service_id
+                        services.append(s_dict)
 
     return {
         "business_name": biz_name or "Schedulux Business",

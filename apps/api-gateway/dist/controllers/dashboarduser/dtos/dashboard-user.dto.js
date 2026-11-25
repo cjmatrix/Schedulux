@@ -1,11 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DashboardUserResetPasswordDto = exports.DashboardUserResetPasswordSchema = exports.DashboardUserForgotPasswordDto = exports.DashboardUserForgotPasswordSchema = exports.DashboardUserRefreshTokenDto = exports.DashboardUserRefreshTokenSchema = exports.DashboardUserLoginDto = exports.DashboardUserLoginSchema = void 0;
+exports.GetInvitationDetailsDto = exports.GetInvitationDetailsSchema = exports.AcceptInvitationDto = exports.AcceptInvitationSchema = exports.DashboardUserResetPasswordDto = exports.DashboardUserResetPasswordSchema = exports.DashboardUserForgotPasswordDto = exports.DashboardUserForgotPasswordSchema = exports.DashboardUserRefreshTokenDto = exports.DashboardUserRefreshTokenSchema = exports.DashboardUserLoginDto = exports.DashboardUserLoginSchema = void 0;
 const nestjs_zod_1 = require("nestjs-zod");
 const zod_1 = require("zod");
 exports.DashboardUserLoginSchema = zod_1.z.object({
     email: zod_1.z.string().trim().email('Please provide a valid email address'),
     password: zod_1.z.string().min(1, 'Password is required'),
+    agent_id: zod_1.z.string().optional(),
 });
 class DashboardUserLoginDto extends (0, nestjs_zod_1.createZodDto)(exports.DashboardUserLoginSchema) {
 }
@@ -29,3 +30,16 @@ exports.DashboardUserResetPasswordSchema = zod_1.z.object({
 class DashboardUserResetPasswordDto extends (0, nestjs_zod_1.createZodDto)(exports.DashboardUserResetPasswordSchema) {
 }
 exports.DashboardUserResetPasswordDto = DashboardUserResetPasswordDto;
+exports.AcceptInvitationSchema = zod_1.z.object({
+    token: zod_1.z.string().min(1, 'Token is required'),
+    password: zod_1.z.string().min(6, 'Password must be at least 6 characters'),
+});
+class AcceptInvitationDto extends (0, nestjs_zod_1.createZodDto)(exports.AcceptInvitationSchema) {
+}
+exports.AcceptInvitationDto = AcceptInvitationDto;
+exports.GetInvitationDetailsSchema = zod_1.z.object({
+    token: zod_1.z.string().min(1, 'Token is required'),
+});
+class GetInvitationDetailsDto extends (0, nestjs_zod_1.createZodDto)(exports.GetInvitationDetailsSchema) {
+}
+exports.GetInvitationDetailsDto = GetInvitationDetailsDto;

@@ -7,16 +7,6 @@ export const PriceDtoSchema = z.object({
   currency: z.string().default('USD'),
 });
 
-export const DepositDtoSchema = z.object({
-  required: z.boolean().default(false),
-  amount: z.number().nonnegative().default(0),
-  processor: z.string().optional().default(''),
-  upi_id: z.string().optional().default(''),
-  qr_code_url: z.string().optional().default(''),
-  confirmation_method: z.string().optional().default('automatic'),
-  payment_instructions: z.string().optional().default(''),
-});
-
 export const ServiceVerificationDtoSchema = z.object({
   require_otp: z.boolean().nullable().optional(),
 });
@@ -40,15 +30,6 @@ export const CreateServiceDtoSchema = z.object({
   buffer_minutes: z.number().int().min(0).default(0),
   booking_mode: z.enum(['time_slot', 'date_range']).default('time_slot'),
   price: PriceDtoSchema.optional().default({ type: 'fixed', amount: 0, currency: 'USD' }),
-  deposit: DepositDtoSchema.optional().default({
-    required: false,
-    amount: 0,
-    processor: '',
-    upi_id: '',
-    qr_code_url: '',
-    confirmation_method: 'automatic',
-    payment_instructions: '',
-  }),
   verification: ServiceVerificationDtoSchema.optional(),
   resource_requirements: z.array(ResourceRequirementDtoSchema).optional().default([]),
 });
@@ -64,7 +45,6 @@ export const UpdateServiceDtoSchema = z.object({
   buffer_minutes: z.number().int().min(0).optional(),
   booking_mode: z.enum(['time_slot', 'date_range']).optional(),
   price: PriceDtoSchema.optional(),
-  deposit: DepositDtoSchema.optional(),
   verification: ServiceVerificationDtoSchema.optional(),
   resource_requirements: z.array(ResourceRequirementDtoSchema).optional(),
 });

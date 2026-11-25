@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   ArrowRight,
   Bot,
   Calendar,
@@ -17,27 +18,41 @@ import {
   Search,
   Settings2,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
+import type { AgentSummaryInfo } from '../../../api/knowledgeApi.js';
+import { ConfirmationModal } from '../../../components/ConfirmationModal.js';
 import { useAuthStore } from '../../../store/useAuthStore.js';
 import { useLogout, useTenantProfile } from '../hooks/useAuth.js';
-import { useTenantAgents } from '../hooks/useKnowledgeDocuments.js';
+import { useDeleteAgent, useTenantAgents } from '../hooks/useKnowledgeDocuments.js';
 
 export default function TenantAgentsPage() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'created' | 'pending'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [agentToDelete, setAgentToDelete] = useState<AgentSummaryInfo | null>(null);
 
   const { data: profileData } = useTenantProfile();
   const authUser = useAuthStore((state) => state.user);
   const logoutMutation = useLogout();
+  const deleteAgentMutation = useDeleteAgent();
 
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
       onSuccess: () => navigate('/login'),
       onError: () => navigate('/login'),
+    });
+  };
+
+  const handleDeleteAgent = () => {
+    if (!agentToDelete) return;
+    deleteAgentMutation.mutate(agentToDelete.agent_id, {
+      onSuccess: () => {
+        setAgentToDelete(null);
+      },
     });
   };
 
@@ -65,11 +80,7 @@ export default function TenantAgentsPage() {
     currentTenant?.business_name ||
     'Tenant Owner';
   const currentUserRole =
-    authUser?.system_role === 'root'
-      ? 'Root Admin'
-      : authUser?.system_role === 'manager'
-        ? 'Manager'
-        : 'Tenant Owner';
+    authUser?.system_role === 'manager' ? 'Operations Manager' : 'Tenant Owner';
   const userInitials = currentUserFullName.substring(0, 2).toUpperCase();
 
   const handleCopyId = (id: string, e: React.MouseEvent) => {
@@ -137,24 +148,25 @@ export default function TenantAgentsPage() {
       </header>
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6 sm:p-10 flex flex-col gap-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 md:p-8 flex flex-col gap-6 sm:gap-8">
         {/* Hero Section */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-200">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-neutral-900 flex items-center justify-center text-white shadow-sm">
-                <Bot className="w-5 h-5" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 sm:pb-6 border-b border-slate-200">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+              <div className="p-1.5 sm:p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+                <Bot className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                  AI Agents Dashboard
-                </h1>
-                <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-                  Manage your scheduling bots. Each agent has its own dedicated services, resources,
-                  and knowledge.
-                </p>
-              </div>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+                AI Agents Dashboard
+              </h1>
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold shrink-0">
+                {agents.length} Total
+              </span>
             </div>
+            <p className="mt-1 text-xs sm:text-sm text-slate-500">
+              Manage your scheduling bots. Each agent has its own dedicated services, resources, and
+              knowledge.
+            </p>
           </div>
 
           {/* Action CTAs */}
@@ -162,17 +174,19 @@ export default function TenantAgentsPage() {
             <button
               onClick={() => refetch()}
               disabled={isRefetching}
-              className="p-2.5 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-white rounded-xl transition cursor-pointer shadow-2xs disabled:opacity-50"
+              className="p-2 border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 rounded-xl transition cursor-pointer shadow-2xs disabled:opacity-50"
               title="Refresh Agents"
             >
-              <RefreshCw className={`w-4 h-4 ${isRefetching ? 'animate-spin' : ''}`} />
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-indigo-600' : ''}`}
+              />
             </button>
             <button
               onClick={() => navigate('/tenant/landingboard')}
-              className="flex items-center gap-2 bg-neutral-950 hover:bg-neutral-800 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-md transition active:scale-98 cursor-pointer"
+              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl font-semibold text-xs shadow-xs transition active:scale-98 cursor-pointer"
             >
-              <Plus className="w-4 h-4 text-emerald-400" />
-              <span>+ Create New Agent</span>
+              <Plus className="w-3.5 h-3.5" />
+              <span>Create New Agent</span>
             </button>
           </div>
         </div>
@@ -380,27 +394,42 @@ export default function TenantAgentsPage() {
                   </div>
 
                   {/* Bottom Action Buttons */}
-                  <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
-                    {/* Edit button: calls resume agent onboarding querying agent draft */}
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/tenant/agent-setup/${agent.agent_id}`)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
-                      title="Resume onboarding and edit draft schema"
-                    >
-                      <Settings2 className="w-3.5 h-3.5" />
-                      <span>{isCreated ? 'Edit Config' : 'Resume Setup'}</span>
-                    </button>
+                  <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      {/* Edit button: calls resume agent onboarding querying agent draft */}
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/tenant/agent-setup/${agent.agent_id}`)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
+                        title="Resume onboarding and edit draft schema"
+                      >
+                        <Settings2 className="w-3.5 h-3.5" />
+                        <span>{isCreated ? 'Edit Config' : 'Resume'}</span>
+                      </button>
+
+                      {/* Delete button: opens confirmation modal */}
+                      {currentUserRole !== 'Operations Manager' && (
+                        <button
+                          type="button"
+                          onClick={() => setAgentToDelete(agent)}
+                          className="inline-flex items-center justify-center p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer border border-transparent hover:border-rose-100"
+                          title="Delete agent"
+                          aria-label={`Delete agent ${agent.name}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
 
                     {/* Go to Dashboard button: enters TenantLayout for this agent */}
                     <button
                       type="button"
                       onClick={() => navigate(`/tenant/agents/${agent.agent_id}/dashboard`)}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-neutral-950 text-white hover:bg-neutral-800 shadow-2xs transition active:scale-98 cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-neutral-950 text-white hover:bg-neutral-800 shadow-2xs transition active:scale-98 cursor-pointer"
                       title="Open operational dashboard for this agent"
                     >
                       <LayoutDashboard className="w-3.5 h-3.5" />
-                      <span>Go to Dashboard</span>
+                      <span>Dashboard</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -410,6 +439,50 @@ export default function TenantAgentsPage() {
           </div>
         )}
       </main>
+
+      {/* Confirmation Modal for Agent Deletion */}
+      <ConfirmationModal
+        isOpen={Boolean(agentToDelete)}
+        onClose={() => setAgentToDelete(null)}
+        onConfirm={handleDeleteAgent}
+        title="Delete AI Agent"
+        description="Are you sure you want to permanently delete this agent? This action cannot be undone."
+        variant="delete"
+        confirmText="Delete Agent"
+        isLoading={deleteAgentMutation.isPending}
+      >
+        {agentToDelete && (
+          <div className="space-y-3">
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold text-slate-900 text-sm truncate">
+                  {agentToDelete.name}
+                </span>
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                    agentToDelete.status === 'created'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}
+                >
+                  {agentToDelete.status === 'created' ? 'Live' : 'Draft'}
+                </span>
+              </div>
+              <div className="mt-2 font-mono text-[11px] text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-slate-200/60 truncate">
+                {agentToDelete.agent_id}
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 bg-rose-50/70 border border-rose-100 rounded-2xl p-3 text-[11px] text-rose-800 leading-relaxed">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span>
+                Deleting this agent will remove its draft schema, runtime configuration, cached
+                knowledge, and active chat widget sessions.
+              </span>
+            </div>
+          </div>
+        )}
+      </ConfirmationModal>
     </div>
   );
 }

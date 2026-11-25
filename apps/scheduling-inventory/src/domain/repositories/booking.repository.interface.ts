@@ -14,6 +14,16 @@ export interface FindBookingsFilter {
   customerPhone?: string;
 }
 
+export interface BookingSummary {
+  totalCount: number;
+  confirmedCount: number;
+  pendingCount: number;
+  cancelledCount: number;
+  completedCount: number;
+  aiInboundCount: number;
+  aiInboundPercent: number;
+}
+
 export interface IBookingRepository {
   create(booking: BookingEntity): Promise<BookingEntity>;
   findById(tenantId: string, bookingId: string): Promise<BookingEntity | null>;
@@ -45,6 +55,7 @@ export interface IBookingRepository {
   ): Promise<{
     bookings: BookingEntity[];
     total: number;
+    summary?: BookingSummary;
   }>;
   update(booking: BookingEntity): Promise<BookingEntity | null>;
 }

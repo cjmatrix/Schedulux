@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DeleteServiceRequest } from '@repo/proto/scheduling';
 import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
 import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
@@ -15,6 +15,8 @@ import { invalidateCachedService } from '../../utils/service-cache.helper.js';
 
 @Injectable()
 export class DeleteServiceUseCase implements IDeleteServiceUseCase {
+  private readonly _logger = new Logger(DeleteServiceUseCase.name);
+
   constructor(
     @Inject(SERVICE_REPOSITORY)
     private readonly _serviceRepository: IServiceRepository,
@@ -49,7 +51,11 @@ export class DeleteServiceUseCase implements IDeleteServiceUseCase {
       return { outbox: outboxDoc };
     });
 
-    await this._eventsProducer.publishOutboxEvent(outbox);
+    void this._eventsProducer.publishOutboxEvent(outbox).catch((err: unknown) => {
+      this._logger.warn(
+        `Immediate outbox dispatch failed for service ${dto.service_id}: ${err}. Recovery sweeper will retry.`,
+      );
+    });
 
     invalidateCachedService(this._cacheRepo, dto.tenant_id, dto.service_id);
 

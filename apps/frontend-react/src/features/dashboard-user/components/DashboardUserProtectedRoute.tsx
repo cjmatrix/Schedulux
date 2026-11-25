@@ -1,11 +1,11 @@
 import { Calendar, Loader2 } from 'lucide-react';
 import { Navigate, Outlet, useLocation } from 'react-router';
-import { useAuthStore } from '../../../store/useAuthStore';
-import { useDashboardProfile } from '../../tenant/hooks/useAuth';
+import { useDashboardAuthStore } from '../../../store/useDashboardAuthStore';
+import { useDashboardProfile } from '../hooks/useDashboardAuth';
 
 export function DashboardUserProtectedRoute() {
   const location = useLocation();
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated } = useDashboardAuthStore();
   const { data: profileData, isLoading, isError } = useDashboardProfile(!isAuthenticated);
 
   if (isAuthenticated && user) {

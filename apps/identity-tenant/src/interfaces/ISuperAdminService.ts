@@ -1,4 +1,9 @@
-import { ListTenantsRequest, ListTenantsResponse } from '@repo/proto/tenant';
+import {
+  GetTenantByIdResponse,
+  ListTenantsRequest,
+  ListTenantsResponse,
+} from '@repo/proto/tenant';
+import type { TierConfigItem } from '@repo/proto/superadmin';
 
 export interface SuperAdminAuthResult {
   superAdmin: {
@@ -31,6 +36,22 @@ export interface SuspendTenantResult {
   };
 }
 
+export interface SuperAdminOverviewResult {
+  totalTenants: number;
+  activeTenants: number;
+  suspendedTenants: number;
+  totalRevenue: number;
+  currency: string;
+  tenantsByTier: Record<string, number>;
+  totalTokens?: number;
+}
+
+export interface RevenueDataPointResult {
+  date: string;
+  amount: number;
+  transactionCount: number;
+}
+
 export interface ISuperAdminService {
   login(email: string, password: string): Promise<SuperAdminAuthResult>;
 
@@ -51,5 +72,48 @@ export interface ISuperAdminService {
 
   ListTenants(data: ListTenantsRequest): Promise<ListTenantsResponse>;
 
+  getTenantById(tenantId: string): Promise<GetTenantByIdResponse>;
+
   suspendTenant(tenantId: string): Promise<SuspendTenantResult>;
+
+  getOverview(startDate?: string, endDate?: string): Promise<SuperAdminOverviewResult>;
+
+  getRevenueChart(
+    startDate?: string,
+    endDate?: string,
+    interval?: string,
+  ): Promise<RevenueDataPointResult[]>;
+
+  getTokenChart(
+    startDate?: string,
+    endDate?: string,
+    interval?: string,
+  ): Promise<
+    Array<{
+      date: string;
+      total_tokens: number;
+      input_tokens: number;
+      output_tokens: number;
+    }>
+  >;
+
+  getTopTenants(
+    startDate?: string,
+    endDate?: string,
+    limit?: number,
+  ): Promise<
+    Array<{
+      tenant_id: string;
+      business_name: string;
+      email: string;
+      tier: string;
+      total_tokens: number;
+    }>
+  >;
+
+  listTierConfigs(): Promise<TierConfigItem[]>;
+
+  getTierConfig(tier: string): Promise<TierConfigItem>;
+
+  updateTierConfig(tier: string, data: Partial<TierConfigItem>): Promise<TierConfigItem>;
 }

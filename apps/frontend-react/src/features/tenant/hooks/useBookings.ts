@@ -97,3 +97,44 @@ export function useRescheduleBooking() {
     },
   });
 }
+
+export function useUpdateBookingStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    ApiResponse<BookingInfo>,
+    Error,
+    {
+      bookingId: string;
+      agentId: string;
+      status: 'confirmed' | 'cancelled' | 'completed' | 'no_show';
+      reason?: string;
+    }
+  >({
+    mutationFn: ({ bookingId, agentId, status, reason }) =>
+      bookingsApi.updateBookingStatus(bookingId, { agent_id: agentId, status, reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: BOOKING_KEYS.allBookings });
+    },
+  });
+}
+
+export function useCompleteBooking() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    ApiResponse<BookingInfo>,
+    Error,
+    {
+      bookingId: string;
+      agentId: string;
+      reason?: string;
+    }
+  >({
+    mutationFn: ({ bookingId, agentId, reason }) =>
+      bookingsApi.completeBooking(bookingId, { agent_id: agentId, reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: BOOKING_KEYS.allBookings });
+    },
+  });
+}

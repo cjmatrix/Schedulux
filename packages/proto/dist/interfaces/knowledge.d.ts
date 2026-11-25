@@ -1,5 +1,13 @@
+import type { Metadata } from "@grpc/grpc-js";
 import { Observable } from "rxjs";
 export declare const protobufPackage = "knowledge";
+export interface GetAgentStatsRequest {
+}
+export interface GetAgentStatsResponse {
+    total_agents: number;
+    active_agents: number;
+    draft_agents: number;
+}
 export interface CrawlSiteRequest {
     tenant_id: string;
     url: string;
@@ -43,6 +51,18 @@ export interface OnboardingResponse {
     draft_schema_json: string;
     live_schema_json: string;
 }
+export interface OnboardingStreamChunk {
+    /** "token", "done", "error" */
+    event_type: string;
+    delta: string;
+    status: string;
+    question: string;
+    field: string;
+    type: string;
+    draft_schema_json: string;
+    live_schema_json: string;
+    error?: string | undefined;
+}
 export interface SaveInitialAgentDraftRequest {
     tenant_id: string;
     draft_json: string;
@@ -69,6 +89,15 @@ export interface AgentSummaryInfo {
 }
 export interface ListTenantAgentsResponse {
     agents: AgentSummaryInfo[];
+}
+export interface DeleteAgentRequest {
+    tenant_id: string;
+    agent_id: string;
+}
+export interface DeleteAgentResponse {
+    success: boolean;
+    message: string;
+    agent_id: string;
 }
 export interface ChatMessageInfo {
     id: string;
@@ -119,6 +148,20 @@ export interface CustomerChatResponse {
     agent_message_id: string;
     created_at: string;
 }
+export interface CustomerChatStreamChunk {
+    session_id: string;
+    delta: string;
+    /** "token" | "status" | "done" | "error" */
+    event_type: string;
+    booking_id?: string | undefined;
+    booking_reference?: string | undefined;
+    status?: string | undefined;
+    user_message_id?: string | undefined;
+    agent_message_id?: string | undefined;
+    created_at?: string | undefined;
+    error?: string | undefined;
+    response?: string | undefined;
+}
 export interface GetCustomerMessagesRequest {
     tenant_id: string;
     agent_id: string;
@@ -140,6 +183,17 @@ export interface GetWidgetConfigRequest {
 export interface GetWidgetConfigResponse {
     tenant_id: string;
     agent_id: string;
+    widget_config_json: string;
+}
+export interface UpdateWidgetConfigRequest {
+    tenant_id: string;
+    agent_id: string;
+    whitelisted_domains: string[];
+    widget_config_json?: string | undefined;
+}
+export interface UpdateWidgetConfigResponse {
+    message: string;
+    success: boolean;
     widget_config_json: string;
 }
 export interface GetDocumentUploadUrlRequest {
@@ -191,36 +245,46 @@ export interface DeleteDocumentResponse {
 }
 export declare const KNOWLEDGE_PACKAGE_NAME = "knowledge";
 export interface KnowledgeServiceClient {
-    crawlSite(request: CrawlSiteRequest): Observable<CrawlSiteResponse>;
-    getCrawlStatus(request: GetCrawlStatusRequest): Observable<GetCrawlStatusResponse>;
-    startOnboardingSession(request: StartOnboardingRequest): Observable<OnboardingResponse>;
-    resumeOnboardingSession(request: ResumeOnboardingRequest): Observable<OnboardingResponse>;
-    saveInitialAgentDraft(request: SaveInitialAgentDraftRequest): Observable<SaveInitialAgentDraftResponse>;
-    listTenantAgents(request: ListTenantAgentsRequest): Observable<ListTenantAgentsResponse>;
-    getAgentMessages(request: GetAgentMessagesRequest): Observable<GetAgentMessagesResponse>;
-    customerChat(request: CustomerChatRequest): Observable<CustomerChatResponse>;
-    getCustomerMessages(request: GetCustomerMessagesRequest): Observable<GetCustomerMessagesResponse>;
-    getWidgetConfig(request: GetWidgetConfigRequest): Observable<GetWidgetConfigResponse>;
-    getDocumentUploadUrl(request: GetDocumentUploadUrlRequest): Observable<GetDocumentUploadUrlResponse>;
-    confirmDocumentUpload(request: ConfirmDocumentUploadRequest): Observable<ConfirmDocumentUploadResponse>;
-    listDocuments(request: ListDocumentsRequest): Observable<ListDocumentsResponse>;
-    deleteDocument(request: DeleteDocumentRequest): Observable<DeleteDocumentResponse>;
+    crawlSite(request: CrawlSiteRequest, metadata?: Metadata): Observable<CrawlSiteResponse>;
+    getCrawlStatus(request: GetCrawlStatusRequest, metadata?: Metadata): Observable<GetCrawlStatusResponse>;
+    startOnboardingSession(request: StartOnboardingRequest, metadata?: Metadata): Observable<OnboardingResponse>;
+    resumeOnboardingSession(request: ResumeOnboardingRequest, metadata?: Metadata): Observable<OnboardingResponse>;
+    resumeOnboardingSessionStream(request: ResumeOnboardingRequest, metadata?: Metadata): Observable<OnboardingStreamChunk>;
+    saveInitialAgentDraft(request: SaveInitialAgentDraftRequest, metadata?: Metadata): Observable<SaveInitialAgentDraftResponse>;
+    listTenantAgents(request: ListTenantAgentsRequest, metadata?: Metadata): Observable<ListTenantAgentsResponse>;
+    deleteAgent(request: DeleteAgentRequest, metadata?: Metadata): Observable<DeleteAgentResponse>;
+    getAgentMessages(request: GetAgentMessagesRequest, metadata?: Metadata): Observable<GetAgentMessagesResponse>;
+    customerChat(request: CustomerChatRequest, metadata?: Metadata): Observable<CustomerChatResponse>;
+    customerChatStream(request: CustomerChatRequest, metadata?: Metadata): Observable<CustomerChatStreamChunk>;
+    getCustomerMessages(request: GetCustomerMessagesRequest, metadata?: Metadata): Observable<GetCustomerMessagesResponse>;
+    getWidgetConfig(request: GetWidgetConfigRequest, metadata?: Metadata): Observable<GetWidgetConfigResponse>;
+    updateWidgetConfig(request: UpdateWidgetConfigRequest, metadata?: Metadata): Observable<UpdateWidgetConfigResponse>;
+    getDocumentUploadUrl(request: GetDocumentUploadUrlRequest, metadata?: Metadata): Observable<GetDocumentUploadUrlResponse>;
+    confirmDocumentUpload(request: ConfirmDocumentUploadRequest, metadata?: Metadata): Observable<ConfirmDocumentUploadResponse>;
+    listDocuments(request: ListDocumentsRequest, metadata?: Metadata): Observable<ListDocumentsResponse>;
+    deleteDocument(request: DeleteDocumentRequest, metadata?: Metadata): Observable<DeleteDocumentResponse>;
+    getAgentStats(request: GetAgentStatsRequest, metadata?: Metadata): Observable<GetAgentStatsResponse>;
 }
 export interface KnowledgeServiceController {
-    crawlSite(request: CrawlSiteRequest): Promise<CrawlSiteResponse> | Observable<CrawlSiteResponse> | CrawlSiteResponse;
-    getCrawlStatus(request: GetCrawlStatusRequest): Promise<GetCrawlStatusResponse> | Observable<GetCrawlStatusResponse> | GetCrawlStatusResponse;
-    startOnboardingSession(request: StartOnboardingRequest): Promise<OnboardingResponse> | Observable<OnboardingResponse> | OnboardingResponse;
-    resumeOnboardingSession(request: ResumeOnboardingRequest): Promise<OnboardingResponse> | Observable<OnboardingResponse> | OnboardingResponse;
-    saveInitialAgentDraft(request: SaveInitialAgentDraftRequest): Promise<SaveInitialAgentDraftResponse> | Observable<SaveInitialAgentDraftResponse> | SaveInitialAgentDraftResponse;
-    listTenantAgents(request: ListTenantAgentsRequest): Promise<ListTenantAgentsResponse> | Observable<ListTenantAgentsResponse> | ListTenantAgentsResponse;
-    getAgentMessages(request: GetAgentMessagesRequest): Promise<GetAgentMessagesResponse> | Observable<GetAgentMessagesResponse> | GetAgentMessagesResponse;
-    customerChat(request: CustomerChatRequest): Promise<CustomerChatResponse> | Observable<CustomerChatResponse> | CustomerChatResponse;
-    getCustomerMessages(request: GetCustomerMessagesRequest): Promise<GetCustomerMessagesResponse> | Observable<GetCustomerMessagesResponse> | GetCustomerMessagesResponse;
-    getWidgetConfig(request: GetWidgetConfigRequest): Promise<GetWidgetConfigResponse> | Observable<GetWidgetConfigResponse> | GetWidgetConfigResponse;
-    getDocumentUploadUrl(request: GetDocumentUploadUrlRequest): Promise<GetDocumentUploadUrlResponse> | Observable<GetDocumentUploadUrlResponse> | GetDocumentUploadUrlResponse;
-    confirmDocumentUpload(request: ConfirmDocumentUploadRequest): Promise<ConfirmDocumentUploadResponse> | Observable<ConfirmDocumentUploadResponse> | ConfirmDocumentUploadResponse;
-    listDocuments(request: ListDocumentsRequest): Promise<ListDocumentsResponse> | Observable<ListDocumentsResponse> | ListDocumentsResponse;
-    deleteDocument(request: DeleteDocumentRequest): Promise<DeleteDocumentResponse> | Observable<DeleteDocumentResponse> | DeleteDocumentResponse;
+    crawlSite(request: CrawlSiteRequest, metadata?: Metadata): Promise<CrawlSiteResponse> | Observable<CrawlSiteResponse> | CrawlSiteResponse;
+    getCrawlStatus(request: GetCrawlStatusRequest, metadata?: Metadata): Promise<GetCrawlStatusResponse> | Observable<GetCrawlStatusResponse> | GetCrawlStatusResponse;
+    startOnboardingSession(request: StartOnboardingRequest, metadata?: Metadata): Promise<OnboardingResponse> | Observable<OnboardingResponse> | OnboardingResponse;
+    resumeOnboardingSession(request: ResumeOnboardingRequest, metadata?: Metadata): Promise<OnboardingResponse> | Observable<OnboardingResponse> | OnboardingResponse;
+    resumeOnboardingSessionStream(request: ResumeOnboardingRequest, metadata?: Metadata): Observable<OnboardingStreamChunk>;
+    saveInitialAgentDraft(request: SaveInitialAgentDraftRequest, metadata?: Metadata): Promise<SaveInitialAgentDraftResponse> | Observable<SaveInitialAgentDraftResponse> | SaveInitialAgentDraftResponse;
+    listTenantAgents(request: ListTenantAgentsRequest, metadata?: Metadata): Promise<ListTenantAgentsResponse> | Observable<ListTenantAgentsResponse> | ListTenantAgentsResponse;
+    deleteAgent(request: DeleteAgentRequest, metadata?: Metadata): Promise<DeleteAgentResponse> | Observable<DeleteAgentResponse> | DeleteAgentResponse;
+    getAgentMessages(request: GetAgentMessagesRequest, metadata?: Metadata): Promise<GetAgentMessagesResponse> | Observable<GetAgentMessagesResponse> | GetAgentMessagesResponse;
+    customerChat(request: CustomerChatRequest, metadata?: Metadata): Promise<CustomerChatResponse> | Observable<CustomerChatResponse> | CustomerChatResponse;
+    customerChatStream(request: CustomerChatRequest, metadata?: Metadata): Observable<CustomerChatStreamChunk>;
+    getCustomerMessages(request: GetCustomerMessagesRequest, metadata?: Metadata): Promise<GetCustomerMessagesResponse> | Observable<GetCustomerMessagesResponse> | GetCustomerMessagesResponse;
+    getWidgetConfig(request: GetWidgetConfigRequest, metadata?: Metadata): Promise<GetWidgetConfigResponse> | Observable<GetWidgetConfigResponse> | GetWidgetConfigResponse;
+    updateWidgetConfig(request: UpdateWidgetConfigRequest, metadata?: Metadata): Promise<UpdateWidgetConfigResponse> | Observable<UpdateWidgetConfigResponse> | UpdateWidgetConfigResponse;
+    getDocumentUploadUrl(request: GetDocumentUploadUrlRequest, metadata?: Metadata): Promise<GetDocumentUploadUrlResponse> | Observable<GetDocumentUploadUrlResponse> | GetDocumentUploadUrlResponse;
+    confirmDocumentUpload(request: ConfirmDocumentUploadRequest, metadata?: Metadata): Promise<ConfirmDocumentUploadResponse> | Observable<ConfirmDocumentUploadResponse> | ConfirmDocumentUploadResponse;
+    listDocuments(request: ListDocumentsRequest, metadata?: Metadata): Promise<ListDocumentsResponse> | Observable<ListDocumentsResponse> | ListDocumentsResponse;
+    deleteDocument(request: DeleteDocumentRequest, metadata?: Metadata): Promise<DeleteDocumentResponse> | Observable<DeleteDocumentResponse> | DeleteDocumentResponse;
+    getAgentStats(request: GetAgentStatsRequest, metadata?: Metadata): Promise<GetAgentStatsResponse> | Observable<GetAgentStatsResponse> | GetAgentStatsResponse;
 }
 export declare function KnowledgeServiceControllerMethods(): (constructor: Function) => void;
 export declare const KNOWLEDGE_SERVICE_NAME = "KnowledgeService";

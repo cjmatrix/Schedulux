@@ -102,3 +102,11 @@ __pycache__/
 
 .agents/
 AGENTS.md
+
+evals/
+
+
+__pycache__/
+*.pyc
+
+doppler-secrets.yaml

@@ -1,8 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import type { ApiResponse } from '../../../api/axiosClient';
 import {
   type AgentSummaryInfo,
   type KnowledgeDocumentInfo,
+  type SaveInitialAgentDraftRequest,
+  type SaveInitialAgentDraftResponse,
   knowledgeApi,
 } from '../../../api/knowledgeApi';
 
@@ -24,6 +27,23 @@ export function useTenantAgents() {
   });
 }
 
+export function useDeleteAgent() {
+  const queryClient = useQueryClient();
+
+  return useMutation<ApiResponse<{ success: boolean; agent_id: string }>, Error, string>({
+    mutationFn: async (agentId: string) => {
+      return knowledgeApi.deleteAgent(agentId);
+    },
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: KNOWLEDGE_KEYS.agentsList });
+      toast.success(res.message || 'Agent deleted successfully');
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to delete agent');
+    },
+  });
+}
+
 export function useKnowledgeDocuments(agentId?: string) {
   return useQuery<KnowledgeDocumentInfo[], Error>({
     queryKey: KNOWLEDGE_KEYS.documents(agentId),
@@ -32,7 +52,14 @@ export function useKnowledgeDocuments(agentId?: string) {
       return res.data;
     },
     enabled: Boolean(agentId),
-    staleTime: 30 * 1000,
+    refetchInterval: (query) => {
+      const docs = query.state.data;
+      const hasInFlight = docs?.some((d) =>
+        ['pending', 'uploaded', 'indexing'].includes(d.status?.toLowerCase()),
+      );
+      return hasInFlight ? 3000 : false;
+    },
+    staleTime: 10 * 1000,
   });
 }
 
@@ -108,6 +135,25 @@ export function useDeleteDocument(activeAgentId?: string) {
       }
       queryClient.invalidateQueries({
         queryKey: KNOWLEDGE_KEYS.allDocuments,
+      });
+    },
+  });
+}
+
+export function useSaveInitialAgentDraft() {
+  const queryClient = useQueryClient();
+
+  return useMutation<SaveInitialAgentDraftResponse, Error, SaveInitialAgentDraftRequest>({
+    mutationFn: async (payload) => {
+      const res = await knowledgeApi.saveInitialAgentDraft(payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: KNOWLEDGE_KEYS.agentsList,
+      });
+      queryClient.invalidateQueries({
+        queryKey: KNOWLEDGE_KEYS.allAgents,
       });
     },
   });

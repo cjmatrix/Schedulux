@@ -128,15 +128,22 @@ let TenantService = class TenantService {
             tenant_id: tenant._id,
             email: tenant.contact_email,
             role: 'tenant_owner',
+            tier: tenant.tier || 'starter',
         }, this._jwtSecret, { expiresIn: this._accessTokenExpiry });
         const tokenId = nanoid(16);
         const refreshToken = this._jwtService.sign({
             tenant_id: tenant._id,
             token_id: tokenId,
         }, this._jwtRefreshSecret, { expiresIn: this._refreshTokenExpiry });
-        await this._cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, {
-            EX: this._refreshTokenTtlSeconds,
-        });
+        await Promise.all([
+            this._cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, {
+                EX: this._refreshTokenTtlSeconds,
+            }),
+            this._cacheRepo.set(`tenant:${tenant._id}:tier`, tenant.tier || 'starter'),
+            this._cacheRepo.set(`tenant:${tenant._id}:status`, tenant.status, {
+                EX: 86400 * 30,
+            }),
+        ]);
         return {
             accessToken,
             refreshToken,
@@ -201,15 +208,22 @@ let TenantService = class TenantService {
             tenant_id: tenant._id,
             email: tenant.contact_email,
             role: 'tenant_owner',
+            tier: tenant.tier || 'starter',
         }, this._jwtSecret, { expiresIn: this._accessTokenExpiry });
         const tokenId = nanoid(16);
         const refreshToken = this._jwtService.sign({
             tenant_id: tenant._id,
             token_id: tokenId,
         }, this._jwtRefreshSecret, { expiresIn: this._refreshTokenExpiry });
-        await this._cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, {
-            EX: this._refreshTokenTtlSeconds,
-        });
+        await Promise.all([
+            this._cacheRepo.set(`tenant_refresh_token:${tenant._id}:${tokenId}`, refreshToken, {
+                EX: this._refreshTokenTtlSeconds,
+            }),
+            this._cacheRepo.set(`tenant:${tenant._id}:tier`, tenant.tier || 'starter'),
+            this._cacheRepo.set(`tenant:${tenant._id}:status`, tenant.status, {
+                EX: 86400 * 30,
+            }),
+        ]);
         return {
             accessToken,
             refreshToken,
@@ -268,15 +282,22 @@ let TenantService = class TenantService {
             tenant_id: tenant._id,
             email: tenant.contact_email,
             role: 'tenant_owner',
+            tier: tenant.tier || 'starter',
         }, this._jwtSecret, { expiresIn: this._accessTokenExpiry });
         const newTokenId = nanoid(16);
         const newRefreshToken = this._jwtService.sign({
             tenant_id: tenant._id,
             token_id: newTokenId,
         }, this._jwtRefreshSecret, { expiresIn: this._refreshTokenExpiry });
-        await this._cacheRepo.set(`tenant_refresh_token:${tenant._id}:${newTokenId}`, newRefreshToken, {
-            EX: this._refreshTokenTtlSeconds,
-        });
+        await Promise.all([
+            this._cacheRepo.set(`tenant_refresh_token:${tenant._id}:${newTokenId}`, newRefreshToken, {
+                EX: this._refreshTokenTtlSeconds,
+            }),
+            this._cacheRepo.set(`tenant:${tenant._id}:tier`, tenant.tier || 'starter'),
+            this._cacheRepo.set(`tenant:${tenant._id}:status`, tenant.status, {
+                EX: 86400 * 30,
+            }),
+        ]);
         return {
             accessToken: newAccessToken,
             refreshToken: newRefreshToken,
@@ -333,35 +354,60 @@ let TenantService = class TenantService {
         if (!tenant) {
             throw new Error(RESPONSE_MESSAGES.ERRORS.TENANT_NOT_FOUND);
         }
-        const existingUser = await this._dashboardUserRepo.findByEmail(data.email.toLowerCase().trim());
-        if (existingUser) {
-            throw new Error(RESPONSE_MESSAGES.ERRORS.USER_ALREADY_EXISTS);
+        if (!data.agent_id?.trim()) {
+            throw new Error(RESPONSE_MESSAGES.ERRORS.MISSING_REQUIRED_FIELDS);
         }
-        const rawPassword = nanoid(8);
-        const password_hash = await this._passwordHasher.hash(rawPassword, 10);
-        const user = await this._dashboardUserRepo.create({
+        const cleanEmail = data.email.toLowerCase().trim();
+        const cleanAgentId = data.agent_id.trim();
+        // Check if the user already exists in this tenant workspace
+        const existingTenantUser = await this._dashboardUserRepo.findByTenantAndEmail(data.tenant_id, cleanEmail);
+        if (existingTenantUser) {
+            const currentAgentIds = existingTenantUser.agent_ids || [];
+            if (currentAgentIds.includes(cleanAgentId)) {
+                throw new Error(RESPONSE_MESSAGES.ERRORS.USER_ALREADY_EXISTS);
+            }
+            const updatedUser = await this._dashboardUserRepo.addAgentToUser(existingTenantUser._id.toString(), cleanAgentId);
+            return {
+                message: 'Workspace user added to agent successfully.',
+                user_id: existingTenantUser._id.toString(),
+                email: existingTenantUser.email,
+                name: existingTenantUser.name,
+                system_role: existingTenantUser.system_role,
+                agent_id: cleanAgentId,
+                agent_ids: updatedUser?.agent_ids || [...currentAgentIds, cleanAgentId],
+            };
+        }
+        const invitationToken = nanoid(32);
+        const invitePayload = {
             tenant_id: data.tenant_id,
-            email: data.email.toLowerCase().trim(),
-            password_hash,
+            agent_id: cleanAgentId,
+            email: cleanEmail,
             name: data.name.trim(),
-            system_role: data.system_role === 'root' ? 'root' : 'manager',
-        });
+            business_name: tenant.business_name,
+            system_role: 'manager',
+        };
+        await this._cacheRepo.set(`dashboard_invitation:${invitationToken}`, JSON.stringify(invitePayload), { EX: 604800 });
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const invitationUrl = `${frontendUrl}/dashboarduser/accept-invite?token=${invitationToken}`;
         if (this._emailProducer) {
             await this._emailProducer.sendUserInvitationEmail({
-                to: user.email,
-                name: user.name,
+                to: invitePayload.email,
+                name: invitePayload.name,
                 tenant_id: data.tenant_id,
                 business_name: tenant.business_name,
-                password: rawPassword,
-                system_role: user.system_role,
+                invitation_token: invitationToken,
+                invitation_url: invitationUrl,
+                system_role: 'manager',
             });
         }
         return {
             message: RESPONSE_MESSAGES.AUTH.USER_INVITED_SUCCESS,
-            user_id: user._id.toString(),
-            email: user.email,
-            name: user.name,
-            system_role: user.system_role,
+            user_id: '',
+            email: invitePayload.email,
+            name: invitePayload.name,
+            system_role: 'manager',
+            agent_id: invitePayload.agent_id,
+            agent_ids: [invitePayload.agent_id],
         };
     }
     async listWorkspaceUsers(options) {
@@ -371,6 +417,7 @@ let TenantService = class TenantService {
             limit: options.limit,
             search: options.search,
             role: options.role,
+            agentId: options.agent_id,
         });
         return {
             users: users.map((u) => ({
@@ -380,8 +427,37 @@ let TenantService = class TenantService {
                 name: u.name,
                 system_role: u.system_role,
                 created_at: u.created_at ? u.created_at.toISOString() : new Date().toISOString(),
+                agent_id: u.agent_ids?.[0] || '',
+                agent_ids: u.agent_ids || [],
+                status: u.status || 'active',
             })),
             total_count,
+        };
+    }
+    async suspendWorkspaceUser(tenantId, userId) {
+        const user = await this._dashboardUserRepo.findById(userId);
+        if (!user || user.tenant_id !== tenantId) {
+            throw new Error(RESPONSE_MESSAGES.ERRORS.WORKSPACE_USER_NOT_FOUND);
+        }
+        const nextStatus = user.status === 'suspended' ? 'active' : 'suspended';
+        const updated = await this._dashboardUserRepo.updateStatus(tenantId, userId, nextStatus);
+        if (!updated) {
+            throw new Error(RESPONSE_MESSAGES.ERRORS.FAILED_TO_UPDATE_WORKSPACE_USER_STATUS);
+        }
+        await this._cacheRepo.set(`dashboard_user:${userId}:status`, nextStatus, { EX: 86400 * 30 });
+        return {
+            message: RESPONSE_MESSAGES.AUTH.WORKSPACE_USER_STATUS_UPDATED(nextStatus),
+            user: {
+                user_id: updated._id.toString(),
+                tenant_id: updated.tenant_id,
+                email: updated.email,
+                name: updated.name,
+                system_role: updated.system_role,
+                created_at: updated.created_at ? updated.created_at.toISOString() : new Date().toISOString(),
+                agent_id: updated.agent_ids?.[0] || '',
+                agent_ids: updated.agent_ids || [],
+                status: updated.status,
+            },
         };
     }
 };

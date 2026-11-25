@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var KnowledgeController_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.KnowledgeController = void 0;
 const common_1 = require("@nestjs/common");
@@ -19,26 +20,57 @@ const rxjs_1 = require("rxjs");
 const messages_constant_js_1 = require("../../constants/messages.constant.js");
 const routes_constant_js_1 = require("../../constants/routes.constant.js");
 const roles_decorator_js_1 = require("../../decorators/roles.decorator.js");
+const crawl_quota_guard_js_1 = require("../../guards/crawl-quota.guard.js");
 const roles_guard_js_1 = require("../../guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
+const tenant_token_quota_guard_js_1 = require("../../guards/tenant-token-quota.guard.js");
+const redis_service_js_1 = require("../../services/redis.service.js");
+const circuit_breaker_1 = require("@repo/circuit-breaker");
 const knowledge_dto_js_1 = require("./dtos/knowledge.dto.js");
 const session_token_util_js_1 = require("../../utils/session-token.util.js");
-let KnowledgeController = class KnowledgeController {
+const grpc_metadata_util_js_1 = require("../../utils/grpc-metadata.util.js");
+let KnowledgeController = KnowledgeController_1 = class KnowledgeController {
     _client;
     _schemaCacheService;
+    _schemaEventSubscriber;
+    _redisService;
+    _circuitBreakerService;
+    _logger = new common_1.Logger(KnowledgeController_1.name);
     _knowledgeService;
-    constructor(_client, _schemaCacheService) {
+    constructor(_client, _schemaCacheService, _schemaEventSubscriber, _redisService, _circuitBreakerService) {
         this._client = _client;
         this._schemaCacheService = _schemaCacheService;
+        this._schemaEventSubscriber = _schemaEventSubscriber;
+        this._redisService = _redisService;
+        this._circuitBreakerService = _circuitBreakerService;
+    }
+    async _executeKnowledgeData(action) {
+        return this._circuitBreakerService.execute('knowledge-data', action);
     }
     onModuleInit() {
         this._knowledgeService = this._client.getService('KnowledgeService');
     }
-    async crawlSite(body) {
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.crawlSite({
-            tenant_id: body.tenant_id,
+    _getTenantId(req) {
+        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
+        if (!tenantId) {
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+        }
+        return tenantId;
+    }
+    _getTenantTier(req) {
+        return req.tenant?.tier || req.dashboardUser?.tier || 'starter';
+    }
+    async crawlSite(req, body) {
+        const tenantId = this._getTenantId(req);
+        const weeklyLimit = req.crawlQuota?.weeklyLimit ?? 5;
+        const response = await this._circuitBreakerService.execute('knowledge-crawl', () => (0, rxjs_1.lastValueFrom)(this._knowledgeService.crawlSite({
+            tenant_id: tenantId,
             url: body.url,
-        }));
+        })));
+        if (response.job_id) {
+            await this._redisService.acquireCrawlLock(tenantId, response.job_id, 900);
+            await this._redisService.recordCrawlUsage(tenantId, weeklyLimit);
+        }
         return {
             message: response.message,
             data: {
@@ -47,24 +79,24 @@ let KnowledgeController = class KnowledgeController {
             },
         };
     }
-    async getCrawlStatus(query) {
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getCrawlStatus({
-            tenant_id: query.tenant_id,
+    async getCrawlStatus(req, query) {
+        const tenantId = this._getTenantId(req);
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.getCrawlStatus({
+            tenant_id: tenantId,
             job_id: query.job_id,
-        }));
+        })));
+        const normalizedStatus = (response.status || '').toLowerCase();
+        if (['completed', 'failed', 'error', 'finished'].includes(normalizedStatus)) {
+            await this._redisService.releaseCrawlLock(tenantId);
+        }
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.CRAWL_STATUS_RETRIEVED,
             data: response,
         };
     }
-    async getSchema(tenantId, jobId) {
-        if (!tenantId) {
-            return {
-                message: messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.TENANT_ID_REQUIRED,
-                data: null,
-            };
-        }
-        const schema = await this._schemaCacheService.getDraftSchema(tenantId, jobId);
+    async getSchema(req, query) {
+        const tenantId = this._getTenantId(req);
+        const schema = await this._schemaCacheService.getDraftSchema(tenantId, query.job_id);
         if (!schema) {
             return {
                 message: messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.SCHEMA_PENDING,
@@ -82,12 +114,82 @@ let KnowledgeController = class KnowledgeController {
             },
         };
     }
-    async startOnboarding(body) {
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.startOnboardingSession({
-            tenant_id: body.tenant_id,
+    streamSchema(req, query) {
+        const tenantId = this._getTenantId(req);
+        const targetJobId = query.job_id;
+        return new rxjs_1.Observable((subscriber) => {
+            let isCompleted = false;
+            this._schemaCacheService
+                .getDraftSchema(tenantId, targetJobId)
+                .then((existingSchema) => {
+                if (existingSchema && !isCompleted) {
+                    isCompleted = true;
+                    subscriber.next({
+                        type: 'schema:ready',
+                        data: {
+                            tenant_id: tenantId,
+                            job_id: targetJobId || '',
+                            schema: existingSchema,
+                            status: 'completed',
+                        },
+                    });
+                    subscriber.complete();
+                }
+            })
+                .catch(() => { });
+            const unsubscribe = this._schemaEventSubscriber.onSchemaGenerated(tenantId, targetJobId || '', (event) => {
+                if (isCompleted)
+                    return;
+                if (event.event === 'SCHEMA_GENERATION_FAILED' || event.error) {
+                    isCompleted = true;
+                    subscriber.next({
+                        type: 'schema:failed',
+                        data: {
+                            job_id: event.job_id,
+                            tenant_id: event.tenant_id,
+                            error: event.error || messages_constant_js_1.RESPONSE_MESSAGES.WEBSOCKET.SCHEMA_GENERATION_FAILED,
+                            status: 'failed',
+                        },
+                    });
+                    subscriber.complete();
+                    return;
+                }
+                isCompleted = true;
+                subscriber.next({
+                    type: 'schema:ready',
+                    data: {
+                        job_id: event.job_id,
+                        tenant_id: event.tenant_id,
+                        schema: event.schema,
+                        status: 'completed',
+                    },
+                });
+                subscriber.complete();
+            });
+            const heartbeatInterval = setInterval(() => {
+                if (!isCompleted) {
+                    subscriber.next({
+                        type: 'ping',
+                        data: { time: Date.now() },
+                    });
+                }
+            }, 20000);
+            return () => {
+                isCompleted = true;
+                clearInterval(heartbeatInterval);
+                unsubscribe();
+            };
+        });
+    }
+    async startOnboarding(req, body) {
+        const tenantId = this._getTenantId(req);
+        const tier = this._getTenantTier(req);
+        const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
+        const response = await this._circuitBreakerService.execute('knowledge-onboarding-unary', () => (0, rxjs_1.lastValueFrom)(this._knowledgeService.startOnboardingSession({
+            tenant_id: tenantId,
             initial_draft_json: body.initial_draft_json || '{}',
             agent_id: body.agent_id || '',
-        }));
+        }, metadata)));
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.SESSION_STARTED,
             data: {
@@ -100,12 +202,25 @@ let KnowledgeController = class KnowledgeController {
             },
         };
     }
-    async resumeOnboarding(body) {
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.resumeOnboardingSession({
-            tenant_id: body.tenant_id,
+    async resumeOnboarding(req, body) {
+        const tenantId = this._getTenantId(req);
+        const tier = this._getTenantTier(req);
+        const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
+        const response = await this._circuitBreakerService.execute('knowledge-onboarding-unary', () => (0, rxjs_1.lastValueFrom)(this._knowledgeService.resumeOnboardingSession({
+            tenant_id: tenantId,
             user_answer: body.user_answer,
             agent_id: body.agent_id || '',
-        }));
+        }, metadata)), (err) => {
+            this._logger.warn(`[KnowledgeController] resumeOnboarding fallback triggered: ${err.message}`);
+            return {
+                status: 'error',
+                question: 'The AI Architect is temporarily unavailable due to high demand. Please retry in a few moments.',
+                field: '',
+                type: 'text',
+                draft_schema_json: '{}',
+                live_schema_json: '{}',
+            };
+        });
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.MESSAGE_PROCESSED,
             data: {
@@ -118,18 +233,76 @@ let KnowledgeController = class KnowledgeController {
             },
         };
     }
-    async sandboxInit(req, body) {
-        const tenantId = body.tenant_id || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-        if (!tenantId) {
-            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+    resumeOnboardingStream(req, res, body) {
+        const tenantId = this._getTenantId(req);
+        const tier = this._getTenantTier(req);
+        const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
+        if (this._circuitBreakerService.isOpen('knowledge-onboarding-stream')) {
+            this._logger.warn(`[KnowledgeController] Breaker "knowledge-onboarding-stream" is OPEN. Fast-failing stream.`);
+            res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+            res.setHeader('Cache-Control', 'no-cache, no-transform');
+            res.setHeader('Connection', 'keep-alive');
+            res.setHeader('X-Accel-Buffering', 'no');
+            res.flushHeaders?.();
+            res.write(`data: ${JSON.stringify({
+                event_type: 'token',
+                content: 'The AI Architect is temporarily busy due to high demand. Please retry in a few moments.',
+            })}\n\n`);
+            res.write(`data: ${JSON.stringify({
+                event_type: 'done',
+                status: 'degraded',
+            })}\n\n`);
+            res.end();
+            return;
         }
+        res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders?.();
+        const stream$ = this._knowledgeService.resumeOnboardingSessionStream({
+            tenant_id: tenantId,
+            user_answer: body.user_answer,
+            agent_id: body.agent_id || '',
+        }, metadata);
+        let streamFailed = false;
+        const subscription = stream$.subscribe({
+            next: (chunk) => {
+                res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+            },
+            error: (err) => {
+                streamFailed = true;
+                this._circuitBreakerService.recordFailure('knowledge-onboarding-stream', err);
+                this._logger.warn(`[KnowledgeController] Stream error recorded in breaker: ${err.message}`);
+                res.write(`data: ${JSON.stringify({
+                    event_type: 'error',
+                    error: err.message || 'Stream error',
+                })}\n\n`);
+                res.end();
+            },
+            complete: () => {
+                if (!streamFailed) {
+                    this._circuitBreakerService.recordSuccess('knowledge-onboarding-stream');
+                }
+                res.end();
+            },
+        });
+        req.on('close', () => {
+            subscription.unsubscribe();
+        });
+    }
+    async sandboxInit(req, body) {
+        const tenantId = this._getTenantId(req);
         const agentId = body.agent_id || 'default';
         let resolvedSessionId;
         let resolvedToken;
         let isFirstTime = true;
         let messages = [];
         if (body.token) {
-            const verified = (0, session_token_util_js_1.verifySessionToken)(body.token);
+            const verified = (0, session_token_util_js_1.verifySessionToken)(body.token, {
+                expectedTenantId: tenantId,
+                expectedAgentId: agentId,
+            });
             if (verified.valid && verified.sessionId) {
                 resolvedSessionId = verified.sessionId;
                 resolvedToken = body.token;
@@ -137,16 +310,17 @@ let KnowledgeController = class KnowledgeController {
         }
         else if (body.session_id) {
             resolvedSessionId = body.session_id;
-            resolvedToken = (0, session_token_util_js_1.signSessionId)(body.session_id);
+            resolvedToken = (0, session_token_util_js_1.signSessionId)(body.session_id, tenantId, agentId);
         }
         if (resolvedSessionId && resolvedToken) {
+            const currentSessionId = resolvedSessionId;
             try {
-                const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getCustomerMessages({
+                const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.getCustomerMessages({
                     tenant_id: tenantId,
                     agent_id: agentId,
-                    session_id: resolvedSessionId,
+                    session_id: currentSessionId,
                     limit: 20,
-                }));
+                })));
                 messages = response.messages || [];
                 isFirstTime = messages.length === 0;
                 return {
@@ -167,7 +341,7 @@ let KnowledgeController = class KnowledgeController {
             }
         }
         else {
-            const session = (0, session_token_util_js_1.createSignedSession)(`sandbox_${tenantId}_${agentId}`);
+            const session = (0, session_token_util_js_1.createSignedSession)(`sandbox_${tenantId}_${agentId}`, tenantId, agentId);
             resolvedSessionId = session.sessionId;
             resolvedToken = session.token;
             isFirstTime = true;
@@ -185,17 +359,14 @@ let KnowledgeController = class KnowledgeController {
             },
         };
     }
-    async getSandboxWidgetConfig(req, tenantIdParam, agentIdParam) {
-        const tenantId = tenantIdParam || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-        if (!tenantId) {
-            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-        }
-        const agentId = agentIdParam || 'default';
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getWidgetConfig({
+    async getSandboxWidgetConfig(req, query) {
+        const tenantId = this._getTenantId(req);
+        const agentId = query.agent_id || 'default';
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.getWidgetConfig({
             tenant_id: tenantId,
             agent_id: agentId,
             source: 'draft',
-        }));
+        })));
         let widgetConfig = {};
         if (response.widget_config_json) {
             try {
@@ -214,15 +385,15 @@ let KnowledgeController = class KnowledgeController {
             },
         };
     }
-    async getSandboxMessages(req, agentIdParam, sessionIdParam, token, before, limitStr) {
-        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-        if (!tenantId) {
-            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-        }
-        const agentId = agentIdParam || 'default';
-        let resolvedSessionId = sessionIdParam;
-        if (token) {
-            const verified = (0, session_token_util_js_1.verifySessionToken)(token);
+    async getSandboxMessages(req, query) {
+        const tenantId = this._getTenantId(req);
+        const agentId = query.agent_id || 'default';
+        let resolvedSessionId = query.session_id;
+        if (query.token) {
+            const verified = (0, session_token_util_js_1.verifySessionToken)(query.token, {
+                expectedTenantId: tenantId,
+                expectedAgentId: agentId,
+            });
             if (!verified.valid || !verified.sessionId) {
                 throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
             }
@@ -231,14 +402,13 @@ let KnowledgeController = class KnowledgeController {
         if (!resolvedSessionId) {
             throw new common_1.BadRequestException(messages_constant_js_1.RESPONSE_MESSAGES.CHAT.REQUIRED_FIELDS);
         }
-        const limit = limitStr ? parseInt(limitStr, 10) : 20;
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getCustomerMessages({
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.getCustomerMessages({
             tenant_id: tenantId,
             agent_id: agentId,
             session_id: resolvedSessionId,
-            limit,
-            before,
-        }));
+            limit: query.limit,
+            before: query.before,
+        })));
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.CHAT.MESSAGES_RETRIEVED,
             data: {
@@ -249,29 +419,31 @@ let KnowledgeController = class KnowledgeController {
         };
     }
     async sandboxChat(req, body) {
-        const tenantId = body.tenant_id || req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-        if (!tenantId) {
-            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-        }
+        const tenantId = this._getTenantId(req);
         const agentId = body.agent_id || 'default';
         let sessionId = body.session_id;
         let token = body.token;
         if (token) {
-            const verified = (0, session_token_util_js_1.verifySessionToken)(token);
+            const verified = (0, session_token_util_js_1.verifySessionToken)(token, {
+                expectedTenantId: tenantId,
+                expectedAgentId: agentId,
+            });
             if (!verified.valid || !verified.sessionId) {
                 throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
             }
             sessionId = verified.sessionId;
         }
         else if (sessionId) {
-            token = (0, session_token_util_js_1.signSessionId)(sessionId);
+            token = (0, session_token_util_js_1.signSessionId)(sessionId, tenantId, agentId);
         }
         else {
-            const session = (0, session_token_util_js_1.createSignedSession)(`sandbox_${tenantId}_${agentId}`);
+            const session = (0, session_token_util_js_1.createSignedSession)(`sandbox_${tenantId}_${agentId}`, tenantId, agentId);
             sessionId = session.sessionId;
             token = session.token;
         }
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.customerChat({
+        const tier = this._getTenantTier(req);
+        const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
+        const response = await this._circuitBreakerService.execute('knowledge-sandbox-unary', () => (0, rxjs_1.lastValueFrom)(this._knowledgeService.customerChat({
             tenant_id: tenantId,
             agent_id: agentId,
             session_id: sessionId,
@@ -280,7 +452,19 @@ let KnowledgeController = class KnowledgeController {
             customer_phone: body.customer_phone || '',
             customer_name: body.customer_name || 'Sandbox Tester',
             mode: 'sandbox',
-        }));
+        }, metadata)), (err) => {
+            this._logger.warn(`[KnowledgeController] sandboxChat fallback triggered: ${err.message}`);
+            return {
+                session_id: sessionId,
+                response: 'Sandbox agent is temporarily unavailable due to high load. Please try again shortly.',
+                user_message_id: `fallback-usr-${Date.now()}`,
+                agent_message_id: `fallback-agent-${Date.now()}`,
+                created_at: new Date().toISOString(),
+                booking_id: '',
+                booking_reference: '',
+                status: 'degraded',
+            };
+        });
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.SANDBOX_CHAT_PROCESSED,
             data: {
@@ -297,17 +481,109 @@ let KnowledgeController = class KnowledgeController {
             },
         };
     }
-    async saveInitialDraft(req, body) {
-        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id || body.tenant_id;
-        if (!tenantId) {
-            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+    sandboxChatStream(req, res, body) {
+        const tenantId = this._getTenantId(req);
+        const agentId = body.agent_id || 'default';
+        let sessionId = body.session_id;
+        let token = body.token;
+        if (token) {
+            const verified = (0, session_token_util_js_1.verifySessionToken)(token, {
+                expectedTenantId: tenantId,
+                expectedAgentId: agentId,
+            });
+            if (!verified.valid || !verified.sessionId) {
+                throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.CHAT.INVALID_SESSION_TOKEN);
+            }
+            sessionId = verified.sessionId;
         }
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.saveInitialAgentDraft({
+        else if (sessionId) {
+            token = (0, session_token_util_js_1.signSessionId)(sessionId, tenantId, agentId);
+        }
+        else {
+            const session = (0, session_token_util_js_1.createSignedSession)(`sandbox_${tenantId}_${agentId}`, tenantId, agentId);
+            sessionId = session.sessionId;
+            token = session.token;
+        }
+        const tier = this._getTenantTier(req);
+        const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
+        if (this._circuitBreakerService.isOpen('knowledge-sandbox-stream')) {
+            this._logger.warn(`[KnowledgeController] Breaker "knowledge-sandbox-stream" is OPEN. Fast-failing sandbox stream.`);
+            res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+            res.setHeader('Cache-Control', 'no-cache, no-transform');
+            res.setHeader('Connection', 'keep-alive');
+            res.setHeader('X-Accel-Buffering', 'no');
+            res.flushHeaders?.();
+            res.write(`data: ${JSON.stringify({
+                event_type: 'token',
+                content: 'Sandbox agent is temporarily unavailable. Please retry in a moment.',
+                token,
+                session_id: sessionId,
+            })}\n\n`);
+            res.write(`data: ${JSON.stringify({
+                event_type: 'done',
+                token,
+                session_id: sessionId,
+                status: 'degraded',
+            })}\n\n`);
+            res.end();
+            return;
+        }
+        res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders?.();
+        const stream$ = this._knowledgeService.customerChatStream({
+            tenant_id: tenantId,
+            agent_id: agentId,
+            session_id: sessionId,
+            message: body.message,
+            customer_id: body.customer_id || '',
+            customer_phone: body.customer_phone || '',
+            customer_name: body.customer_name || 'Sandbox Tester',
+            mode: 'sandbox',
+        }, metadata);
+        let streamFailed = false;
+        const subscription = stream$.subscribe({
+            next: (chunk) => {
+                const payload = {
+                    ...chunk,
+                    token,
+                    session_id: chunk.session_id || sessionId,
+                };
+                res.write(`data: ${JSON.stringify(payload)}\n\n`);
+            },
+            error: (err) => {
+                streamFailed = true;
+                this._circuitBreakerService.recordFailure('knowledge-sandbox-stream', err);
+                this._logger.warn(`[KnowledgeController] Sandbox stream error recorded in breaker: ${err.message}`);
+                res.write(`data: ${JSON.stringify({
+                    event_type: 'error',
+                    error: err.message || 'Stream error',
+                })}\n\n`);
+                res.end();
+            },
+            complete: () => {
+                if (!streamFailed) {
+                    this._circuitBreakerService.recordSuccess('knowledge-sandbox-stream');
+                }
+                res.end();
+            },
+        });
+        req.on('close', () => {
+            subscription.unsubscribe();
+        });
+    }
+    async saveInitialDraft(req, body) {
+        const tenantId = this._getTenantId(req);
+        const tier = this._getTenantTier(req);
+        const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.saveInitialAgentDraft({
             tenant_id: tenantId,
             draft_json: body.draft_json || '',
             creation_source: body.creation_source || 'web_crawl',
             name: body.name || '',
-        }));
+        }, metadata)));
         return {
             message: response.message,
             data: {
@@ -317,30 +593,43 @@ let KnowledgeController = class KnowledgeController {
         };
     }
     async listAgents(req) {
-        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-        if (!tenantId) {
-            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-        }
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.listTenantAgents({
+        const tenantId = this._getTenantId(req);
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.listTenantAgents({
             tenant_id: tenantId,
-        }));
+        })));
+        let agents = response.agents || [];
+        if (req.dashboardUser?.agent_ids && req.dashboardUser.agent_ids.length > 0) {
+            agents = agents.filter((a) => req.dashboardUser.agent_ids.includes(a.agent_id));
+        }
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.AGENTS_RETRIEVED,
-            data: response.agents || [],
+            data: agents,
         };
     }
-    async getAgentMessages(req, agentId, limitStr, before) {
-        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-        if (!tenantId) {
-            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-        }
-        const limit = limitStr ? parseInt(limitStr, 10) : 20;
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getAgentMessages({
+    async deleteAgent(req, agentId) {
+        const tenantId = this._getTenantId(req);
+        const tier = this._getTenantTier(req);
+        const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.deleteAgent({
             tenant_id: tenantId,
             agent_id: agentId,
-            limit,
-            before,
-        }));
+        }, metadata)));
+        return {
+            message: response.message || messages_constant_js_1.RESPONSE_MESSAGES.KNOWLEDGE.AGENT_DELETED,
+            data: {
+                success: response.success,
+                agent_id: response.agent_id || agentId,
+            },
+        };
+    }
+    async getAgentMessages(req, agentId, query) {
+        const tenantId = this._getTenantId(req);
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.getAgentMessages({
+            tenant_id: tenantId,
+            agent_id: agentId,
+            limit: query.limit,
+            before: query.before,
+        })));
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.CHAT.MESSAGES_RETRIEVED,
             data: {
@@ -350,21 +639,14 @@ let KnowledgeController = class KnowledgeController {
             },
         };
     }
-    async getOnboardingMessages(req, agentIdQuery, limitStr, before) {
-        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-        if (!tenantId) {
-            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-        }
-        if (!agentIdQuery) {
-            throw new common_1.BadRequestException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.AGENT_ID_REQUIRED);
-        }
-        const limit = limitStr ? parseInt(limitStr, 10) : 50;
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getAgentMessages({
+    async getOnboardingMessages(req, query) {
+        const tenantId = this._getTenantId(req);
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.getAgentMessages({
             tenant_id: tenantId,
-            agent_id: agentIdQuery,
-            limit,
-            before,
-        }));
+            agent_id: query.agent_id,
+            limit: query.limit,
+            before: query.before,
+        })));
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.CHAT.MESSAGES_RETRIEVED,
             data: {
@@ -375,16 +657,22 @@ let KnowledgeController = class KnowledgeController {
         };
     }
     async getDocumentUploadUrl(req, body) {
-        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-        if (!tenantId) {
-            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
+        const tenantId = this._getTenantId(req);
+        const tenantTier = this._getTenantTier(req);
+        const tierConfig = await this._redisService.getCachedTierConfig(tenantTier);
+        if (body.file_size_bytes && body.file_size_bytes > 0) {
+            const maxAllowedBytes = tierConfig.max_kb_doc_size_mb * 1024 * 1024;
+            if (body.file_size_bytes > maxAllowedBytes) {
+                throw new common_1.BadRequestException(`File size (${(body.file_size_bytes / (1024 * 1024)).toFixed(2)} MB) exceeds the maximum allowed limit of ${tierConfig.max_kb_doc_size_mb} MB for your tier (${tierConfig.name}). Please upgrade your tier to upload larger files.`);
+            }
         }
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.getDocumentUploadUrl({
+        const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tenantTier);
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.getDocumentUploadUrl({
             tenant_id: tenantId,
             agent_id: body.agent_id,
             file_name: body.file_name,
             file_size_bytes: body.file_size_bytes || 0,
-        }));
+        }, metadata)));
         return {
             message: 'Presigned upload URL generated successfully',
             data: {
@@ -396,45 +684,86 @@ let KnowledgeController = class KnowledgeController {
         };
     }
     async confirmDocumentUpload(req, body) {
-        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-        if (!tenantId) {
-            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-        }
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.confirmDocumentUpload({
+        const tenantId = this._getTenantId(req);
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.confirmDocumentUpload({
             tenant_id: tenantId,
             document_id: body.document_id,
-        }));
+        })));
         return {
             message: response.message,
             data: { success: response.success },
         };
     }
     async listDocuments(req, query) {
-        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-        if (!tenantId) {
-            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-        }
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.listDocuments({
+        const tenantId = this._getTenantId(req);
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.listDocuments({
             tenant_id: tenantId,
             agent_id: query.agent_id || '',
-        }));
+        })));
         return {
             message: 'Documents retrieved successfully',
             data: response.documents || [],
         };
     }
     async deleteDocument(req, documentId) {
-        const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
-        if (!tenantId) {
-            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.TENANT_ID_REQUIRED);
-        }
-        const response = await (0, rxjs_1.lastValueFrom)(this._knowledgeService.deleteDocument({
+        const tenantId = this._getTenantId(req);
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.deleteDocument({
             tenant_id: tenantId,
             document_id: documentId,
-        }));
+        })));
         return {
             message: response.message,
             data: { success: response.success },
+        };
+    }
+    async getWidgetConfig(req, agentId, source) {
+        const tenantId = this._getTenantId(req);
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.getWidgetConfig({
+            tenant_id: tenantId,
+            agent_id: agentId,
+            source: source || 'live',
+        })));
+        let widgetConfig = {};
+        if (response.widget_config_json) {
+            try {
+                widgetConfig = JSON.parse(response.widget_config_json);
+            }
+            catch {
+                widgetConfig = {};
+            }
+        }
+        return {
+            message: 'Widget configuration retrieved',
+            data: {
+                tenant_id: response.tenant_id || tenantId,
+                agent_id: response.agent_id || agentId,
+                widget_config: widgetConfig,
+            },
+        };
+    }
+    async updateWidgetConfig(req, agentId, body) {
+        const tenantId = this._getTenantId(req);
+        const response = await this._executeKnowledgeData(() => (0, rxjs_1.lastValueFrom)(this._knowledgeService.updateWidgetConfig({
+            tenant_id: tenantId,
+            agent_id: agentId,
+            whitelisted_domains: body.whitelisted_domains,
+            widget_config_json: body.widget_config_json,
+        })));
+        let widgetConfig = {};
+        if (response.widget_config_json) {
+            try {
+                widgetConfig = JSON.parse(response.widget_config_json);
+            }
+            catch {
+                widgetConfig = {};
+            }
+        }
+        return {
+            message: response.message,
+            data: {
+                success: response.success,
+                widget_config: widgetConfig,
+            },
         };
     }
 };
@@ -442,46 +771,75 @@ exports.KnowledgeController = KnowledgeController;
 __decorate([
     (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.CRAWL),
     (0, common_1.HttpCode)(common_1.HttpStatus.ACCEPTED),
+    (0, common_1.UseGuards)(crawl_quota_guard_js_1.CrawlQuotaGuard),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
-    __param(0, (0, common_1.Body)()),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [knowledge_dto_js_1.CrawlSiteDto]),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.CrawlSiteDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "crawlSite", null);
 __decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.CRAWL_STATUS),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
-    __param(0, (0, common_1.Query)()),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [knowledge_dto_js_1.GetCrawlStatusDto]),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.GetCrawlStatusDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "getCrawlStatus", null);
 __decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.SCHEMA),
-    __param(0, (0, common_1.Query)('tenant_id')),
-    __param(1, (0, common_1.Query)('job_id')),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.GetSchemaQueryDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "getSchema", null);
 __decorate([
+    (0, common_1.Sse)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.SCHEMA_STREAM),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.GetSchemaQueryDto]),
+    __metadata("design:returntype", rxjs_1.Observable)
+], KnowledgeController.prototype, "streamSchema", null);
+__decorate([
     (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_START),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UseGuards)(tenant_token_quota_guard_js_1.TenantTokenQuotaGuard),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
-    __param(0, (0, common_1.Body)()),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [knowledge_dto_js_1.StartOnboardingDto]),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.StartOnboardingDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "startOnboarding", null);
 __decorate([
     (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_MESSAGE),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UseGuards)(tenant_token_quota_guard_js_1.TenantTokenQuotaGuard),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
-    __param(0, (0, common_1.Body)()),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [knowledge_dto_js_1.ResumeOnboardingDto]),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.ResumeOnboardingDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "resumeOnboarding", null);
+__decorate([
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_MESSAGE_STREAM),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UseGuards)(tenant_token_quota_guard_js_1.TenantTokenQuotaGuard),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Res)()),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, knowledge_dto_js_1.ResumeOnboardingDto]),
+    __metadata("design:returntype", void 0)
+], KnowledgeController.prototype, "resumeOnboardingStream", null);
 __decorate([
     (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_INIT),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
@@ -489,33 +847,31 @@ __decorate([
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.InitCustomerChatDto]),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.InitSandboxChatDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "sandboxInit", null);
 __decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_CONFIG),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Req)()),
-    __param(1, (0, common_1.Query)('tenant_id')),
-    __param(2, (0, common_1.Query)('agent_id')),
+    __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.GetSandboxWidgetConfigQueryDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "getSandboxWidgetConfig", null);
 __decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_MESSAGES),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Req)()),
-    __param(1, (0, common_1.Query)('agent_id')),
-    __param(2, (0, common_1.Query)('session_id')),
-    __param(3, (0, common_1.Query)('token')),
-    __param(4, (0, common_1.Query)('before')),
-    __param(5, (0, common_1.Query)('limit')),
+    __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, String, String, String, String]),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.GetSandboxMessagesQueryDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "getSandboxMessages", null);
 __decorate([
     (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UseGuards)(tenant_token_quota_guard_js_1.TenantTokenQuotaGuard),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Body)()),
@@ -523,6 +879,18 @@ __decorate([
     __metadata("design:paramtypes", [Object, knowledge_dto_js_1.SendSandboxMessageDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "sandboxChat", null);
+__decorate([
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_SANDBOX_STREAM),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UseGuards)(tenant_token_quota_guard_js_1.TenantTokenQuotaGuard),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Res)()),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, knowledge_dto_js_1.SendSandboxMessageDto]),
+    __metadata("design:returntype", void 0)
+], KnowledgeController.prototype, "sandboxChatStream", null);
 __decorate([
     (0, common_1.Post)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.AGENTS_DRAFT),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
@@ -535,29 +903,38 @@ __decorate([
 ], KnowledgeController.prototype, "saveInitialDraft", null);
 __decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.AGENTS),
+    (0, roles_decorator_js_1.Roles)('tenant_owner', 'manager'),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "listAgents", null);
 __decorate([
-    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.AGENT_MESSAGES),
+    (0, common_1.Delete)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.AGENT_BY_ID),
+    (0, roles_decorator_js_1.Roles)('tenant_owner'),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Param)('agentId')),
-    __param(2, (0, common_1.Query)('limit')),
-    __param(3, (0, common_1.Query)('before')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, String, String]),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "deleteAgent", null);
+__decorate([
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.AGENT_MESSAGES),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('agentId')),
+    __param(2, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, knowledge_dto_js_1.GetAgentMessagesQueryDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "getAgentMessages", null);
 __decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.ONBOARDING_MESSAGES),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Req)()),
-    __param(1, (0, common_1.Query)('agent_id')),
-    __param(2, (0, common_1.Query)('limit')),
-    __param(3, (0, common_1.Query)('before')),
+    __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, String, String]),
+    __metadata("design:paramtypes", [Object, knowledge_dto_js_1.GetOnboardingMessagesQueryDto]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "getOnboardingMessages", null);
 __decorate([
@@ -598,11 +975,35 @@ __decorate([
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], KnowledgeController.prototype, "deleteDocument", null);
-exports.KnowledgeController = KnowledgeController = __decorate([
+__decorate([
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.WIDGET_CONFIG),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('agentId')),
+    __param(2, (0, common_1.Query)('source')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "getWidgetConfig", null);
+__decorate([
+    (0, common_1.Put)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.WIDGET_CONFIG),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('agentId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, knowledge_dto_js_1.UpdateWidgetConfigDto]),
+    __metadata("design:returntype", Promise)
+], KnowledgeController.prototype, "updateWidgetConfig", null);
+exports.KnowledgeController = KnowledgeController = KnowledgeController_1 = __decorate([
     (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.KNOWLEDGE.BASE),
     (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),
-    (0, roles_decorator_js_1.Roles)('tenant_owner', 'root'),
+    (0, roles_decorator_js_1.Roles)('tenant_owner'),
     __param(0, (0, common_1.Inject)('KNOWLEDGE_PACKAGE')),
     __param(1, (0, common_1.Inject)('ISchemaCacheService')),
-    __metadata("design:paramtypes", [Object, Object])
+    __param(2, (0, common_1.Inject)('ISchemaEventSubscriber')),
+    __param(3, (0, common_1.Inject)(redis_service_js_1.RedisService)),
+    __param(4, (0, common_1.Inject)(circuit_breaker_1.CIRCUIT_BREAKER_SERVICE)),
+    __metadata("design:paramtypes", [Object, Object, Object, redis_service_js_1.RedisService, Object])
 ], KnowledgeController);

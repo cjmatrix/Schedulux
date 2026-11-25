@@ -1,4 +1,3 @@
-import { DepositVO } from '../value-objects/deposit.vo.js';
 import { PriceVO } from '../value-objects/price.vo.js';
 
 export interface ServiceEntityProps {
@@ -12,7 +11,6 @@ export interface ServiceEntityProps {
   bufferMinutes: number;
   bookingMode?: string;
   price: PriceVO;
-  deposit: DepositVO;
   verification?: { require_otp?: boolean | null };
   resourceRequirements?: ResourceRequirement[];
   isDeleted?: boolean;
@@ -40,7 +38,6 @@ export class ServiceEntity {
   private _bufferMinutes: number;
   private _bookingMode: string;
   private _price: PriceVO;
-  private _deposit: DepositVO;
   private _verification?: { require_otp?: boolean | null };
   private _resourceRequirements: ResourceRequirement[];
   private _isDeleted: boolean;
@@ -72,7 +69,6 @@ export class ServiceEntity {
     this._bufferMinutes = props.bufferMinutes;
     this._bookingMode = props.bookingMode ?? 'time_slot';
     this._price = props.price ?? PriceVO.create();
-    this._deposit = props.deposit ?? DepositVO.create();
     this._verification = props.verification;
     this._resourceRequirements = (props.resourceRequirements ?? []).map((r) => ({
       role: r.role?.trim() || 'Staff',
@@ -115,9 +111,6 @@ export class ServiceEntity {
   }
   get price(): PriceVO {
     return this._price;
-  }
-  get deposit(): DepositVO {
-    return this._deposit;
   }
   get verification(): { require_otp?: boolean | null } | undefined {
     return this._verification;
@@ -170,7 +163,6 @@ export class ServiceEntity {
     bufferMinutes?: number;
     bookingMode?: string;
     price?: PriceVO;
-    deposit?: DepositVO;
     verification?: { require_otp?: boolean | null };
     resourceRequirements?: ResourceRequirement[];
   }): void {
@@ -203,9 +195,6 @@ export class ServiceEntity {
     }
     if (details.price !== undefined) {
       this._price = details.price;
-    }
-    if (details.deposit !== undefined) {
-      this._deposit = details.deposit;
     }
     if (details.verification !== undefined) {
       this._verification = details.verification;

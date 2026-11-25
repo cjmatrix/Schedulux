@@ -3,5 +3,5 @@ import { BatchSyncInventoryRequest, BatchSyncInventoryResponse } from '@repo/pro
 export const BATCH_SYNC_INVENTORY_USE_CASE = 'IBatchSyncInventoryUseCase';
 
 export interface IBatchSyncInventoryUseCase {
-  execute(dto: BatchSyncInventoryRequest): Promise<BatchSyncInventoryResponse>;
+  execute(dto: BatchSyncInventoryRequest, tier?: string): Promise<BatchSyncInventoryResponse>;
 }

@@ -39,7 +39,7 @@ export default function ResetPasswordPage() {
     setError('');
 
     try {
-      if (role === 'dashboard_user') {
+      if (role === 'dashboard_user' || role === 'manager') {
         await dashboardUserAuthApi.resetPassword({ token, new_password: newPassword });
       } else {
         await authApi.resetPassword({ token, new_password: newPassword });
@@ -67,7 +67,7 @@ export default function ResetPasswordPage() {
             in.
           </p>
           <Link
-            to={role === 'dashboard_user' ? '/dashboarduser/login' : '/login'}
+            to={role === 'dashboard_user' || role === 'manager' ? '/dashboarduser/login' : '/login'}
             className="block w-full py-3.5 px-4 bg-slate-950 hover:bg-black text-white text-sm font-semibold rounded-2xl transition-all shadow-md active:scale-[0.98]"
           >
             Go to login

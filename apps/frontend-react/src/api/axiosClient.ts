@@ -1,4 +1,11 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import { toast } from 'sonner';
+
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    skipGlobalToast?: boolean;
+  }
+}
 
 export interface ApiResponse<T> {
   message: string;
@@ -11,6 +18,13 @@ export const axiosClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+axiosClient.interceptors.request.use((config) => {
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/dashboarduser')) {
+    config.headers['x-auth-type'] = 'dashboard_user';
+  }
+  return config;
 });
 
 let isRefreshing = false;
@@ -60,7 +74,11 @@ axiosClient.interceptors.response.use(
             {},
             { withCredentials: true },
           );
-        } else if (originalRequest.url?.includes('/dashboard-user/')) {
+        } else if (
+          originalRequest.url?.includes('/dashboard-user/') ||
+          originalRequest.headers?.['x-auth-type'] === 'dashboard_user' ||
+          (typeof window !== 'undefined' && window.location.pathname.startsWith('/dashboarduser'))
+        ) {
           await axios.post(
             `${axiosClient.defaults.baseURL}/api/v1/dashboard-user/auth/refresh-token`,
             {},
@@ -88,11 +106,21 @@ axiosClient.interceptors.response.use(
       }
     }
 
+    const resData = error.response?.data;
+    const rawMsg = resData?.message || resData?.error;
     const message =
-      error.response?.data?.error ||
-      error.response?.data?.message ||
+      (Array.isArray(rawMsg) ? rawMsg.join(', ') : rawMsg) ||
       error.message ||
       'An unexpected error occurred';
+
+    const customConfig = originalRequest as { skipGlobalToast?: boolean } | undefined;
+    if (!customConfig?.skipGlobalToast && error.response?.status !== 401) {
+      toast.error(message, {
+        id: message,
+        duration: 5000,
+      });
+    }
+
     return Promise.reject(new Error(message));
   },
 );

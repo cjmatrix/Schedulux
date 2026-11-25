@@ -20,7 +20,7 @@ export class ListCustomersUseCase implements IListCustomersUseCase {
     const page = Math.max(1, dto.page || 1);
     const limit = Math.min(Math.max(1, dto.limit || 10), 100);
 
-    const { customers, total } = await this._customerRepo.findAll(tenantId, {
+    const { customers, total, summary } = await this._customerRepo.findAll(tenantId, {
       page,
       limit,
       search: dto.search?.trim() || undefined,
@@ -47,6 +47,13 @@ export class ListCustomersUseCase implements IListCustomersUseCase {
       page,
       limit,
       total_pages: totalPages,
+      summary: summary
+        ? {
+            total_count: summary.totalCount,
+            verified_count: summary.verifiedCount,
+            guest_count: summary.guestCount,
+          }
+        : undefined,
     };
   }
 }

@@ -16,14 +16,21 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { ConfirmationModal } from '../../../components/ConfirmationModal.js';
 import { Pagination } from '../../../components/Pagination';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import useDebounceHook from '../../../shared/hooks/useDebounceHook';
+import { useTenantAgents } from '../hooks/useKnowledgeDocuments';
 import { useDeleteResource, useResourcesList } from '../hooks/useResources';
 
 export default function ResourcesListPage() {
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId?: string }>();
-  const effectiveAgentId = agentId || undefined;
+  const { user: authUser, isManager } = useCurrentUser();
+  const { data: agents = [] } = useTenantAgents();
+
+  const effectiveAgentId =
+    agentId || authUser?.agent_id || (agents.length > 0 ? agents[0].agent_id : undefined);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
@@ -35,25 +42,26 @@ export default function ResourcesListPage() {
 
   const [debouncedSearch] = useDebounceHook(searchTerm);
 
-  // Reset to page 1 whenever search, type, or status filter changes
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch, selectedType, selectedStatus]);
 
-  // Single backend-searched, backend-filtered, and paginated query enriched with summary
   const {
     data: resourcesResponse,
     isLoading,
     refetch,
     isRefetching,
-  } = useResourcesList({
-    page,
-    limit,
-    resource_type: selectedType === 'all' ? undefined : selectedType,
-    dispatch_status: selectedStatus === 'all' ? undefined : selectedStatus,
-    agent_id: effectiveAgentId,
-    search: debouncedSearch.trim() || undefined,
-  });
+  } = useResourcesList(
+    {
+      page,
+      limit,
+      resource_type: selectedType === 'all' ? undefined : selectedType,
+      dispatch_status: selectedStatus === 'all' ? undefined : selectedStatus,
+      agent_id: effectiveAgentId,
+      search: debouncedSearch.trim() || undefined,
+    },
+    { enabled: true },
+  );
 
   const deleteResourceMutation = useDeleteResource();
 
@@ -87,11 +95,13 @@ export default function ResourcesListPage() {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
-  // Helper to get total weekly hours from schedule json
   const getWeeklyHours = (jsonStr?: string): string => {
-    if (!jsonStr) return 'Standard Hours';
+    if (!jsonStr || jsonStr.trim() === '' || jsonStr.trim() === '{}') return 'Standard Hours';
     try {
       const schedule = JSON.parse(jsonStr);
+      if (!schedule || typeof schedule !== 'object' || Object.keys(schedule).length === 0) {
+        return 'Standard Hours';
+      }
       let total = 0;
       let activeDays = 0;
       for (const day of Object.keys(schedule)) {
@@ -113,17 +123,23 @@ export default function ResourcesListPage() {
       if (activeDays === 0) return 'Custom Off';
       return `${(total / 60).toFixed(0)} hrs / ${activeDays} days`;
     } catch {
-      return 'Clinic Hours';
+      return 'Standard Hours';
     }
   };
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800 pb-20">
       {/* Top Header */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 pt-4 sm:pt-6 md:pt-8 pb-4">
         {/* Breadcrumb */}
-        {effectiveAgentId ? (
-          <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3">
+        {isManager ? (
+          <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-semibold text-slate-400 tracking-wide mb-3 flex-wrap">
+            <span>Operations</span>
+            <span>/</span>
+            <span className="text-slate-900 font-bold">Resources &amp; Inventory</span>
+          </div>
+        ) : effectiveAgentId ? (
+          <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-medium text-slate-500 mb-3 flex-wrap">
             <button
               onClick={() => navigate('/tenant/agents')}
               className="hover:text-slate-900 transition cursor-pointer"
@@ -133,58 +149,62 @@ export default function ResourcesListPage() {
             <span>/</span>
             <button
               onClick={() => navigate(`/tenant/agents/${effectiveAgentId}/dashboard`)}
-              className="hover:text-slate-900 font-bold transition cursor-pointer"
+              className="hover:text-slate-900 font-bold transition cursor-pointer truncate max-w-[140px] sm:max-w-none"
             >
               {effectiveAgentId}
             </button>
             <span>/</span>
-            <span className="text-slate-900 font-semibold">Resources & Inventory</span>
+            <span className="text-slate-900 font-semibold truncate">Resources &amp; Inventory</span>
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3">
+          <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-medium text-slate-500 mb-3 flex-wrap">
             <span>Tenant Workspace</span>
             <span>/</span>
-            <span className="text-slate-900 font-semibold">Resources & Inventory</span>
+            <span className="text-slate-900 font-semibold">Resources &amp; Inventory</span>
           </div>
         )}
 
         {/* Header Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 sm:pb-6 border-b border-slate-200">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+              <div className="p-1.5 sm:p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+                <Package className="w-4 h-4 sm:w-5 sm:h-5" />
+              </div>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
                 {effectiveAgentId ? 'Agent Resources & Inventory' : 'Resources & Inventory'}
               </h1>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold shrink-0">
                 {stats.active} Dispatched
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-1 max-w-xl">
+            <p className="mt-1 text-xs sm:text-sm text-slate-500">
               {effectiveAgentId
-                ? `Configure team members, rooms, and equipment linked to AI agent: ${effectiveAgentId}`
+                ? 'Configure team members, rooms, and equipment linked to this AI agent.'
                 : 'Configure team members, meeting rooms, stations, and physical equipment available for autonomous AI booking.'}
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
             <button
               onClick={() => refetch()}
               disabled={isRefetching}
-              className="p-2 rounded-full border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+              className="p-2 border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 rounded-xl transition cursor-pointer disabled:opacity-50 shadow-2xs"
               title="Refresh inventory"
             >
-              <RefreshCw className={`w-4 h-4 ${isRefetching ? 'animate-spin' : ''}`} />
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-indigo-600' : ''}`}
+              />
             </button>
             <button
-              onClick={() =>
-                navigate(
-                  effectiveAgentId
-                    ? `/tenant/agents/${effectiveAgentId}/resources/new`
-                    : '/tenant/inventory/new',
-                )
-              }
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-black transition-all shadow-sm cursor-pointer"
+              onClick={() => {
+                if (effectiveAgentId) {
+                  navigate(`/tenant/agents/${effectiveAgentId}/resources/new`);
+                } else {
+                  navigate('/tenant/inventory/new');
+                }
+              }}
+              className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-black transition-all shadow-sm cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Add Resource</span>
@@ -193,41 +213,57 @@ export default function ResourcesListPage() {
         </div>
 
         {/* Stats Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 my-6">
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 my-4 sm:my-6">
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
             <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-xs font-medium">Total Resources</span>
-              <Package className="w-4 h-4 text-slate-400" />
+              <span className="text-[11px] sm:text-xs font-medium truncate">Total Resources</span>
+              <Package className="w-4 h-4 text-slate-400 shrink-0" />
             </div>
-            <div className="text-2xl font-extrabold text-slate-900">{stats.total}</div>
-            <div className="text-[11px] text-slate-400 mt-0.5">Physical & staff assets</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-slate-900">{stats.total}</div>
+            <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">
+              Physical &amp; staff assets
+            </div>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
             <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-xs font-medium">AI Bookable</span>
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              <span className="text-[11px] sm:text-xs font-medium truncate">AI Bookable</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
             </div>
-            <div className="text-2xl font-extrabold text-emerald-600">{stats.active}</div>
-            <div className="text-[11px] text-slate-400 mt-0.5">Active for atomic slot locking</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-emerald-600">
+              {stats.active}
+            </div>
+            <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">
+              Active for slot locking
+            </div>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
             <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-xs font-medium">Staff & Team</span>
-              <Users className="w-4 h-4 text-slate-400" />
+              <span className="text-[11px] sm:text-xs font-medium truncate">Staff &amp; Team</span>
+              <Users className="w-4 h-4 text-slate-400 shrink-0" />
             </div>
-            <div className="text-2xl font-extrabold text-slate-900">{stats.staffCount}</div>
-            <div className="text-[11px] text-slate-400 mt-0.5">Eligible team members</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-slate-900">
+              {stats.staffCount}
+            </div>
+            <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">
+              Eligible team members
+            </div>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
             <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-xs font-medium">Rooms & Equipment</span>
-              <Building2 className="w-4 h-4 text-slate-400" />
+              <span className="text-[11px] sm:text-xs font-medium truncate">
+                Rooms &amp; Equipment
+              </span>
+              <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
             </div>
-            <div className="text-2xl font-extrabold text-slate-900">{stats.physicalCount}</div>
-            <div className="text-[11px] text-slate-400 mt-0.5">Required spaces & equipment</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-slate-900">
+              {stats.physicalCount}
+            </div>
+            <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">
+              Spaces &amp; equipment
+            </div>
           </div>
         </div>
 
@@ -448,13 +484,15 @@ export default function ResourcesListPage() {
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() =>
-                          navigate(
-                            effectiveAgentId
-                              ? `/tenant/agents/${effectiveAgentId}/resources/${res.resource_id}`
-                              : `/tenant/inventory/${res.resource_id}`,
-                          )
-                        }
+                        onClick={() => {
+                          if (effectiveAgentId) {
+                            navigate(
+                              `/tenant/agents/${effectiveAgentId}/resources/${res.resource_id}`,
+                            );
+                          } else {
+                            navigate(`/tenant/inventory/${res.resource_id}`);
+                          }
+                        }}
                         className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer shadow-2xs"
                       >
                         <Edit className="w-3 h-3 text-slate-400" />
@@ -482,40 +520,16 @@ export default function ResourcesListPage() {
       </div>
 
       {/* Delete Confirmation Modal */}
-      {resourceToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
-            <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
-              <Trash2 className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                Delete "{resourceToDelete.name}"?
-              </h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Are you sure you want to permanently delete this resource? This cannot be undone.
-              </p>
-            </div>
-            <div className="flex items-center justify-end gap-2.5 pt-2">
-              <button
-                type="button"
-                onClick={() => setResourceToDelete(null)}
-                className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteConfirm}
-                disabled={deleteResourceMutation.isPending}
-                className="px-4 py-2 rounded-full bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors shadow-2xs cursor-pointer disabled:opacity-60"
-              >
-                {deleteResourceMutation.isPending ? 'Deleting...' : 'Confirm Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmationModal
+        isOpen={Boolean(resourceToDelete)}
+        onClose={() => setResourceToDelete(null)}
+        onConfirm={handleDeleteConfirm}
+        title={`Delete "${resourceToDelete?.name}"?`}
+        description="Are you sure you want to permanently delete this resource? This cannot be undone."
+        variant="delete"
+        confirmText="Confirm Delete"
+        isLoading={deleteResourceMutation.isPending}
+      />
     </div>
   );
 }

@@ -11,15 +11,22 @@ import { LoggerModule } from 'nestjs-pino';
 import { RedisModule } from './config/redis.js';
 import { DashboardUserController } from './controllers/DashboardUserController.js';
 import { SuperAdminAuthController } from './controllers/SuperAdminController.js';
+import { TenantBillingController } from './controllers/TenantBillingController.js';
 import { TenantAuthController } from './controllers/TenantController.js';
 import { EmailProducer } from './producers/emailProducer.js';
+import { SqsEmailProducer } from './producers/sqsEmailProducer.js';
+import { BillingLedgerRepository } from './repository/BillingLedgerRepository.js';
 import { CacheRepository } from './repository/CacheRepository.js';
 import { DashboardUserRepository } from './repository/DashboardUserRepository.js';
 import { SuperAdminRepository } from './repository/SuperAdminRepository.js';
 import { TenantRepository } from './repository/TenantRepository.js';
+import { TierConfigRepository } from './repository/TierConfigRepository.js';
+import { UnitOfWork } from './repository/UnitOfWork.js';
 import { BcryptPasswordHasher } from './services/bcryptPasswordHasher.js';
+import { BillingService } from './services/billingService.js';
 import { DashboardUserService } from './services/dashboardUserService.js';
 import { JwtTokenService } from './services/jwtTokenService.js';
+import { OpenSearchAnalyticsService } from './services/openSearchAnalyticsService.js';
 import { SuperAdminService } from './services/superAdminService.js';
 import { TenantService } from './services/tenantService.js';
 const require = createRequire(import.meta.url);
@@ -49,18 +56,31 @@ AppModule = __decorate([
             }),
             RedisModule,
         ],
-        controllers: [TenantAuthController, SuperAdminAuthController, DashboardUserController],
+        controllers: [
+            TenantAuthController,
+            TenantBillingController,
+            SuperAdminAuthController,
+            DashboardUserController,
+        ],
         providers: [
+            { provide: 'IUnitOfWork', useClass: UnitOfWork },
             { provide: 'ITenantRepository', useClass: TenantRepository },
+            { provide: 'ITierConfigRepository', useClass: TierConfigRepository },
             { provide: 'IDashboardUserRepository', useClass: DashboardUserRepository },
             { provide: 'ISuperAdminRepository', useClass: SuperAdminRepository },
             { provide: 'ICacheRepository', useClass: CacheRepository },
-            { provide: 'IEmailProducer', useClass: EmailProducer },
+            {
+                provide: 'IEmailProducer',
+                useClass: process.env.AWS_SQS_EMAIL_QUEUE_URL ? SqsEmailProducer : EmailProducer,
+            },
             { provide: 'IPasswordHasher', useClass: BcryptPasswordHasher },
             { provide: 'IJwtService', useClass: JwtTokenService },
             { provide: 'ITenantService', useClass: TenantService },
+            { provide: 'IBillingLedgerRepository', useClass: BillingLedgerRepository },
+            { provide: 'IBillingService', useClass: BillingService },
             { provide: 'ISuperAdminService', useClass: SuperAdminService },
             { provide: 'IDashboardUserService', useClass: DashboardUserService },
+            { provide: 'ITokenAnalyticsService', useClass: OpenSearchAnalyticsService },
         ],
     })
 ], AppModule);

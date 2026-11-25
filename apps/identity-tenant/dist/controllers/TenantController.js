@@ -42,6 +42,10 @@ let TenantAuthController = class TenantAuthController {
         const { email, password } = data;
         if (!email || !password)
             throw new Error(RESPONSE_MESSAGES.ERRORS.EMAIL_AND_PASSWORD_REQUIRED);
+        // throw new RpcException({
+        //     code: status.INTERNAL, 
+        //     message: 'Simulated database failure in identity-tenant',
+        //   });
         const result = await this._tenantService.login(email, password);
         return {
             message: RESPONSE_MESSAGES.AUTH.LOGIN_SUCCESS,

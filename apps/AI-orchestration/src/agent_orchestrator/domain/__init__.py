@@ -2,6 +2,7 @@ from agent_orchestrator.domain.exceptions import (
     AgentNotFoundException,
     CrawlJobNotFoundException,
     InvalidDraftException,
+    PermanentMemoryError,
 )
 from agent_orchestrator.domain.protocols import (
     AgentOrchestrator,
@@ -18,6 +19,7 @@ __all__ = [
     "AgentNotFoundException",
     "CrawlJobNotFoundException",
     "InvalidDraftException",
+    "PermanentMemoryError",
     "build_default_agent_template",
     "MessageRepository",
     "DraftRepository",

@@ -22,20 +22,25 @@ const routes_constant_js_1 = require("../../constants/routes.constant.js");
 const roles_decorator_js_1 = require("../../decorators/roles.decorator.js");
 const roles_guard_js_1 = require("../../guards/roles.guard.js");
 const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
+const grpc_metadata_util_js_1 = require("../../utils/grpc-metadata.util.js");
+const circuit_breaker_1 = require("@repo/circuit-breaker");
 const availability_dto_js_1 = require("./dtos/availability.dto.js");
 const booking_dto_js_1 = require("./dtos/booking.dto.js");
+const customer_dto_js_1 = require("./dtos/customer.dto.js");
 const resource_dto_js_1 = require("./dtos/resource.dto.js");
 const schedule_dto_js_1 = require("./dtos/schedule.dto.js");
 const service_dto_js_1 = require("./dtos/service.dto.js");
-const customer_dto_js_1 = require("./dtos/customer.dto.js");
 let SchedulingController = class SchedulingController {
     _client;
+    _circuitBreakerService;
     _schedulingService;
-    constructor(_client) {
+    constructor(_client, _circuitBreakerService) {
         this._client = _client;
+        this._circuitBreakerService = _circuitBreakerService;
     }
     onModuleInit() {
-        this._schedulingService = this._client.getService(scheduling_1.SCHEDULING_INVENTORY_SERVICE_NAME);
+        const rawService = this._client.getService(scheduling_1.SCHEDULING_INVENTORY_SERVICE_NAME);
+        this._schedulingService = this._circuitBreakerService.wrapGrpcClient('scheduling-service', rawService);
     }
     _getTenantId(req) {
         const tenantId = req.tenant?.tenant_id || req.dashboardUser?.tenant_id;
@@ -44,11 +49,29 @@ let SchedulingController = class SchedulingController {
         }
         return tenantId;
     }
+    _getTenantTier(req) {
+        return req.tenant?.tier || req.dashboardUser?.tier || 'starter';
+    }
+    _getEffectiveAgentId(req, requestedAgentId) {
+        if (req.dashboardUser) {
+            if (requestedAgentId) {
+                const allowedAgentIds = req.dashboardUser.agent_ids ||
+                    (req.dashboardUser.agent_id ? [req.dashboardUser.agent_id] : []);
+                if (allowedAgentIds.length === 0 || allowedAgentIds.includes(requestedAgentId)) {
+                    return requestedAgentId;
+                }
+            }
+            return req.dashboardUser.agent_id || '';
+        }
+        return requestedAgentId || '';
+    }
     async createService(req, body) {
         const tenantId = this._getTenantId(req);
+        const tier = this._getTenantTier(req);
+        const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
         const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.createService({
             tenant_id: tenantId,
-            agent_id: body.agent_id,
+            agent_id: this._getEffectiveAgentId(req, body.agent_id),
             name: body.name,
             category: body.category,
             description: body.description,
@@ -56,12 +79,11 @@ let SchedulingController = class SchedulingController {
             buffer_minutes: body.buffer_minutes,
             booking_mode: body.booking_mode,
             price: body.price,
-            deposit: body.deposit,
             verification: body.verification
                 ? { require_otp: body.verification.require_otp ?? undefined }
                 : undefined,
             resource_requirements: body.resource_requirements ?? [],
-        }));
+        }, metadata));
         return {
             message: response.message,
             data: response.service,
@@ -74,7 +96,7 @@ let SchedulingController = class SchedulingController {
             page: query.page,
             limit: query.limit,
             category: query.category || '',
-            agent_id: query.agent_id,
+            agent_id: this._getEffectiveAgentId(req, query.agent_id),
             search: query.search || undefined,
         }));
         return {
@@ -111,7 +133,6 @@ let SchedulingController = class SchedulingController {
             buffer_minutes: body.buffer_minutes,
             booking_mode: body.booking_mode,
             price: body.price,
-            deposit: body.deposit,
             verification: body.verification
                 ? { require_otp: body.verification.require_otp ?? undefined }
                 : undefined,
@@ -135,9 +156,11 @@ let SchedulingController = class SchedulingController {
     }
     async createResource(req, body) {
         const tenantId = this._getTenantId(req);
+        const tier = this._getTenantTier(req);
+        const metadata = (0, grpc_metadata_util_js_1.createTenantGrpcMetadata)(tenantId, tier);
         const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.createResource({
             tenant_id: tenantId,
-            agent_id: body.agent_id,
+            agent_id: this._getEffectiveAgentId(req, body.agent_id),
             resource_type: body.resource_type,
             name: body.name,
             title: body.title,
@@ -146,7 +169,7 @@ let SchedulingController = class SchedulingController {
             is_bookable: body.is_bookable,
             dispatch_status: body.dispatch_status,
             custom_shift_overrides_json: body.custom_shift_overrides_json,
-        }));
+        }, metadata));
         return {
             message: response.message,
             data: response.resource,
@@ -161,7 +184,7 @@ let SchedulingController = class SchedulingController {
             resource_type: query.resource_type || '',
             dispatch_status: query.dispatch_status || '',
             category: query.category || undefined,
-            agent_id: query.agent_id,
+            agent_id: this._getEffectiveAgentId(req, query.agent_id),
             search: query.search || undefined,
         }));
         return {
@@ -222,7 +245,7 @@ let SchedulingController = class SchedulingController {
             tenant_id: tenantId,
             page: query.page,
             limit: query.limit,
-            agent_id: query.agent_id,
+            agent_id: this._getEffectiveAgentId(req, query.agent_id),
             service_id: query.service_id,
             resource_id: query.resource_id,
             status: query.status,
@@ -238,6 +261,7 @@ let SchedulingController = class SchedulingController {
                 page: response.page,
                 limit: response.limit,
             },
+            summary: response.summary,
         };
     }
     async createBooking(req, body) {
@@ -245,7 +269,7 @@ let SchedulingController = class SchedulingController {
         const userId = req.dashboardUser?.user_id || req.tenant?.tenant_id || '';
         const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.createBooking({
             tenant_id: tenantId,
-            agent_id: body.agent_id,
+            agent_id: this._getEffectiveAgentId(req, body.agent_id),
             service_id: body.service_id,
             resource_id: body.resource_id,
             resource_ids: body.resource_ids ?? (body.resource_id ? [body.resource_id] : []),
@@ -256,8 +280,9 @@ let SchedulingController = class SchedulingController {
             customer_email: body.customer_email || undefined,
             notes: body.notes,
             source: body.source,
-            deposit_status: body.deposit_status,
             created_by: body.created_by || userId,
+            hold_token: body.hold_token,
+            override_hold: body.override_hold,
         }));
         return {
             message: response.message,
@@ -270,7 +295,7 @@ let SchedulingController = class SchedulingController {
         const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.cancelBooking({
             tenant_id: tenantId,
             booking_id: id,
-            agent_id: body.agent_id,
+            agent_id: this._getEffectiveAgentId(req, body.agent_id),
             reason: body.reason,
             cancelled_by: userId,
         }));
@@ -285,13 +310,47 @@ let SchedulingController = class SchedulingController {
         const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.rescheduleBooking({
             tenant_id: tenantId,
             booking_id: id,
-            agent_id: body.agent_id,
+            agent_id: this._getEffectiveAgentId(req, body.agent_id),
             new_start_time: body.new_start_time,
             new_end_time: body.new_end_time,
             resource_id: body.resource_id,
             resource_ids: body.resource_ids ?? (body.resource_id ? [body.resource_id] : []),
             notes: body.notes,
             rescheduled_by: userId,
+            hold_token: body.hold_token,
+            override_hold: body.override_hold,
+        }));
+        return {
+            message: response.message,
+            data: response.booking,
+        };
+    }
+    async updateBookingStatus(req, id, body) {
+        const tenantId = this._getTenantId(req);
+        const userId = req.dashboardUser?.user_id || req.tenant?.tenant_id || '';
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.updateBookingStatus({
+            tenant_id: tenantId,
+            booking_id: id,
+            agent_id: this._getEffectiveAgentId(req, body.agent_id),
+            status: body.status,
+            reason: body.reason,
+            updated_by: userId,
+        }));
+        return {
+            message: response.message,
+            data: response.booking,
+        };
+    }
+    async completeBooking(req, id, body) {
+        const tenantId = this._getTenantId(req);
+        const userId = req.dashboardUser?.user_id || req.tenant?.tenant_id || '';
+        const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.updateBookingStatus({
+            tenant_id: tenantId,
+            booking_id: id,
+            agent_id: this._getEffectiveAgentId(req, body.agent_id),
+            status: 'completed',
+            reason: body.reason,
+            updated_by: userId,
         }));
         return {
             message: response.message,
@@ -305,7 +364,7 @@ let SchedulingController = class SchedulingController {
             service_id: query.service_id,
             start_date: query.start_date,
             end_date: query.end_date,
-            agent_id: query.agent_id,
+            agent_id: this._getEffectiveAgentId(req, query.agent_id),
             resource_id: query.resource_id,
             resource_ids: query.resource_ids || [],
             timezone: query.timezone,
@@ -319,7 +378,7 @@ let SchedulingController = class SchedulingController {
         const tenantId = this._getTenantId(req);
         const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.getTenantSchedule({
             tenant_id: tenantId,
-            agent_id: query.agent_id || '',
+            agent_id: this._getEffectiveAgentId(req, query.agent_id),
         }));
         return {
             message: response.message,
@@ -330,7 +389,7 @@ let SchedulingController = class SchedulingController {
         const tenantId = this._getTenantId(req);
         const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.updateTenantSchedule({
             tenant_id: tenantId,
-            agent_id: body.agent_id,
+            agent_id: this._getEffectiveAgentId(req, body.agent_id),
             timezone: body.timezone,
             currency: body.currency,
             operating_hours: body.operating_hours,
@@ -347,7 +406,7 @@ let SchedulingController = class SchedulingController {
         const tenantId = this._getTenantId(req);
         const response = await (0, rxjs_1.lastValueFrom)(this._schedulingService.listCustomers({
             tenant_id: tenantId,
-            agent_id: query.agent_id || '',
+            agent_id: this._getEffectiveAgentId(req, query.agent_id),
             page: query.page,
             limit: query.limit,
             search: query.search || '',
@@ -361,6 +420,7 @@ let SchedulingController = class SchedulingController {
                 limit: response.limit,
                 total_pages: response.total_pages,
             },
+            summary: response.summary,
         };
     }
 };
@@ -497,6 +557,28 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], SchedulingController.prototype, "rescheduleBooking", null);
 __decorate([
+    (0, common_1.Patch)(routes_constant_js_1.API_ROUTES.SCHEDULING.BOOKING_STATUS),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, booking_dto_js_1.UpdateBookingStatusDto]),
+    __metadata("design:returntype", Promise)
+], SchedulingController.prototype, "updateBookingStatus", null);
+__decorate([
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.SCHEDULING.BOOKING_COMPLETE),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, booking_dto_js_1.CompleteBookingDto]),
+    __metadata("design:returntype", Promise)
+], SchedulingController.prototype, "completeBooking", null);
+__decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.SCHEDULING.AVAILABILITY),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
     __param(0, (0, common_1.Req)()),
@@ -535,7 +617,8 @@ __decorate([
 exports.SchedulingController = SchedulingController = __decorate([
     (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.SCHEDULING.BASE),
     (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard, roles_guard_js_1.RolesGuard),
-    (0, roles_decorator_js_1.Roles)('tenant_owner', 'root', 'manager', 'dashboard_user'),
+    (0, roles_decorator_js_1.Roles)('tenant_owner', 'manager'),
     __param(0, (0, common_1.Inject)('SCHEDULING_PACKAGE')),
-    __metadata("design:paramtypes", [Object])
+    __param(1, (0, common_1.Inject)(circuit_breaker_1.CIRCUIT_BREAKER_SERVICE)),
+    __metadata("design:paramtypes", [Object, Object])
 ], SchedulingController);

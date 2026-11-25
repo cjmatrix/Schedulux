@@ -1,42 +1,80 @@
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
+import { Toaster } from 'sonner';
 import './index.css';
-import App from './App.tsx';
-import { DashboardUserProtectedRoute } from './features/dashboard-user/components/DashboardUserProtectedRoute.tsx';
-import DashboardUserLoginPage from './features/dashboard-user/DashboardUserLoginPage.tsx';
-import AdminLayout from './features/superadmin/components/AdminLayout.tsx';
 import { SuperAdminProtectedRoute } from './features/superadmin/components/SuperAdminProtectedRoute.tsx';
-import GlobalSettingsPage from './features/superadmin/pages/GlobalSettingsPage.tsx';
-import SuperAdminDashboard from './features/superadmin/pages/SuperAdminDashboard.tsx';
-// Superadmin Feature Imports
-import SuperAdminLoginPage from './features/superadmin/pages/SuperAdminLoginPage.tsx';
-import SystemHealthPage from './features/superadmin/pages/SystemHealthPage.tsx';
-import TenantListPage from './features/superadmin/pages/TenantListPage.tsx';
+import { RoleProtectedRoute } from './features/tenant/components/RoleProtectedRoute.tsx';
+import { TenantIndexRedirect } from './features/tenant/components/TenantIndexRedirect.tsx';
 import { TenantProtectedRoute } from './features/tenant/components/TenantProtectedRoute.tsx';
-import AgentDashboardPage from './features/tenant/pages/AgentDashboardPage.tsx';
-import BookingsPage from './features/tenant/pages/BookingsPage.tsx';
-import CustomersPage from './features/tenant/pages/CustomersPage.tsx';
-import ForgotPasswordPage from './features/tenant/pages/ForgotPasswordPage.tsx';
-import KnowledgeBasePage from './features/tenant/pages/KnowledgeBasePage.tsx';
-import LoginPage from './features/tenant/pages/LoginPage.tsx';
 
-// Tenant Dashboard Feature Imports
-import TenantLayout from './features/tenant/pages/layout/TenantLayout.tsx';
-import RegisterPage from './features/tenant/pages/RegisterPage.tsx';
-import ResetPasswordPage from './features/tenant/pages/ResetPasswordPage.tsx';
-import ResourceEditorPage from './features/tenant/pages/ResourceEditorPage.tsx';
-import ResourcesListPage from './features/tenant/pages/ResourcesListPage.tsx';
-import ScheduleSettingsPage from './features/tenant/pages/ScheduleSettingsPage.tsx';
-import ServiceEditorPage from './features/tenant/pages/ServiceEditorPage.tsx';
-import ServicesListPage from './features/tenant/pages/ServicesListPage.tsx';
-import TenantAgentsPage from './features/tenant/pages/TenantAgentsPage.tsx';
-import VerifyEmailPage from './features/tenant/pages/VerifyEmailPage.tsx';
-import WorkspaceUsersPage from './features/tenant/pages/WorkspaceUsersPage.tsx';
-import AgentOnboardingWizard from './pages/AgentOnboardingWizard.tsx';
-import LandingPage from './pages/LandingPage.tsx';
-import SchedulingOnboarding from './pages/SchedulingOnboarding.tsx';
+// Lazy-loaded Layouts & Pages (Route-level Code Splitting)
+const App = lazy(() => import('./App.tsx'));
+const LandingPage = lazy(() => import('./pages/LandingPage.tsx'));
+const PublicChatPage = lazy(() => import('./features/public/pages/PublicChatPage.tsx'));
+
+// Auth & Invite Pages
+const LoginPage = lazy(() => import('./features/tenant/pages/LoginPage.tsx'));
+const RegisterPage = lazy(() => import('./features/tenant/pages/RegisterPage.tsx'));
+const VerifyEmailPage = lazy(() => import('./features/tenant/pages/VerifyEmailPage.tsx'));
+const ForgotPasswordPage = lazy(() => import('./features/tenant/pages/ForgotPasswordPage.tsx'));
+const ResetPasswordPage = lazy(() => import('./features/tenant/pages/ResetPasswordPage.tsx'));
+const DashboardUserLoginPage = lazy(
+  () => import('./features/dashboard-user/DashboardUserLoginPage.tsx'),
+);
+const AcceptInvitePage = lazy(() => import('./features/dashboard-user/AcceptInvitePage.tsx'));
+
+// SuperAdmin Layout & Pages
+const SuperAdminLoginPage = lazy(() => import('./features/superadmin/pages/SuperAdminLoginPage.tsx'));
+const AdminLayout = lazy(() => import('./features/superadmin/components/AdminLayout.tsx'));
+const SuperAdminDashboard = lazy(() => import('./features/superadmin/pages/SuperAdminDashboard.tsx'));
+const TenantListPage = lazy(() => import('./features/superadmin/pages/TenantListPage.tsx'));
+const RateLimitsPage = lazy(() => import('./features/superadmin/pages/RateLimitsPage.tsx'));
+const SystemHealthPage = lazy(() => import('./features/superadmin/pages/SystemHealthPage.tsx'));
+const GlobalSettingsPage = lazy(() => import('./features/superadmin/pages/GlobalSettingsPage.tsx'));
+
+// Tenant Onboarding & Layout
+const TenantAgentsPage = lazy(() => import('./features/tenant/pages/TenantAgentsPage.tsx'));
+const SchedulingOnboarding = lazy(() => import('./pages/SchedulingOnboarding.tsx'));
+const AgentOnboardingWizard = lazy(() => import('./pages/AgentOnboardingWizard.tsx'));
+const TenantLayout = lazy(() => import('./features/tenant/pages/layout/TenantLayout.tsx'));
+
+// Tenant Dashboard & Management Pages
+const TenantDashboardPage = lazy(() => import('./features/tenant/pages/TenantDashboardPage.tsx'));
+const BillingPage = lazy(() => import('./features/tenant/pages/BillingPage.tsx'));
+const WorkspaceUsersPage = lazy(() => import('./features/tenant/pages/WorkspaceUsersPage.tsx'));
+const KnowledgeBasePage = lazy(() => import('./features/tenant/pages/KnowledgeBasePage.tsx'));
+const ScheduleSettingsPage = lazy(() => import('./features/tenant/pages/ScheduleSettingsPage.tsx'));
+const EmbedWidgetPage = lazy(() => import('./features/tenant/pages/EmbedWidgetPage.tsx'));
+const BookingsPage = lazy(() => import('./features/tenant/pages/BookingsPage.tsx'));
+const CustomersPage = lazy(() => import('./features/tenant/pages/CustomersPage.tsx'));
+const ServicesListPage = lazy(() => import('./features/tenant/pages/ServicesListPage.tsx'));
+const ServiceEditorPage = lazy(() => import('./features/tenant/pages/ServiceEditorPage.tsx'));
+const ResourcesListPage = lazy(() => import('./features/tenant/pages/ResourcesListPage.tsx'));
+const ResourceEditorPage = lazy(() => import('./features/tenant/pages/ResourceEditorPage.tsx'));
+
+
+function PageLoader() {
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="w-7 h-7 rounded-full border-2 border-slate-200 border-t-slate-900 animate-spin" />
+    </div>
+  );
+}
+
+
+function withSuspense(element: ReactNode): ReactNode {
+  return <Suspense fallback={<PageLoader />}>{element}</Suspense>;
+}
+
+
+function ownerRoute(element: ReactNode): ReactNode {
+  return (
+    <RoleProtectedRoute allowedRoles={['owner']}>{withSuspense(element)}</RoleProtectedRoute>
+  );
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,54 +88,62 @@ const queryClient = new QueryClient({
 const router = createBrowserRouter([
   {
     path: '/',
-    element: <App />,
+    element: withSuspense(<App />),
   },
   {
     path: '/home',
-    element: <LandingPage />,
+    element: withSuspense(<LandingPage />),
   },
   {
     path: '/register',
-    element: <RegisterPage />,
+    element: withSuspense(<RegisterPage />),
   },
   {
     path: '/login',
-    element: <LoginPage />,
+    element: withSuspense(<LoginPage />),
   },
   {
     path: '/dashboarduser/login',
-    element: <DashboardUserLoginPage />,
+    element: withSuspense(<DashboardUserLoginPage />),
   },
   {
     path: '/tenant/user-login',
-    element: <DashboardUserLoginPage />,
+    element: withSuspense(<DashboardUserLoginPage />),
   },
   {
     path: '/verify-email',
-    element: <VerifyEmailPage />,
+    element: withSuspense(<VerifyEmailPage />),
   },
   {
     path: '/forgot-password',
-    element: <ForgotPasswordPage />,
+    element: withSuspense(<ForgotPasswordPage />),
   },
   {
     path: '/dashboarduser/forgot-password',
-    element: <ForgotPasswordPage />,
+    element: withSuspense(<ForgotPasswordPage />),
   },
   {
     path: '/reset-password',
-    element: <ResetPasswordPage />,
+    element: withSuspense(<ResetPasswordPage />),
+  },
+  {
+    path: '/chat/:tenantId/:agentId',
+    element: withSuspense(<PublicChatPage />),
+  },
+  {
+    path: '/book/:tenantId/:agentId',
+    element: withSuspense(<PublicChatPage />),
   },
   {
     path: '/superadmin/login',
-    element: <SuperAdminLoginPage />,
+    element: withSuspense(<SuperAdminLoginPage />),
   },
   {
     path: '/superadmin',
     element: <SuperAdminProtectedRoute />,
     children: [
       {
-        element: <AdminLayout />,
+        element: withSuspense(<AdminLayout />),
         children: [
           {
             index: true,
@@ -105,19 +151,23 @@ const router = createBrowserRouter([
           },
           {
             path: 'dashboard',
-            element: <SuperAdminDashboard />,
+            element: withSuspense(<SuperAdminDashboard />),
           },
           {
             path: 'tenants',
-            element: <TenantListPage />,
+            element: withSuspense(<TenantListPage />),
+          },
+          {
+            path: 'rate-limits',
+            element: withSuspense(<RateLimitsPage />),
           },
           {
             path: 'system-health',
-            element: <SystemHealthPage />,
+            element: withSuspense(<SystemHealthPage />),
           },
           {
             path: 'settings',
-            element: <GlobalSettingsPage />,
+            element: withSuspense(<GlobalSettingsPage />),
           },
         ],
       },
@@ -129,116 +179,125 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Navigate to="/tenant/agents" replace />,
-      },
-      {
-        path: 'dashboard',
-        element: <Navigate to="/tenant/agents" replace />,
+        element: <TenantIndexRedirect />,
       },
       {
         path: 'agents',
-        element: <TenantAgentsPage />,
+        element: ownerRoute(<TenantAgentsPage />),
       },
       {
         path: 'landingboard',
-        element: <SchedulingOnboarding />,
+        element: ownerRoute(<SchedulingOnboarding />),
       },
       {
         path: 'agent-setup/:id',
-        element: <AgentOnboardingWizard />,
+        element: ownerRoute(<AgentOnboardingWizard />),
       },
       {
-        element: <TenantLayout isTenant={true} />,
+        element: withSuspense(<TenantLayout />),
         children: [
+          // Owner Only Routes
           {
-            path: 'users',
-            element: <WorkspaceUsersPage />,
+            path: 'dashboard',
+            element: ownerRoute(<TenantDashboardPage />),
           },
-          {
-            path: 'bookings',
-            element: <BookingsPage />,
-          },
-          {
-            path: 'customers',
-            element: <CustomersPage />,
-          },
-
           {
             path: 'agents/:agentId/dashboard',
-            element: <AgentDashboardPage />,
+            element: ownerRoute(<TenantDashboardPage />),
+          },
+          {
+            path: 'billing',
+            element: ownerRoute(<BillingPage />),
+          },
+          {
+            path: 'agents/:agentId/billing',
+            element: ownerRoute(<BillingPage />),
+          },
+          {
+            path: 'users',
+            element: ownerRoute(<WorkspaceUsersPage />),
+          },
+          {
+            path: 'agents/:agentId/users',
+            element: ownerRoute(<WorkspaceUsersPage />),
           },
           {
             path: 'agents/:agentId/knowledge',
-            element: <KnowledgeBasePage />,
+            element: ownerRoute(<KnowledgeBasePage />),
           },
           {
             path: 'knowledge',
-            element: <KnowledgeBasePage />,
-          },
-          {
-            path: 'agents/:agentId/bookings',
-            element: <BookingsPage />,
-          },
-          {
-            path: 'agents/:agentId/customers',
-            element: <CustomersPage />,
-          },
-          {
-            path: 'agents/:agentId/services',
-            element: <ServicesListPage />,
-          },
-          {
-            path: 'agents/:agentId/services/new',
-            element: <ServiceEditorPage mode="create" />,
-          },
-          {
-            path: 'agents/:agentId/services/:id',
-            element: <ServiceEditorPage mode="edit" />,
-          },
-          {
-            path: 'agents/:agentId/resources',
-            element: <ResourcesListPage />,
-          },
-          {
-            path: 'agents/:agentId/resources/new',
-            element: <ResourceEditorPage mode="create" />,
-          },
-          {
-            path: 'agents/:agentId/resources/:id',
-            element: <ResourceEditorPage mode="edit" />,
+            element: ownerRoute(<KnowledgeBasePage />),
           },
           {
             path: 'agents/:agentId/settings',
-            element: <ScheduleSettingsPage />,
+            element: ownerRoute(<ScheduleSettingsPage />),
           },
           {
             path: 'settings',
-            element: <ScheduleSettingsPage />,
+            element: ownerRoute(<ScheduleSettingsPage />),
+          },
+          {
+            path: 'agents/:agentId/widget',
+            element: ownerRoute(<EmbedWidgetPage />),
+          },
+          {
+            path: 'widget',
+            element: ownerRoute(<EmbedWidgetPage />),
           },
 
+          // Shared Operational Routes (Both Owner and Manager)
+          {
+            path: 'bookings',
+            element: withSuspense(<BookingsPage />),
+          },
+          {
+            path: 'agents/:agentId/bookings',
+            element: withSuspense(<BookingsPage />),
+          },
+          {
+            path: 'customers',
+            element: withSuspense(<CustomersPage />),
+          },
+          {
+            path: 'agents/:agentId/customers',
+            element: withSuspense(<CustomersPage />),
+          },
           {
             path: 'services',
-            element: <ServicesListPage />,
+            element: withSuspense(<ServicesListPage />),
           },
           {
             path: 'services/new',
-            element: <ServiceEditorPage mode="create" />,
+            element: withSuspense(<ServiceEditorPage mode="create" />),
           },
           {
             path: 'services/:id',
-            element: <ServiceEditorPage mode="edit" />,
+            element: withSuspense(<ServiceEditorPage mode="edit" />),
+          },
+          {
+            path: 'agents/:agentId/services',
+            element: withSuspense(<ServicesListPage />),
+          },
+          {
+            path: 'agents/:agentId/services/new',
+            element: withSuspense(<ServiceEditorPage mode="create" />),
+          },
+          {
+            path: 'agents/:agentId/services/:id',
+            element: withSuspense(<ServiceEditorPage mode="edit" />),
           },
           {
             path: 'inventory',
-            element: <ResourcesListPage />,
+            element: withSuspense(<ResourcesListPage />),
           },
           {
             path: 'inventory/new',
-            element: <ResourceEditorPage mode="create" />,
+            element: withSuspense(<ResourceEditorPage mode="create" />),
           },
           {
             path: 'inventory/:id',
-            element: <ResourceEditorPage mode="edit" />,
+            element: withSuspense(<ResourceEditorPage mode="edit" />),
           },
           {
             path: 'resources',
@@ -252,6 +311,18 @@ const router = createBrowserRouter([
             path: 'resources/:id',
             element: <Navigate to="/tenant/inventory/:id" replace />,
           },
+          {
+            path: 'agents/:agentId/resources',
+            element: withSuspense(<ResourcesListPage />),
+          },
+          {
+            path: 'agents/:agentId/resources/new',
+            element: withSuspense(<ResourceEditorPage mode="create" />),
+          },
+          {
+            path: 'agents/:agentId/resources/:id',
+            element: withSuspense(<ResourceEditorPage mode="edit" />),
+          },
         ],
       },
     ],
@@ -261,26 +332,15 @@ const router = createBrowserRouter([
     element: <Navigate to="/tenant/users" replace />,
   },
   {
+    path: '/dashboarduser/accept-invite',
+    element: withSuspense(<AcceptInvitePage />),
+  },
+  {
     path: '/dashboarduser',
-    element: <DashboardUserProtectedRoute />,
     children: [
       {
-        path: 'tenant',
-        element: <TenantLayout isTenant={false} />,
-        children: [
-          {
-            index: true,
-            element: <Navigate to="/dashboarduser/tenant/bookings" replace />,
-          },
-          {
-            path: 'bookings',
-            element: <BookingsPage />,
-          },
-          {
-            path: 'customers',
-            element: <CustomersPage />,
-          },
-        ],
+        path: 'tenant/*',
+        element: <Navigate to="/tenant/bookings" replace />,
       },
     ],
   },
@@ -294,7 +354,10 @@ if (rootElement) {
     <>
       <GoogleOAuthProvider clientId={googleClientId}>
         <QueryClientProvider client={queryClient}>
-          <RouterProvider router={router} />
+          <Suspense fallback={<PageLoader />}>
+            <RouterProvider router={router} />
+          </Suspense>
+          <Toaster position="top-right" richColors closeButton visibleToasts={5} />
         </QueryClientProvider>
       </GoogleOAuthProvider>
     </>,

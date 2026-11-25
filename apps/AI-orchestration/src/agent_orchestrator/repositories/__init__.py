@@ -4,16 +4,16 @@ from agent_orchestrator.repositories.customer_message_repository import Customer
 from agent_orchestrator.repositories.document_repository import MongoDocumentRepository
 from agent_orchestrator.repositories.draft_repository import MongoDraftRepository
 from agent_orchestrator.repositories.message_repository import MongoMessageRepository
+from agent_orchestrator.repositories.outbox_repository import MongoOutboxRepository
 from agent_orchestrator.repositories.runtime_config_repository import MongoRuntimeConfigRepository
 
 __all__ = [
-    # Repositories (Persistence)
     "CustomerMessageRepository",
     "MongoDocumentRepository",
     "MongoMessageRepository",
     "MongoDraftRepository",
+    "MongoOutboxRepository",
     "MongoRuntimeConfigRepository",
-    # Deprecated aliases
     "RabbitMQCrawlerQueue",
     "BullMQCrawlerQueue",
     "RabbitMQMemoryQueue",

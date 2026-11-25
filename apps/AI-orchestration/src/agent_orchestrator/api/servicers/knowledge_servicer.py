@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import AsyncIterator
 import grpc
 
 import agent_orchestrator.proto.knowledge_pb2 as knowledge_pb2
@@ -9,6 +10,7 @@ from agent_orchestrator.domain.exceptions import (
     AgentNotFoundException,
     CrawlJobNotFoundException,
     InvalidDraftException,
+    TierQuotaExceededException,
 )
 from agent_orchestrator.services.protocols import (
     AgentManagementServiceProtocol,
@@ -17,6 +19,7 @@ from agent_orchestrator.services.protocols import (
     DocumentServiceProtocol,
     OnboardingServiceProtocol,
 )
+from agent_orchestrator.tracing import set_span_attributes
 
 
 class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
@@ -88,10 +91,22 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
         agent_id = getattr(request, "agent_id", "")
         print(f"[gRPC] StartOnboardingSession for tenant: {request.tenant_id}, agent: {agent_id}")
         try:
+            metadata_dict = dict(context.invocation_metadata()) if context else {}
+            tier = metadata_dict.get("x-tenant-tier")
+            set_span_attributes(
+                tenant_id=request.tenant_id,
+                agent_id=agent_id,
+                tier=tier,
+            )
+            print(
+                f"[gRPC] StartOnboardingSession for tenant: {request.tenant_id}, agent: {agent_id}, tier: {tier}",
+                flush=True,
+            )
             res = await self.onboarding_service.start_session(
                 tenant_id=request.tenant_id,
                 agent_id=agent_id,
                 initial_draft_json=request.initial_draft_json,
+                tier=tier,
             )
             return knowledge_pb2.OnboardingResponse(
                 status=res.status,
@@ -117,10 +132,18 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
         agent_id = getattr(request, "agent_id", "")
         print(f"[gRPC] ResumeOnboardingSession for tenant: {request.tenant_id}, agent: {agent_id}")
         try:
+            metadata_dict = dict(context.invocation_metadata()) if context else {}
+            tier = metadata_dict.get("x-tenant-tier")
+            set_span_attributes(
+                tenant_id=request.tenant_id,
+                agent_id=agent_id,
+                tier=tier,
+            )
             res = await self.onboarding_service.resume_session(
                 tenant_id=request.tenant_id,
                 agent_id=agent_id,
                 user_answer=request.user_answer,
+                tier=tier,
             )
             return knowledge_pb2.OnboardingResponse(
                 status=res.status,
@@ -136,6 +159,45 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             context.set_details(f"RESUME_ONBOARDING_ERROR: {str(e)}")
             return knowledge_pb2.OnboardingResponse()
 
+    async def ResumeOnboardingSessionStream(
+        self, request: knowledge_pb2.ResumeOnboardingRequest, context: grpc.aio.ServicerContext
+    ) -> AsyncIterator[knowledge_pb2.OnboardingStreamChunk]:
+        agent_id = getattr(request, "agent_id", "")
+        print(
+            f"[gRPC] ResumeOnboardingSessionStream for tenant: {request.tenant_id}, agent: {agent_id}"
+        )
+        try:
+            metadata_dict = dict(context.invocation_metadata()) if context else {}
+            tier = metadata_dict.get("x-tenant-tier")
+            set_span_attributes(
+                tenant_id=request.tenant_id,
+                agent_id=agent_id,
+                tier=tier,
+            )
+            async for chunk in self.onboarding_service.resume_session_stream(
+                tenant_id=request.tenant_id,
+                agent_id=agent_id,
+                user_answer=request.user_answer,
+                tier=tier,
+            ):
+                yield knowledge_pb2.OnboardingStreamChunk(
+                    event_type=chunk.get("event_type", "token"),
+                    delta=chunk.get("delta", ""),
+                    status=chunk.get("status", ""),
+                    question=chunk.get("question", ""),
+                    field=chunk.get("field", ""),
+                    type=chunk.get("type", ""),
+                    draft_schema_json=chunk.get("draft_schema_json", ""),
+                    live_schema_json=chunk.get("live_schema_json", ""),
+                    error=chunk.get("error") or None,
+                )
+        except Exception as e:
+            print(f"[gRPC Error] ResumeOnboardingSessionStream failed: {e}")
+            yield knowledge_pb2.OnboardingStreamChunk(
+                event_type="error",
+                error=str(e),
+            )
+
     async def GetAgentMessages(
         self, request: knowledge_pb2.GetAgentMessagesRequest, context: grpc.aio.ServicerContext
     ) -> knowledge_pb2.GetAgentMessagesResponse:
@@ -146,17 +208,29 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
     ) -> knowledge_pb2.SaveInitialAgentDraftResponse:
         print(f"[gRPC] SaveInitialAgentDraft for tenant: {request.tenant_id}")
         try:
+            metadata_dict = dict(context.invocation_metadata()) if context else {}
+            tier = metadata_dict.get("x-tenant-tier")
+            set_span_attributes(
+                tenant_id=request.tenant_id,
+                tier=tier,
+            )
+            print(f"[gRPC] tier: {tier}")
             agent_id, status = await self.agent_service.save_initial_draft(
                 tenant_id=request.tenant_id,
                 creation_source=request.creation_source,
                 draft_json=request.draft_json,
                 name=request.name,
+                tier=tier,
             )
             return knowledge_pb2.SaveInitialAgentDraftResponse(
                 message="Agent draft saved successfully",
                 agent_id=agent_id,
                 status=status,
             )
+        except TierQuotaExceededException as tqe:
+            context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            context.set_details(str(tqe))
+            return knowledge_pb2.SaveInitialAgentDraftResponse()
         except InvalidDraftException as ide:
             context.set_code(grpc.StatusCode.NOT_FOUND)
             context.set_details(str(ide))
@@ -192,6 +266,42 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             context.set_details(f"LIST_AGENTS_ERROR: {str(e)}")
             return knowledge_pb2.ListTenantAgentsResponse()
 
+    async def DeleteAgent(
+        self, request: knowledge_pb2.DeleteAgentRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.DeleteAgentResponse:
+        print(
+            f"[gRPC] DeleteAgent for tenant: {request.tenant_id}, agent: {request.agent_id}",
+            flush=True,
+        )
+        set_span_attributes(tenant_id=request.tenant_id, agent_id=request.agent_id)
+        try:
+            success, message = await self.agent_service.delete_agent(
+                tenant_id=request.tenant_id,
+                agent_id=request.agent_id,
+            )
+            if not success:
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                context.set_details(message)
+                return knowledge_pb2.DeleteAgentResponse(
+                    success=False,
+                    message=message,
+                    agent_id=request.agent_id,
+                )
+            return knowledge_pb2.DeleteAgentResponse(
+                success=True,
+                message=message,
+                agent_id=request.agent_id,
+            )
+        except Exception as e:
+            print(f"[gRPC Error] DeleteAgent failed: {e}", flush=True)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"DELETE_AGENT_ERROR: {str(e)}")
+            return knowledge_pb2.DeleteAgentResponse(
+                success=False,
+                message=str(e),
+                agent_id=request.agent_id,
+            )
+
     async def CustomerChat(
         self, request: knowledge_pb2.CustomerChatRequest, context: grpc.aio.ServicerContext
     ) -> knowledge_pb2.CustomerChatResponse:
@@ -201,7 +311,20 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
         try:
             from agent_orchestrator.workflows.customer_agent import process_customer_chat
 
+            metadata_dict = dict(context.invocation_metadata()) if context else {}
+            tier = metadata_dict.get("x-tenant-tier")
+            is_quota_verified = metadata_dict.get("x-quota-verified") == "true"
             mode = getattr(request, "mode", None) or None
+            is_sandbox = mode == "sandbox" or (
+                bool(request.session_id) and request.session_id.startswith("sandbox_")
+            )
+            set_span_attributes(
+                tenant_id=request.tenant_id,
+                agent_id=request.agent_id,
+                session_id=request.session_id,
+                tier=tier,
+                is_sandbox=is_sandbox,
+            )
             result = await process_customer_chat(
                 tenant_id=request.tenant_id,
                 agent_id=request.agent_id,
@@ -211,6 +334,8 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                 customer_phone=request.customer_phone if request.customer_phone else None,
                 customer_name=request.customer_name if request.customer_name else None,
                 mode=mode,
+                tier=tier,
+                is_quota_verified=is_quota_verified,
             )
             return knowledge_pb2.CustomerChatResponse(
                 session_id=result["session_id"],
@@ -228,9 +353,72 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                 response="An error occurred processing your request. Please try again.",
             )
 
+    async def CustomerChatStream(
+        self, request: knowledge_pb2.CustomerChatRequest, context: grpc.aio.ServicerContext
+    ) -> AsyncIterator[knowledge_pb2.CustomerChatStreamChunk]:
+        print(
+            f"[gRPC] CustomerChatStream for tenant: {request.tenant_id}, agent: {request.agent_id}, session: {request.session_id}"
+        )
+        try:
+            from agent_orchestrator.workflows.customer_agent import process_customer_chat_stream
+
+            metadata_dict = dict(context.invocation_metadata()) if context else {}
+            tier = metadata_dict.get("x-tenant-tier")
+            is_quota_verified = metadata_dict.get("x-quota-verified") == "true"
+            mode = getattr(request, "mode", None) or None
+            is_sandbox = mode == "sandbox" or (
+                bool(request.session_id) and request.session_id.startswith("sandbox_")
+            )
+            set_span_attributes(
+                tenant_id=request.tenant_id,
+                agent_id=request.agent_id,
+                session_id=request.session_id,
+                tier=tier,
+                is_sandbox=is_sandbox,
+            )
+
+            async for chunk in process_customer_chat_stream(
+                tenant_id=request.tenant_id,
+                agent_id=request.agent_id,
+                session_id=request.session_id,
+                message=request.message,
+                customer_id=request.customer_id if request.customer_id else None,
+                customer_phone=request.customer_phone if request.customer_phone else None,
+                customer_name=request.customer_name if request.customer_name else None,
+                mode=mode,
+                tier=tier,
+                is_quota_verified=is_quota_verified,
+            ):
+                yield knowledge_pb2.CustomerChatStreamChunk(
+                    session_id=chunk.get("session_id", request.session_id),
+                    delta=chunk.get("delta", ""),
+                    event_type=chunk.get("event_type", "token"),
+                    booking_id=chunk.get("booking_id") or None,
+                    booking_reference=chunk.get("booking_reference") or None,
+                    status=chunk.get("status") or None,
+                    user_message_id=chunk.get("user_message_id") or None,
+                    agent_message_id=chunk.get("agent_message_id") or None,
+                    created_at=chunk.get("created_at") or None,
+                    error=chunk.get("error") or None,
+                    response=chunk.get("response") or None,
+                )
+        except Exception as e:
+            print(f"[gRPC Error] CustomerChatStream failed: {e}")
+            yield knowledge_pb2.CustomerChatStreamChunk(
+                session_id=request.session_id,
+                event_type="error",
+                error=str(e),
+                delta="An error occurred processing your request. Please try again.",
+            )
+
     async def GetCustomerMessages(
         self, request: knowledge_pb2.GetCustomerMessagesRequest, context: grpc.aio.ServicerContext
     ) -> knowledge_pb2.GetCustomerMessagesResponse:
+        set_span_attributes(
+            tenant_id=request.tenant_id,
+            agent_id=request.agent_id,
+            session_id=request.session_id,
+        )
         try:
             from datetime import datetime
 
@@ -311,6 +499,16 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                 )
                 if runtime_cfg and runtime_cfg.widget_config:
                     widget_config = runtime_cfg.widget_config.model_dump()
+                else:
+                    agent_draft = await AgentDraft.find_one(
+                        {"tenant_id": request.tenant_id, "agent_id": request.agent_id}
+                    )
+                    if (
+                        agent_draft
+                        and agent_draft.current_draft
+                        and agent_draft.current_draft.widget_config
+                    ):
+                        widget_config = agent_draft.current_draft.widget_config.model_dump()
 
             if not widget_config:
                 widget_config = WidgetConfigEmbed().model_dump()
@@ -332,6 +530,98 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                 widget_config_json=json.dumps(WidgetConfigEmbed().model_dump()),
             )
 
+    async def UpdateWidgetConfig(
+        self, request: knowledge_pb2.UpdateWidgetConfigRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.UpdateWidgetConfigResponse:
+        print(
+            f"[gRPC] UpdateWidgetConfig for tenant: {request.tenant_id}, agent: {request.agent_id}"
+        )
+        try:
+            import json
+
+            from agent_orchestrator.clients.redis_client import delete_cached_biz_context
+            from agent_orchestrator.models import AgentDraft, AgentRuntimeConfig, WidgetConfigEmbed
+
+            domains = list(request.whitelisted_domains) if request.whitelisted_domains else []
+            extra_config = {}
+            if request.widget_config_json:
+                try:
+                    extra_config = json.loads(request.widget_config_json)
+                except Exception:
+                    extra_config = {}
+
+            updated_config_dict = None
+
+            runtime_cfg = await AgentRuntimeConfig.find_one(
+                {
+                    "tenant_id": request.tenant_id,
+                    "agent_id": request.agent_id,
+                    "status": "live",
+                }
+            )
+            if runtime_cfg:
+                current = (
+                    runtime_cfg.widget_config.model_dump()
+                    if runtime_cfg.widget_config
+                    else WidgetConfigEmbed().model_dump()
+                )
+                current["whitelisted_domains"] = domains
+                if extra_config:
+                    for k, v in extra_config.items():
+                        if k != "whitelisted_domains":
+                            current[k] = v
+                runtime_cfg.widget_config = WidgetConfigEmbed(**current)
+                await runtime_cfg.save()
+                updated_config_dict = current
+
+            agent_draft = await AgentDraft.find_one(
+                {"tenant_id": request.tenant_id, "agent_id": request.agent_id}
+            )
+            if agent_draft and agent_draft.current_draft:
+                draft_widget = (
+                    agent_draft.current_draft.widget_config.model_dump()
+                    if agent_draft.current_draft.widget_config
+                    else WidgetConfigEmbed().model_dump()
+                )
+                draft_widget["whitelisted_domains"] = domains
+                if extra_config:
+                    for k, v in extra_config.items():
+                        if k != "whitelisted_domains":
+                            draft_widget[k] = v
+                agent_draft.current_draft.widget_config = WidgetConfigEmbed(**draft_widget)
+                await agent_draft.save()
+                if not updated_config_dict:
+                    updated_config_dict = draft_widget
+
+            if not updated_config_dict:
+                updated_config_dict = WidgetConfigEmbed(whitelisted_domains=domains).model_dump()
+
+            try:
+                from agent_orchestrator.clients.redis_client import (
+                    delete_cached_biz_context,
+                    delete_cached_whitelist,
+                )
+
+                await delete_cached_biz_context(request.tenant_id, request.agent_id)
+                await delete_cached_whitelist(request.tenant_id, request.agent_id)
+            except Exception as cache_err:
+                print(
+                    f"[gRPC Warning] Failed to delete cached biz context or whitelist: {cache_err}"
+                )
+
+            return knowledge_pb2.UpdateWidgetConfigResponse(
+                message="Widget configuration updated successfully",
+                success=True,
+                widget_config_json=json.dumps(updated_config_dict),
+            )
+        except Exception as e:
+            print(f"[gRPC Error] UpdateWidgetConfig failed: {e}")
+            return knowledge_pb2.UpdateWidgetConfigResponse(
+                message=f"Update failed: {str(e)}",
+                success=False,
+                widget_config_json="",
+            )
+
     async def GetDocumentUploadUrl(
         self, request: knowledge_pb2.GetDocumentUploadUrlRequest, context: grpc.aio.ServicerContext
     ) -> knowledge_pb2.GetDocumentUploadUrlResponse:
@@ -339,11 +629,14 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             f"[gRPC] GetDocumentUploadUrl tenant: {request.tenant_id}, agent: {request.agent_id}, file: {request.file_name}"
         )
         try:
+            metadata_dict = dict(context.invocation_metadata()) if context else {}
+            tier = metadata_dict.get("x-tenant-tier")
             upload_url, doc_id, s3_key, expires_in = await self.document_service.get_upload_url(
                 tenant_id=request.tenant_id,
                 agent_id=request.agent_id,
                 file_name=request.file_name,
                 file_size_bytes=request.file_size_bytes,
+                tier=tier,
             )
             return knowledge_pb2.GetDocumentUploadUrlResponse(
                 upload_url=upload_url,
@@ -351,6 +644,10 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
                 s3_key=s3_key,
                 expires_in=expires_in,
             )
+        except TierQuotaExceededException as tqe:
+            context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            context.set_details(str(tqe))
+            return knowledge_pb2.GetDocumentUploadUrlResponse()
         except Exception as e:
             print(f"[gRPC Error] GetDocumentUploadUrl failed: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -425,3 +722,29 @@ class KnowledgeServiceServicer(knowledge_pb2_grpc.KnowledgeServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"DELETE_DOCUMENT_ERROR: {str(e)}")
             return knowledge_pb2.DeleteDocumentResponse(success=False, message=str(e))
+
+    async def GetAgentStats(
+        self, request: knowledge_pb2.GetAgentStatsRequest, context: grpc.aio.ServicerContext
+    ) -> knowledge_pb2.GetAgentStatsResponse:
+        try:
+            import asyncio
+
+            from agent_orchestrator.models import AgentDraft, AgentRuntimeConfig
+
+            active, draft = await asyncio.gather(
+                AgentRuntimeConfig.count(),
+                AgentDraft.find(AgentDraft.status != "created").count(),
+            )
+            total = active + draft
+
+            print(active, draft, flush=True)
+            return knowledge_pb2.GetAgentStatsResponse(
+                total_agents=int(total),
+                active_agents=int(active),
+                draft_agents=int(draft),
+            )
+        except Exception as e:
+            print(f"[gRPC Error] GetAgentStats failed: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"GET_AGENT_STATS_ERROR: {str(e)}")
+            return knowledge_pb2.GetAgentStatsResponse()

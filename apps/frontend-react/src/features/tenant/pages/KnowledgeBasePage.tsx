@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
-  Database,
   FileText,
   HardDrive,
   Loader2,
@@ -16,8 +15,9 @@ import {
   X,
 } from 'lucide-react';
 import React, { useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import type { KnowledgeDocumentInfo } from '../../../api/knowledgeApi';
+import { ConfirmationModal } from '../../../components/ConfirmationModal.js';
 import {
   useDeleteDocument,
   useKnowledgeDocuments,
@@ -50,14 +50,12 @@ async function verifyPdfMagicBytes(file: File): Promise<boolean> {
 export default function KnowledgeBasePage() {
   const navigate = useNavigate();
   const { agentId: routeAgentId } = useParams<{ agentId?: string }>();
+  const [searchParams] = useSearchParams();
+  const queryAgentId = searchParams.get('agent_id');
 
   const { data: agents = [] } = useTenantAgents();
 
-  const [selectedAgentId, setSelectedAgentId] = useState<string>(
-    routeAgentId || agents[0]?.agent_id || '',
-  );
-
-  const activeAgentId = routeAgentId || selectedAgentId || agents[0]?.agent_id || '';
+  const activeAgentId = routeAgentId || queryAgentId || agents[0]?.agent_id || '';
   const currentAgent = agents.find((a) => a.agent_id === activeAgentId);
 
   const {
@@ -69,6 +67,7 @@ export default function KnowledgeBasePage() {
 
   const uploadMutation = useUploadDocument(activeAgentId);
   const deleteMutation = useDeleteDocument(activeAgentId);
+  const [docToDelete, setDocToDelete] = useState<KnowledgeDocumentInfo | null>(null);
 
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -201,9 +200,16 @@ export default function KnowledgeBasePage() {
   };
 
   const handleDelete = (doc: KnowledgeDocumentInfo) => {
-    if (confirm(`Are you sure you want to delete "${doc.file_name}"?`)) {
-      deleteMutation.mutate(doc.id);
-    }
+    setDocToDelete(doc);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!docToDelete) return;
+    deleteMutation.mutate(docToDelete.id, {
+      onSuccess: () => {
+        setDocToDelete(null);
+      },
+    });
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -218,9 +224,9 @@ export default function KnowledgeBasePage() {
   );
 
   return (
-    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6 font-sans">
+    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto flex flex-col gap-6 sm:gap-8 font-sans">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 tracking-wide">
+      <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-semibold text-slate-400 tracking-wide flex-wrap">
         <button
           onClick={() => navigate('/tenant/agents')}
           className="flex items-center gap-1 hover:text-slate-800 transition cursor-pointer"
@@ -233,57 +239,45 @@ export default function KnowledgeBasePage() {
           <>
             <button
               onClick={() => navigate(`/tenant/agents/${activeAgentId}/dashboard`)}
-              className="text-slate-600 hover:text-slate-800 font-bold truncate max-w-xs cursor-pointer"
+              className="text-slate-600 hover:text-slate-800 font-bold truncate max-w-[140px] sm:max-w-xs cursor-pointer"
             >
               {currentAgent.name}
             </button>
             <ChevronRight className="w-3 h-3 text-slate-300" />
           </>
         )}
-        <span className="text-slate-900 font-bold">Knowledge Base</span>
+        <span className="text-slate-900 font-bold truncate">Knowledge Base</span>
       </div>
 
-      {/* Header Banner */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-900 via-slate-900 to-slate-800 flex items-center justify-center shadow-md shrink-0">
-            <BookOpen className="w-7 h-7 text-indigo-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-              Knowledge Base & FAQ PDFs
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 sm:pb-6 border-b border-slate-200">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            <div className="p-1.5 sm:p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+              <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
+            </div>
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+              Knowledge Base &amp; FAQ PDFs
             </h1>
-            <p className="text-xs text-slate-500 mt-1">
-              Upload PDF documents (pricing matrices, FAQ sheets, policy guides) to train your AI
-              agent.
-            </p>
           </div>
+          <p className="mt-1 text-xs sm:text-sm text-slate-500">
+            Upload PDF documents (pricing matrices, FAQ sheets, policy guides) to train your AI
+            agent.
+          </p>
         </div>
 
         {/* Bucket badge & Agent selector */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200/80 text-[11px] font-mono text-slate-600">
-            <Database className="w-3.5 h-3.5 text-indigo-500" />
-            <span>s3://my-client-pdf-uploads-mumbai</span>
-          </div>
-
-          {agents.length > 1 && (
-            <select
-              value={activeAgentId}
-              onChange={(e) => {
-                setSelectedAgentId(e.target.value);
-                if (routeAgentId) {
-                  navigate(`/tenant/agents/${e.target.value}/knowledge`);
-                }
-              }}
-              className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-800 shadow-2xs focus:outline-none"
-            >
-              {agents.map((a) => (
-                <option key={a.agent_id} value={a.agent_id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+          {currentAgent && (
+            <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200/80 text-xs">
+              <span className="font-semibold text-slate-700">
+                {currentAgent.name || currentAgent.agent_id}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live
+              </span>
+            </div>
           )}
         </div>
       </div>
@@ -380,7 +374,7 @@ export default function KnowledgeBasePage() {
                       {uploadStage === 'uploading' && (
                         <>
                           <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
-                          Uploading to S3 Bucket...
+                          Uploading...
                         </>
                       )}
                       {uploadStage === 'confirming' && (
@@ -428,7 +422,7 @@ export default function KnowledgeBasePage() {
                     className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer"
                   >
                     <UploadCloud className="w-4 h-4 text-emerald-400" />
-                    Upload PDF to S3
+                    Upload PDF
                   </button>
                   <button
                     type="button"
@@ -534,20 +528,47 @@ export default function KnowledgeBasePage() {
                 </div>
 
                 <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
-                  <span
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                      doc.status === 'uploaded'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : 'bg-amber-50 text-amber-700 border-amber-200'
-                    }`}
-                  >
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full ${
-                        doc.status === 'uploaded' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
-                      }`}
-                    />
-                    {doc.status === 'uploaded' ? 'Uploaded to S3' : 'Pending'}
-                  </span>
+                  {(() => {
+                    const norm = (doc.status || '').toLowerCase();
+                    if (norm === 'indexed') {
+                      return (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Indexed
+                        </span>
+                      );
+                    }
+                    if (norm === 'indexing') {
+                      return (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-sky-50 text-sky-700 border-sky-200">
+                          <Loader2 className="w-3 h-3 animate-spin text-sky-600" />
+                          Indexing...
+                        </span>
+                      );
+                    }
+                    if (norm === 'uploaded') {
+                      return (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-blue-50 text-blue-700 border-blue-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                          Uploaded
+                        </span>
+                      );
+                    }
+                    if (norm === 'failed') {
+                      return (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-rose-50 text-rose-700 border-rose-200">
+                          <AlertCircle className="w-3 h-3 text-rose-600" />
+                          Failed
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-amber-50 text-amber-700 border-amber-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                        Pending
+                      </span>
+                    );
+                  })()}
 
                   <button
                     onClick={() => handleDelete(doc)}
@@ -563,6 +584,26 @@ export default function KnowledgeBasePage() {
           </div>
         )}
       </div>
+
+      {/* Delete Document Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={Boolean(docToDelete)}
+        onClose={() => setDocToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Knowledge Document"
+        description={
+          docToDelete ? (
+            <span>
+              Are you sure you want to delete{' '}
+              <strong className="text-slate-800">{docToDelete.file_name}</strong>? This document
+              will be permanently removed from the agent's knowledge base and vector index.
+            </span>
+          ) : undefined
+        }
+        variant="delete"
+        confirmText="Delete Document"
+        isLoading={deleteMutation.isPending}
+      />
     </div>
   );
 }

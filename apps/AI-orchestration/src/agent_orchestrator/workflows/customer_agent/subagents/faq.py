@@ -6,12 +6,15 @@ from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from pydantic import SecretStr
+
+from agent_orchestrator.workflows.customer_agent.text_util import extract_text_content
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +24,11 @@ _FAQ_TOOLS = {"search_knowledge_base", "search_services", "search_resources"}
 def _format_services_catalog(services: list[dict[str, Any]]) -> str:
     if not services:
         return "No services listed."
-    lines = [f"services[{len(services)}]{{id, name, staff_requirements}}:"]
+    lines = [f"services[{len(services)}]{{id, name, mode, staff_requirements}}:"]
     for s in services:
         sid = s.get("id") or s.get("service_id") or "unassigned"
         name = s.get("name") or "Unnamed"
+        mode = s.get("booking_mode") or "time_slot"
         reqs = s.get("resource_requirements") or s.get("requirements") or []
         staff_roles = []
         for r in reqs:
@@ -37,7 +41,7 @@ def _format_services_catalog(services: list[dict[str, Any]]) -> str:
                 else:
                     staff_roles.append(f"{role}")
         staff_str = f"staff: [{', '.join(staff_roles)}]" if staff_roles else "general service"
-        lines.append(f"  {sid} | {name} | {staff_str}")
+        lines.append(f"  {sid} | {name} | {mode} | {staff_str}")
     return "\n".join(lines)
 
 
@@ -71,16 +75,12 @@ def _get_gemini_model(temperature: float = 0.1, max_tokens: int = 2048) -> Any |
 
 
 def _extract_response_text(result: dict[str, Any]) -> str:
-    final = result["messages"][-1]
-    if isinstance(final.content, str):
-        return final.content
-    if isinstance(final.content, list):
-        texts = [
-            item["text"] if isinstance(item, dict) and item.get("text") else str(item)
-            for item in final.content
-        ]
-        return "\n".join(texts)
-    return str(final.content)
+    messages = result.get("messages", [])
+    for msg in reversed(messages):
+        text = extract_text_content(msg)
+        if text.strip():
+            return text.strip()
+    return "I'm happy to help with any questions about our services or hours. What would you like to know?"
 
 
 def _get_chat_model(temperature: float = 0.1) -> Any:
@@ -138,7 +138,7 @@ Address: {address}
 Operating Hours & Schedule:
 {formatted_hours}
 
-[Services & Offerings Catalog (Compact TOON: id, name, staff_requirements)]
+[Services & Offerings Catalog (Compact TOON: id, name, mode, staff_requirements)]
 {services_catalog}
 
 [Staff & Resources Catalog (Compact TOON: id, name, type, role)]
@@ -153,7 +153,7 @@ Operating Hours & Schedule:
    - Call `search_services(service_id=..., tenant_id=..., agent_id=...)` ONLY IF the customer explicitly asks for deeper details, full service descriptions, package inclusions, or specific preparation instructions not provided in the compact catalog.
    - Call `search_resources(resource_id=..., tenant_id=..., agent_id=...)` ONLY IF the customer explicitly asks for a staff member's background, qualifications, or bio.
 3. For questions about policies, refund/cancellation rules, procedures, preparation guidelines, or general business information:
-   Invoke `search_knowledge_base(query=..., tenant_id=..., agent_id=...)` using tenant_id and agent_id from [Active Request Context].
+   Invoke `search_knowledge_base(query=..., tenant_id=..., agent_id=...)` using tenant_id and agent_id from [Active Request Context] and the query should be related user context and last query.
 4. Ground answers to policy/procedure questions STRICTLY on retrieved content from the knowledge base, services, or business profile. Do NOT fabricate policies, terms, or guidelines.
 5. If no matching information is found in the knowledge base, services catalog, or business profile, say: "I don't have that information on file — our team will be happy to assist you directly."
 6. If the customer indicates they want to schedule an appointment or book, let them know our booking concierge can assist them right away.
@@ -179,6 +179,7 @@ async def run_faq_agent(
     conversation_history: list[BaseMessage],
     biz_context: dict[str, Any],
     all_tools: list[BaseTool],
+    config: RunnableConfig | None = None,
 ) -> str:
     faq_tools = [t for t in all_tools if t.name in _FAQ_TOOLS]
 
@@ -211,8 +212,13 @@ async def run_faq_agent(
         prompt=SystemMessage(content=system_prompt),
     )
 
+    agent_config: RunnableConfig = {**(config or {}), "recursion_limit": 6}
+
     try:
-        result = await agent.ainvoke({"messages": langchain_msgs})
+        result = await agent.ainvoke(
+            {"messages": langchain_msgs},
+            config=agent_config,
+        )
         return _extract_response_text(result)
     except Exception as e:
         logger.warning(
@@ -232,7 +238,10 @@ async def run_faq_agent(
                     tools=faq_tools,
                     prompt=SystemMessage(content=system_prompt),
                 )
-                result = await fallback_agent.ainvoke({"messages": langchain_msgs})
+                result = await fallback_agent.ainvoke(
+                    {"messages": langchain_msgs},
+                    config=agent_config,
+                )
                 logger.info("[FaqAgent] Successfully recovered using Gemini fallback!")
                 return _extract_response_text(result)
             except Exception as fb_err:

@@ -20,19 +20,25 @@ const cookies_constant_js_1 = require("../../constants/cookies.constant.js");
 const messages_constant_js_1 = require("../../constants/messages.constant.js");
 const routes_constant_js_1 = require("../../constants/routes.constant.js");
 const tenant_auth_guard_js_1 = require("../../guards/tenant-auth.guard.js");
+const circuit_breaker_1 = require("@repo/circuit-breaker");
 const cookie_util_js_1 = require("../../utils/cookie.util.js");
 const dashboard_user_dto_js_1 = require("./dtos/dashboard-user.dto.js");
 let DashboardUserAuthController = class DashboardUserAuthController {
     _client;
+    _circuitBreakerService;
     _dashboardUserAuthClient;
-    constructor(_client) {
+    constructor(_client, _circuitBreakerService) {
         this._client = _client;
+        this._circuitBreakerService = _circuitBreakerService;
     }
     onModuleInit() {
-        this._dashboardUserAuthClient = this._client.getService('DashboardAuthService');
+        this._dashboardUserAuthClient = this._circuitBreakerService.wrapGrpcClient('dashboard-service', this._client.getService('DashboardAuthService'));
     }
     async Login(data, res) {
         const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserAuthClient.login(data));
+        // Clear any existing tenant cookies to prevent session collision on shared origins
+        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.TENANT_ACCESS_TOKEN, (0, cookie_util_js_1.getClearCookieOptions)());
+        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.TENANT_REFRESH_TOKEN, (0, cookie_util_js_1.getClearCookieOptions)());
         res.cookie(cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN, response.access_token, (0, cookie_util_js_1.getAccessTokenCookieOptions)());
         res.cookie(cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN, response.refresh_token, (0, cookie_util_js_1.getRefreshTokenCookieOptions)());
         return {
@@ -40,10 +46,18 @@ let DashboardUserAuthController = class DashboardUserAuthController {
             data: response.user,
         };
     }
+    async logout(res) {
+        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN, (0, cookie_util_js_1.getClearCookieOptions)());
+        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN, (0, cookie_util_js_1.getClearCookieOptions)());
+        return {
+            message: messages_constant_js_1.RESPONSE_MESSAGES.AUTH.LOGGED_OUT,
+            data: null,
+        };
+    }
     async refreshToken(req, body, res) {
         const token = req.cookies?.[cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN] || body?.refresh_token || '';
         if (!token) {
-            throw new Error(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.NO_REFRESH_TOKEN);
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.NO_REFRESH_TOKEN);
         }
         const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserAuthClient.refreshToken({ refresh_token: token }));
         res.cookie(cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN, response.access_token, (0, cookie_util_js_1.getAccessTokenCookieOptions)());
@@ -70,10 +84,29 @@ let DashboardUserAuthController = class DashboardUserAuthController {
             data: null,
         };
     }
+    async acceptInvitation(body) {
+        const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserAuthClient.acceptInvitation({
+            token: body.token,
+            password: body.password,
+        }));
+        return {
+            message: response.message,
+            data: response.user,
+        };
+    }
+    async getInvitationDetails(query) {
+        const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserAuthClient.getInvitationDetails({
+            token: query.token,
+        }));
+        return {
+            message: 'Invitation details retrieved successfully',
+            data: response,
+        };
+    }
     async getProfile(req) {
         const userId = req.dashboardUser?.user_id;
         if (!userId) {
-            throw new Error(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.USER_ID_NOT_FOUND);
+            throw new common_1.UnauthorizedException(messages_constant_js_1.RESPONSE_MESSAGES.AUTH.USER_ID_NOT_FOUND);
         }
         const response = await (0, rxjs_1.lastValueFrom)(this._dashboardUserAuthClient.getProfile({ user_id: userId }));
         return {
@@ -92,6 +125,13 @@ __decorate([
     __metadata("design:paramtypes", [dashboard_user_dto_js_1.DashboardUserLoginDto, Object]),
     __metadata("design:returntype", Promise)
 ], DashboardUserAuthController.prototype, "Login", null);
+__decorate([
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.DASHBOARD_USER.AUTH.LOGOUT),
+    __param(0, (0, common_1.Res)({ passthrough: true })),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], DashboardUserAuthController.prototype, "logout", null);
 __decorate([
     (0, common_1.Post)(routes_constant_js_1.API_ROUTES.DASHBOARD_USER.AUTH.REFRESH_TOKEN),
     (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
@@ -119,6 +159,22 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], DashboardUserAuthController.prototype, "resetPassword", null);
 __decorate([
+    (0, common_1.Post)(routes_constant_js_1.API_ROUTES.DASHBOARD_USER.AUTH.ACCEPT_INVITE),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [dashboard_user_dto_js_1.AcceptInvitationDto]),
+    __metadata("design:returntype", Promise)
+], DashboardUserAuthController.prototype, "acceptInvitation", null);
+__decorate([
+    (0, common_1.Get)(routes_constant_js_1.API_ROUTES.DASHBOARD_USER.AUTH.INVITATION_INFO),
+    (0, common_1.UsePipes)(nestjs_zod_1.ZodValidationPipe),
+    __param(0, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [dashboard_user_dto_js_1.GetInvitationDetailsDto]),
+    __metadata("design:returntype", Promise)
+], DashboardUserAuthController.prototype, "getInvitationDetails", null);
+__decorate([
     (0, common_1.Get)(routes_constant_js_1.API_ROUTES.DASHBOARD_USER.AUTH.ME),
     (0, common_1.UseGuards)(tenant_auth_guard_js_1.TenantAuthGuard),
     __param(0, (0, common_1.Req)()),
@@ -129,5 +185,6 @@ __decorate([
 exports.DashboardUserAuthController = DashboardUserAuthController = __decorate([
     (0, common_1.Controller)(routes_constant_js_1.API_ROUTES.DASHBOARD_USER.AUTH.BASE),
     __param(0, (0, common_1.Inject)('DASHBOARD_PACKAGE')),
-    __metadata("design:paramtypes", [Object])
+    __param(1, (0, common_1.Inject)(circuit_breaker_1.CIRCUIT_BREAKER_SERVICE)),
+    __metadata("design:paramtypes", [Object, Object])
 ], DashboardUserAuthController);

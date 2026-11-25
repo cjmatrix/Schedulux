@@ -22,6 +22,7 @@ class GraphState(TypedDict):
     status: str
     patch_retries: int
     react_step_count: int
+    tier: str | None
 
 
 STRUCTURAL_REQUIREMENTS: list[dict] = [
@@ -112,10 +113,11 @@ class SemanticAction(BaseModel):
     question: str = Field(
         description=(
             "MANDATORY. The conversational response, expert guidance, and next conversational step for the user. "
-            "Must ALWAYS be a non-empty string. "
+            "Must ALWAYS be a non-empty string formatted in clean, highly readable GitHub Flavored Markdown (GFM). "
+            "Use bullet points for multiple items, bold key terms (**Service Name**, **$30**, **45 mins**), and structured sections. "
             "Act as an expert booking architect and business mentor. If the user is asking questions, exploring how to build their agent, "
             "or seeking advice (e.g. 'how to do it'), explain the industry appointment workflow thoroughly, provide actionable mentorship, "
-            "and propose standard starter packages. "
+            "and propose standard starter packages in clean bulleted lists. "
             "When updating the schema ('update_schema'): warmly acknowledge the applied configuration in professional language and guide "
             "the user on the next operational design step or offer domain suggestions. "
             "For 'ask_user': ask an insightful, domain-relevant question or provide consultative advice. "

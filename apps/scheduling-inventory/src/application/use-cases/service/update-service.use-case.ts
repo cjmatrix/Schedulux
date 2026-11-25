@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { UpdateServiceRequest } from '@repo/proto/scheduling';
 import { ServiceEntity } from '../../../domain/entities/service.entity.js';
 import { IServiceRepository } from '../../../domain/repositories/service.repository.interface.js';
@@ -9,7 +9,6 @@ import {
   SERVICE_REPOSITORY,
   UNIT_OF_WORK,
 } from '../../../domain/tokens.js';
-import { DepositVO } from '../../../domain/value-objects/deposit.vo.js';
 import { PriceVO } from '../../../domain/value-objects/price.vo.js';
 import type { ICacheRepository } from '../../../infrastructure/cache/cache-repository.interface.js';
 import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-events-producer.interface.js';
@@ -18,6 +17,8 @@ import { invalidateCachedService } from '../../utils/service-cache.helper.js';
 
 @Injectable()
 export class UpdateServiceUseCase implements IUpdateServiceUseCase {
+  private readonly _logger = new Logger(UpdateServiceUseCase.name);
+
   constructor(
     @Inject(SERVICE_REPOSITORY)
     private readonly _serviceRepository: IServiceRepository,
@@ -41,18 +42,6 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
       ? PriceVO.create(dto.price.type, dto.price.amount, dto.price.currency)
       : undefined;
 
-    const deposit = dto.deposit
-      ? DepositVO.create({
-          required: dto.deposit.required,
-          amount: dto.deposit.amount,
-          processor: dto.deposit.processor,
-          upiId: dto.deposit.upi_id,
-          qrCodeUrl: dto.deposit.qr_code_url,
-          confirmationMethod: dto.deposit.confirmation_method,
-          paymentInstructions: dto.deposit.payment_instructions,
-        })
-      : undefined;
-
     existing.updateDetails({
       name: dto.name,
       category: dto.category,
@@ -61,7 +50,6 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
       bufferMinutes: dto.buffer_minutes,
       bookingMode: dto.booking_mode,
       price,
-      deposit,
       verification: dto.verification ? { require_otp: dto.verification.require_otp } : undefined,
       resourceRequirements: dto.resource_requirements?.length
         ? dto.resource_requirements.map((r) => ({
@@ -85,7 +73,11 @@ export class UpdateServiceUseCase implements IUpdateServiceUseCase {
       return { updated: updatedEntity, outbox: outboxDoc };
     });
 
-    await this._eventsProducer.publishOutboxEvent(outbox);
+    void this._eventsProducer.publishOutboxEvent(outbox).catch((err: unknown) => {
+      this._logger.warn(
+        `Immediate outbox dispatch failed for service ${dto.service_id}: ${err}. Recovery sweeper will retry.`,
+      );
+    });
 
     invalidateCachedService(this._cacheRepo, dto.tenant_id, dto.service_id);
 

@@ -8,13 +8,15 @@ import {
 
 export const SCHEDULE_KEYS = {
   all: ['tenant-schedule'] as const,
-  detail: (agentId?: string) => ['tenant-schedule', agentId || ''] as const,
+  detail: (agentId?: string) => ['tenant-schedule', agentId?.trim() || ''] as const,
 };
 
 export function useTenantSchedule(agentId?: string) {
+  const cleanAgentId = agentId?.trim() || '';
   return useQuery<ApiResponse<TenantSchedule>, Error>({
-    queryKey: SCHEDULE_KEYS.detail(agentId),
-    queryFn: () => scheduleApi.getSchedule(agentId),
+    queryKey: SCHEDULE_KEYS.detail(cleanAgentId),
+    queryFn: () => scheduleApi.getSchedule(cleanAgentId),
+    enabled: Boolean(cleanAgentId),
     staleTime: 30 * 1000,
   });
 }

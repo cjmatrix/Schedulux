@@ -20,6 +20,11 @@ let CacheRepository = class CacheRepository {
     async get(key) {
         return await this._redisClient.get(key);
     }
+    async mget(...keys) {
+        if (!keys || keys.length === 0)
+            return [];
+        return await this._redisClient.mget(...keys);
+    }
     async set(key, value, options) {
         if (options?.EX) {
             await this._redisClient.set(key, value, 'EX', options.EX);

@@ -17,13 +17,21 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { ConfirmationModal } from '../../../components/ConfirmationModal.js';
 import { Pagination } from '../../../components/Pagination';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import useDebounceHook from '../../../shared/hooks/useDebounceHook';
+import { useTenantAgents } from '../hooks/useKnowledgeDocuments';
 import { useDeleteService, useServicesList } from '../hooks/useServices';
 
 export default function ServicesListPage() {
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId?: string }>();
+  const { user: authUser, isManager } = useCurrentUser();
+  const { data: agents = [] } = useTenantAgents();
+
+  const effectiveAgentId =
+    agentId || authUser?.agent_id || (agents.length > 0 ? agents[0].agent_id : undefined);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -43,13 +51,16 @@ export default function ServicesListPage() {
     isLoading,
     refetch,
     isRefetching,
-  } = useServicesList({
-    page,
-    limit,
-    category: selectedCategory === 'all' ? undefined : selectedCategory,
-    agent_id: agentId,
-    search: debouncedSearch.trim() || undefined,
-  });
+  } = useServicesList(
+    {
+      page,
+      limit,
+      category: selectedCategory === 'all' ? undefined : selectedCategory,
+      agent_id: effectiveAgentId,
+      search: debouncedSearch.trim() || undefined,
+    },
+    { enabled: true },
+  );
 
   const deleteServiceMutation = useDeleteService();
 
@@ -62,7 +73,6 @@ export default function ServicesListPage() {
   const categories = summary?.categories || [];
 
   const totalCount = summary?.total_count ?? total;
-  const depositCount = summary?.deposit_count ?? 0;
   const avgPrice = summary?.avg_price !== undefined ? summary.avg_price.toFixed(2) : '0.00';
 
   const handleDeleteConfirm = async () => {
@@ -76,10 +86,16 @@ export default function ServicesListPage() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-6 font-sans text-slate-800">
+    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto flex flex-col gap-6 sm:gap-8 font-sans text-slate-800">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 tracking-wide">
-        {agentId ? (
+      <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 tracking-wide flex-wrap">
+        {isManager ? (
+          <>
+            <span>Operations</span>
+            <span>/</span>
+            <span className="text-slate-800 font-bold truncate">Services &amp; Pricing</span>
+          </>
+        ) : agentId ? (
           <>
             <button
               onClick={() => navigate('/tenant/agents')}
@@ -91,58 +107,68 @@ export default function ServicesListPage() {
             <ChevronRight className="w-3 h-3 text-slate-300" />
             <button
               onClick={() => navigate(`/tenant/agents/${agentId}/dashboard`)}
-              className="hover:text-slate-800 transition cursor-pointer font-bold truncate max-w-xs"
+              className="hover:text-slate-800 transition cursor-pointer font-bold truncate max-w-[140px] sm:max-w-xs"
             >
               {agentId}
             </button>
             <ChevronRight className="w-3 h-3 text-slate-300" />
-            <span className="text-slate-900 font-bold">Services</span>
+            <span className="text-slate-900 font-bold truncate">Services</span>
           </>
         ) : (
           <>
             <span>Dashboard</span>
             <span>/</span>
-            <span className="text-slate-800 font-bold">Services & Pricing</span>
+            <span className="text-slate-800 font-bold truncate">Services &amp; Pricing</span>
           </>
         )}
       </div>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
-              <Tag className="w-8 h-8 text-neutral-900" />
-              {agentId ? 'Agent Services & Pricing' : 'Services & Pricing Catalog'}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 sm:pb-6 border-b border-slate-200">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            <div className="p-1.5 sm:p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+              <Tag className="w-4 h-4 sm:w-5 sm:h-5" />
+            </div>
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+              {agentId || (isManager && effectiveAgentId)
+                ? 'Agent Services & Pricing'
+                : 'Services & Pricing Catalog'}
             </h1>
-            <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-0.5 rounded-full font-bold">
+            <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold shrink-0">
               {totalCount} Total
             </span>
           </div>
-          <p className="text-sm text-slate-500">
-            {agentId
-              ? `Configure execution durations, fees, and rules for AI agent: ${agentId}`
-              : 'Configure clinical execution durations, fee schedules, deposits, and multi-resource allocation rules.'}
+          <p className="mt-1 text-xs sm:text-sm text-slate-500">
+            {agentId || (isManager && effectiveAgentId)
+              ? `Configure execution durations, fees, and rules for this AI agent.`
+              : 'Configure execution durations, fee schedules, OTP verification, and multi-resource allocation rules.'}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
           <button
             onClick={() => refetch()}
             disabled={isRefetching}
-            className="p-2.5 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition cursor-pointer disabled:opacity-50"
+            className="p-2 border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 rounded-xl transition cursor-pointer disabled:opacity-50 shadow-2xs"
             title="Refresh Services"
           >
-            <RefreshCw className={`w-4 h-4 ${isRefetching ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-indigo-600' : ''}`}
+            />
           </button>
           <button
-            onClick={() =>
-              navigate(agentId ? `/tenant/agents/${agentId}/services/new` : '/tenant/services/new')
-            }
-            className="flex items-center gap-2 bg-slate-950 hover:bg-black text-white px-5 py-2.5 rounded-xl font-semibold text-xs shadow-xs transition active:scale-98 cursor-pointer"
+            onClick={() => {
+              if (effectiveAgentId) {
+                navigate(`/tenant/agents/${effectiveAgentId}/services/new`);
+              } else {
+                navigate('/tenant/services/new');
+              }
+            }}
+            className="flex items-center gap-2 bg-slate-950 hover:bg-black text-white px-4 sm:px-5 py-2 sm:py-2.5 rounded-full font-semibold text-xs shadow-xs transition active:scale-98 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Add New Service</span>
+            <span>Add New Service</span>
           </button>
         </div>
       </div>
@@ -175,11 +201,9 @@ export default function ServicesListPage() {
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Deposit Enforced
-            </p>
-            <p className="text-2xl font-extrabold text-slate-900 mt-1">{depositCount}</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">Requires upfront booking hold</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Categories</p>
+            <p className="text-2xl font-extrabold text-slate-900 mt-1">{categories.length}</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Active service groupings</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center">
             <Shield className="w-5 h-5" />
@@ -263,8 +287,6 @@ export default function ServicesListPage() {
           {filteredServices.map((service) => {
             const price = service.price?.amount ?? 0;
             const currency = service.price?.currency || 'USD';
-            const depositRequired = service.deposit?.required;
-            const depositAmount = service.deposit?.amount ?? 0;
 
             const reqs = service.resource_requirements || [];
             const staffCount = reqs
@@ -309,12 +331,12 @@ export default function ServicesListPage() {
                       {service.buffer_minutes ? ` (+${service.buffer_minutes}m buffer)` : ''}
                     </span>
 
-                    {depositRequired ? (
-                      <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
-                        Hold: ${depositAmount.toFixed(2)}
+                    {service.verification?.require_otp ? (
+                      <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100 flex items-center gap-1">
+                        <Shield className="w-3 h-3" /> OTP Required
                       </span>
                     ) : (
-                      <span className="text-[11px] text-slate-400 font-medium">No deposit</span>
+                      <span className="text-[11px] text-slate-400 font-medium">Direct Booking</span>
                     )}
                   </div>
 
@@ -334,13 +356,15 @@ export default function ServicesListPage() {
                 {/* Card Actions */}
                 <div className="flex items-center gap-2 pt-2">
                   <button
-                    onClick={() =>
-                      navigate(
-                        agentId
-                          ? `/tenant/agents/${agentId}/services/${service.service_id}`
-                          : `/tenant/services/${service.service_id}`,
-                      )
-                    }
+                    onClick={() => {
+                      if (effectiveAgentId) {
+                        navigate(
+                          `/tenant/agents/${effectiveAgentId}/services/${service.service_id}`,
+                        );
+                      } else {
+                        navigate(`/tenant/services/${service.service_id}`);
+                      }
+                    }}
                     className="flex-1 py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-800 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 border border-slate-200 transition cursor-pointer"
                   >
                     <Edit className="w-3.5 h-3.5 text-slate-600" />
@@ -374,40 +398,24 @@ export default function ServicesListPage() {
       />
 
       {/* Delete Confirmation Modal */}
-      {serviceToDelete && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 flex flex-col gap-4 text-center">
-            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
-              <Trash2 className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900">Delete Service?</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Are you sure you want to delete{' '}
-                <strong className="text-slate-800">{serviceToDelete.name}</strong>? This action
-                cannot be undone.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 mt-2">
-              <button
-                type="button"
-                onClick={() => setServiceToDelete(null)}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteConfirm}
-                disabled={deleteServiceMutation.isPending}
-                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl transition shadow-xs cursor-pointer disabled:opacity-50"
-              >
-                {deleteServiceMutation.isPending ? 'Deleting...' : 'Yes, Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmationModal
+        isOpen={Boolean(serviceToDelete)}
+        onClose={() => setServiceToDelete(null)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Service?"
+        description={
+          serviceToDelete ? (
+            <span>
+              Are you sure you want to delete{' '}
+              <strong className="text-slate-800">{serviceToDelete.name}</strong>? This action cannot
+              be undone.
+            </span>
+          ) : undefined
+        }
+        variant="delete"
+        confirmText="Yes, Delete"
+        isLoading={deleteServiceMutation.isPending}
+      />
     </div>
   );
 }

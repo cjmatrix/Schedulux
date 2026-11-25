@@ -1,20 +1,19 @@
-import { User } from 'lucide-react';
+
 import React from 'react';
 
 interface WizardHeaderProps {
   onNavigateAgents: () => void;
   onNavigateDashboard: () => void;
-  onNavigateProfile: () => void;
+
 }
 
 export const WizardHeader: React.FC<WizardHeaderProps> = ({
   onNavigateAgents,
   onNavigateDashboard,
-  onNavigateProfile,
+
 }) => {
   return (
-    <header className="h-14 bg-white border-b border-slate-200/90 px-6 flex items-center justify-between z-30 shadow-2xs">
-      {/* Left Logo */}
+    <header className="h-14 bg-white border-b border-slate-200/90 px-4 sm:px-6 flex items-center justify-between z-30 shadow-2xs">
       <div className="flex items-center gap-3">
         <button
           onClick={onNavigateAgents}
@@ -33,8 +32,7 @@ export const WizardHeader: React.FC<WizardHeaderProps> = ({
         </button>
       </div>
 
-      {/* Center Pill Switch */}
-      <div className="flex items-center bg-slate-100 p-1 rounded-full text-xs font-semibold">
+      <div className="hidden md:flex items-center bg-slate-100 p-1 rounded-full text-xs font-semibold">
         <button
           type="button"
           className="bg-white text-slate-900 shadow-2xs px-4 py-1.5 rounded-full cursor-default"
@@ -50,18 +48,11 @@ export const WizardHeader: React.FC<WizardHeaderProps> = ({
         </button>
       </div>
 
-      {/* Right Status & Profile */}
-      <div className="flex items-center gap-3">
-        <span className="border border-slate-300 text-slate-700 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <span className="hidden sm:inline-flex border border-slate-300 text-slate-700 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">
           PRODUCTION
         </span>
-        <button
-          onClick={onNavigateProfile}
-          className="w-8 h-8 rounded-full bg-slate-950 text-white flex items-center justify-center hover:bg-black transition cursor-pointer shadow-2xs"
-          title="Tenant Account"
-        >
-          <User className="w-4 h-4" />
-        </button>
+        
       </div>
     </header>
   );

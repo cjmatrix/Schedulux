@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from agent_orchestrator.models import KnowledgeDocument
+from agent_orchestrator.models import KnowledgeDocument, OutboxEvent
 
 
 @dataclass
@@ -66,18 +67,31 @@ class ChatServiceProtocol(Protocol):
 
 class AgentManagementServiceProtocol(Protocol):
     async def save_initial_draft(
-        self, tenant_id: str, creation_source: str, draft_json: str | None, name: str | None
+        self,
+        tenant_id: str,
+        creation_source: str,
+        draft_json: str | None,
+        name: str | None,
+        tier: str | None = None,
     ) -> tuple[str, str]: ...
     async def list_tenant_agents(self, tenant_id: str) -> list[AgentSummaryDTO]: ...
+    async def delete_agent(self, tenant_id: str, agent_id: str) -> tuple[bool, str]: ...
 
 
 class OnboardingServiceProtocol(Protocol):
     async def start_session(
-        self, tenant_id: str, agent_id: str, initial_draft_json: str | None = None
+        self,
+        tenant_id: str,
+        agent_id: str,
+        initial_draft_json: str | None = None,
+        tier: str | None = None,
     ) -> OnboardingResult: ...
     async def resume_session(
-        self, tenant_id: str, agent_id: str, user_answer: str
+        self, tenant_id: str, agent_id: str, user_answer: str, tier: str | None = None
     ) -> OnboardingResult: ...
+    async def resume_session_stream(
+        self, tenant_id: str, agent_id: str, user_answer: str, tier: str | None = None
+    ) -> AsyncIterator[dict[str, Any]]: ...
 
 
 class MemoryServiceProtocol(Protocol):
@@ -89,7 +103,12 @@ class MemoryServiceProtocol(Protocol):
 
 class DocumentServiceProtocol(Protocol):
     async def get_upload_url(
-        self, tenant_id: str, agent_id: str, file_name: str, file_size_bytes: int = 0
+        self,
+        tenant_id: str,
+        agent_id: str,
+        file_name: str,
+        file_size_bytes: int = 0,
+        tier: str | None = None,
     ) -> tuple[str, str, str, int]: ...
 
     async def confirm_upload(self, tenant_id: str, document_id: str) -> bool: ...
@@ -97,3 +116,43 @@ class DocumentServiceProtocol(Protocol):
     async def list_documents(self, tenant_id: str, agent_id: str) -> list[KnowledgeDocument]: ...
 
     async def delete_document(self, tenant_id: str, document_id: str) -> bool: ...
+
+
+class OutboxServiceProtocol(Protocol):
+    """Protocol for transactional outbox dispatching and recovery."""
+
+    async def save_event(
+        self,
+        event_id: str,
+        aggregate_type: str,
+        aggregate_id: str,
+        event_type: str,
+        topic: str,
+        partition_key: str,
+        payload: dict[str, Any],
+    ) -> OutboxEvent: ...
+
+    async def publish_outbox_event(self, outbox_doc: OutboxEvent) -> None: ...
+
+    def dispatch_async(self, outbox_doc: OutboxEvent) -> None: ...
+
+    async def sweep_stuck_events(self) -> None: ...
+
+
+class TokenTrackingServiceProtocol(Protocol):
+    """Protocol for tracking weekly token usage and rate quotas."""
+
+    async def record_tokens(
+        self,
+        tenant_id: str,
+        agent_id: str,
+        source: str,
+        input_tokens: int,
+        output_tokens: int,
+        model_id: str | None = None,
+        event_id: str | None = None,
+    ) -> int: ...
+
+    async def check_weekly_quota(
+        self, tenant_id: str, tier: str | None = None
+    ) -> tuple[bool, int, int]: ...

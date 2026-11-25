@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crawler-worker
+  namespace: schedulux
+  labels:
+    app: crawler-worker
+    app.kubernetes.io/name: crawler-worker
+    app.kubernetes.io/part-of: schedulux
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crawler-worker
+  template:
+    metadata:
+      labels:
+        app: crawler-worker
+    spec:
+      containers:
+        - name: crawler-worker
+          image: cjmatrix/crawler-worker:latest
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: crawler-worker-secrets
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: "crawler-worker"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 300Mi
+            limits:
+              cpu: 500m
+              memory: 550Mi
+---
+#Auto-scale worker on RabbitMQ Queue Backlog
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: crawler-worker-scaler
+  namespace: schedulux
+spec:
+  scaleTargetRef:
+    name: crawler-worker
+  minReplicaCount: 1
+  maxReplicaCount: 2
+  cooldownPeriod: 300
+  triggers:
+    - type: rabbitmq
+      metadata:
+        protocol: http
+        host: http://guest:guest@rabbitmq-service.schedulux.svc.cluster.local:15672
+        queueName: knowledge-document-indexing-queue
+        mode: QueueLength
+        value: "2"
+    - type: rabbitmq
+      metadata:
+        protocol: http
+        host: http://guest:guest@rabbitmq-service.schedulux.svc.cluster.local:15672
+        queueName: knowledge-crawl-queue
+        mode: QueueLength
+        value: "2"

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-import json
+import asyncio
 import logging
 import os
-from typing import Any
+import uuid
+from typing import Any, AsyncIterator
 
 from dotenv import load_dotenv
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
+from langchain_core.tracers import LangChainTracer
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
@@ -16,6 +19,8 @@ from pydantic import SecretStr
 
 from agent_orchestrator.mcp.scheduling_mcp_server import get_scheduling_mcp_tools
 from agent_orchestrator.repositories.customer_message_repository import CustomerMessageRepository
+from agent_orchestrator.services.token_service import TokenTrackingService, TokenUsageTracker
+from agent_orchestrator.tracing import get_current_trace_id, set_span_attributes
 from agent_orchestrator.workflows.customer_agent.context import resolve_business_context
 from agent_orchestrator.workflows.customer_agent.state import CustomerGraphState
 from agent_orchestrator.workflows.customer_agent.subagents import (
@@ -24,13 +29,7 @@ from agent_orchestrator.workflows.customer_agent.subagents import (
     run_faq_agent,
     run_handoff_agent,
 )
-
-try:
-    import toon
-
-    _has_toon = True
-except ImportError:
-    _has_toon = False
+from agent_orchestrator.workflows.customer_agent.text_util import extract_text_content
 
 logger = logging.getLogger(__name__)
 
@@ -38,17 +37,6 @@ _env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", 
 load_dotenv(_env_path)
 
 _customer_msg_repo = CustomerMessageRepository()
-
-
-def _format_services_catalog(services: list[dict[str, Any]]) -> str:
-    if _has_toon:
-        try:
-            return toon.encode(services)
-        except Exception as e:
-            logger.warning(
-                "[CustomerAgent] Failed to toonify services, falling back to JSON: %s", e
-            )
-    return json.dumps(services, indent=2)
 
 
 def _get_gemini_model(temperature: float = 0.2, max_tokens: int = 4096) -> BaseChatModel | None:
@@ -93,7 +81,7 @@ def _get_chat_model(temperature: float = 0.2) -> BaseChatModel:
         )
 
 
-async def node_supervisor(state: CustomerGraphState) -> dict[str, Any]:
+async def node_supervisor(state: CustomerGraphState, config: RunnableConfig) -> dict[str, Any]:
     message = state.get("message", "")
     history = state.get("messages", [])
     biz_context = state.get("biz_context", {})
@@ -102,12 +90,13 @@ async def node_supervisor(state: CustomerGraphState) -> dict[str, Any]:
         message=message,
         conversation_history=history,
         biz_context=biz_context,
+        config=config,
     )
     logger.info("[CustomerGraph:SupervisorNode] Classified intents -> %s", intents)
     return {"intents": intents}
 
 
-async def node_booking_agent(state: CustomerGraphState) -> dict[str, Any]:
+async def node_booking_agent(state: CustomerGraphState, config: RunnableConfig) -> dict[str, Any]:
     logger.info("[CustomerGraph:BookingAgentNode] Executing booking specialist")
     response_text = await run_booking_agent(
         tenant_id=state["tenant_id"],
@@ -117,13 +106,14 @@ async def node_booking_agent(state: CustomerGraphState) -> dict[str, Any]:
         biz_context=state["biz_context"],
         all_tools=state["all_tools"],
         session_id=state.get("session_id", ""),
+        config=config,
     )
     return {
         "booking_response": response_text,
     }
 
 
-async def node_faq_agent(state: CustomerGraphState) -> dict[str, Any]:
+async def node_faq_agent(state: CustomerGraphState, config: RunnableConfig) -> dict[str, Any]:
     logger.info("[CustomerGraph:FaqAgentNode] Executing FAQ / RAG specialist")
     response_text = await run_faq_agent(
         tenant_id=state["tenant_id"],
@@ -132,13 +122,14 @@ async def node_faq_agent(state: CustomerGraphState) -> dict[str, Any]:
         conversation_history=state["messages"],
         biz_context=state["biz_context"],
         all_tools=state["all_tools"],
+        config=config,
     )
     return {
         "faq_response": response_text,
     }
 
 
-async def node_handoff_agent(state: CustomerGraphState) -> dict[str, Any]:
+async def node_handoff_agent(state: CustomerGraphState, config: RunnableConfig) -> dict[str, Any]:
     intents = state.get("intents") or ["handoff"]
     is_emergency = "emergency" in intents
     logger.info(
@@ -157,7 +148,7 @@ async def node_handoff_agent(state: CustomerGraphState) -> dict[str, Any]:
     }
 
 
-async def node_synthesizer(state: CustomerGraphState) -> dict[str, Any]:
+async def node_synthesizer(state: CustomerGraphState, config: RunnableConfig) -> dict[str, Any]:
     booking_resp = state.get("booking_response")
     faq_resp = state.get("faq_response")
 
@@ -193,12 +184,8 @@ Your job is to merge specialist agent answers into a single, cohesive, seamless,
         ]
 
         try:
-            synth_result = await model.ainvoke(synth_messages)
-            final_text = (
-                synth_result.content
-                if isinstance(synth_result.content, str)
-                else str(synth_result.content)
-            )
+            synth_result = await model.ainvoke(synth_messages, config=config)
+            final_text = extract_text_content(synth_result)
         except Exception as e:
             logger.warning(
                 "[CustomerGraph:SynthesizerNode] Primary LLM error (%s) → trying Gemini fallback", e
@@ -206,28 +193,30 @@ Your job is to merge specialist agent answers into a single, cohesive, seamless,
             gemini_model = _get_gemini_model(temperature=0.2, max_tokens=4096)
             if gemini_model and not isinstance(model, ChatGoogleGenerativeAI):
                 try:
-                    synth_result = await gemini_model.ainvoke(synth_messages)
-                    final_text = (
-                        synth_result.content
-                        if isinstance(synth_result.content, str)
-                        else str(synth_result.content)
-                    )
+                    synth_result = await gemini_model.ainvoke(synth_messages, config=config)
+                    final_text = extract_text_content(synth_result)
                 except Exception as fb_err:
                     logger.error(
                         "[CustomerGraph:SynthesizerNode] Gemini synthesis fallback failed (%s) → fallback join",
                         fb_err,
                     )
-                    final_text = f"{faq_resp}\n\n{booking_resp}"
+                    final_text = (
+                        f"{extract_text_content(faq_resp)}\n\n{extract_text_content(booking_resp)}"
+                    )
             else:
-                final_text = f"{faq_resp}\n\n{booking_resp}"
-    elif booking_resp:
-        final_text = booking_resp
-    elif faq_resp:
-        final_text = faq_resp
+                final_text = (
+                    f"{extract_text_content(faq_resp)}\n\n{extract_text_content(booking_resp)}"
+                )
+    elif booking_resp and extract_text_content(booking_resp).strip():
+        final_text = extract_text_content(booking_resp).strip()
+    elif faq_resp and extract_text_content(faq_resp).strip():
+        final_text = extract_text_content(faq_resp).strip()
     else:
         final_text = (
-            "I'm sorry, I could not complete your request. Please try again or ask our team."
+            "I'm here to help! Could you please tell me which service and time you would prefer?"
         )
+
+    final_text = extract_text_content(final_text)
 
     return {
         "response": final_text,
@@ -292,6 +281,8 @@ async def process_customer_chat(
     customer_phone: str | None = None,
     customer_name: str | None = None,
     mode: str | None = None,
+    tier: str | None = None,
+    is_quota_verified: bool = False,
 ) -> dict[str, Any]:
     if mode == "sandbox":
         is_sandbox = True
@@ -300,35 +291,82 @@ async def process_customer_chat(
     else:
         is_sandbox = bool(session_id and session_id.startswith("sandbox_"))
 
-    await _customer_msg_repo.get_or_create_conversation(session_id, tenant_id, agent_id)
-
-    if customer_id or customer_phone or customer_name:
-        await _customer_msg_repo.update_conversation_customer(
+   
+    pre_tasks: list[Any] = [
+        _customer_msg_repo.save_message(
             session_id=session_id,
+            tenant_id=tenant_id,
+            agent_id=agent_id,
+            role="user",
+            content=message,
             customer_id=customer_id,
             customer_name=customer_name,
             customer_phone=customer_phone,
-        )
+        ),
+        _customer_msg_repo.get_recent_messages(session_id, limit=20),
+        resolve_business_context(tenant_id, agent_id, is_sandbox=is_sandbox),
+    ]
 
-    user_msg = await _customer_msg_repo.save_message(
-        session_id=session_id,
-        tenant_id=tenant_id,
-        agent_id=agent_id,
-        role="user",
-        content=message,
-    )
+    check_quota = not is_quota_verified
+    if check_quota:
+        pre_tasks.append(TokenTrackingService.check_weekly_quota(tenant_id, tier=tier))
 
-    recent_messages = await _customer_msg_repo.get_recent_messages(session_id, limit=20)
+    pre_results = await asyncio.gather(*pre_tasks)
+    user_msg = pre_results[0]
+    recent_messages = pre_results[1]
+    biz_context = pre_results[2]
+
+    if check_quota:
+        is_exceeded, current_tokens, token_limit = pre_results[3]
+        if is_exceeded:
+            logger.warning(
+                "[CustomerAgent] Tenant %s exceeded weekly token quota (%d/%d). Blocking interaction.",
+                tenant_id,
+                current_tokens,
+                token_limit,
+            )
+            quota_msg = (
+                "This workspace has reached its weekly AI token usage limit. "
+                "Please contact the administrator or upgrade your subscription plan to continue."
+            )
+            assistant_msg = await _customer_msg_repo.save_message(
+                session_id=session_id,
+                tenant_id=tenant_id,
+                agent_id=agent_id,
+                role="assistant",
+                content=quota_msg,
+            )
+            user_msg_id = str(user_msg.id) if user_msg and hasattr(user_msg, "id") else ""
+            agent_msg_id = (
+                str(assistant_msg.id) if assistant_msg and hasattr(assistant_msg, "id") else ""
+            )
+            created_at_iso = (
+                assistant_msg.created_at.isoformat()
+                if assistant_msg
+                and hasattr(assistant_msg, "created_at")
+                and assistant_msg.created_at
+                else ""
+            )
+            return {
+                "session_id": session_id,
+                "response": quota_msg,
+                "user_message_id": user_msg_id,
+                "agent_message_id": agent_msg_id,
+                "created_at": created_at_iso,
+            }
+
+    all_tools = get_scheduling_mcp_tools()
 
     langchain_messages: list[BaseMessage] = []
     for m in recent_messages:
+        
+        if user_msg and hasattr(user_msg, "id") and hasattr(m, "id") and m.id == user_msg.id:
+            continue
+        clean_history_text = extract_text_content(m.content)
         if m.role == "user":
-            langchain_messages.append(HumanMessage(content=m.content))
+            langchain_messages.append(HumanMessage(content=clean_history_text))
         elif m.role == "assistant":
-            langchain_messages.append(AIMessage(content=m.content))
-
-    biz_context = await resolve_business_context(tenant_id, agent_id, is_sandbox=is_sandbox)
-    all_tools = get_scheduling_mcp_tools()
+            langchain_messages.append(AIMessage(content=clean_history_text))
 
     initial_state: CustomerGraphState = {
         "session_id": session_id,
@@ -347,26 +385,120 @@ async def process_customer_chat(
         "is_sandbox": is_sandbox,
     }
 
-    try:
-        final_state = await customer_orchestration_graph.ainvoke(initial_state)
-        response_text = final_state.get("response") or (
-            "I'm sorry, I encountered a temporary issue while processing your request. "
-            "Please try again in a moment."
-        )
-    except Exception as e:
-        logger.error("[CustomerAgent] StateGraph orchestration error: %s", e, exc_info=True)
-        response_text = (
-            "I'm sorry, I encountered a temporary issue while processing your request. "
-            "Please try again in a moment."
-        )
+    otel_trace_id = get_current_trace_id()
+    set_span_attributes(
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        session_id=session_id,
+        tier=tier or "starter",
+        is_sandbox=is_sandbox,
+    )
 
-    assistant_msg = await _customer_msg_repo.save_message(
+    metadata: dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "agent_id": agent_id,
+        "session_id": session_id,
+        "tier": tier or "starter",
+        "is_sandbox": is_sandbox,
+        "thread_id": session_id,
+    }
+    if otel_trace_id:
+        metadata["otel_trace_id"] = otel_trace_id
+
+    tags = [
+        "customer_chat",
+        f"tier:{tier or 'starter'}",
+        "sandbox" if is_sandbox else "live",
+        f"tenant:{tenant_id}",
+    ]
+
+    tracker = TokenUsageTracker()
+    run_config: dict[str, Any] = {
+        "recursion_limit": 8,
+        "callbacks": [tracker, LangChainTracer(project_name="customer-agent")],
+        "run_name": f"CustomerChat:{agent_id}",
+        "tags": tags,
+        "metadata": metadata,
+    }
+
+   
+    if os.getenv("MOCK_LLM", "").strip().lower() in ("true", "1", "yes"):
+        response_text = (
+            "Thank you for reaching out. I am your automated AI assistant and can help you "
+            "with scheduling appointments, checking availability, and answering questions."
+        )
+        tracker.input_tokens = max(15, len(message) // 4)
+        tracker.output_tokens = max(25, len(response_text) // 4)
+        tracker.call_count = 1
+        tracker.model_id = "mock-llm-fast"
+    else:
+        try:
+            final_state = await customer_orchestration_graph.ainvoke(
+                initial_state,
+                config=run_config,
+            )
+            raw_response = final_state.get("response")
+            response_text = (
+                extract_text_content(raw_response)
+                if raw_response
+                else (
+                    "I'm sorry, I encountered a temporary issue while processing your request. "
+                    "Please try again in a moment."
+                )
+            )
+        except Exception as e:
+            logger.error("[CustomerAgent] StateGraph orchestration error: %s", e, exc_info=True)
+            response_text = (
+                "I'm sorry, I encountered a temporary issue while processing your request. "
+                "Please try again in a moment."
+            )
+
+    fallback_prompt = f"{message} " + " ".join(
+        m.content
+        for m in langchain_messages
+        if hasattr(m, "content") and isinstance(m.content, str)
+    )
+    fallback_inp = max(1, len(fallback_prompt) // 4)
+    fallback_out = max(1, len(response_text) // 4)
+
+    if tracker.total_tokens > 0:
+        inp_tokens = tracker.input_tokens
+        out_tokens = tracker.output_tokens
+        model_name = tracker.model_id or os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+        logger.info(
+            "[CustomerAgent] Recorded %d subagent/node LLM calls for session %s (In: %d, Out: %d, Total: %d, Model: %s)",
+            tracker.call_count,
+            session_id,
+            inp_tokens,
+            out_tokens,
+            tracker.total_tokens,
+            model_name,
+        )
+    else:
+        inp_tokens = fallback_inp
+        out_tokens = fallback_out
+        model_name = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+
+    det_event_id = f"evt_tok_{tenant_id}_{agent_id}_{uuid.uuid4().hex[:16]}"
+
+  
+    assistant_msg_task = _customer_msg_repo.save_message(
         session_id=session_id,
         tenant_id=tenant_id,
         agent_id=agent_id,
         role="assistant",
         content=response_text,
     )
+    token_task = TokenTrackingService.record_tokens(
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        source="customer_agent",
+        input_tokens=inp_tokens,
+        output_tokens=out_tokens,
+        model_id=model_name,
+        event_id=det_event_id,
+    )
+    assistant_msg, _ = await asyncio.gather(assistant_msg_task, token_task)
 
     user_msg_id = str(user_msg.id) if user_msg and hasattr(user_msg, "id") else ""
     agent_msg_id = str(assistant_msg.id) if assistant_msg and hasattr(assistant_msg, "id") else ""
@@ -382,4 +514,295 @@ async def process_customer_chat(
         "user_message_id": user_msg_id,
         "agent_message_id": agent_msg_id,
         "created_at": created_at_iso,
+    }
+
+
+async def process_customer_chat_stream(
+    tenant_id: str,
+    agent_id: str,
+    session_id: str,
+    message: str,
+    customer_id: str | None = None,
+    customer_phone: str | None = None,
+    customer_name: str | None = None,
+    mode: str | None = None,
+    tier: str | None = None,
+    is_quota_verified: bool = False,
+) -> AsyncIterator[dict[str, Any]]:
+    if mode == "sandbox":
+        is_sandbox = True
+    elif mode == "live":
+        is_sandbox = False
+    else:
+        is_sandbox = bool(session_id and session_id.startswith("sandbox_"))
+
+    pre_tasks: list[Any] = [
+        _customer_msg_repo.save_message(
+            session_id=session_id,
+            tenant_id=tenant_id,
+            agent_id=agent_id,
+            role="user",
+            content=message,
+            customer_id=customer_id,
+            customer_name=customer_name,
+            customer_phone=customer_phone,
+        ),
+        _customer_msg_repo.get_recent_messages(session_id, limit=20),
+        resolve_business_context(tenant_id, agent_id, is_sandbox=is_sandbox),
+    ]
+
+    check_quota = not is_quota_verified
+    if check_quota:
+        pre_tasks.append(TokenTrackingService.check_weekly_quota(tenant_id, tier=tier))
+
+    pre_results = await asyncio.gather(*pre_tasks)
+    user_msg = pre_results[0]
+    recent_messages = pre_results[1]
+    biz_context = pre_results[2]
+
+    if check_quota:
+        is_exceeded, current_tokens, token_limit = pre_results[3]
+        if is_exceeded:
+            logger.warning(
+                "[CustomerAgent] Tenant %s exceeded weekly token quota (%d/%d). Blocking interaction.",
+                tenant_id,
+                current_tokens,
+                token_limit,
+            )
+            quota_msg = (
+                "This workspace has reached its weekly AI token usage limit. "
+                "Please contact the administrator or upgrade your subscription plan to continue."
+            )
+            assistant_msg = await _customer_msg_repo.save_message(
+                session_id=session_id,
+                tenant_id=tenant_id,
+                agent_id=agent_id,
+                role="assistant",
+                content=quota_msg,
+            )
+            user_msg_id = str(user_msg.id) if user_msg and hasattr(user_msg, "id") else ""
+            agent_msg_id = (
+                str(assistant_msg.id) if assistant_msg and hasattr(assistant_msg, "id") else ""
+            )
+            created_at_iso = (
+                assistant_msg.created_at.isoformat()
+                if assistant_msg
+                and hasattr(assistant_msg, "created_at")
+                and assistant_msg.created_at
+                else ""
+            )
+            yield {
+                "event_type": "error",
+                "session_id": session_id,
+                "error": "QUOTA_EXCEEDED",
+                "delta": quota_msg,
+                "response": quota_msg,
+                "user_message_id": user_msg_id,
+                "agent_message_id": agent_msg_id,
+                "created_at": created_at_iso,
+            }
+            return
+
+    all_tools = get_scheduling_mcp_tools()
+
+    langchain_messages: list[BaseMessage] = []
+    for m in recent_messages:
+        if user_msg and hasattr(user_msg, "id") and hasattr(m, "id") and m.id == user_msg.id:
+            continue
+        clean_history_text = extract_text_content(getattr(m, "content", ""))
+        role = getattr(m, "role", "user")
+        if role == "user":
+            langchain_messages.append(HumanMessage(content=clean_history_text))
+        elif role in ("assistant", "agent"):
+            langchain_messages.append(AIMessage(content=clean_history_text))
+
+    initial_state: CustomerGraphState = {
+        "tenant_id": tenant_id,
+        "agent_id": agent_id,
+        "session_id": session_id,
+        "message": message,
+        "customer_id": customer_id,
+        "customer_phone": customer_phone,
+        "customer_name": customer_name,
+        "biz_context": biz_context,
+        "all_tools": all_tools,
+        "messages": langchain_messages,
+        "intents": [],
+        "booking_response": None,
+        "faq_response": None,
+        "handoff_response": None,
+        "response": "",
+        "error": None,
+        "is_sandbox": is_sandbox,
+    }
+
+    otel_trace_id = get_current_trace_id()
+    set_span_attributes(
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        session_id=session_id,
+        tier=tier or "starter",
+        is_sandbox=is_sandbox,
+    )
+
+    metadata: dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "agent_id": agent_id,
+        "session_id": session_id,
+        "tier": tier or "starter",
+        "is_sandbox": is_sandbox,
+        "thread_id": session_id,
+    }
+    if otel_trace_id:
+        metadata["otel_trace_id"] = otel_trace_id
+
+    tags = [
+        "customer_chat",
+        f"tier:{tier or 'starter'}",
+        "sandbox" if is_sandbox else "live",
+        f"tenant:{tenant_id}",
+    ]
+
+    tracker = TokenUsageTracker()
+    run_config: dict[str, Any] = {
+        "recursion_limit": 8,
+        "callbacks": [tracker, LangChainTracer(project_name="customer-agent")],
+        "run_name": f"CustomerChatStream:{agent_id}",
+        "tags": tags,
+        "metadata": metadata,
+    }
+
+    streamed_tokens: list[str] = []
+    final_state: dict[str, Any] = {}
+
+    if os.getenv("MOCK_LLM", "").strip().lower() in ("true", "1", "yes"):
+        response_text = (
+            "Thank you for reaching out. I am your automated AI assistant and can help you "
+            "with scheduling appointments, checking availability, and answering questions."
+        )
+        words = response_text.split(" ")
+        for i, word in enumerate(words):
+            delta = word + (" " if i < len(words) - 1 else "")
+            streamed_tokens.append(delta)
+            yield {
+                "event_type": "token",
+                "delta": delta,
+                "session_id": session_id,
+            }
+            await asyncio.sleep(0.02)
+        tracker.input_tokens = max(15, len(message) // 4)
+        tracker.output_tokens = max(25, len(response_text) // 4)
+        tracker.call_count = 1
+        tracker.model_id = "mock-llm-fast"
+    else:
+        try:
+            async for event in customer_orchestration_graph.astream_events(
+                initial_state,
+                config=run_config,
+                version="v2",
+            ):
+                ev_name = event.get("event")
+                node = event.get("metadata", {}).get("langgraph_node")
+
+                if ev_name == "on_chat_model_stream" and node in ("booking_agent", "faq_agent", "synthesizer"):
+                    chunk = event.get("data", {}).get("chunk")
+                    content = extract_text_content(getattr(chunk, "content", None) or chunk)
+                    if content:
+                        streamed_tokens.append(content)
+                        yield {
+                            "event_type": "token",
+                            "delta": content,
+                            "session_id": session_id,
+                        }
+                elif ev_name == "on_chain_end" and not node:
+                    output = event.get("data", {}).get("output")
+                    if isinstance(output, dict):
+                        final_state = output
+        except Exception as e:
+            logger.error("[CustomerAgent] StateGraph stream error: %s", e, exc_info=True)
+            err_msg = (
+                "I'm sorry, I encountered a temporary issue while processing your request. "
+                "Please try again in a moment."
+            )
+            yield {
+                "event_type": "error",
+                "session_id": session_id,
+                "error": str(e),
+                "delta": err_msg,
+            }
+            return
+
+        raw_response = final_state.get("response") if isinstance(final_state, dict) else None
+        response_text = (
+            extract_text_content(raw_response)
+            if raw_response
+            else "".join(streamed_tokens)
+        )
+        if not response_text.strip():
+            response_text = (
+                "I'm here to help! Could you please tell me which service and time you would prefer?"
+            )
+
+        if not streamed_tokens:
+            yield {
+                "event_type": "token",
+                "delta": response_text,
+                "session_id": session_id,
+            }
+
+    fallback_prompt = f"{message} " + " ".join(
+        m.content
+        for m in langchain_messages
+        if hasattr(m, "content") and isinstance(m.content, str)
+    )
+    fallback_inp = max(1, len(fallback_prompt) // 4)
+    fallback_out = max(1, len(response_text) // 4)
+
+    if tracker.total_tokens > 0:
+        inp_tokens = tracker.input_tokens
+        out_tokens = tracker.output_tokens
+        model_name = tracker.model_id or os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+    else:
+        inp_tokens = fallback_inp
+        out_tokens = fallback_out
+        model_name = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+
+    det_event_id = f"evt_tok_{tenant_id}_{agent_id}_{uuid.uuid4().hex[:16]}"
+
+    assistant_msg_task = _customer_msg_repo.save_message(
+        session_id=session_id,
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        role="assistant",
+        content=response_text,
+    )
+    token_task = TokenTrackingService.record_tokens(
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        source="customer_agent",
+        input_tokens=inp_tokens,
+        output_tokens=out_tokens,
+        model_id=model_name,
+        event_id=det_event_id,
+    )
+    assistant_msg, _ = await asyncio.gather(assistant_msg_task, token_task)
+
+    user_msg_id = str(user_msg.id) if user_msg and hasattr(user_msg, "id") else ""
+    agent_msg_id = str(assistant_msg.id) if assistant_msg and hasattr(assistant_msg, "id") else ""
+    created_at_iso = (
+        assistant_msg.created_at.isoformat()
+        if assistant_msg and hasattr(assistant_msg, "created_at") and assistant_msg.created_at
+        else ""
+    )
+
+    yield {
+        "event_type": "done",
+        "session_id": session_id,
+        "response": response_text,
+        "user_message_id": user_msg_id,
+        "agent_message_id": agent_msg_id,
+        "created_at": created_at_iso,
+        "booking_id": final_state.get("booking_id") or "",
+        "booking_reference": final_state.get("booking_reference") or "",
+        "status": final_state.get("status") or "",
     }

@@ -43,10 +43,28 @@ class QdrantMemoryStore(MemoryVectorStore):
         self.collection_name = collection_name
         self.vector_size = vector_size
 
+    async def ensure_collection(self) -> None:
+        await self._ensure_collection()
+
     async def _ensure_collection(self) -> None:
         try:
             resp = await self.client.get_collections()
             existing = [c.name for c in resp.collections]
+            if self.collection_name in existing:
+                col = await self.client.get_collection(self.collection_name)
+                vectors_cfg = getattr(col.config.params, "vectors", None)
+                current_dim = (
+                    getattr(vectors_cfg, "size", None) if hasattr(vectors_cfg, "size") else None
+                )
+                if current_dim and current_dim != self.vector_size:
+                    print(
+                        f"[QdrantMemoryStore] Vector dimension mismatch for {self.collection_name}: "
+                        f"existing {current_dim} != configured {self.vector_size}. Re-creating collection...",
+                        flush=True,
+                    )
+                    await self.client.delete_collection(self.collection_name)
+                    existing.remove(self.collection_name)
+
             if self.collection_name not in existing:
                 await self.client.create_collection(
                     collection_name=self.collection_name,
@@ -108,8 +126,9 @@ class QdrantMemoryStore(MemoryVectorStore):
         tenant_id: str,
         agent_id: str | None = None,
         limit: int = 4,
+        score_threshold: float | None = 0.35,
     ) -> list[str]:
-        if not query_vector:
+        if not query_vector or not any(query_vector):
             return []
         must: list[models.Condition] = [
             models.FieldCondition(key="tenant_id", match=models.MatchValue(value=tenant_id))
@@ -124,6 +143,7 @@ class QdrantMemoryStore(MemoryVectorStore):
                 query=query_vector,
                 query_filter=models.Filter(must=must),
                 limit=limit,
+                score_threshold=score_threshold,
                 with_payload=True,
             )
             return [p.payload["fact"] for p in results.points if p.payload and "fact" in p.payload]
@@ -221,6 +241,64 @@ class QdrantKnowledgeStore(KnowledgeVectorStore):
         except Exception as e:
             print(f"[QdrantKnowledgeStore] Hybrid search warning: {e}", flush=True)
             return []
+
+    async def delete_by_document_id(self, tenant_id: str, document_id: str) -> bool:
+        if not await self._collection_exists():
+            return True
+
+        filter_criteria = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="tenant_id",
+                    match=models.MatchValue(value=tenant_id),
+                ),
+                models.FieldCondition(
+                    key="document_id",
+                    match=models.MatchValue(value=document_id),
+                ),
+            ]
+        )
+        try:
+            await self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=models.FilterSelector(filter=filter_criteria),
+            )
+            return True
+        except Exception as e:
+            print(
+                f"[QdrantKnowledgeStore Error] Failed to delete vectors for doc '{document_id}': {e}",
+                flush=True,
+            )
+            return False
+
+    async def delete_by_agent_id(self, tenant_id: str, agent_id: str) -> bool:
+        if not await self._collection_exists():
+            return True
+
+        filter_criteria = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="tenant_id",
+                    match=models.MatchValue(value=tenant_id),
+                ),
+                models.FieldCondition(
+                    key="agent_id",
+                    match=models.MatchValue(value=agent_id),
+                ),
+            ]
+        )
+        try:
+            await self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=models.FilterSelector(filter=filter_criteria),
+            )
+            return True
+        except Exception as e:
+            print(
+                f"[QdrantKnowledgeStore Error] Failed to delete vectors for agent '{agent_id}': {e}",
+                flush=True,
+            )
+            return False
 
     async def close(self) -> None:
         await self.client.close()

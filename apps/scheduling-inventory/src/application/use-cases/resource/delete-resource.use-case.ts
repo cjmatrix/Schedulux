@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DeleteResourceRequest } from '@repo/proto/scheduling';
 import { IResourceRepository } from '../../../domain/repositories/resource.repository.interface.js';
 import type { IUnitOfWork } from '../../../domain/repositories/unit-of-work.interface.js';
@@ -12,6 +12,8 @@ import type { ISchedulingEventsProducer } from '../../interfaces/scheduling-even
 
 @Injectable()
 export class DeleteResourceUseCase implements IDeleteResourceUseCase {
+  private readonly _logger = new Logger(DeleteResourceUseCase.name);
+
   constructor(
     @Inject(RESOURCE_REPOSITORY)
     private readonly _resourceRepository: IResourceRepository,
@@ -44,7 +46,11 @@ export class DeleteResourceUseCase implements IDeleteResourceUseCase {
       return { outbox: outboxDoc };
     });
 
-    await this._eventsProducer.publishOutboxEvent(outbox);
+    void this._eventsProducer.publishOutboxEvent(outbox).catch((err: unknown) => {
+      this._logger.warn(
+        `Immediate outbox dispatch failed for resource ${dto.resource_id}: ${err}. Recovery sweeper will retry.`,
+      );
+    });
 
     return true;
   }

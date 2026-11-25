@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
-import type { DepositInfo, PriceInfo, ServiceVerificationInfo } from '@repo/proto/scheduling';
+import { trace } from '@opentelemetry/api';
+import type { PriceInfo, ServiceVerificationInfo } from '@repo/proto/scheduling';
 import type { ClientSession } from 'mongoose';
 import { firstValueFrom } from 'rxjs';
 import type { ISchedulingEventsProducer } from '../../application/interfaces/scheduling-events-producer.interface.js';
@@ -12,10 +13,15 @@ import { MESSAGING_SERVICE, OUTBOX_REPOSITORY } from '../../domain/tokens.js';
 import { IOutboxDoc } from '../database/schemas/outbox.schema.js';
 import type { ITenantScheduleDoc } from '../database/schemas/tenant-schedule.schema.js';
 
-export const KAFKA_SERVICE_TOPIC_SERVICES = 'scheduling.service.events';
-export const KAFKA_SERVICE_TOPIC_RESOURCES = 'scheduling.resource.events';
-export const KAFKA_SERVICE_TOPIC_BOOKINGS = 'scheduling.booking.events';
-export const KAFKA_SERVICE_TOPIC_SCHEDULES = 'scheduling.schedule.events';
+export const KAFKA_SERVICE_TOPIC_DOMAIN =
+  process.env.KAFKA_SCHEDULING_DOMAIN_TOPIC || 'scheduling.domain.events';
+export const KAFKA_SERVICE_TOPIC_BOOKINGS =
+  process.env.KAFKA_BOOKING_TOPIC || 'scheduling.booking.events';
+
+
+export const KAFKA_SERVICE_TOPIC_SERVICES = KAFKA_SERVICE_TOPIC_DOMAIN;
+export const KAFKA_SERVICE_TOPIC_RESOURCES = KAFKA_SERVICE_TOPIC_DOMAIN;
+export const KAFKA_SERVICE_TOPIC_SCHEDULES = KAFKA_SERVICE_TOPIC_DOMAIN;
 
 export type SchedulingEventType =
   | 'service.created'
@@ -27,6 +33,8 @@ export type SchedulingEventType =
   | 'booking.created'
   | 'booking.cancelled'
   | 'booking.rescheduled'
+  | 'booking.completed'
+  | 'booking.status_updated'
   | 'schedule.updated';
 
 export interface BaseSchedulingEventPayload {
@@ -37,6 +45,8 @@ export interface BaseSchedulingEventPayload {
   agent_id: string;
   version: number;
   timestamp: string;
+  trace_id?: string;
+  traceparent?: string;
 }
 
 export interface ServiceEventPayload extends BaseSchedulingEventPayload {
@@ -50,7 +60,6 @@ export interface ServiceEventPayload extends BaseSchedulingEventPayload {
     buffer_minutes: number;
     booking_mode: string;
     price: PriceInfo;
-    deposit: DepositInfo;
     verification?: ServiceVerificationInfo;
     resource_requirements?: Array<{
       role: string;
@@ -100,12 +109,12 @@ export interface BookingEventPayload extends BaseSchedulingEventPayload {
     duration_minutes: number;
     source: string;
     status: string;
-    deposit_status: string;
     price: { amount: number; currency: string };
     created_at: string;
     reason?: string;
     previous_start_time?: string;
     previous_end_time?: string;
+    previous_status?: string;
   };
 }
 
@@ -150,6 +159,18 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
     private readonly _outboxRepository: IOutboxRepository,
   ) {}
 
+  private _attachTraceContext<T extends BaseSchedulingEventPayload>(payload: T): T {
+    const spanContext = trace.getActiveSpan()?.spanContext();
+    if (spanContext?.traceId) {
+      return {
+        ...payload,
+        trace_id: spanContext.traceId,
+        traceparent: `00-${spanContext.traceId}-${spanContext.spanId}-${spanContext.traceFlags.toString(16).padStart(2, '0')}`,
+      };
+    }
+    return payload;
+  }
+
   async createServiceCreatedOutboxEvent(
     entity: ServiceEntity,
     session?: ClientSession,
@@ -175,7 +196,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'service.created',
         topic: KAFKA_SERVICE_TOPIC_SERVICES,
         partitionKey: entity.agentId || entity.tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -206,7 +227,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'service.updated',
         topic: KAFKA_SERVICE_TOPIC_SERVICES,
         partitionKey: entity.agentId || entity.tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -238,7 +259,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'service.deleted',
         topic: KAFKA_SERVICE_TOPIC_SERVICES,
         partitionKey: agentId || tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -269,7 +290,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'resource.created',
         topic: KAFKA_SERVICE_TOPIC_RESOURCES,
         partitionKey: entity.agentId || entity.tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -300,7 +321,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'resource.updated',
         topic: KAFKA_SERVICE_TOPIC_RESOURCES,
         partitionKey: entity.agentId || entity.tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -332,7 +353,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'resource.deleted',
         topic: KAFKA_SERVICE_TOPIC_RESOURCES,
         partitionKey: agentId || tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -342,10 +363,23 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
     try {
       const key = outboxDoc.partition_key;
       const value = JSON.stringify(outboxDoc.payload);
-      await firstValueFrom(this._messagingClient.emit(outboxDoc.topic, { key, value }));
+      const payloadObj = outboxDoc.payload as Record<string, unknown> | undefined;
+      const traceparent = (payloadObj?.traceparent as string) || undefined;
+      const traceId = (payloadObj?.trace_id as string) || undefined;
+
+      await firstValueFrom(
+        this._messagingClient.emit(outboxDoc.topic, {
+          key,
+          value,
+          headers: {
+            ...(traceparent ? { traceparent } : {}),
+            ...(traceId ? { trace_id: traceId } : {}),
+          },
+        }),
+      );
       await this._outboxRepository.markPublished([outboxDoc._id]);
       this._logger.log(
-        `[Messaging] Emitted and marked PUBLISHED: ${outboxDoc._id} (${outboxDoc.event_type})`,
+        `[Messaging] Emitted and marked PUBLISHED: ${outboxDoc._id} (${outboxDoc.event_type}) [Trace: ${traceId || 'N/A'}]`,
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -397,15 +431,6 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         type: entity.price.type,
         amount: entity.price.amount,
         currency: entity.price.currency,
-      },
-      deposit: {
-        required: entity.deposit.required,
-        amount: entity.deposit.amount,
-        processor: entity.deposit.processor,
-        upi_id: entity.deposit.upiId,
-        qr_code_url: entity.deposit.qrCodeUrl,
-        confirmation_method: entity.deposit.confirmationMethod,
-        payment_instructions: entity.deposit.paymentInstructions,
       },
       verification: entity.verification
         ? { require_otp: entity.verification.require_otp ?? undefined }
@@ -476,7 +501,6 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         duration_minutes: entity.durationMinutes,
         source: entity.source,
         status: entity.status,
-        deposit_status: entity.depositStatus,
         price: {
           amount: entity.price.amount,
           currency: entity.price.currency,
@@ -493,7 +517,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'booking.created',
         topic: KAFKA_SERVICE_TOPIC_BOOKINGS,
         partitionKey: entity.tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -536,7 +560,6 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         duration_minutes: entity.durationMinutes,
         source: entity.source,
         status: entity.status,
-        deposit_status: entity.depositStatus,
         price: {
           amount: entity.price.amount,
           currency: entity.price.currency,
@@ -554,7 +577,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'booking.cancelled',
         topic: KAFKA_SERVICE_TOPIC_BOOKINGS,
         partitionKey: entity.tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -598,7 +621,6 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         duration_minutes: entity.durationMinutes,
         source: entity.source,
         status: entity.status,
-        deposit_status: entity.depositStatus,
         price: {
           amount: entity.price.amount,
           currency: entity.price.currency,
@@ -617,7 +639,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'booking.rescheduled',
         topic: KAFKA_SERVICE_TOPIC_BOOKINGS,
         partitionKey: entity.tenantId,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );
@@ -632,6 +654,77 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
       entity,
       previousStartTime,
       previousEndTime,
+    );
+    await this.publishOutboxEvent(outboxDoc);
+  }
+
+  async createBookingStatusUpdatedOutboxEvent(
+    entity: BookingEntity,
+    previousStatus: string,
+    reason?: string,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc> {
+    const version = entity.updatedAt ? entity.updatedAt.getTime() : Date.now();
+    const eventId = `evt_bk_status_${entity.id}_${version}`;
+    const eventType = entity.status === 'completed' ? 'booking.completed' : 'booking.status_updated';
+    const payload: BookingEventPayload = {
+      event_id: eventId,
+      event_type: eventType,
+      tenant_id: entity.tenantId,
+      agent_id: entity.agentId,
+      booking_id: entity.id,
+      version,
+      timestamp: new Date().toISOString(),
+      data: {
+        booking_reference: entity.bookingReference,
+        service_id: entity.serviceId,
+        resource_id: entity.resourceId,
+        resource_ids: entity.resourceIds,
+        assigned_asset_ids: entity.assignedAssetIds,
+        customer_id: entity.customerId,
+        customer_name: entity.customerSnapshot.name,
+        customer_phone: entity.customerSnapshot.phone,
+        booking_mode: entity.bookingMode,
+        start_time: entity.startTime.toISOString(),
+        end_time: entity.endTime.toISOString(),
+        effective_end_time: entity.effectiveEndTime.toISOString(),
+        buffer_minutes: entity.bufferMinutes,
+        duration_minutes: entity.durationMinutes,
+        source: entity.source,
+        status: entity.status,
+        price: {
+          amount: entity.price.amount,
+          currency: entity.price.currency,
+        },
+        created_at: entity.createdAt.toISOString(),
+        reason: reason?.trim() || '',
+        previous_status: previousStatus,
+      },
+    };
+
+    return this._outboxRepository.saveEvent(
+      {
+        eventId,
+        aggregateType: 'booking',
+        aggregateId: entity.id,
+        eventType,
+        topic: KAFKA_SERVICE_TOPIC_BOOKINGS,
+        partitionKey: entity.tenantId,
+        payload: this._attachTraceContext(payload),
+      },
+      session,
+    );
+  }
+
+  async emitBookingStatusUpdated(
+    entity: BookingEntity,
+    previousStatus: string,
+    reason?: string,
+  ): Promise<void> {
+    const outboxDoc = await this.createBookingStatusUpdatedOutboxEvent(
+      entity,
+      previousStatus,
+      reason,
     );
     await this.publishOutboxEvent(outboxDoc);
   }
@@ -691,7 +784,7 @@ export class SchedulingEventsProducer implements ISchedulingEventsProducer {
         eventType: 'schedule.updated',
         topic: KAFKA_SERVICE_TOPIC_SCHEDULES,
         partitionKey: doc.agent_id || doc.tenant_id,
-        payload,
+        payload: this._attachTraceContext(payload),
       },
       session,
     );

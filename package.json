@@ -2,6 +2,7 @@
   "name": "schedulx-core",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@11.20.0",
   "scripts": {
     "lint": "biome lint .",
     "lint:fix": "biome check --write .",
@@ -18,20 +19,29 @@
     "check:all": "pnpm check && pnpm check:py",
     "dev:rabbitmq": "docker compose up rabbitmq",
     "dev:gateway": "pnpm --filter @repo/api-gateway dev",
+    "dev:customer-gateway": "pnpm --filter @repo/customer-api-gateway dev",
     "dev:identity": "pnpm --filter @repo/identity-tenant dev",
     "dev:scheduling": "pnpm --filter @repo/scheduling-inventory dev",
     "dev:frontend": "pnpm --filter @repo/frontend-react dev",
-    "dev:worker": "pnpm --filter @repo/background-worker dev",
-    "dev:worker:python": "pnpm --filter @repo/background-worker worker:python",
+    "dev:consumer": "pnpm --filter @repo/kafka-consumer dev",
+    "dev:crawler": "cd apps/crawler-worker && PYTHONUNBUFFERED=1 uv run worker.py",
+    "dev:worker": "pnpm --filter @repo/kafka-consumer dev",
+    "dev:worker:python": "cd apps/crawler-worker && PYTHONUNBUFFERED=1 uv run worker.py",
     "dev:ai:grpc": "cd apps/AI-orchestration && PYTHONUNBUFFERED=1 uv run agent-orchestrator",
-    "dev": "concurrently --kill-others --names \"RABBITMQ,GATEWAY,IDENTITY,SCHEDULING,FRONTEND,WORKER-TS,WORKER-PY,AI-GRPC\" -c \"gray,blue,green,magenta,yellow,cyan,white,red\" \"pnpm dev:rabbitmq\" \"pnpm dev:gateway\" \"pnpm dev:identity\" \"pnpm dev:scheduling\" \"pnpm dev:frontend\" \"pnpm dev:worker\" \"pnpm dev:worker:python\" \"pnpm dev:ai:grpc\"",
+    "dev": "concurrently --kill-others --names \"RABBITMQ,GATEWAY,CUSTOMER-GW,IDENTITY,SCHEDULING,FRONTEND,KAFKA,CRAWLER,AI-GRPC\" -c \"gray,blue,cyan,green,magenta,yellow,white,dim,red\" \"pnpm dev:rabbitmq\" \"pnpm dev:gateway\" \"pnpm dev:customer-gateway\" \"pnpm dev:identity\" \"pnpm dev:scheduling\" \"pnpm dev:frontend\" \"pnpm dev:consumer\" \"pnpm dev:crawler\" \"pnpm dev:ai:grpc\"",
     "rabbitmq:up": "docker compose up -d rabbitmq",
     "rabbitmq:down": "docker compose down",
     "build:proto:py": "cd apps/AI-orchestration && uv run python -m grpc_tools.protoc --proto_path=../../packages/proto/src --python_out=src/agent_orchestrator/proto --pyi_out=src/agent_orchestrator/proto --grpc_python_out=src/agent_orchestrator/proto ../../packages/proto/src/*.proto",
-    "build": "pnpm -r run build"
+    "build": "pnpm -r run build",
+    "loadtest:core:ramp": "node loadtests/run.js core:ramp",
+    "loadtest:core:spike": "node loadtests/run.js core:spike",
+    "loadtest:chat:mocked": "node loadtests/run.js chat:mocked",
+    "loadtest:chat:live": "node loadtests/run.js chat:live",
+    "loadtest:quick": "node loadtests/run.js chat:mocked --duration 10s --vus 5"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
-    "concurrently": "^10.0.5"
+    "concurrently": "^10.0.5",
+    "turbo": "^2.11.13"
   }
 }

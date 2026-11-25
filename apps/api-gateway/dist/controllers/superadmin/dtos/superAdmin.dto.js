@@ -23,11 +23,12 @@ class SuperAdminLogoutDto extends (0, nestjs_zod_1.createZodDto)(exports.SuperAd
 }
 exports.SuperAdminLogoutDto = SuperAdminLogoutDto;
 exports.ListTenantsSchema = zod_1.z.object({
-    page: zod_1.z.coerce.number().default(1),
-    limit: zod_1.z.coerce.number().default(10),
+    page: zod_1.z.coerce.number().int().min(1).default(1),
+    limit: zod_1.z.coerce.number().int().min(1).max(100).default(10),
     search: zod_1.z.string().optional(),
     tier: zod_1.z.string().optional(),
     status: zod_1.z.string().optional(),
+    tenant_ids: zod_1.z.array(zod_1.z.string()).default([]),
 });
 class ListTenantsDto extends (0, nestjs_zod_1.createZodDto)(exports.ListTenantsSchema) {
 }

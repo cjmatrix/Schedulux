@@ -1,3 +1,4 @@
+import './tracing.js';
 import 'reflect-metadata';
 import { createRequire } from 'node:module';
 import { ConfigService } from '@nestjs/config';
@@ -8,6 +9,8 @@ import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module.js';
 
 const require = createRequire(import.meta.url);
+
+
 
 async function bootstrap() {
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule, {
@@ -41,6 +44,8 @@ async function bootstrap() {
   if (mongoUri) {
     await mongoose.connect(mongoUri);
     logger.log('MongoDB connected globally.', 'Bootstrap');
+    const { seedTierConfigs } = await import('./scripts/seed-tier-configs.js');
+    await seedTierConfigs(logger);
   } else {
     throw new Error('MONGO_URI is missing');
   }

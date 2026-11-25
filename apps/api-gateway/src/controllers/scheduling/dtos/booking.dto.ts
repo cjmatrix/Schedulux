@@ -10,11 +10,20 @@ export const CreateBookingDtoSchema = z.object({
   end_time: z.string().optional(),
   customer_name: z.string().min(1, 'customer_name is required').trim(),
   customer_phone: z.string().min(1, 'customer_phone is required').trim(),
-  customer_email: z.string().email('Invalid email address').optional().or(z.literal('')).or(z.null()),
+  customer_email: z
+    .string()
+    .email('Invalid email address')
+    .optional()
+    .or(z.literal(''))
+    .or(z.null()),
   notes: z.string().optional(),
-  source: z.enum(['manual', 'customer_agent', 'web_portal', 'sandbox_simulation']).optional().default('manual'),
-  deposit_status: z.enum(['not_required', 'pending', 'verified', 'waived']).optional(),
+  source: z
+    .enum(['manual', 'customer_agent', 'web_portal', 'sandbox_simulation'])
+    .optional()
+    .default('manual'),
   created_by: z.string().optional(),
+  hold_token: z.string().optional(),
+  override_hold: z.boolean().optional(),
 });
 
 export class CreateBookingDto extends createZodDto(CreateBookingDtoSchema) {}
@@ -33,13 +42,30 @@ export const RescheduleBookingDtoSchema = z.object({
   resource_id: z.string().optional(),
   resource_ids: z.array(z.string()).optional(),
   notes: z.string().optional(),
+  hold_token: z.string().optional(),
+  override_hold: z.boolean().optional(),
 });
 
 export class RescheduleBookingDto extends createZodDto(RescheduleBookingDtoSchema) {}
 
+export const UpdateBookingStatusDtoSchema = z.object({
+  agent_id: z.string().min(1, 'agent_id is required'),
+  status: z.enum(['confirmed', 'cancelled', 'completed', 'no_show']),
+  reason: z.string().optional(),
+});
+
+export class UpdateBookingStatusDto extends createZodDto(UpdateBookingStatusDtoSchema) {}
+
+export const CompleteBookingDtoSchema = z.object({
+  agent_id: z.string().min(1, 'agent_id is required'),
+  reason: z.string().optional(),
+});
+
+export class CompleteBookingDto extends createZodDto(CompleteBookingDtoSchema) {}
+
 export const ListBookingsQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20),
+  limit: z.coerce.number().min(1).max(1000).default(20),
   agent_id: z.string().optional(),
   service_id: z.string().optional(),
   resource_id: z.string().optional(),
@@ -50,4 +76,3 @@ export const ListBookingsQuerySchema = z.object({
 });
 
 export class ListBookingsQueryDto extends createZodDto(ListBookingsQuerySchema) {}
-

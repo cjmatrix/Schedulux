@@ -7,7 +7,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SCHEDULING_INVENTORY_SERVICE_NAME = exports.SCHEDULING_PACKAGE_NAME = exports.protobufPackage = void 0;
 exports.SchedulingInventoryServiceControllerMethods = SchedulingInventoryServiceControllerMethods;
-/* eslint-disable */
 const microservices_1 = require("@nestjs/microservices");
 exports.protobufPackage = "scheduling";
 exports.SCHEDULING_PACKAGE_NAME = "scheduling";
@@ -28,6 +27,7 @@ function SchedulingInventoryServiceControllerMethods() {
             "createBooking",
             "cancelBooking",
             "rescheduleBooking",
+            "updateBookingStatus",
             "getAvailability",
             "listBookings",
             "verifyCustomer",

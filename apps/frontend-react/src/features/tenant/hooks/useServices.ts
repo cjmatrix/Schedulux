@@ -20,10 +20,11 @@ export const SCHEDULING_KEYS = {
   resourcesList: (params?: ListResourcesParams) => ['scheduling-resources', params] as const,
 };
 
-export function useServicesList(params?: ListServicesParams) {
+export function useServicesList(params?: ListServicesParams, options?: { enabled?: boolean }) {
   return useQuery<ListServicesResponseData, Error>({
     queryKey: SCHEDULING_KEYS.servicesList(params),
     queryFn: () => servicesApi.listServices(params),
+    enabled: options?.enabled !== undefined ? options.enabled : Boolean(params?.agent_id),
     staleTime: 30 * 1000,
   });
 }
@@ -80,10 +81,11 @@ export function useDeleteService() {
   });
 }
 
-export function useResourcesList(params?: ListResourcesParams) {
+export function useResourcesList(params?: ListResourcesParams, options?: { enabled?: boolean }) {
   return useQuery<ListResourcesResponseData, Error>({
     queryKey: SCHEDULING_KEYS.resourcesList(params),
     queryFn: () => servicesApi.listResources(params),
+    enabled: options?.enabled !== undefined ? options.enabled : true,
     staleTime: 60 * 1000,
   });
 }

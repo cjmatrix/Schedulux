@@ -7,6 +7,12 @@ export interface FindCustomersFilter {
   agentId?: string;
 }
 
+export interface CustomerSummary {
+  totalCount: number;
+  verifiedCount: number;
+  guestCount: number;
+}
+
 export interface ICustomerRepository {
   create(customer: CustomerEntity): Promise<CustomerEntity>;
   findById(tenantId: string, customerId: string, agentId?: string): Promise<CustomerEntity | null>;
@@ -20,5 +26,6 @@ export interface ICustomerRepository {
   ): Promise<{
     customers: CustomerEntity[];
     total: number;
+    summary?: CustomerSummary;
   }>;
 }

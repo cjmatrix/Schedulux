@@ -54,8 +54,12 @@ let AllExceptionsFilter = AllExceptionsFilter_1 = class AllExceptionsFilter {
                 message = RESPONSE_MESSAGES.ERRORS.VERIFY_EMAIL_PROMPT;
                 break;
             case RESPONSE_MESSAGES.ERRORS.ACCOUNT_INACTIVE:
+            case RESPONSE_MESSAGES.ERRORS.USER_ACCOUNT_SUSPENDED:
                 code = grpc.status.PERMISSION_DENIED;
-                message = RESPONSE_MESSAGES.ERRORS.ACCOUNT_INACTIVE_PROMPT;
+                message =
+                    errMessage === RESPONSE_MESSAGES.ERRORS.USER_ACCOUNT_SUSPENDED
+                        ? RESPONSE_MESSAGES.ERRORS.USER_ACCOUNT_SUSPENDED
+                        : RESPONSE_MESSAGES.ERRORS.ACCOUNT_INACTIVE_PROMPT;
                 break;
             case RESPONSE_MESSAGES.ERRORS.INVALID_OR_EXPIRED_REFRESH_TOKEN:
             case RESPONSE_MESSAGES.ERRORS.INVALID_OR_REVOKED_REFRESH_TOKEN:
@@ -67,8 +71,12 @@ let AllExceptionsFilter = AllExceptionsFilter_1 = class AllExceptionsFilter {
                 break;
             case RESPONSE_MESSAGES.ERRORS.TENANT_NOT_FOUND:
             case RESPONSE_MESSAGES.ERRORS.TENANT_NOT_FOUND_OR_INACTIVE:
+            case RESPONSE_MESSAGES.ERRORS.WORKSPACE_USER_NOT_FOUND:
                 code = grpc.status.NOT_FOUND;
-                message = RESPONSE_MESSAGES.ERRORS.TENANT_NOT_FOUND_MSG;
+                message =
+                    errMessage === RESPONSE_MESSAGES.ERRORS.WORKSPACE_USER_NOT_FOUND
+                        ? 'Workspace user not found'
+                        : RESPONSE_MESSAGES.ERRORS.TENANT_NOT_FOUND_MSG;
                 break;
             case RESPONSE_MESSAGES.ERRORS.ONLY_ACTIVE_TENANTS_CAN_BE_SUSPENDED:
                 code = grpc.status.FAILED_PRECONDITION;

@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+import os
+from typing import Any
+
 from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.tracers import LangChainTracer
 from langgraph.graph import END, StateGraph
 
+from agent_orchestrator.tracing import get_current_trace_id, set_span_attributes
 from agent_orchestrator.workflows.tenant_agent.nodes import (
     node_apply_draft_update,
     node_ask_human_semantic,
@@ -59,24 +65,23 @@ def build_tenant_onboarding_graph():
 _graph = build_tenant_onboarding_graph()
 
 
-async def start_onboarding_session(tenant_id: str, draft: dict, agent_id: str = "") -> dict:
+async def start_onboarding_session(
+    tenant_id: str, draft: dict, agent_id: str = "", tier: str | None = None
+) -> dict:
+    from agent_orchestrator.services.token_service import TokenTrackingService
+
+    is_exceeded, current_tokens, token_limit = await TokenTrackingService.check_weekly_quota(
+        tenant_id, tier=tier
+    )
+    if is_exceeded:
+        return {
+            "error": "Weekly AI token limit exceeded",
+            "message": f"Weekly AI token limit reached ({current_tokens}/{token_limit} tokens). Upgrade your workspace plan in Billing to continue.",
+            "status": "quota_exceeded",
+        }
+
     target_agent_id = agent_id or draft.get("agent_id") or f"agent_{tenant_id}_v1"
     draft["agent_id"] = target_agent_id
-
-    initial: GraphState = {
-        "tenant_id": tenant_id,
-        "agent_id": target_agent_id,
-        "draft": draft,
-        "messages": [],
-        "structural_gaps": [],
-        "pending_field": None,
-        "semantic_note": None,
-        "decision": None,
-        "pending_draft_update": None,
-        "status": "onboarding",
-        "patch_retries": 0,
-        "react_step_count": 0,
-    }
 
     try:
         from agent_orchestrator.clients.redis_client import set_cached_draft
@@ -85,11 +90,44 @@ async def start_onboarding_session(tenant_id: str, draft: dict, agent_id: str = 
     except Exception as e:
         print(f"[Start Session Warning] Failed to prime Redis cache: {e}", flush=True)
 
-    result_state = await _graph.ainvoke(initial)
-    return _extract_payload(result_state)
+    from agent_orchestrator.workflows.tenant_agent.utils import (
+        _compute_structural_gaps,
+        generate_deterministic_onboarding_greeting,
+    )
+
+    gaps = _compute_structural_gaps(draft)
+    greeting = generate_deterministic_onboarding_greeting(draft, gaps)
+    first_gap_field = gaps[0]["field"] if gaps else ""
+
+    print(
+        f"[TenantAgent:StartSession] Deterministic greeting initialized for agent '{target_agent_id}' "
+        f"(source='{draft.get('creation_source')}', gaps={len(gaps)}, latency=<2ms, tokens=0)",
+        flush=True,
+    )
+
+    return {
+        "status": "awaiting_input",
+        "question": greeting,
+        "field": first_gap_field,
+        "type": "semantic_review",
+    }
 
 
-async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: str = "") -> dict:
+async def resume_onboarding_session(
+    tenant_id: str, user_answer: str, agent_id: str = "", tier: str | None = None
+) -> dict:
+    from agent_orchestrator.services.token_service import TokenTrackingService, TokenUsageTracker
+
+    is_exceeded, current_tokens, token_limit = await TokenTrackingService.check_weekly_quota(
+        tenant_id, tier=tier
+    )
+    if is_exceeded:
+        return {
+            "error": "Weekly AI token limit exceeded",
+            "message": f"Weekly AI token limit reached ({current_tokens}/{token_limit} tokens). Upgrade your workspace plan in Billing to continue.",
+            "status": "quota_exceeded",
+        }
+
     from agent_orchestrator.clients.redis_client import get_cached_draft
 
     draft = await get_cached_draft(tenant_id, agent_id)
@@ -99,11 +137,7 @@ async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: 
 
             ad = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
             if ad and ad.current_draft:
-                draft = (
-                    ad.current_draft.model_dump()
-                    if hasattr(ad.current_draft, "model_dump")
-                    else ad.current_draft
-                )
+                draft = ad.current_draft.model_dump()
             else:
                 cfg = await AgentRuntimeConfig.find_one(
                     {"tenant_id": tenant_id, "agent_id": agent_id}
@@ -179,10 +213,489 @@ async def resume_onboarding_session(tenant_id: str, user_answer: str, agent_id: 
         "status": "onboarding",
         "patch_retries": 0,
         "react_step_count": 0,
+        "tier": tier or "starter",
     }
 
-    result_state = await _graph.ainvoke(initial)
+    otel_trace_id = get_current_trace_id()
+    set_span_attributes(
+        tenant_id=tenant_id,
+        agent_id=target_agent_id,
+        tier=tier or "starter",
+    )
+
+    metadata: dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "agent_id": target_agent_id,
+        "tier": tier or "starter",
+        "session_phase": "resume",
+        "thread_id": f"onboarding_{tenant_id}_{target_agent_id}",
+    }
+    if otel_trace_id:
+        metadata["otel_trace_id"] = otel_trace_id
+
+    tracker = TokenUsageTracker()
+    run_config: dict[str, Any] = {
+        "callbacks": [tracker, LangChainTracer(project_name="tenant-onboarding-agent")],
+        "run_name": f"TenantOnboarding:Resume:{target_agent_id}",
+        "tags": [
+            "tenant_onboarding",
+            "session_resume",
+            f"tier:{tier or 'starter'}",
+            f"tenant:{tenant_id}",
+        ],
+        "metadata": metadata,
+    }
+    result_state = await _graph.ainvoke(initial, config=run_config)
+
+    from datetime import UTC, datetime
+
+    semantic_resp = result_state.get("semantic_note") or ""
+    if tracker.total_tokens > 0:
+        inp_tokens = tracker.input_tokens
+        out_tokens = tracker.output_tokens
+        model_name = tracker.model_id or os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+        print(
+            f"[TenantAgent] Recorded {tracker.call_count} LLM calls (In: {inp_tokens}, Out: {out_tokens}, Total: {tracker.total_tokens}, Model: {model_name})",
+            flush=True,
+        )
+    else:
+        inp_tokens = max(1, (len(user_answer or "") + 500) // 4)
+        out_tokens = max(1, len(semantic_resp) // 4)
+        model_name = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+
+    det_event_id = (
+        f"evt_tok_{tenant_id}_{target_agent_id}_resume_{int(datetime.now(UTC).timestamp() * 1000)}"
+    )
+
+    await TokenTrackingService.record_tokens(
+        tenant_id=tenant_id,
+        agent_id=target_agent_id,
+        source="tenant_agent",
+        input_tokens=inp_tokens,
+        output_tokens=out_tokens,
+        model_id=model_name,
+        event_id=det_event_id,
+    )
+
     return _extract_payload(result_state)
+
+
+async def resume_onboarding_session_stream(
+    tenant_id: str, user_answer: str, agent_id: str = "", tier: str | None = None
+) -> AsyncIterator[dict[str, Any]]:
+    from agent_orchestrator.services.token_service import TokenTrackingService, TokenUsageTracker
+
+    is_exceeded, current_tokens, token_limit = await TokenTrackingService.check_weekly_quota(
+        tenant_id, tier=tier
+    )
+    if is_exceeded:
+        yield {
+            "event_type": "error",
+            "error": "Weekly AI token limit exceeded",
+            "status": "quota_exceeded",
+            "question": f"Weekly AI token limit reached ({current_tokens}/{token_limit} tokens). Upgrade your workspace plan in Billing to continue.",
+        }
+        return
+
+    from agent_orchestrator.clients.redis_client import get_cached_draft
+
+    draft = await get_cached_draft(tenant_id, agent_id)
+    if not draft and agent_id:
+        try:
+            from agent_orchestrator.models import AgentDraft, AgentRuntimeConfig
+
+            ad = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
+            if ad and ad.current_draft:
+                draft = ad.current_draft.model_dump()
+            else:
+                cfg = await AgentRuntimeConfig.find_one(
+                    {"tenant_id": tenant_id, "agent_id": agent_id}
+                )
+                if cfg:
+                    from agent_orchestrator.models import canonicalize_agent_schema
+
+                    draft = canonicalize_agent_schema(cfg.model_dump(), status="live")
+        except Exception:
+            pass
+
+    if not draft:
+        draft = {"tenant_id": tenant_id, "agent_id": agent_id}
+
+    target_agent_id = agent_id or draft.get("agent_id") or f"agent_{tenant_id}_v1"
+
+    recent_history: list[HumanMessage | AIMessage] = []
+    if target_agent_id:
+        try:
+            from agent_orchestrator.models import AgentDraft, AgentMessage
+
+            agent_draft_doc = await AgentDraft.find_one(
+                {"tenant_id": tenant_id, "agent_id": target_agent_id}
+            )
+            last_summarized = agent_draft_doc.last_summarized_seq if agent_draft_doc else 0
+
+            active_db_msgs = (
+                await AgentMessage.find(
+                    {
+                        "tenant_id": tenant_id,
+                        "agent_id": target_agent_id,
+                        "seq": {"$gt": last_summarized},
+                    }
+                )
+                .sort("seq")
+                .to_list()
+            )
+
+            from agent_orchestrator.config import MEMORY_TRIGGER_TOKEN_THRESHOLD
+
+            total_active_tokens = sum(
+                (m.token_count or max(1, len(m.content) // 4)) for m in active_db_msgs
+            )
+            if total_active_tokens > MEMORY_TRIGGER_TOKEN_THRESHOLD:
+                budget = MEMORY_TRIGGER_TOKEN_THRESHOLD
+                kept: list[AgentMessage] = []
+                for m in reversed(active_db_msgs):
+                    t = m.token_count or max(1, len(m.content) // 4)
+                    if budget - t < 0 and kept:
+                        break
+                    kept.append(m)
+                    budget -= t
+                active_db_msgs = list(reversed(kept))
+
+            for m in active_db_msgs:
+                if m.role in ("tenant", "user"):
+                    recent_history.append(HumanMessage(content=m.content))
+                else:
+                    recent_history.append(AIMessage(content=m.content))
+        except Exception as rhe:
+            print(f"[TenantAgent Warning] Could not rehydrate recent history: {rhe}", flush=True)
+
+    initial: GraphState = {
+        "tenant_id": tenant_id,
+        "agent_id": target_agent_id,
+        "draft": draft,
+        "messages": recent_history,
+        "structural_gaps": [],
+        "pending_field": None,
+        "semantic_note": f"User requested change: {user_answer}",
+        "decision": None,
+        "pending_draft_update": None,
+        "status": "onboarding",
+        "patch_retries": 0,
+        "react_step_count": 0,
+        "tier": tier or "starter",
+    }
+
+    otel_trace_id = get_current_trace_id()
+    set_span_attributes(
+        tenant_id=tenant_id,
+        agent_id=target_agent_id,
+        tier=tier or "starter",
+    )
+
+    metadata: dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "agent_id": target_agent_id,
+        "tier": tier or "starter",
+        "session_phase": "resume",
+        "thread_id": f"onboarding_{tenant_id}_{target_agent_id}",
+    }
+    if otel_trace_id:
+        metadata["otel_trace_id"] = otel_trace_id
+
+    tracker = TokenUsageTracker()
+    run_config: dict[str, Any] = {
+        "callbacks": [tracker, LangChainTracer(project_name="tenant-onboarding-agent")],
+        "run_name": f"TenantOnboarding:ResumeStream:{target_agent_id}",
+        "tags": [
+            "tenant_onboarding",
+            "session_resume_stream",
+            f"tier:{tier or 'starter'}",
+            f"tenant:{tenant_id}",
+        ],
+        "metadata": metadata,
+    }
+
+    last_question_text = ""
+    accumulated_text = ""
+    result_state: dict[str, Any] = {}
+
+    try:
+        async for event in _graph.astream_events(initial, config=run_config, version="v2"):
+            kind = event.get("event")
+
+           
+            if kind == "on_parser_stream":
+                chunk = event.get("data", {}).get("chunk")
+                if chunk and hasattr(chunk, "question") and chunk.question:
+                    cur_q = str(chunk.question)
+                    if len(cur_q) > len(last_question_text):
+                        delta = cur_q[len(last_question_text):]
+                        last_question_text = cur_q
+                        accumulated_text += delta
+                        yield {"event_type": "token", "delta": delta}
+
+         
+            elif kind == "on_chain_end":
+                output = event.get("data", {}).get("output")
+                if isinstance(output, dict):
+                    if "semantic_note" in output or "draft" in output or "status" in output:
+                        result_state.update(output)
+
+    except Exception as e:
+        print(f"[TenantAgent Stream Error] {e}", flush=True)
+        yield {"event_type": "error", "error": str(e)}
+        return
+
+    from datetime import UTC, datetime
+
+    semantic_resp = result_state.get("semantic_note") or last_question_text or ""
+    if tracker.total_tokens > 0:
+        inp_tokens = tracker.input_tokens
+        out_tokens = tracker.output_tokens
+        model_name = tracker.model_id or os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+    else:
+        inp_tokens = max(1, (len(user_answer or "") + 500) // 4)
+        out_tokens = max(1, len(semantic_resp) // 4)
+        model_name = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+
+    det_event_id = (
+        f"evt_tok_{tenant_id}_{target_agent_id}_resume_stream_{int(datetime.now(UTC).timestamp() * 1000)}"
+    )
+
+    await TokenTrackingService.record_tokens(
+        tenant_id=tenant_id,
+        agent_id=target_agent_id,
+        source="tenant_agent",
+        input_tokens=inp_tokens,
+        output_tokens=out_tokens,
+        model_id=model_name,
+        event_id=det_event_id,
+    )
+
+    payload = _extract_payload(result_state)
+    final_q = payload.get("question") or semantic_resp
+
+    if final_q and not accumulated_text:
+        yield {"event_type": "token", "delta": final_q}
+
+    yield {
+        "event_type": "done",
+        "status": payload.get("status", "awaiting_input"),
+        "question": final_q,
+        "field": payload.get("field", ""),
+        "type": payload.get("type", "semantic_review"),
+        "draft_schema_json": payload.get("draft_schema_json", "{}"),
+        "live_schema_json": payload.get("live_schema_json", ""),
+    }
+
+
+async def resume_onboarding_session_stream(
+    tenant_id: str, user_answer: str, agent_id: str = "", tier: str | None = None
+) -> AsyncIterator[dict[str, Any]]:
+    from agent_orchestrator.services.token_service import TokenTrackingService, TokenUsageTracker
+
+    is_exceeded, current_tokens, token_limit = await TokenTrackingService.check_weekly_quota(
+        tenant_id, tier=tier
+    )
+    if is_exceeded:
+        yield {
+            "event_type": "error",
+            "error": "Weekly AI token limit exceeded",
+            "status": "quota_exceeded",
+            "question": f"Weekly AI token limit reached ({current_tokens}/{token_limit} tokens). Upgrade your workspace plan in Billing to continue.",
+        }
+        return
+
+    from agent_orchestrator.clients.redis_client import get_cached_draft
+
+    draft = await get_cached_draft(tenant_id, agent_id)
+    if not draft and agent_id:
+        try:
+            from agent_orchestrator.models import AgentDraft, AgentRuntimeConfig
+
+            ad = await AgentDraft.find_one({"tenant_id": tenant_id, "agent_id": agent_id})
+            if ad and ad.current_draft:
+                draft = ad.current_draft.model_dump()
+            else:
+                cfg = await AgentRuntimeConfig.find_one(
+                    {"tenant_id": tenant_id, "agent_id": agent_id}
+                )
+                if cfg:
+                    from agent_orchestrator.models import canonicalize_agent_schema
+
+                    draft = canonicalize_agent_schema(cfg.model_dump(), status="live")
+        except Exception:
+            pass
+
+    if not draft:
+        draft = {"tenant_id": tenant_id, "agent_id": agent_id}
+
+    target_agent_id = agent_id or draft.get("agent_id") or f"agent_{tenant_id}_v1"
+
+    recent_history: list[HumanMessage | AIMessage] = []
+    if target_agent_id:
+        try:
+            from agent_orchestrator.models import AgentDraft, AgentMessage
+
+            agent_draft_doc = await AgentDraft.find_one(
+                {"tenant_id": tenant_id, "agent_id": target_agent_id}
+            )
+            last_summarized = agent_draft_doc.last_summarized_seq if agent_draft_doc else 0
+
+            active_db_msgs = (
+                await AgentMessage.find(
+                    {
+                        "tenant_id": tenant_id,
+                        "agent_id": target_agent_id,
+                        "seq": {"$gt": last_summarized},
+                    }
+                )
+                .sort("seq")
+                .to_list()
+            )
+
+            from agent_orchestrator.config import MEMORY_TRIGGER_TOKEN_THRESHOLD
+
+            total_active_tokens = sum(
+                (m.token_count or max(1, len(m.content) // 4)) for m in active_db_msgs
+            )
+            if total_active_tokens > MEMORY_TRIGGER_TOKEN_THRESHOLD:
+                budget = MEMORY_TRIGGER_TOKEN_THRESHOLD
+                kept: list[AgentMessage] = []
+                for m in reversed(active_db_msgs):
+                    t = m.token_count or max(1, len(m.content) // 4)
+                    if budget - t < 0 and kept:
+                        break
+                    kept.append(m)
+                    budget -= t
+                active_db_msgs = list(reversed(kept))
+
+            for m in active_db_msgs:
+                if m.role in ("tenant", "user"):
+                    recent_history.append(HumanMessage(content=m.content))
+                else:
+                    recent_history.append(AIMessage(content=m.content))
+        except Exception as rhe:
+            print(f"[TenantAgent Warning] Could not rehydrate recent history: {rhe}", flush=True)
+
+    initial: GraphState = {
+        "tenant_id": tenant_id,
+        "agent_id": target_agent_id,
+        "draft": draft,
+        "messages": recent_history,
+        "structural_gaps": [],
+        "pending_field": None,
+        "semantic_note": f"User requested change: {user_answer}",
+        "decision": None,
+        "pending_draft_update": None,
+        "status": "onboarding",
+        "patch_retries": 0,
+        "react_step_count": 0,
+        "tier": tier or "starter",
+    }
+
+    otel_trace_id = get_current_trace_id()
+    set_span_attributes(
+        tenant_id=tenant_id,
+        agent_id=target_agent_id,
+        tier=tier or "starter",
+    )
+
+    metadata: dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "agent_id": target_agent_id,
+        "tier": tier or "starter",
+        "session_phase": "resume",
+        "thread_id": f"onboarding_{tenant_id}_{target_agent_id}",
+    }
+    if otel_trace_id:
+        metadata["otel_trace_id"] = otel_trace_id
+
+    tracker = TokenUsageTracker()
+    run_config: dict[str, Any] = {
+        "callbacks": [tracker, LangChainTracer(project_name="tenant-onboarding-agent")],
+        "run_name": f"TenantOnboarding:ResumeStream:{target_agent_id}",
+        "tags": [
+            "tenant_onboarding",
+            "session_resume_stream",
+            f"tier:{tier or 'starter'}",
+            f"tenant:{tenant_id}",
+        ],
+        "metadata": metadata,
+    }
+
+    last_question_text = ""
+    accumulated_text = ""
+    result_state: dict[str, Any] = {}
+
+    try:
+        async for event in _graph.astream_events(initial, config=run_config, version="v2"):
+            kind = event.get("event")
+
+            # 1. Stream question tokens as they parse
+            if kind == "on_parser_stream":
+                chunk = event.get("data", {}).get("chunk")
+                if chunk and hasattr(chunk, "question") and chunk.question:
+                    cur_q = str(chunk.question)
+                    if len(cur_q) > len(last_question_text):
+                        delta = cur_q[len(last_question_text):]
+                        last_question_text = cur_q
+                        accumulated_text += delta
+                        yield {"event_type": "token", "delta": delta}
+
+            # 2. Capture final node / graph state
+            elif kind == "on_chain_end":
+                output = event.get("data", {}).get("output")
+                if isinstance(output, dict):
+                    if "semantic_note" in output or "draft" in output or "status" in output:
+                        result_state.update(output)
+
+    except Exception as e:
+        print(f"[TenantAgent Stream Error] {e}", flush=True)
+        yield {"event_type": "error", "error": str(e)}
+        return
+
+    from datetime import UTC, datetime
+
+    semantic_resp = result_state.get("semantic_note") or last_question_text or ""
+    if tracker.total_tokens > 0:
+        inp_tokens = tracker.input_tokens
+        out_tokens = tracker.output_tokens
+        model_name = tracker.model_id or os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+    else:
+        inp_tokens = max(1, (len(user_answer or "") + 500) // 4)
+        out_tokens = max(1, len(semantic_resp) // 4)
+        model_name = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+
+    det_event_id = (
+        f"evt_tok_{tenant_id}_{target_agent_id}_resume_stream_{int(datetime.now(UTC).timestamp() * 1000)}"
+    )
+
+    await TokenTrackingService.record_tokens(
+        tenant_id=tenant_id,
+        agent_id=target_agent_id,
+        source="tenant_agent",
+        input_tokens=inp_tokens,
+        output_tokens=out_tokens,
+        model_id=model_name,
+        event_id=det_event_id,
+    )
+
+    payload = _extract_payload(result_state)
+    final_q = payload.get("question") or semantic_resp
+
+    if final_q and not accumulated_text:
+        yield {"event_type": "token", "delta": final_q}
+
+    yield {
+        "event_type": "done",
+        "status": payload.get("status", "awaiting_input"),
+        "question": final_q,
+        "field": payload.get("field", ""),
+        "type": payload.get("type", "semantic_review"),
+        "draft_schema_json": payload.get("draft_schema_json", "{}"),
+        "live_schema_json": payload.get("live_schema_json", ""),
+    }
 
 
 async def get_current_draft(tenant_id: str, agent_id: str = "") -> dict:

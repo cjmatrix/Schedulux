@@ -15,16 +15,16 @@ export class ListServicesUseCase implements IListServicesUseCase {
   ) {}
 
   async execute(dto: ListServicesRequest): Promise<ListServicesOutput> {
-    if (!dto.agent_id?.trim()) throw new BadRequestException('agent_id is required');
+    if (!dto.tenant_id?.trim()) throw new BadRequestException('tenant_id is required');
 
     const page = dto.page > 0 ? dto.page : 1;
     const limit = dto.limit > 0 ? dto.limit : 20;
 
-    const { services, total, summary } = await this._serviceRepository.findAll(dto.tenant_id, {
+    const { services, total, summary } = await this._serviceRepository.findAll(dto.tenant_id.trim(), {
       page,
       limit,
       category: dto.category || undefined,
-      agentId: dto.agent_id.trim(),
+      agentId: dto.agent_id?.trim() || undefined,
       search: dto.search || undefined,
     });
 

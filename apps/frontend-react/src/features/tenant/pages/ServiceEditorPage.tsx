@@ -15,7 +15,10 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { ConfirmationModal } from '../../../components/ConfirmationModal.js';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import type { CreateServicePayload, UpdateServicePayload } from '../api/servicesApi';
+import { useTenantAgents } from '../hooks/useKnowledgeDocuments';
 import {
   useCreateResource,
   useCreateService,
@@ -32,6 +35,8 @@ interface ServiceEditorPageProps {
 export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPageProps) {
   const navigate = useNavigate();
   const { id: serviceIdFromParams, agentId } = useParams<{ id: string; agentId?: string }>();
+  const { user: authUser, isManager } = useCurrentUser();
+  const { data: agents = [] } = useTenantAgents();
 
   const isCreateMode = mode === 'create' || !serviceIdFromParams || serviceIdFromParams === 'new';
 
@@ -39,7 +44,19 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
     isCreateMode ? undefined : serviceIdFromParams,
   );
 
-  const effectiveAgentId = agentId || serviceResponse?.data?.agent_id || '';
+  const effectiveAgentId =
+    agentId ||
+    authUser?.agent_id ||
+    serviceResponse?.data?.agent_id ||
+    (agents.length > 0 ? agents[0].agent_id : '');
+
+  const navigateToServices = () => {
+    if (effectiveAgentId) {
+      navigate(`/tenant/agents/${effectiveAgentId}/services`);
+    } else {
+      navigate('/tenant/services');
+    }
+  };
 
   const { data: resourcesResponse } = useResourcesList(
     effectiveAgentId ? { agent_id: effectiveAgentId } : undefined,
@@ -61,10 +78,6 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
   const [priceCurrency, setPriceCurrency] = useState('USD');
   const [requireOtp, setRequireOtp] = useState<boolean>(false);
   const [description, setDescription] = useState('');
-  const [requireDeposit, setRequireDeposit] = useState(false);
-  const [depositAmount, setDepositAmount] = useState<number>(50);
-  const [upiId, setUpiId] = useState('');
-  const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [durationMinutes, setDurationMinutes] = useState<number>(60);
   const [bufferMinutes, setBufferMinutes] = useState<number>(20);
   const [bookingMode, setBookingMode] = useState<'time_slot' | 'date_range'>('time_slot');
@@ -86,7 +99,6 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
   } | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
-  // Populate existing data when editing
   useEffect(() => {
     if (!isCreateMode && serviceResponse?.data) {
       const s = serviceResponse.data;
@@ -97,10 +109,6 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
       setPriceCurrency(s.price?.currency || 'USD');
       setRequireOtp(s.verification?.require_otp ?? false);
       setDescription(s.description || '');
-      setRequireDeposit(s.deposit?.required ?? false);
-      setDepositAmount(s.deposit?.amount ?? 0);
-      setUpiId(s.deposit?.upi_id || '');
-      setQrCodeUrl(s.deposit?.qr_code_url || '');
       setDurationMinutes(s.duration_minutes || 30);
       setBufferMinutes(s.buffer_minutes ?? 0);
       setBookingMode((s.booking_mode as 'time_slot' | 'date_range') || 'time_slot');
@@ -181,14 +189,6 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
         amount: priceType === 'free' ? 0 : Number(priceAmount) || 0,
         currency: priceCurrency,
       },
-      deposit: {
-        required: requireDeposit,
-        amount: requireDeposit ? Number(depositAmount) || 0 : 0,
-        processor: 'upi_direct',
-        upi_id: upiId.trim(),
-        qr_code_url: qrCodeUrl.trim(),
-        confirmation_method: 'utr_reference',
-      },
       verification: {
         require_otp: requireOtp,
       },
@@ -221,11 +221,11 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
         const res = await createServiceMutation.mutateAsync(payload);
         setFeedbackMessage({ type: 'success', text: 'Service created successfully!' });
         setTimeout(() => {
-          navigate(
-            effectiveAgentId
-              ? `/tenant/agents/${effectiveAgentId}/services/${res.data.service_id}`
-              : `/tenant/services/${res.data.service_id}`,
-          );
+          if (effectiveAgentId) {
+            navigate(`/tenant/agents/${effectiveAgentId}/services/${res.data.service_id}`);
+          } else {
+            navigate(`/tenant/services/${res.data.service_id}`);
+          }
         }, 600);
       } else {
         await updateServiceMutation.mutateAsync({
@@ -245,9 +245,7 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
     if (!serviceIdFromParams) return;
     try {
       await deleteServiceMutation.mutateAsync(serviceIdFromParams);
-      navigate(
-        effectiveAgentId ? `/tenant/agents/${effectiveAgentId}/services` : '/tenant/services',
-      );
+      navigateToServices();
     } catch (err: unknown) {
       setFeedbackMessage({
         type: 'error',
@@ -336,30 +334,24 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
     serviceData?.service_id || (isCreateMode ? 'srv_new_draft' : serviceIdFromParams);
 
   return (
-    <div className="min-h-screen bg-[#fafbfc] p-6 lg:p-10 font-sans text-slate-800">
+    <div className="min-h-screen bg-[#fafbfc] p-4 sm:p-6 lg:p-10 font-sans text-slate-800">
       <div className="max-w-5xl mx-auto flex flex-col gap-6">
         {/* Navigation Breadcrumbs */}
-        <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+        <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-semibold text-slate-400 flex-wrap">
           <button
             type="button"
-            onClick={() =>
-              navigate(
-                effectiveAgentId
-                  ? `/tenant/agents/${effectiveAgentId}/services`
-                  : '/tenant/services',
-              )
-            }
+            onClick={navigateToServices}
             className="flex items-center gap-1.5 text-slate-700 hover:text-black font-semibold cursor-pointer transition"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back</span>
           </button>
           <span>/</span>
-          {effectiveAgentId && (
+          {!isManager && effectiveAgentId && (
             <>
               <span
                 onClick={() => navigate(`/tenant/agents/${effectiveAgentId}/dashboard`)}
-                className="hover:text-slate-600 cursor-pointer transition font-bold"
+                className="hover:text-slate-600 cursor-pointer transition font-bold truncate max-w-[140px] sm:max-w-none"
               >
                 {effectiveAgentId}
               </span>
@@ -367,21 +359,15 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
             </>
           )}
           <span
-            onClick={() =>
-              navigate(
-                effectiveAgentId
-                  ? `/tenant/agents/${effectiveAgentId}/services`
-                  : '/tenant/services',
-              )
-            }
-            className="hover:text-slate-600 cursor-pointer transition"
+            onClick={navigateToServices}
+            className="hover:text-slate-600 cursor-pointer transition truncate"
           >
             Services & Pricing
           </span>
           <span>/</span>
-          <span>{category || 'General'}</span>
+          <span className="capitalize">{category || 'General'}</span>
           <span>/</span>
-          <span className="text-slate-900 font-bold truncate max-w-[200px]">
+          <span className="text-slate-900 font-bold truncate max-w-[140px] sm:max-w-[200px]">
             {name || (isCreateMode ? 'New Service' : 'Service')}
           </span>
         </div>
@@ -405,9 +391,9 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
         )}
 
         {/* Header Bar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 sm:pb-6 border-b border-slate-200">
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight truncate">
               {isCreateMode ? 'Create New Service' : `Edit Service: ${name || 'Untitled Service'}`}
             </h1>
             <div className="flex items-center gap-2.5 mt-2">
@@ -564,79 +550,6 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
                 onChange={(e) => setDescription(e.target.value)}
                 className="w-full px-4 py-3 bg-slate-50/70 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition leading-relaxed"
               />
-            </div>
-
-            {/* Deposit Box */}
-            <div className="bg-slate-50/70 border border-slate-200/90 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <label className="flex items-center gap-3 cursor-pointer select-none">
-                <div
-                  onClick={() => setRequireDeposit(!requireDeposit)}
-                  className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-200 ease-in-out cursor-pointer ${
-                    requireDeposit ? 'bg-slate-950' : 'bg-slate-300'
-                  }`}
-                >
-                  <div
-                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
-                      requireDeposit ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </div>
-                <span className="text-xs font-semibold text-slate-800">
-                  Require Deposit to Book
-                </span>
-              </label>
-
-              {requireDeposit && (
-                <div className="flex flex-col gap-3 pt-2 border-t border-slate-100">
-                  <div className="flex flex-wrap items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-slate-500">Hold Amount:</span>
-                      <div className="relative w-28">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
-                          $
-                        </span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={depositAmount}
-                          onChange={(e) => setDepositAmount(parseFloat(e.target.value) || 0)}
-                          className="w-full pl-7 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 transition"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-                      <span className="text-xs font-semibold text-slate-500">UPI ID:</span>
-                      <input
-                        type="text"
-                        placeholder="e.g. clinic@okhdfcbank"
-                        value={upiId}
-                        onChange={(e) => setUpiId(e.target.value)}
-                        className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 transition"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-500">
-                      QR Code URL (optional):
-                    </span>
-                    <input
-                      type="url"
-                      placeholder="https://cdn.example.com/upi_qr.png"
-                      value={qrCodeUrl}
-                      onChange={(e) => setQrCodeUrl(e.target.value)}
-                      className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 transition"
-                    />
-                  </div>
-
-                  <p className="text-[11px] text-slate-400">
-                    Direct UPI Payments: Patients pay via UPI ID or QR code and provide a UTR
-                    reference number. Money goes directly to the tenant with zero platform fee.
-                  </p>
-                </div>
-              )}
             </div>
 
             {/* Verification Box */}
@@ -1070,39 +983,21 @@ export default function ServiceEditorPage({ mode = 'edit' }: ServiceEditorPagePr
       )}
 
       {/* Delete Confirmation Modal */}
-      {isDeleteConfirmOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 flex flex-col gap-4 text-center">
-            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
-              <Trash2 className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900">Delete this Service?</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Are you sure you want to delete <strong className="text-slate-800">{name}</strong>?
-                The autonomous AI agent will no longer be able to schedule it.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 mt-2">
-              <button
-                type="button"
-                onClick={() => setIsDeleteConfirmOpen(false)}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleteServiceMutation.isPending}
-                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl transition shadow-xs cursor-pointer disabled:opacity-50"
-              >
-                {deleteServiceMutation.isPending ? 'Deleting...' : 'Yes, Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmationModal
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={handleDelete}
+        title="Delete this Service?"
+        description={
+          <span>
+            Are you sure you want to delete <strong className="text-slate-800">{name}</strong>? The
+            autonomous AI agent will no longer be able to schedule it.
+          </span>
+        }
+        variant="delete"
+        confirmText="Yes, Delete"
+        isLoading={deleteServiceMutation.isPending}
+      />
     </div>
   );
 }

@@ -54,19 +54,21 @@ export const LogoutSchema: z.ZodType<LogoutRequest> = z.object({
 
 export class LogoutDto extends createZodDto(LogoutSchema) {}
 
-export const InviteUserSchema: z.ZodType<InviteUserRequest> = z.object({
-  tenant_id: z.string().min(1, 'Tenant ID is required'),
+export const InviteUserSchema = z.object({
+  tenant_id: z.string().optional(),
+  agent_id: z.string().min(1, 'Agent ID is required'),
   email: z.string().trim().email('Please provide a valid email address'),
   name: z.string().trim().min(2, 'Name must be at least 2 characters'),
-  system_role: z.string().min(1, 'System role is required'),
+  system_role: z.string().default('manager'),
 });
 
 export class InviteUserDto extends createZodDto(InviteUserSchema) {}
 
-export const ListWorkspaceUsersSchema: z.ZodType<ListWorkspaceUsersRequest> = z.object({
-  tenant_id: z.string().min(1, 'Tenant ID is required'),
-  page: z.coerce.number().optional(),
-  limit: z.coerce.number().optional(),
+export const ListWorkspaceUsersSchema = z.object({
+  tenant_id: z.string().optional(),
+  agent_id: z.string().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
   search: z.string().optional(),
   role: z.string().optional(),
 });
@@ -85,3 +87,15 @@ export const ResetPasswordSchema = z.object({
 });
 
 export class ResetPasswordDto extends createZodDto(ResetPasswordSchema) {}
+
+export const TenantDashboardOverviewSchema = z.object({
+  agent_id: z.string().optional(),
+});
+
+export class TenantDashboardOverviewDto extends createZodDto(TenantDashboardOverviewSchema) {}
+
+export const SuspendWorkspaceUserParamSchema = z.object({
+  userId: z.string().min(1, 'User ID is required'),
+});
+
+export class SuspendWorkspaceUserParamDto extends createZodDto(SuspendWorkspaceUserParamSchema) {}

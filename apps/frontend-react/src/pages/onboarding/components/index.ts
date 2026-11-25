@@ -5,6 +5,7 @@ export * from './DiffDrawer';
 export * from './RawJsonViewer';
 export * from './ResourcesRosterCard';
 export * from './SandboxSimulation';
+export * from './SchedulingEngineCard';
 export * from './SecurityGuardrailsCard';
 export * from './ServicesCatalogCard';
 export * from './WizardChatColumn';

@@ -8,7 +8,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TENANT_SERVICE_NAME = exports.TENANT_AUTH_SERVICE_NAME = exports.TENANT_PACKAGE_NAME = exports.protobufPackage = void 0;
 exports.TenantAuthServiceControllerMethods = TenantAuthServiceControllerMethods;
 exports.TenantServiceControllerMethods = TenantServiceControllerMethods;
-/* eslint-disable */
 const microservices_1 = require("@nestjs/microservices");
 exports.protobufPackage = "tenant";
 exports.TENANT_PACKAGE_NAME = "tenant";
@@ -41,7 +40,15 @@ function TenantAuthServiceControllerMethods() {
 exports.TENANT_AUTH_SERVICE_NAME = "TenantAuthService";
 function TenantServiceControllerMethods() {
     return function (constructor) {
-        const grpcMethods = ["listTenants", "suspendTenant"];
+        const grpcMethods = [
+            "listTenants",
+            "getTenantById",
+            "suspendTenant",
+            "updateTenantSubscription",
+            "getTenantBillingInfo",
+            "processPaddleWebhook",
+            "createPaddleCheckout",
+        ];
         for (const method of grpcMethods) {
             const descriptor = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
             (0, microservices_1.GrpcMethod)("TenantService", method)(constructor.prototype[method], method, descriptor);

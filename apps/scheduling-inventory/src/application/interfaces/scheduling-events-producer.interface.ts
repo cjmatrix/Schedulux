@@ -51,6 +51,12 @@ export interface ISchedulingEventsProducer {
     previousEndTime: Date,
     session?: ClientSession,
   ): Promise<IOutboxDoc>;
+  createBookingStatusUpdatedOutboxEvent(
+    entity: BookingEntity,
+    previousStatus: string,
+    reason?: string,
+    session?: ClientSession,
+  ): Promise<IOutboxDoc>;
 
   createScheduleUpdatedOutboxEvent(
     doc: ITenantScheduleDoc,
@@ -73,5 +79,10 @@ export interface ISchedulingEventsProducer {
     entity: BookingEntity,
     previousStartTime: Date,
     previousEndTime: Date,
+  ): Promise<void>;
+  emitBookingStatusUpdated(
+    entity: BookingEntity,
+    previousStatus: string,
+    reason?: string,
   ): Promise<void>;
 }

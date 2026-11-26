@@ -246,6 +246,10 @@ async def sync_agent_inventory(
             )
         )
 
+    bp_raw = draft.get("business_profile") or {}
+    timezone = bp_raw.get("timezone") or draft.get("timezone") or "UTC"
+    currency = bp_raw.get("currency") or draft.get("currency") or "USD"
+
     proto_services: list[scheduling_pb2.CreateServiceRequest] = []
     for svc in raw_services:
         price_d = svc.get("price") or {}
@@ -256,10 +260,10 @@ async def sync_agent_inventory(
                 require_otp=bool(verif_d["require_otp"])
             )
 
-        proto_requirements: list[scheduling_pb2.ResourceRequirement] = []
+        proto_requirements: list[scheduling_pb2.ResourceRequirementInfo] = []
         for req in svc.get("resource_requirements", []):
             proto_requirements.append(
-                scheduling_pb2.ResourceRequirement(
+                scheduling_pb2.ResourceRequirementInfo(
                     role=req.get("role", "Staff"),
                     resource_type=req.get("resource_type", "staff"),
                     count=int(req.get("count") or 1),
@@ -271,7 +275,7 @@ async def sync_agent_inventory(
         proto_services.append(
             scheduling_pb2.CreateServiceRequest(
                 tenant_id=tenant_id,
-                agent_id=agent_id or None,
+                agent_id=agent_id or "",
                 service_id=svc.get("service_id") or None,
                 name=(svc.get("name") or "Unnamed").strip(),
                 category=svc.get("category") or "General",
@@ -279,10 +283,10 @@ async def sync_agent_inventory(
                 duration_minutes=int(svc.get("duration_minutes") or 30),
                 buffer_minutes=int(svc.get("buffer_minutes") or 0),
                 booking_mode=svc.get("booking_mode", "time_slot"),
-                price=scheduling_pb2.Price(
-                    type=price_d.get("type", "fixed"),
-                    amount=float(price_d.get("amount", 0.0)),
-                    currency=price_d.get("currency", "USD"),
+                price=scheduling_pb2.PriceInfo(
+                    type=price_d.get("type") or "fixed",
+                    amount=float(price_d.get("amount") or 0.0),
+                    currency=price_d.get("currency") or currency,
                 )
                 if price_d
                 else None,
@@ -293,39 +297,45 @@ async def sync_agent_inventory(
             )
         )
 
-    timezone = draft.get("timezone", "UTC")
-    currency = draft.get("currency", "USD")
-
-    proto_operating_hours: list[scheduling_pb2.OperatingHoursDay] = []
-    for day in draft.get("operating_hours", []):
-        proto_operating_hours.append(
-            scheduling_pb2.OperatingHoursDay(
-                day_of_week=day.get("day_of_week", ""),
-                is_open=day.get("is_open", True),
-                time_ranges=[
-                    scheduling_pb2.TimeRange(start=tr.get("start", ""), end=tr.get("end", ""))
-                    for tr in day.get("time_ranges", [])
-                ],
+    oh_raw = draft.get("operating_hours")
+    oh_dict: dict[str, Any] = oh_raw if isinstance(oh_raw, dict) else {}
+    weekday_kwargs: dict[str, list[scheduling_pb2.TimeIntervalInfo]] = {}
+    for day_name in ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"):
+        day_slots = oh_dict.get(day_name) or []
+        weekday_kwargs[day_name] = [
+            scheduling_pb2.TimeIntervalInfo(
+                start=str(slot.get("start", "")),
+                end=str(slot.get("end", "")),
             )
-        )
+            for slot in day_slots
+            if isinstance(slot, dict) and slot.get("start") and slot.get("end")
+        ]
+    proto_operating_hours = scheduling_pb2.OperatingHoursInfo(**weekday_kwargs)
 
-    proto_blackout_dates: list[scheduling_pb2.BlackoutDateInfo] = []
-    for bo in draft.get("blackout_dates", []):
-        proto_blackout_dates.append(
-            scheduling_pb2.BlackoutDateInfo(
-                start_date=bo.get("start_date", ""),
-                end_date=bo.get("end_date", ""),
-                reason=bo.get("reason", ""),
-            )
+    raw_blackouts = draft.get("blackout_dates") or oh_dict.get("blackout_dates") or []
+    proto_blackout_dates: list[scheduling_pb2.BlackoutDateInfo] = [
+        scheduling_pb2.BlackoutDateInfo(
+            date=str(bo.get("date") or bo.get("start_date") or ""),
+            reason=str(bo.get("reason") or ""),
+            is_closed=bool(bo.get("is_closed", True)),
         )
+        for bo in raw_blackouts
+        if isinstance(bo, dict) and (bo.get("date") or bo.get("start_date"))
+    ]
+
+    def _int_or_default(val: Any, default: int) -> int:
+        return int(val) if val is not None else default
 
     se_raw = draft.get("scheduling_engine") or {}
+    lead_time_val = se_raw.get("default_lead_time_hours")
+    if lead_time_val is None:
+        lead_time_val = se_raw.get("min_advance_booking_hours")
     proto_scheduling_engine = scheduling_pb2.SchedulingEngineConfigInfo(
-        slot_interval_minutes=int(se_raw.get("slot_interval_minutes") or 30),
-        min_advance_booking_hours=int(se_raw.get("min_advance_booking_hours") or 2),
-        max_advance_booking_days=int(se_raw.get("max_advance_booking_days") or 60),
-        cancellation_window_hours=int(se_raw.get("cancellation_window_hours") or 24),
-        hold_duration_minutes=int(se_raw.get("hold_duration_minutes") or 10),
+        booking_mode=str(se_raw.get("booking_mode") or "time_slot"),
+        default_lead_time_hours=_int_or_default(lead_time_val, 2),
+        max_advance_booking_days=_int_or_default(se_raw.get("max_advance_booking_days"), 60),
+        cancellation_window_hours=_int_or_default(se_raw.get("cancellation_window_hours"), 24),
+        hold_duration_minutes=_int_or_default(se_raw.get("hold_duration_minutes"), 10),
     )
 
     guard_raw = draft.get("guardrails") or {}

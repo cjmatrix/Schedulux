@@ -119,10 +119,14 @@ let KnowledgeController = KnowledgeController_1 = class KnowledgeController {
         const targetJobId = query.job_id;
         return new rxjs_1.Observable((subscriber) => {
             let isCompleted = false;
-            this._schemaCacheService
-                .getDraftSchema(tenantId, targetJobId)
-                .then((existingSchema) => {
-                if (existingSchema && !isCompleted) {
+            Promise.all([
+                this._schemaCacheService.getDraftSchema(tenantId, targetJobId),
+                targetJobId ? this._redisService.getCrawlJobStatus(targetJobId) : Promise.resolve(null),
+            ])
+                .then(([existingSchema, crawlStatus]) => {
+                if (isCompleted)
+                    return;
+                if (existingSchema) {
                     isCompleted = true;
                     subscriber.next({
                         type: 'schema:ready',
@@ -131,6 +135,20 @@ let KnowledgeController = KnowledgeController_1 = class KnowledgeController {
                             job_id: targetJobId || '',
                             schema: existingSchema,
                             status: 'completed',
+                        },
+                    });
+                    subscriber.complete();
+                    return;
+                }
+                if (crawlStatus?.status === 'failed') {
+                    isCompleted = true;
+                    subscriber.next({
+                        type: 'schema:failed',
+                        data: {
+                            job_id: targetJobId || '',
+                            tenant_id: tenantId,
+                            error: crawlStatus.error || messages_constant_js_1.RESPONSE_MESSAGES.WEBSOCKET.SCHEMA_GENERATION_FAILED,
+                            status: 'failed',
                         },
                     });
                     subscriber.complete();

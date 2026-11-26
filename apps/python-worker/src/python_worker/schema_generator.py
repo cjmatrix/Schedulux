@@ -5,7 +5,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
-from python_worker.queues import get_redis_client
+from python_worker.queues import get_redis_client, publish_schema_failure_event
 from python_worker.schema_validator import (
     GeneratedAgentDraftSchema,
     StrictDraftPatchValidator,
@@ -360,20 +360,7 @@ async def process_schema_generation(job_or_data, token=None):
         else:
             friendly_err = f"AI schema synthesis failed: {raw_err}"
 
-        pubsub_channel = f"schema-events:{tenant_id}:{job_id}"
-        event_payload = {
-            "event": "SCHEMA_GENERATION_FAILED",
-            "tenant_id": tenant_id,
-            "job_id": job_id,
-            "url": url,
-            "error": friendly_err,
-        }
-        try:
-            redis = get_redis_client()
-            await redis.publish(pubsub_channel, json.dumps(event_payload))
-            print(f"[Schema Worker] Published failure event to '{pubsub_channel}': {friendly_err}", flush=True)
-        except Exception as pub_err:
-            print(f"[Schema Worker] Failed to publish error event to redis: {pub_err}", flush=True)
+        await publish_schema_failure_event(tenant_id, url, job_id, friendly_err)
 
      
         raise RuntimeError(friendly_err) from exc

@@ -6,7 +6,11 @@ import re
 from urllib.parse import urlparse, urljoin, urlunparse
 from pydantic import BaseModel, Field
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
-from python_worker.queues import publish_schema_generation_job, get_redis_client
+from python_worker.queues import (
+    get_redis_client,
+    publish_schema_failure_event,
+    publish_schema_generation_job,
+)
 from python_worker.tracing import get_tracer
 
 tracer = get_tracer("crawler-worker.crawler")
@@ -25,6 +29,8 @@ except ImportError:
 CACHE_TTL_SECONDS = int(os.environ.get("CRAWL_CACHE_TTL_SECONDS", "86400"))
 DEFAULT_MIN_LINKS = 4
 DEFAULT_MAX_LINKS = 6
+MAX_CRAWL_ATTEMPTS = 3
+CRAWL_RETRY_BACKOFF_SECONDS = (5, 15)
 
 
 class PermanentCrawlError(Exception):
@@ -35,20 +41,36 @@ class PermanentCrawlError(Exception):
 browser_cfg = BrowserConfig(
     headless=True,
     verbose=False,
-    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) SchedulerCrawler/1.0"
+    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) SchedulerCrawler/1.0",
+    light_mode=True,
+    text_mode=True,
+    memory_saving_mode=True,
+    extra_args=["--disable-dev-shm-usage", "--no-sandbox", "--disable-gpu"],
 )
 
 
-run_cfg = CrawlerRunConfig(
-    cache_mode=CacheMode.BYPASS,
-    word_count_threshold=3,
-    excluded_tags=["nav", "header", "footer", "aside", "script", "style", "svg", "noscript"],
-    remove_overlay_elements=True,
-    remove_consent_popups=True,
-    exclude_all_images=True,
-    exclude_external_links=True,
-    exclude_social_media_links=True,
-)
+def _build_run_config(
+    wait_until: str = "domcontentloaded",
+    delay_before_return_html: float = 0.1,
+) -> CrawlerRunConfig:
+    """Constructs a consistent CrawlerRunConfig with increased page timeout for slow JS sites."""
+    return CrawlerRunConfig(
+        cache_mode=CacheMode.BYPASS,
+        word_count_threshold=3,
+        excluded_tags=["nav", "header", "footer", "aside", "script", "style", "svg", "noscript"],
+        remove_overlay_elements=True,
+        remove_consent_popups=True,
+        exclude_all_images=True,
+        exclude_external_links=True,
+        exclude_social_media_links=True,
+        page_timeout=90000,
+        wait_until=wait_until,
+        delay_before_return_html=delay_before_return_html,
+    )
+
+
+run_cfg = _build_run_config()
+homepage_fallback_run_cfg = _build_run_config(wait_until="commit", delay_before_return_html=2.0)
 
 
 JUNK_REGEX = re.compile(
@@ -271,6 +293,29 @@ async def select_relevant_links_with_llm(
     return final_urls
 
 
+async def _fetch_homepage_result(crawler: AsyncWebCrawler, target_url: str):
+    """Fetches homepage, falling back to wait_until='commit' if domcontentloaded times out."""
+    result = await crawler.arun(url=target_url, config=run_cfg)
+    error_msg = getattr(result, "error_message", "") or ""
+    if not getattr(result, "success", False) and "timeout" in error_msg.lower():
+        print(
+            f"[Crawl] Homepage domcontentloaded timed out for {target_url}; retrying with wait_until='commit'",
+            flush=True,
+        )
+        result = await crawler.arun(url=target_url, config=homepage_fallback_run_cfg)
+    return result
+
+
+def _format_crawl_error(exc: Exception) -> str:
+    """Formats a user-friendly crawl error message for Redis status and SSE notifications."""
+    raw = str(exc)
+    if isinstance(exc, PermanentCrawlError):
+        return raw
+    if "timeout" in raw.lower():
+        return "Timed out while loading the website. The site took too long to respond; please verify the URL or try again."
+    return f"Website crawl failed: {raw}"
+
+
 async def crawl_site_knowledge(target_url: str, tenant_id: str = "default") -> dict:
   
     semaphore = asyncio.Semaphore(2)
@@ -298,7 +343,7 @@ async def crawl_site_knowledge(target_url: str, tenant_id: str = "default") -> d
                 "crawl.homepage.fetch",
                 attributes={"crawl.url": target_url, "tenant.id": tenant_id},
             ) as hp_span:
-                initial_result = await crawler.arun(url=target_url, config=run_cfg)
+                initial_result = await _fetch_homepage_result(crawler, target_url)
 
                 status_code = getattr(initial_result, "status_code", None)
                 error_msg = getattr(initial_result, "error_message", "") or ""
@@ -411,7 +456,7 @@ async def crawl_site_knowledge(target_url: str, tenant_id: str = "default") -> d
 
 
 async def process_crawl_job(data: dict):
-    """RabbitMQ message processor — receives a crawl-site job, crawls, and publishes to schema-generation-queue."""
+    """RabbitMQ message processor — receives a crawl-site job, retries transient failures, crawls, and publishes to schema-generation-queue."""
     tenant_id = data.get("tenant_id", "default")
     url = data.get("url")
     job_id = data.get("job_id")
@@ -429,7 +474,30 @@ async def process_crawl_job(data: dict):
         }
         await redis.setex(f"crawl:job:{job_id}", 86400, json.dumps(status_payload))
 
-        knowledge = await crawl_site_knowledge(url, tenant_id=tenant_id)
+        last_exc: Exception | None = None
+        knowledge: dict | None = None
+        for attempt in range(1, MAX_CRAWL_ATTEMPTS + 1):
+            try:
+                knowledge = await crawl_site_knowledge(url, tenant_id=tenant_id)
+                break
+            except PermanentCrawlError as exc:
+                last_exc = exc
+                break
+            except Exception as exc:
+                last_exc = exc
+                if attempt < MAX_CRAWL_ATTEMPTS:
+                    delay = CRAWL_RETRY_BACKOFF_SECONDS[
+                        min(attempt - 1, len(CRAWL_RETRY_BACKOFF_SECONDS) - 1)
+                    ]
+                    print(
+                        f"[Crawler Worker] Job {job_id} attempt {attempt}/{MAX_CRAWL_ATTEMPTS} failed transiently ({exc}); retrying in {delay}s...",
+                        flush=True,
+                    )
+                    await asyncio.sleep(delay)
+
+        if knowledge is None:
+            assert last_exc is not None
+            raise last_exc
 
         with tracer.start_as_current_span("crawl.schema.publish"):
             await publish_schema_generation_job(
@@ -448,6 +516,7 @@ async def process_crawl_job(data: dict):
 
     except Exception as e:
         is_permanent = isinstance(e, PermanentCrawlError)
+        friendly_err = _format_crawl_error(e)
         print(
             f"[Crawler Worker] Job {job_id} failed (permanent={is_permanent}): {str(e)}",
             flush=True,
@@ -459,11 +528,12 @@ async def process_crawl_job(data: dict):
                 "tenant_id": tenant_id,
                 "url": url,
                 "job_id": job_id,
-                "error": str(e),
+                "error": friendly_err,
             }
             await redis.setex(f"crawl:job:{job_id}", 86400, json.dumps(err_payload))
         except Exception:
             pass
+        await publish_schema_failure_event(tenant_id, url or "", job_id or "", friendly_err)
         raise
     finally:
         try:

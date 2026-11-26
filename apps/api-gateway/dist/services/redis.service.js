@@ -92,6 +92,21 @@ let RedisService = RedisService_1 = class RedisService {
             }
         };
     }
+    async getCrawlJobStatus(jobId) {
+        if (!this._client || !jobId)
+            return null;
+        const key = `crawl:job:${jobId}`;
+        try {
+            const raw = await this._client.get(key);
+            if (!raw)
+                return null;
+            return JSON.parse(raw);
+        }
+        catch (err) {
+            this._logger.error(`Failed to retrieve crawl job status for key: ${key}`, err);
+            return null;
+        }
+    }
     async getDraftSchema(tenantId, jobId) {
         const key = jobId ? `agent:draft:${tenantId}:${jobId}` : `agent:draft:${tenantId}`;
         try {

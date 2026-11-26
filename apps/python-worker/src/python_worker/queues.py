@@ -173,6 +173,29 @@ async def publish_schema_generation_job(tenant_id: str, url: str, job_id: str, c
     print(f"[RabbitMQ] Published job 'schema_{job_id}' to '{SCHEMA_QUEUE_NAME}'", flush=True)
 
 
+async def publish_schema_failure_event(
+    tenant_id: str, url: str, job_id: str, error: str
+) -> None:
+    """Publishes a SCHEMA_GENERATION_FAILED notification to Redis pub/sub for SSE clients."""
+    pubsub_channel = f"schema-events:{tenant_id}:{job_id}"
+    event_payload = {
+        "event": "SCHEMA_GENERATION_FAILED",
+        "tenant_id": tenant_id,
+        "job_id": job_id,
+        "url": url,
+        "error": error,
+    }
+    try:
+        redis = get_redis_client()
+        await redis.publish(pubsub_channel, json.dumps(event_payload))
+        print(
+            f"[Redis PubSub] Published failure event to '{pubsub_channel}': {error}",
+            flush=True,
+        )
+    except Exception as pub_err:
+        print(f"[Redis PubSub] Failed to publish error event to redis: {pub_err}", flush=True)
+
+
 async def publish_crawl_job(tenant_id: str, url: str, job_id: str) -> None:
     """Publishes a website crawling task to RabbitMQ knowledge-crawl-queue."""
     channel = await get_rabbitmq_channel()

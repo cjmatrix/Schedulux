@@ -29,11 +29,19 @@ spec:
               value: "crawler-worker"
           resources:
             requests:
-              cpu: 100m
-              memory: 300Mi
+              cpu: 150m
+              memory: 384Mi
             limits:
-              cpu: 500m
-              memory: 550Mi
+              cpu: 1000m
+              memory: 900Mi
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: dshm
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
 ---
 #Auto-scale worker on RabbitMQ Queue Backlog
 apiVersion: keda.sh/v1alpha1

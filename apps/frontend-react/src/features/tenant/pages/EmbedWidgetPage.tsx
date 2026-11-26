@@ -731,16 +731,8 @@ export default function AppointmentChatWidget() {
               <h3 className="text-sm font-bold">Split Gateway Architecture</h3>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Your public customer chat runs on a dedicated high-throughput microservice gateway (
-              <code className="px-1.5 py-0.5 bg-slate-800 rounded font-mono text-[11px] text-indigo-300">
-                port 5001
-              </code>
-              ), isolating unauthenticated customer traffic from your authenticated tenant
-              administration gateway (
-              <code className="px-1.5 py-0.5 bg-slate-800 rounded font-mono text-[11px] text-indigo-300">
-                port 5000
-              </code>
-              ).
+              Your public customer chat runs on a dedicated high-throughput gateway isolating unauthenticated customer traffic from your authenticated tenant
+              administration gateway 
             </p>
             <div className="p-3 bg-slate-800/80 rounded-xl text-[11px] text-slate-400 space-y-1">
               <div>&bull; HMAC-signed stateless session verification</div>

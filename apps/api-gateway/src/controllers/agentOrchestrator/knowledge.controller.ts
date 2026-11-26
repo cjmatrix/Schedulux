@@ -197,10 +197,13 @@ export class KnowledgeController implements OnModuleInit {
     return new Observable<MessageEvent>((subscriber) => {
       let isCompleted = false;
 
-      this._schemaCacheService
-        .getDraftSchema(tenantId, targetJobId)
-        .then((existingSchema) => {
-          if (existingSchema && !isCompleted) {
+      Promise.all([
+        this._schemaCacheService.getDraftSchema(tenantId, targetJobId),
+        targetJobId ? this._redisService.getCrawlJobStatus(targetJobId) : Promise.resolve(null),
+      ])
+        .then(([existingSchema, crawlStatus]) => {
+          if (isCompleted) return;
+          if (existingSchema) {
             isCompleted = true;
             subscriber.next({
               type: 'schema:ready',
@@ -209,6 +212,20 @@ export class KnowledgeController implements OnModuleInit {
                 job_id: targetJobId || '',
                 schema: existingSchema,
                 status: 'completed',
+              },
+            });
+            subscriber.complete();
+            return;
+          }
+          if (crawlStatus?.status === 'failed') {
+            isCompleted = true;
+            subscriber.next({
+              type: 'schema:failed',
+              data: {
+                job_id: targetJobId || '',
+                tenant_id: tenantId,
+                error: crawlStatus.error || RESPONSE_MESSAGES.WEBSOCKET.SCHEMA_GENERATION_FAILED,
+                status: 'failed',
               },
             });
             subscriber.complete();

@@ -18,6 +18,18 @@ variable "from_email" {
   default     = "no-reply@schedulux.ai"
 }
 
+variable "from_name" {
+  type        = string
+  default     = "Schedulux AI"
+}
+
+variable "brevo_api_key" {
+  type        = string
+  default     = ""
+  sensitive   = true
+  description = "Brevo Transactional Email API v3 key"
+}
+
 variable "frontend_url" {
   type        = string
   default     = "http://localhost:5173"

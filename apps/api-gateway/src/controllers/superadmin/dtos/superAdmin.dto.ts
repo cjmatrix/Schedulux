@@ -10,15 +10,19 @@ export const SuperAdminLoginSchema: z.ZodType<LoginRequest> = z.object({
 
 export class SuperAdminLoginDto extends createZodDto(SuperAdminLoginSchema) {}
 
-export const SuperAdminRefreshTokenSchema: z.ZodType<RefreshTokenRequest> = z.object({
-  refresh_token: z.string().default(''),
-});
+export const SuperAdminRefreshTokenSchema: z.ZodType<RefreshTokenRequest> = z
+  .object({
+    refresh_token: z.string().default(''),
+  })
+  .prefault({});
 
 export class SuperAdminRefreshTokenDto extends createZodDto(SuperAdminRefreshTokenSchema) {}
 
-export const SuperAdminLogoutSchema: z.ZodType<LogoutRequest> = z.object({
-  refresh_token: z.string().default(''),
-});
+export const SuperAdminLogoutSchema: z.ZodType<LogoutRequest> = z
+  .object({
+    refresh_token: z.string().default(''),
+  })
+  .prefault({});
 
 export class SuperAdminLogoutDto extends createZodDto(SuperAdminLogoutSchema) {}
 

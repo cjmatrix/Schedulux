@@ -38,14 +38,6 @@ resource "aws_iam_policy" "lambda_policy" {
           "sqs:GetQueueAttributes"
         ]
         Resource = var.email_queue_arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ses:SendEmail",
-          "ses:SendRawEmail"
-        ]
-        Resource = "*"
       }
     ]
   })
@@ -79,8 +71,10 @@ resource "aws_lambda_function" "email_worker" {
 
   environment {
     variables = {
-      FROM_EMAIL   = var.from_email
-      FRONTEND_URL = var.frontend_url
+      BREVO_API_KEY = var.brevo_api_key
+      FROM_EMAIL    = var.from_email
+      FROM_NAME     = var.from_name
+      FRONTEND_URL  = var.frontend_url
     }
   }
 

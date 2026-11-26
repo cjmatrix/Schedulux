@@ -29,7 +29,7 @@ flowchart TB
 
     subgraph Serverless["AWS Async Notification Pipeline"]
         SQS["AWS SQS\n(email-queue & sms-queue + 14d DLQs)"]
-        LEmail["Lambda: email-worker (SES)"]
+        LEmail["Lambda: email-worker (Brevo)"]
         LSms["Lambda: sms-worker (Twilio)"]
         SQS --> LEmail
         SQS --> LSms
@@ -52,7 +52,7 @@ All AWS infrastructure lives under `infra/terraform/main.tf` and is split into f
 | **`modules/frontend`** | Private S3 bucket, OAC, `us-east-1` ACM SSL certificate, CloudFront Function (`cloudfront-js-2.0`), Cache & CORS Response Policies, CloudFront Distribution | **Split Routing:** Extensionless React Router URLs rewrite to `/index.html` (`no-cache`), `/assets/*` cache immutably (`1y`), and `/widget.js` bypasses SPA rewrite with `Access-Control-Allow-Origin: *` (`5m` TTL) |
 | **`modules/rag_storage`** | Private S3 bucket (`prevent_destroy = true`, AES256 + Bucket Key, public access blocked) | Configures `PUT`/`GET`/`HEAD` CORS for `app.schedulux.xyz` so browsers upload PDFs directly via presigned URLs |
 | **`modules/sqs`** | `email-queue` + `email-dlq`, `sms-queue` + `sms-dlq` | Managed SSE, configurable `maxReceiveCount`, redrive allow policies, and 14-day (`1209600s`) DLQ retention |
-| **`modules/lambda_email`** | IAM role/policy + CloudWatch log group + SQS-triggered Lambda | Consumes `email-queue` and sends transactional workspace/booking emails via AWS SES |
+| **`modules/lambda_email`** | IAM role/policy + CloudWatch log group + SQS-triggered Lambda | Consumes `email-queue` and sends transactional workspace/booking emails via Brevo Transactional Email API |
 | **`modules/lambda_sms`** | IAM role/policy + CloudWatch log group (14d retention) + SQS-triggered Lambda | Consumes `sms-queue` and dispatches SMS OTPs and booking alerts via Twilio |
 | **`budget.tf`** | AWS Budgets monthly threshold alert | Notifies on spend approaching `monthly_budget_limit` (default `$30`) |
 

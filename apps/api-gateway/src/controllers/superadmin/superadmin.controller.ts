@@ -25,6 +25,7 @@ import {
 } from '../../guards/superadmin-auth.guard.js';
 import {
   getAccessTokenCookieOptions,
+  getClearCookieOptions,
   getRefreshTokenCookieOptions,
 } from '../../utils/cookie.util.js';
 import {
@@ -113,8 +114,9 @@ export class SuperAdminController implements OnModuleInit {
     const response = await lastValueFrom(
       this._superAdminAuthService.logout({ refresh_token: token }),
     );
-    res.clearCookie(COOKIE_NAMES.SUPERADMIN_ACCESS_TOKEN);
-    res.clearCookie(COOKIE_NAMES.SUPERADMIN_REFRESH_TOKEN);
+    const clearOpts = getClearCookieOptions();
+    res.clearCookie(COOKIE_NAMES.SUPERADMIN_ACCESS_TOKEN, clearOpts);
+    res.clearCookie(COOKIE_NAMES.SUPERADMIN_REFRESH_TOKEN, clearOpts);
     return {
       message: response.message || RESPONSE_MESSAGES.AUTH.LOGGED_OUT,
       data: null,

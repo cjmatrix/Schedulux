@@ -31,6 +31,7 @@ import { AuthenticatedTenantRequest, TenantAuthGuard } from '../../guards/tenant
 import { CIRCUIT_BREAKER_SERVICE, ICircuitBreakerService } from '@repo/circuit-breaker';
 import {
   getAccessTokenCookieOptions,
+  getClearCookieOptions,
   getRefreshTokenCookieOptions,
 } from '../../utils/cookie.util.js';
 import {
@@ -217,10 +218,11 @@ export class TenantController implements OnModuleInit {
     if (token) {
       await lastValueFrom(this._tenantAuthService.logout({ refresh_token: token })).catch(() => {});
     }
-    res.clearCookie(COOKIE_NAMES.TENANT_ACCESS_TOKEN);
-    res.clearCookie(COOKIE_NAMES.TENANT_REFRESH_TOKEN);
-    res.clearCookie(COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN);
-    res.clearCookie(COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN);
+    const clearOpts = getClearCookieOptions();
+    res.clearCookie(COOKIE_NAMES.TENANT_ACCESS_TOKEN, clearOpts);
+    res.clearCookie(COOKIE_NAMES.TENANT_REFRESH_TOKEN, clearOpts);
+    res.clearCookie(COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN, clearOpts);
+    res.clearCookie(COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN, clearOpts);
     return {
       message: RESPONSE_MESSAGES.AUTH.LOGGED_OUT,
       data: null,

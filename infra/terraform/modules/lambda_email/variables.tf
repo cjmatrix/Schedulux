@@ -18,6 +18,17 @@ variable "from_email" {
   type = string
 }
 
+variable "from_name" {
+  type    = string
+  default = "Schedulux AI"
+}
+
+variable "brevo_api_key" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
 variable "frontend_url" {
   type = string
 }

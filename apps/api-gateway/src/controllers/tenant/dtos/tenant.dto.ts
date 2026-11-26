@@ -42,15 +42,19 @@ export const VerifyEmailSchema: z.ZodType<VerifyEmailRequest> = z.object({
 
 export class VerifyEmailDto extends createZodDto(VerifyEmailSchema) {}
 
-export const RefreshTokenSchema: z.ZodType<RefreshTokenRequest> = z.object({
-  refresh_token: z.string().default(''),
-});
+export const RefreshTokenSchema: z.ZodType<RefreshTokenRequest> = z
+  .object({
+    refresh_token: z.string().default(''),
+  })
+  .prefault({});
 
 export class RefreshTokenDto extends createZodDto(RefreshTokenSchema) {}
 
-export const LogoutSchema: z.ZodType<LogoutRequest> = z.object({
-  refresh_token: z.string().default(''),
-});
+export const LogoutSchema: z.ZodType<LogoutRequest> = z
+  .object({
+    refresh_token: z.string().default(''),
+  })
+  .prefault({});
 
 export class LogoutDto extends createZodDto(LogoutSchema) {}
 

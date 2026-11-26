@@ -11,9 +11,11 @@ exports.DashboardUserLoginSchema = zod_1.z.object({
 class DashboardUserLoginDto extends (0, nestjs_zod_1.createZodDto)(exports.DashboardUserLoginSchema) {
 }
 exports.DashboardUserLoginDto = DashboardUserLoginDto;
-exports.DashboardUserRefreshTokenSchema = zod_1.z.object({
+exports.DashboardUserRefreshTokenSchema = zod_1.z
+    .object({
     refresh_token: zod_1.z.string().optional(),
-});
+})
+    .prefault({});
 class DashboardUserRefreshTokenDto extends (0, nestjs_zod_1.createZodDto)(exports.DashboardUserRefreshTokenSchema) {
 }
 exports.DashboardUserRefreshTokenDto = DashboardUserRefreshTokenDto;

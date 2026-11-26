@@ -1,8 +1,7 @@
-import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
-
-const ses = new SESClient({ region: process.env.AWS_REGION || "ap-south-1" });
-const fromEmail = process.env.FROM_EMAIL || "no-reply@schedulux.ai";
-const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+const brevoApiKey = (process.env.BREVO_API_KEY || "").trim();
+const fromEmail = (process.env.FROM_EMAIL || "no-reply@schedulux.ai").trim();
+const fromName = (process.env.FROM_NAME || "Schedulux AI").trim();
+const frontendUrl = (process.env.FRONTEND_URL || "http://localhost:5173").trim();
 
 function buildVerificationEmailHtml({ fullName, businessName, verificationUrl }) {
   return `<!DOCTYPE html>
@@ -170,26 +169,44 @@ function buildForgotPasswordEmailHtml({ name, resetUrl }) {
 }
 
 async function sendEmail({ to, subject, htmlContent }) {
-  const command = new SendEmailCommand({
-    Source: fromEmail,
-    Destination: {
-      ToAddresses: [to],
+  if (!to) {
+    throw new Error("[EmailWorker] Recipient email address is required.");
+  }
+  if (!brevoApiKey) {
+    throw new Error("[EmailWorker] Missing BREVO_API_KEY environment variable.");
+  }
+
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": brevoApiKey,
+      "Content-Type": "application/json",
+      Accept: "application/json",
     },
-    Message: {
-      Subject: {
-        Data: subject,
-        Charset: "UTF-8",
+    body: JSON.stringify({
+      sender: {
+        email: fromEmail,
+        name: fromName,
       },
-      Body: {
-        Html: {
-          Data: htmlContent,
-          Charset: "UTF-8",
-        },
-      },
-    },
+      to: [{ email: to }],
+      subject,
+      htmlContent,
+    }),
   });
 
-  return await ses.send(command);
+  if (!res.ok) {
+    const errorText = await res.text();
+    let errorMsg = `Brevo API error (${res.status}): ${res.statusText}`;
+    try {
+      const errorJson = JSON.parse(errorText);
+      errorMsg = errorJson.message || errorJson.code || errorMsg;
+    } catch {
+      errorMsg = errorText || errorMsg;
+    }
+    throw new Error(`[EmailWorker] Failed to send email to ${to}: ${errorMsg}`);
+  }
+
+  return await res.json();
 }
 
 export const handler = async (event) => {

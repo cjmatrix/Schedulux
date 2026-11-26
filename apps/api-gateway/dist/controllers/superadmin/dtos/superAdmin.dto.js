@@ -10,15 +10,19 @@ exports.SuperAdminLoginSchema = zod_1.z.object({
 class SuperAdminLoginDto extends (0, nestjs_zod_1.createZodDto)(exports.SuperAdminLoginSchema) {
 }
 exports.SuperAdminLoginDto = SuperAdminLoginDto;
-exports.SuperAdminRefreshTokenSchema = zod_1.z.object({
+exports.SuperAdminRefreshTokenSchema = zod_1.z
+    .object({
     refresh_token: zod_1.z.string().default(''),
-});
+})
+    .prefault({});
 class SuperAdminRefreshTokenDto extends (0, nestjs_zod_1.createZodDto)(exports.SuperAdminRefreshTokenSchema) {
 }
 exports.SuperAdminRefreshTokenDto = SuperAdminRefreshTokenDto;
-exports.SuperAdminLogoutSchema = zod_1.z.object({
+exports.SuperAdminLogoutSchema = zod_1.z
+    .object({
     refresh_token: zod_1.z.string().default(''),
-});
+})
+    .prefault({});
 class SuperAdminLogoutDto extends (0, nestjs_zod_1.createZodDto)(exports.SuperAdminLogoutSchema) {
 }
 exports.SuperAdminLogoutDto = SuperAdminLogoutDto;

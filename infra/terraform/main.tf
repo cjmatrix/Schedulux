@@ -12,7 +12,9 @@ module "lambda_email" {
   environment     = var.environment
   aws_region      = var.aws_region
   email_queue_arn = module.sqs.queue_arn
+  brevo_api_key   = var.brevo_api_key
   from_email      = var.from_email
+  from_name       = var.from_name
   frontend_url    = var.frontend_url
 }
 

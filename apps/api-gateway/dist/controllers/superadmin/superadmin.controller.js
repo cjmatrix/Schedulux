@@ -56,8 +56,9 @@ let SuperAdminController = class SuperAdminController {
     async logout(req, body, res) {
         const token = req.cookies?.[cookies_constant_js_1.COOKIE_NAMES.SUPERADMIN_REFRESH_TOKEN] || body?.refresh_token || '';
         const response = await (0, rxjs_1.lastValueFrom)(this._superAdminAuthService.logout({ refresh_token: token }));
-        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.SUPERADMIN_ACCESS_TOKEN);
-        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.SUPERADMIN_REFRESH_TOKEN);
+        const clearOpts = (0, cookie_util_js_1.getClearCookieOptions)();
+        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.SUPERADMIN_ACCESS_TOKEN, clearOpts);
+        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.SUPERADMIN_REFRESH_TOKEN, clearOpts);
         return {
             message: response.message || messages_constant_js_1.RESPONSE_MESSAGES.AUTH.LOGGED_OUT,
             data: null,

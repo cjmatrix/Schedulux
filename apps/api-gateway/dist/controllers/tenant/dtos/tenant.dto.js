@@ -35,15 +35,19 @@ exports.VerifyEmailSchema = zod_1.z.object({
 class VerifyEmailDto extends (0, nestjs_zod_1.createZodDto)(exports.VerifyEmailSchema) {
 }
 exports.VerifyEmailDto = VerifyEmailDto;
-exports.RefreshTokenSchema = zod_1.z.object({
+exports.RefreshTokenSchema = zod_1.z
+    .object({
     refresh_token: zod_1.z.string().default(''),
-});
+})
+    .prefault({});
 class RefreshTokenDto extends (0, nestjs_zod_1.createZodDto)(exports.RefreshTokenSchema) {
 }
 exports.RefreshTokenDto = RefreshTokenDto;
-exports.LogoutSchema = zod_1.z.object({
+exports.LogoutSchema = zod_1.z
+    .object({
     refresh_token: zod_1.z.string().default(''),
-});
+})
+    .prefault({});
 class LogoutDto extends (0, nestjs_zod_1.createZodDto)(exports.LogoutSchema) {
 }
 exports.LogoutDto = LogoutDto;

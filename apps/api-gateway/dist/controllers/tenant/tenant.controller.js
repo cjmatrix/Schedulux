@@ -114,10 +114,11 @@ let TenantController = class TenantController {
         if (token) {
             await (0, rxjs_1.lastValueFrom)(this._tenantAuthService.logout({ refresh_token: token })).catch(() => { });
         }
-        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.TENANT_ACCESS_TOKEN);
-        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.TENANT_REFRESH_TOKEN);
-        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN);
-        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN);
+        const clearOpts = (0, cookie_util_js_1.getClearCookieOptions)();
+        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.TENANT_ACCESS_TOKEN, clearOpts);
+        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.TENANT_REFRESH_TOKEN, clearOpts);
+        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_ACCESS_TOKEN, clearOpts);
+        res.clearCookie(cookies_constant_js_1.COOKIE_NAMES.DASHBOARD_REFRESH_TOKEN, clearOpts);
         return {
             message: messages_constant_js_1.RESPONSE_MESSAGES.AUTH.LOGGED_OUT,
             data: null,

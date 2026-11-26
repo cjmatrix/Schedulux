@@ -224,7 +224,7 @@ Under NO circumstances should you fabricate, assume, extrapolate, or invent serv
    - Set guardrails.verification_policy with require_otp_for_new_booking (default false).
 
 6. WIDGET CONFIGURATION & SUPERVISOR PROMPT:
-   - "agent_name": "{Business Name} AI Assistant" or business name receptionist.
+   - "agent_name": "{{Business Name}} AI Assistant" or business name receptionist.
    - "initial_greeting": Friendly greeting explicitly welcoming the user to the specific business name and offering to assist with the ACTUAL extracted services.
    - "quick_prompts": 3 relevant prompts referencing real services or inquiries for this business (e.g. "What services do you provide?", "Book an appointment", "What are your business hours?").
    - "supervisor_prompt": Operational instructions for the AI receptionist, tailored ONLY to the actual services and business facts discovered.

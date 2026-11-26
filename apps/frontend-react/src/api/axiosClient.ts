@@ -44,14 +44,46 @@ const processQueue = (error: Error | null, token: string | null = null) => {
   failedQueue = [];
 };
 
+const AUTH_BYPASS_REFRESH_PATHS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/google',
+  '/auth/refresh-token',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/verify-email',
+  '/auth/accept-invite',
+];
+
+function extractApiErrorMessage(error: unknown): string {
+  if (axios.isAxiosError<{ error?: string | string[]; message?: string | string[] }>(error)) {
+    const resData = error.response?.data;
+    const rawMsg = resData?.message || resData?.error;
+    return (
+      (Array.isArray(rawMsg) ? rawMsg.join(', ') : rawMsg) ||
+      error.message ||
+      'An unexpected error occurred'
+    );
+  }
+  return error instanceof Error ? error.message : 'An unexpected error occurred';
+}
+
 axiosClient.interceptors.response.use(
   (response) => response,
-  async (error: AxiosError<{ error?: string; message?: string }>) => {
+  async (error: AxiosError<{ error?: string | string[]; message?: string | string[] }>) => {
     const originalRequest = error.config as
       | (InternalAxiosRequestConfig & { _retry?: boolean })
       | undefined;
 
-    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+    const reqUrl = originalRequest?.url || '';
+    const shouldSkipRefresh = AUTH_BYPASS_REFRESH_PATHS.some((path) => reqUrl.includes(path));
+
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !shouldSkipRefresh
+    ) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -95,23 +127,18 @@ axiosClient.interceptors.response.use(
         processQueue(null);
         return axiosClient(originalRequest);
       } catch (refreshError: unknown) {
-        processQueue(
-          refreshError instanceof Error ? refreshError : new Error(String(refreshError)),
-        );
+        const refreshMessage = extractApiErrorMessage(refreshError);
+        const normalizedRefreshErr = new Error(refreshMessage);
+        processQueue(normalizedRefreshErr);
 
         window.dispatchEvent(new Event('auth:unauthorized'));
-        return Promise.reject(refreshError);
+        return Promise.reject(normalizedRefreshErr);
       } finally {
         isRefreshing = false;
       }
     }
 
-    const resData = error.response?.data;
-    const rawMsg = resData?.message || resData?.error;
-    const message =
-      (Array.isArray(rawMsg) ? rawMsg.join(', ') : rawMsg) ||
-      error.message ||
-      'An unexpected error occurred';
+    const message = extractApiErrorMessage(error);
 
     const customConfig = originalRequest as { skipGlobalToast?: boolean } | undefined;
     if (!customConfig?.skipGlobalToast && error.response?.status !== 401) {

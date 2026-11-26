@@ -298,7 +298,7 @@ Crawled Data:
 
 
 async def process_schema_generation(job_or_data, token=None):
-    """RabbitMQ message processor for schema-generation-queue"""
+    """SQS message processor for schema-generation-queue."""
     if isinstance(job_or_data, dict):
         data = job_or_data
     elif hasattr(job_or_data, "data"):
@@ -309,7 +309,13 @@ async def process_schema_generation(job_or_data, token=None):
     tenant_id = data.get("tenant_id")
     url = data.get("url")
     job_id = data.get("job_id")
-    crawled_data = data.get("crawled_data", {})
+    crawled_data = data.get("crawled_data")
+    if not crawled_data and job_id:
+        redis_key = data.get("crawled_data_redis_key") or f"crawl:schema_data:{job_id}"
+        raw_cached = await get_redis_client().get(redis_key)
+        if raw_cached:
+            crawled_data = json.loads(raw_cached)
+    crawled_data = crawled_data or {}
 
     print(f"[Schema Worker] Processing schema generation for tenant: {tenant_id}, URL: {url}, job_id: {job_id}", flush=True)
 

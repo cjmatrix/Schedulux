@@ -29,3 +29,15 @@ output "sms_dlq_url" {
 output "sms_dlq_arn" {
   value = aws_sqs_queue.sms_dlq.arn
 }
+
+output "worker_queue_urls" {
+  value = { for k, q in aws_sqs_queue.worker_queue : k => q.url }
+}
+
+output "worker_queue_arns" {
+  value = { for k, q in aws_sqs_queue.worker_queue : k => q.arn }
+}
+
+output "worker_dlq_urls" {
+  value = { for k, q in aws_sqs_queue.worker_dlq : k => q.url }
+}

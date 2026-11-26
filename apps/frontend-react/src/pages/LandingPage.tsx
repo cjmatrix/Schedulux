@@ -226,12 +226,6 @@ export default function LandingPage() {
 
           {/* Nav Actions */}
           <div className="hidden sm:flex items-center gap-4">
-            <button
-              onClick={() => setShowDemoModal(true)}
-              className="text-sm font-medium text-neutral-700 hover:text-neutral-950 transition-colors cursor-pointer"
-            >
-              Contact sales
-            </button>
             {isAuthenticated ? (
               <Link
                 to="/tenant/dashboard"
@@ -309,15 +303,6 @@ export default function LandingPage() {
               FAQ
             </a>
             <div className="pt-3 border-t border-neutral-100 flex flex-col gap-2.5">
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  setShowDemoModal(true);
-                }}
-                className="w-full text-center py-2 text-sm font-medium text-neutral-700 hover:text-neutral-950"
-              >
-                Contact sales
-              </button>
               {isAuthenticated ? (
                 <Link
                   to="/tenant/dashboard"
@@ -373,12 +358,6 @@ export default function LandingPage() {
                   Build your agent free
                 </Link>
               )}
-              <button
-                onClick={() => setShowDemoModal(true)}
-                className="rounded-full border border-neutral-300 bg-white text-neutral-800 px-6 py-3 text-sm font-medium hover:border-neutral-400 hover:bg-neutral-50 transition cursor-pointer"
-              >
-                Contact sales
-              </button>
             </div>
           </div>
 
@@ -1074,13 +1053,12 @@ export default function LandingPage() {
               </div>
 
               <div className="pt-8 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowDemoModal(true)}
+                <Link
+                  to="/register"
                   className="w-full rounded-full border border-neutral-300 bg-white hover:bg-neutral-50 hover:border-neutral-400 text-neutral-900 font-semibold py-2.5 text-xs transition flex items-center justify-center cursor-pointer shadow-2xs"
                 >
-                  Contact Sales
-                </button>
+                  Get Enterprise
+                </Link>
               </div>
             </div>
           </div>
@@ -1214,12 +1192,6 @@ export default function LandingPage() {
             <a href="#faq" className="hover:text-neutral-950 transition-colors">
               FAQ
             </a>
-            <button
-              onClick={() => setShowDemoModal(true)}
-              className="hover:text-neutral-950 transition-colors cursor-pointer"
-            >
-              Contact Sales
-            </button>
           </div>
         </div>
       </footer>

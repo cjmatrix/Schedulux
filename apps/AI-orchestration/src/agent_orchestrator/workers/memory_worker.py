@@ -1,21 +1,20 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import os
 import random
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-import aio_pika
 from opentelemetry import trace
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 from agent_orchestrator.adapters.qdrant_stores import QdrantMemoryStore
+from agent_orchestrator.adapters.sqs_client import poll_sqs_queue, resolve_queue_url
 from agent_orchestrator.adapters.voyage_embedder import VoyageDenseEmbedder
-from agent_orchestrator.config import AGENT_MEMORY_DLQ_NAME, AGENT_MEMORY_QUEUE_NAME
+from agent_orchestrator.config import AGENT_MEMORY_QUEUE_NAME
 from agent_orchestrator.domain.exceptions import PermanentMemoryError
-from agent_orchestrator.queues.memory_queue import RabbitMQMemoryQueue
+from agent_orchestrator.queues.memory_queue import SqsMemoryQueue
 from agent_orchestrator.repositories.draft_repository import MongoDraftRepository
 from agent_orchestrator.repositories.message_repository import MongoMessageRepository
 from agent_orchestrator.services.memory_service import MemoryService
@@ -77,125 +76,116 @@ async def async_retry_with_backoff(
         raise last_exc
 
 
-async def handle_memory_message(message: aio_pika.abc.AbstractIncomingMessage):
-    async with message.process(requeue=False):
+async def handle_memory_message(
+    data: dict[str, Any],
+    attrs: dict[str, Any] | None = None,
+    raw_msg: dict[str, Any] | None = None,
+) -> None:
+    tenant_id = data.get("tenant_id")
+    agent_id = data.get("agent_id")
+    cutoff_seq = data.get("cutoff_seq", 0)
+    job_id = data.get("job_id") or (raw_msg or {}).get("MessageId") or "unknown"
+
+    attr_tp = ((attrs or {}).get("traceparent") or {}).get("StringValue")
+    traceparent = attr_tp or data.get("traceparent")
+    parent_ctx = None
+    if traceparent:
+        parent_ctx = TraceContextTextMapPropagator().extract({"traceparent": traceparent})
+
+    with tracer.start_as_current_span(
+        "memory.consolidation.process",
+        context=parent_ctx,
+        kind=trace.SpanKind.CONSUMER,
+        attributes={
+            "messaging.system": "aws_sqs",
+            "messaging.destination.name": AGENT_MEMORY_QUEUE_NAME,
+            "messaging.operation": "process",
+            "tenant.id": tenant_id or "unknown",
+            "agent.id": agent_id or "unknown",
+            "memory.job_id": job_id,
+            "memory.cutoff_seq": cutoff_seq,
+        },
+    ) as consumer_span:
+        if not tenant_id or not agent_id:
+            logger.error(f"[MemoryWorker] Poison pill - Missing tenant_id or agent_id: {data}")
+            raise PermanentMemoryError(f"Missing tenant_id or agent_id in job {job_id}")
+
+        logger.info(
+            f"[MemoryWorker] Processing job {job_id} for agent {agent_id} (cutoff: {cutoff_seq})"
+        )
+        print(
+            f"[MemoryWorker] Processing job {job_id} for agent {agent_id} (cutoff: {cutoff_seq})",
+            flush=True,
+        )
+
+        msg_repo = MongoMessageRepository()
+        draft_repo = MongoDraftRepository()
+        queue = SqsMemoryQueue()
+        memory_service = MemoryService(
+            message_repo=msg_repo,
+            draft_repo=draft_repo,
+            memory_queue=queue,
+            dense_embedder=VoyageDenseEmbedder(),
+            memory_store=QdrantMemoryStore(),
+        )
+
         try:
-            body_raw = message.body.decode()
-            data = json.loads(body_raw)
-        except Exception as parse_err:
-            logger.error(f"[MemoryWorker] Poison pill - Malformed JSON body: {parse_err}")
-            raise PermanentMemoryError(f"Malformed JSON: {parse_err}") from parse_err
-
-        tenant_id = data.get("tenant_id")
-        agent_id = data.get("agent_id")
-        cutoff_seq = data.get("cutoff_seq", 0)
-        job_id = data.get("job_id", message.message_id or "unknown")
-
-        headers = message.headers or {}
-        traceparent = headers.get("traceparent") or data.get("traceparent")
-        parent_ctx = None
-        if traceparent:
-            parent_ctx = TraceContextTextMapPropagator().extract({"traceparent": traceparent})
-
-        with tracer.start_as_current_span(
-            "memory.consolidation.process",
-            context=parent_ctx,
-            kind=trace.SpanKind.CONSUMER,
-            attributes={
-                "messaging.system": "rabbitmq",
-                "messaging.destination.name": AGENT_MEMORY_QUEUE_NAME,
-                "messaging.operation": "process",
-                "tenant.id": tenant_id or "unknown",
-                "agent.id": agent_id or "unknown",
-                "memory.job_id": job_id,
-                "memory.cutoff_seq": cutoff_seq,
-            },
-        ) as consumer_span:
-            if not tenant_id or not agent_id:
-                logger.error(f"[MemoryWorker] Poison pill - Missing tenant_id or agent_id: {data}")
-                raise PermanentMemoryError(f"Missing tenant_id or agent_id in job {job_id}")
-
-            logger.info(
-                f"[MemoryWorker] Processing job {job_id} for agent {agent_id} (cutoff: {cutoff_seq})"
+            result = await async_retry_with_backoff(
+                memory_service.consolidate_memory,
+                tenant_id,
+                agent_id,
+                cutoff_seq,
+                max_retries=3,
+                initial_delay=1.5,
+                operation_name=f"ConsolidateMemory({job_id})",
             )
+            consumer_span.set_attribute("memory.status", result.get("status", "success"))
+            print(f"[MemoryWorker] Completed job {job_id}: {result.get('status')}", flush=True)
+        except PermanentMemoryError as p_err:
+            consumer_span.record_exception(p_err)
+            consumer_span.set_attribute("error", True)
             print(
-                f"[MemoryWorker] Processing job {job_id} for agent {agent_id} (cutoff: {cutoff_seq})",
+                f"[MemoryWorker] Permanent failure for job {job_id} -> letting SQS redrive to DLQ: {p_err}",
                 flush=True,
             )
-
-            msg_repo = MongoMessageRepository()
-            draft_repo = MongoDraftRepository()
-            queue = RabbitMQMemoryQueue()
-            memory_service = MemoryService(
-                message_repo=msg_repo,
-                draft_repo=draft_repo,
-                memory_queue=queue,
-                dense_embedder=VoyageDenseEmbedder(),
-                memory_store=QdrantMemoryStore(),
+            raise
+        except Exception as transient_err:
+            consumer_span.record_exception(transient_err)
+            consumer_span.set_attribute("error", True)
+            print(
+                f"[MemoryWorker] Exhausted retries for job {job_id} -> letting SQS redrive to DLQ: {transient_err}",
+                flush=True,
             )
-
-            try:
-                result = await async_retry_with_backoff(
-                    memory_service.consolidate_memory,
-                    tenant_id,
-                    agent_id,
-                    cutoff_seq,
-                    max_retries=3,
-                    initial_delay=1.5,
-                    operation_name=f"ConsolidateMemory({job_id})",
-                )
-                consumer_span.set_attribute("memory.status", result.get("status", "success"))
-                print(f"[MemoryWorker] Completed job {job_id}: {result.get('status')}", flush=True)
-            except PermanentMemoryError as p_err:
-                consumer_span.record_exception(p_err)
-                consumer_span.set_attribute("error", True)
-                print(
-                    f"[MemoryWorker] Permanent failure for job {job_id} -> routing to DLQ: {p_err}",
-                    flush=True,
-                )
-                raise
-            except Exception as transient_err:
-                consumer_span.record_exception(transient_err)
-                consumer_span.set_attribute("error", True)
-                print(
-                    f"[MemoryWorker] Exhausted retries for job {job_id} -> routing to DLQ: {transient_err}",
-                    flush=True,
-                )
-                raise
+            raise
 
 
-async def run_memory_worker():
-    rabbitmq_uri = os.environ.get("RABBITMQ_URI", "amqp://guest:guest@localhost:5672")
-    print(f"[MemoryWorker] Connecting to RabbitMQ at {rabbitmq_uri}...", flush=True)
-
-    connection = await aio_pika.connect_robust(rabbitmq_uri)
-    channel = await connection.channel()
-    await channel.set_qos(prefetch_count=2)
-
-    memory_args = {
-        "x-dead-letter-exchange": "",
-        "x-dead-letter-routing-key": AGENT_MEMORY_DLQ_NAME,
-    }
-    await channel.declare_queue(AGENT_MEMORY_DLQ_NAME, durable=True)
+async def run_memory_worker() -> None:
+    stop_event = asyncio.Event()
     try:
-        queue = await channel.declare_queue(AGENT_MEMORY_QUEUE_NAME, durable=True, arguments=memory_args)
-    except aio_pika.exceptions.ChannelPreconditionFailed:
-        channel = await connection.channel()
-        await channel.queue_delete(AGENT_MEMORY_QUEUE_NAME)
-        queue = await channel.declare_queue(AGENT_MEMORY_QUEUE_NAME, durable=True, arguments=memory_args)
+        queue_url = await resolve_queue_url(
+            "AWS_SQS_MEMORY_QUEUE_URL",
+            "AGENT_MEMORY_QUEUE_NAME",
+            AGENT_MEMORY_QUEUE_NAME,
+        )
+    except Exception as exc:
+        logger.error("[MemoryWorker] Failed to resolve SQS queue '%s': %s", AGENT_MEMORY_QUEUE_NAME, exc)
+        await stop_event.wait()
+        return
 
     print(
-        f"[MemoryWorker] Listening for memory consolidation jobs on '{AGENT_MEMORY_QUEUE_NAME}' (DLQ: '{AGENT_MEMORY_DLQ_NAME}')...",
+        f"[MemoryWorker] Listening for memory consolidation jobs on SQS '{queue_url}'...",
         flush=True,
     )
 
-    await queue.consume(handle_memory_message)
-
     try:
-        while True:
-            await asyncio.sleep(3600)
+        await poll_sqs_queue(
+            queue_url,
+            handle_memory_message,
+            stop_event,
+            max_messages=2,
+            wait_seconds=20,
+            label="MemoryWorker",
+        )
     except asyncio.CancelledError:
+        stop_event.set()
         print("[MemoryWorker] Shutting down memory worker gracefully...", flush=True)
-    finally:
-        await channel.close()
-        await connection.close()

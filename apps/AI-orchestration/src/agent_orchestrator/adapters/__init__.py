@@ -7,7 +7,7 @@ from agent_orchestrator.adapters.kafka_token_producer import (
 )
 from agent_orchestrator.adapters.orchestrator_adapter import LangGraphAgentOrchestrator
 from agent_orchestrator.adapters.qdrant_stores import QdrantKnowledgeStore, QdrantMemoryStore
-from agent_orchestrator.adapters.rabbitmq_subscriber import RabbitMQEventSubscriber
+from agent_orchestrator.adapters.sqs_subscriber import SqsEventSubscriber
 from agent_orchestrator.adapters.voyage_embedder import VoyageDenseEmbedder
 
 __all__ = [
@@ -16,7 +16,7 @@ __all__ = [
     "KafkaTokenProducer",
     "get_event_publisher",
     "set_event_publisher",
-    "RabbitMQEventSubscriber",
+    "SqsEventSubscriber",
     "VoyageDenseEmbedder",
     "BM25SparseEmbedder",
     "QdrantMemoryStore",

@@ -23,22 +23,20 @@ data:
   REDIS_HOST: "redis-service.schedulux.svc.cluster.local"
   REDIS_PORT: "6379"
 
-  # Message Brokers
-  RABBITMQ_URI: "amqp://guest:guest@rabbitmq-service.schedulux.svc.cluster.local:5672"
+  # Message Brokers & AWS SQS Queues
+  AWS_REGION: "ap-south-1"
   KAFKA_BROKERS: "kafka-service.schedulux.svc.cluster.local:9092"
   KAFKA_CONSUMER_GROUP: "ai-orchestration-consumer-group"
   KAFKA_BOOKING_TOPIC: "booking.events"
   KAFKA_SCHEDULING_DOMAIN_TOPIC: "scheduling.domain.events"
   KAFKA_TOKEN_TOPIC: "billing.tokens.consumed"
 
-  # Asynchronous RabbitMQ Queue Names
-  DOCUMENT_INDEXING_QUEUE_NAME: "knowledge-document-indexing-queue"
-  DOCUMENT_STATUS_QUEUE_NAME: "knowledge-document-status-queue"
-  AGENT_MEMORY_QUEUE_NAME: "agent-memory-queue"
-  AGENT_MEMORY_DLQ_NAME: "agent-memory-queue-dlq"
-  CRAWL_QUEUE_NAME: "knowledge-crawl-queue"
-  CRAWL_DLQ_NAME: "knowledge-crawl-queue-dlq"
-  SCHEMA_QUEUE_NAME: "schema-generation-queue"
+  # Asynchronous SQS Queue Names
+  DOCUMENT_INDEXING_QUEUE_NAME: "schedulux-knowledge-document-indexing-queue-dev"
+  DOCUMENT_STATUS_QUEUE_NAME: "schedulux-knowledge-document-status-queue-dev"
+  AGENT_MEMORY_QUEUE_NAME: "schedulux-agent-memory-queue-dev"
+  CRAWL_QUEUE_NAME: "schedulux-knowledge-crawl-queue-dev"
+  SCHEMA_QUEUE_NAME: "schedulux-schema-generation-queue-dev"
 
   # Telemetry & Storage Indexes
   OPENSEARCH_TOKEN_INDEX: "token-ledger"

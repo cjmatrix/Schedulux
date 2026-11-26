@@ -13,7 +13,6 @@ import { DashboardUserController } from './controllers/DashboardUserController.j
 import { SuperAdminAuthController } from './controllers/SuperAdminController.js';
 import { TenantBillingController } from './controllers/TenantBillingController.js';
 import { TenantAuthController } from './controllers/TenantController.js';
-import { EmailProducer } from './producers/emailProducer.js';
 import { SqsEmailProducer } from './producers/sqsEmailProducer.js';
 import { BillingLedgerRepository } from './repository/BillingLedgerRepository.js';
 import { CacheRepository } from './repository/CacheRepository.js';
@@ -71,7 +70,7 @@ AppModule = __decorate([
             { provide: 'ICacheRepository', useClass: CacheRepository },
             {
                 provide: 'IEmailProducer',
-                useClass: process.env.AWS_SQS_EMAIL_QUEUE_URL ? SqsEmailProducer : EmailProducer,
+                useClass: SqsEmailProducer,
             },
             { provide: 'IPasswordHasher', useClass: BcryptPasswordHasher },
             { provide: 'IJwtService', useClass: JwtTokenService },

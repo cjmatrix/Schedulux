@@ -18,9 +18,9 @@ from agent_orchestrator.adapters.voyage_embedder import VoyageDenseEmbedder
 from agent_orchestrator.api.servicers.knowledge_servicer import KnowledgeServiceServicer
 from agent_orchestrator.domain.protocols import MemoryQueue
 from agent_orchestrator.models import init_db
-from agent_orchestrator.queues.crawler_queue import RabbitMQCrawlerQueue
-from agent_orchestrator.queues.document_queue import RabbitMQDocumentIndexingQueue
-from agent_orchestrator.queues.memory_queue import RabbitMQMemoryQueue
+from agent_orchestrator.queues.crawler_queue import SqsCrawlerQueue
+from agent_orchestrator.queues.document_queue import SqsDocumentIndexingQueue
+from agent_orchestrator.queues.memory_queue import SqsMemoryQueue
 from agent_orchestrator.repositories.cache_repository import RedisCacheRepository
 from agent_orchestrator.repositories.document_repository import MongoDocumentRepository
 from agent_orchestrator.repositories.draft_repository import MongoDraftRepository
@@ -46,16 +46,16 @@ def build_knowledge_servicer() -> tuple[
     KnowledgeServiceServicer,
     CrawlerServiceProtocol,
     MemoryQueue,
-    RabbitMQDocumentIndexingQueue,
+    SqsDocumentIndexingQueue,
     QdrantKnowledgeStore,
 ]:
     msg_repo = MongoMessageRepository()
     draft_repo = MongoDraftRepository()
     runtime_repo = MongoRuntimeConfigRepository()
     cache_repo = RedisCacheRepository()
-    crawler_queue = RabbitMQCrawlerQueue()
-    memory_queue = RabbitMQMemoryQueue()
-    indexing_queue = RabbitMQDocumentIndexingQueue()
+    crawler_queue = SqsCrawlerQueue()
+    memory_queue = SqsMemoryQueue()
+    indexing_queue = SqsDocumentIndexingQueue()
     knowledge_store = QdrantKnowledgeStore()
 
     orchestrator = LangGraphAgentOrchestrator()

@@ -38,6 +38,16 @@ output "sms_dlq_arn" {
   value = module.sqs.sms_dlq_arn
 }
 
+output "worker_sqs_queue_urls" {
+  value       = module.sqs.worker_queue_urls
+  description = "Map of SQS queue URLs for crawl, schema, document_indexing, document_status, and memory workers"
+}
+
+output "worker_sqs_queue_arns" {
+  value       = module.sqs.worker_queue_arns
+  description = "Map of SQS queue ARNs for worker queues"
+}
+
 output "lambda_sms_function_arn" {
   value = module.lambda_sms.function_arn
 }

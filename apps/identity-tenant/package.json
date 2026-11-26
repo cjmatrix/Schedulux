@@ -35,7 +35,6 @@
     "@opentelemetry/semantic-conventions": "^1.45.0",
     "@repo/proto": "workspace:*",
     "add": "^2.0.9",
-    "amqplib": "^2.2.0",
     "bcryptjs": "^3.0.3",
     "bullmq": "^6.3.8",
     "cookie-parser": "^1.4.7",
@@ -58,7 +57,6 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/amqplib": "^0.10.8",
     "@types/bcryptjs": "^3.0.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",

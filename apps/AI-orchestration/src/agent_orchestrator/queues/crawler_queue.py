@@ -4,65 +4,47 @@ import json
 import os
 from typing import Any
 
-import aio_pika
 from opentelemetry import trace
 
+from agent_orchestrator.adapters.sqs_client import (
+    extract_active_trace_context,
+    resolve_queue_url,
+    send_sqs_message,
+)
 from agent_orchestrator.clients.redis_client import get_redis_client
 from agent_orchestrator.domain.protocols import CrawlerQueue
 
-CRAWL_QUEUE_NAME = "knowledge-crawl-queue"
-CRAWL_DLQ_NAME = "knowledge-crawl-queue-dlq"
+CRAWL_QUEUE_NAME = os.environ.get("CRAWL_QUEUE_NAME", "knowledge-crawl-queue")
 
 tracer = trace.get_tracer("agent-orchestrator.crawler-queue")
 
 
-class RabbitMQCrawlerQueue(CrawlerQueue):
-    def __init__(self, rabbitmq_uri: str | None = None):
-        self.uri = rabbitmq_uri or os.environ.get(
-            "RABBITMQ_URI", "amqp://guest:guest@localhost:5672"
-        )
-        self._connection: aio_pika.abc.AbstractRobustConnection | None = None
-        self._channel: aio_pika.abc.AbstractChannel | None = None
+class SqsCrawlerQueue(CrawlerQueue):
+    
 
-    async def _get_channel(self) -> aio_pika.abc.AbstractChannel:
-        crawl_args = {
-            "x-dead-letter-exchange": "",
-            "x-dead-letter-routing-key": CRAWL_DLQ_NAME,
-        }
-        if self._connection is None or self._connection.is_closed:
-            self._connection = await aio_pika.connect_robust(self.uri)
-            self._channel = await self._connection.channel()
-            await self._channel.declare_queue(CRAWL_DLQ_NAME, durable=True)
-            await self._channel.declare_queue(CRAWL_QUEUE_NAME, durable=True, arguments=crawl_args)
-        elif self._channel is None or self._channel.is_closed:
-            self._channel = await self._connection.channel()
-            await self._channel.declare_queue(CRAWL_DLQ_NAME, durable=True)
-            await self._channel.declare_queue(CRAWL_QUEUE_NAME, durable=True, arguments=crawl_args)
-        return self._channel
+    def __init__(self, queue_url: str | None = None) -> None:
+        self._explicit_url = queue_url
 
     async def enqueue_crawl(self, tenant_id: str, url: str, job_id: str) -> None:
-        channel = await self._get_channel()
+        queue_url = self._explicit_url or await resolve_queue_url(
+            "AWS_SQS_CRAWL_QUEUE_URL",
+            "CRAWL_QUEUE_NAME",
+            CRAWL_QUEUE_NAME,
+        )
 
         with tracer.start_as_current_span(
             "knowledge.crawl.enqueue",
             kind=trace.SpanKind.PRODUCER,
             attributes={
-                "messaging.system": "rabbitmq",
+                "messaging.system": "aws_sqs",
                 "messaging.destination.name": CRAWL_QUEUE_NAME,
                 "messaging.operation": "publish",
                 "tenant.id": tenant_id,
                 "crawl.job_id": job_id,
                 "crawl.url": url,
             },
-        ) as producer_span:
-            ctx = producer_span.get_span_context()
-            trace_id = format(ctx.trace_id, "032x") if ctx.is_valid else None
-            traceparent = (
-                f"00-{trace_id}-{format(ctx.span_id, '016x')}-{ctx.trace_flags:02x}"
-                if ctx.is_valid
-                else None
-            )
-
+        ):
+            trace_id, traceparent = extract_active_trace_context()
             payload = {
                 "name": "crawl-site",
                 "tenant_id": tenant_id,
@@ -71,22 +53,8 @@ class RabbitMQCrawlerQueue(CrawlerQueue):
                 "trace_id": trace_id,
                 "traceparent": traceparent,
             }
-
-            headers: dict[str, Any] = {}
-            if traceparent:
-                headers["traceparent"] = traceparent
-            if trace_id:
-                headers["trace_id"] = trace_id
-
-            await channel.default_exchange.publish(
-                aio_pika.Message(
-                    body=json.dumps(payload).encode(),
-                    delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
-                    content_type="application/json",
-                    message_id=job_id,
-                    headers=headers,
-                ),
-                routing_key=CRAWL_QUEUE_NAME,
+            await send_sqs_message(
+                queue_url, payload, trace_id=trace_id, traceparent=traceparent
             )
 
         try:
@@ -101,12 +69,12 @@ class RabbitMQCrawlerQueue(CrawlerQueue):
             await redis.setex(f"crawl:job:{job_id}", 86400, json.dumps(status_data))
         except Exception as e:
             print(
-                f"[RabbitMQCrawlerQueue] Warning: Failed to set initial job status in Redis: {e}",
+                f"[SqsCrawlerQueue] Warning: Failed to set initial job status in Redis: {e}",
                 flush=True,
             )
 
         print(
-            f"[RabbitMQCrawlerQueue] Enqueued crawl job {job_id} to '{CRAWL_QUEUE_NAME}' (trace_id={trace_id})",
+            f"[SqsCrawlerQueue] Enqueued crawl job {job_id} to SQS (trace_id={trace_id})",
             flush=True,
         )
 
@@ -127,17 +95,8 @@ class RabbitMQCrawlerQueue(CrawlerQueue):
 
             return state, len(pages), pages
         except Exception as e:
-            print(f"[RabbitMQCrawlerQueue] Error reading job status {job_id}: {e}", flush=True)
+            print(f"[SqsCrawlerQueue] Error reading job status {job_id}: {e}", flush=True)
             return None, 0, []
 
     async def close(self) -> None:
-        try:
-            if self._channel and not self._channel.is_closed:
-                await self._channel.close()
-            if self._connection and not self._connection.is_closed:
-                await self._connection.close()
-        except Exception:
-            pass
-
-
-BullMQCrawlerQueue = RabbitMQCrawlerQueue
+        return None

@@ -20,8 +20,6 @@ DOCUMENT_STATUS_QUEUE_NAME = os.getenv(
 
 
 class DocumentStatusConsumer:
-   
-
     def __init__(
         self,
         subscriber: EventSubscriber,
@@ -49,7 +47,7 @@ class DocumentStatusConsumer:
             context=parent_ctx,
             kind=trace.SpanKind.CONSUMER,
             attributes={
-                "messaging.system": "rabbitmq",
+                "messaging.system": "aws_sqs",
                 "messaging.destination.name": self.queue_name,
                 "messaging.operation": "process",
                 "tenant.id": tenant_id or "",
@@ -96,7 +94,6 @@ class DocumentStatusConsumer:
                 )
 
     async def start(self) -> None:
-        
         await self.subscriber.subscribe(self.queue_name, self.handle_status_event)
         await self.subscriber.start()
         logger.info(

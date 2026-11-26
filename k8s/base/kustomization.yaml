@@ -6,7 +6,6 @@ namespace: schedulux
 resources:
   - namespace.yaml
   - doppler-secrets.yaml
-  - rabbitmq.yaml
   - otel-collector.yaml
   - otel-ingestor.yaml
   - api-gateway.yaml

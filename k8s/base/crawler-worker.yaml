@@ -43,7 +43,21 @@ spec:
             medium: Memory
             sizeLimit: 256Mi
 ---
-#Auto-scale worker on RabbitMQ Queue Backlog
+# Auto-scale worker on AWS SQS Queue Backlog
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: crawler-worker-aws-auth
+  namespace: schedulux
+spec:
+  secretTargetRef:
+    - parameter: awsAccessKeyID
+      name: crawler-worker-secrets
+      key: AWS_ACCESS_KEY_ID
+    - parameter: awsSecretAccessKey
+      name: crawler-worker-secrets
+      key: AWS_SECRET_ACCESS_KEY
+---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -56,17 +70,17 @@ spec:
   maxReplicaCount: 2
   cooldownPeriod: 300
   triggers:
-    - type: rabbitmq
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: crawler-worker-aws-auth
       metadata:
-        protocol: http
-        host: http://guest:guest@rabbitmq-service.schedulux.svc.cluster.local:15672
-        queueName: knowledge-document-indexing-queue
-        mode: QueueLength
-        value: "2"
-    - type: rabbitmq
+        queueURL: https://sqs.ap-south-1.amazonaws.com/197977933137/schedulux-knowledge-document-indexing-queue-dev
+        queueLength: "2"
+        awsRegion: ap-south-1
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: crawler-worker-aws-auth
       metadata:
-        protocol: http
-        host: http://guest:guest@rabbitmq-service.schedulux.svc.cluster.local:15672
-        queueName: knowledge-crawl-queue
-        mode: QueueLength
-        value: "2"
+        queueURL: https://sqs.ap-south-1.amazonaws.com/197977933137/schedulux-knowledge-crawl-queue-dev
+        queueLength: "2"
+        awsRegion: ap-south-1

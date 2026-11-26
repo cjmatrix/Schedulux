@@ -11,19 +11,22 @@ from agent_orchestrator.tracing import flush_telemetry, init_telemetry
 
 init_telemetry()
 
-from agent_orchestrator.adapters import KafkaEventSubscriber, RabbitMQEventSubscriber
+from agent_orchestrator.adapters import KafkaEventSubscriber, SqsEventSubscriber
 from agent_orchestrator.api.grpc_server import serve
 from agent_orchestrator.models import init_db
 from agent_orchestrator.repositories.document_repository import MongoDocumentRepository
 from agent_orchestrator.services.outbox_service import run_outbox_recovery_loop
-from agent_orchestrator.workers.document_status_consumer import DocumentStatusConsumer
+from agent_orchestrator.workers.document_status_consumer import (
+    DOCUMENT_STATUS_QUEUE_NAME,
+    DocumentStatusConsumer,
+)
 from agent_orchestrator.workers.memory_worker import run_memory_worker  # noqa: E402
 from agent_orchestrator.workers.scheduling_consumer import SchedulingConsumer
 
 
 def main():
     print(
-        "[AI Orchestrator Service] Starting gRPC server + Scheduling consumer (Kafka) + Memory worker + Document status consumer (RabbitMQ)...",
+        "[AI Orchestrator Service] Starting gRPC server + Scheduling consumer (Kafka) + Memory worker + Document status consumer (SQS)...",
         flush=True,
     )
     try:
@@ -54,13 +57,14 @@ async def _run_all():
     )
     scheduling_consumer = SchedulingConsumer(subscriber=kafka_subscriber)
 
-    rabbitmq_subscriber = RabbitMQEventSubscriber(
-        uri=os.environ.get("RABBITMQ_URI", "amqp://guest:guest@localhost:5672"),
-        prefetch_count=5,
+    sqs_subscriber = SqsEventSubscriber(
+        url_env_map={DOCUMENT_STATUS_QUEUE_NAME: "AWS_SQS_DOCUMENT_STATUS_QUEUE_URL"},
+        max_messages=5,
+        wait_seconds=20,
     )
     document_repo = MongoDocumentRepository()
     doc_status_consumer = DocumentStatusConsumer(
-        subscriber=rabbitmq_subscriber,
+        subscriber=sqs_subscriber,
         document_repo=document_repo,
     )
 

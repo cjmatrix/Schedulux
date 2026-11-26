@@ -1,5 +1,5 @@
-from agent_orchestrator.queues.crawler_queue import BullMQCrawlerQueue, RabbitMQCrawlerQueue
-from agent_orchestrator.queues.memory_queue import BullMQMemoryQueue, RabbitMQMemoryQueue
+from agent_orchestrator.queues.crawler_queue import SqsCrawlerQueue
+from agent_orchestrator.queues.memory_queue import SqsMemoryQueue
 from agent_orchestrator.repositories.customer_message_repository import CustomerMessageRepository
 from agent_orchestrator.repositories.document_repository import MongoDocumentRepository
 from agent_orchestrator.repositories.draft_repository import MongoDraftRepository
@@ -14,8 +14,6 @@ __all__ = [
     "MongoDraftRepository",
     "MongoOutboxRepository",
     "MongoRuntimeConfigRepository",
-    "RabbitMQCrawlerQueue",
-    "BullMQCrawlerQueue",
-    "RabbitMQMemoryQueue",
-    "BullMQMemoryQueue",
+    "SqsCrawlerQueue",
+    "SqsMemoryQueue",
 ]

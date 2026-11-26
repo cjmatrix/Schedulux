@@ -456,7 +456,7 @@ async def crawl_site_knowledge(target_url: str, tenant_id: str = "default") -> d
 
 
 async def process_crawl_job(data: dict):
-    """RabbitMQ message processor — receives a crawl-site job, retries transient failures, crawls, and publishes to schema-generation-queue."""
+    """SQS message processor — receives a crawl-site job, retries transient failures, crawls, and publishes to schema-generation-queue."""
     tenant_id = data.get("tenant_id", "default")
     url = data.get("url")
     job_id = data.get("job_id")

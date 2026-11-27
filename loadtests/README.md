@@ -79,7 +79,7 @@ You can copy and paste the tables and findings below directly into your GitHub `
 
 ### Key Engineering Takeaways for Interviews
 1. **Zero Database I/O in Loops:** By pre-fetching schedules and computing availability windows in RAM (rather than running iterative queries), availability lookups sustained sub-40ms P95 latency at 850 RPS.
-2. **Pure-Write Transactions:** Eliminating read operations inside database transactions kept PostgreSQL lock duration under 10ms, avoiding `WriteConflict` errors and deadlock during 10x traffic spikes.
+2. **Pure-Write Transactions:** Eliminating read operations inside database transactions kept MongoDB transaction lock duration under 10ms, avoiding `WriteConflict` errors and deadlock during 10x traffic spikes.
 3. **Decoupled Asynchronous Outbox:** Offloading Kafka network publishing to non-blocking background dispatch allowed the API Gateway to return instantaneous responses to users without being bounded by broker latency.
 
 ---

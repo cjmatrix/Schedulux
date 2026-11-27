@@ -510,7 +510,7 @@ export function CreateBookingModal({
                               className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-slate-900 transition cursor-pointer appearance-none"
                             >
                               <option value="">
-                                Auto-Assign Optimal Available {req.role || 'Resource'} (Recommended)
+                                Auto-Assign Optimal Available {req.role || 'Resource'} 
                               </option>
                               {pool.map((res) => (
                                 <option key={res.resource_id} value={res.resource_id}>

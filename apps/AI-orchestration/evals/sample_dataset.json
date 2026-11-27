@@ -1,0 +1,95 @@
+
+[
+  {
+    "question": "What is the maximum allowed duration under the new condonation policy for the Premium 1-Year Program?",
+    "ground_truth": "The maximum allowed duration is 2.5 years (30 months), calculated from the Foundation Start Date."
+  },
+  {
+    "question": "What is the maximum allowed duration for candidates enrolled in the Old 1-Year Program?",
+    "ground_truth": "The maximum allowed duration is 2 years (24 months), calculated from the Batch Intake Date."
+  },
+  {
+    "question": "How long can candidates in the 7-Month Program continue under the new condonation policy?",
+    "ground_truth": "The maximum allowed duration is 1.5 years (18 months), calculated from the Batch Intake Date."
+  },
+  {
+    "question": "When does the program duration calculation begin for Premium 1-Year Program candidates?",
+    "ground_truth": "For the Premium 1-Year Program, the duration is calculated from the Foundation Start Date."
+  },
+  {
+    "question": "When does the program duration calculation begin for Old 1-Year and 7-Month Program candidates?",
+    "ground_truth": "For both the Old 1-Year Program and the 7-Month Program, the duration is calculated from the Batch Intake Date."
+  },
+  {
+    "question": "Do candidates need to pay additional condonation fees after migrating to the new policy?",
+    "ground_truth": "No. After successful migration, candidates can continue their learning journey without further condonation fees until they reach the maximum program duration specified for their respective program."
+  },
+  {
+    "question": "Will personal breaks or medical leave extend the maximum program duration?",
+    "ground_truth": "No. Pauses due to personal reasons, review holds, delays, PRP, refresh periods, cool-off periods, or similar situations are counted within the allowed program duration and will not be excluded or extended."
+  },
+  {
+    "question": "Are review holds and refresh periods excluded when calculating the maximum program duration?",
+    "ground_truth": "No. Review holds, refresh periods, and other similar pauses are included within the maximum program duration and do not extend it."
+  },
+  {
+    "question": "What happens if a candidate cannot complete the program within the maximum allowed duration?",
+    "ground_truth": "Candidates may continue beyond the maximum duration by paying a fee for each pending module (week), according to their respective program's fee structure."
+  },
+  {
+    "question": "What is the additional fee per pending module for the Premium 1-Year Program?",
+    "ground_truth": "The additional fee is ₹5,000 per pending module (week)."
+  },
+  {
+    "question": "What is the additional fee per pending module for the Old 1-Year Program?",
+    "ground_truth": "The additional fee is ₹4,000 per pending module (week)."
+  },
+  {
+    "question": "What is the additional fee per pending module for the 7-Month Program?",
+    "ground_truth": "The additional fee is ₹4,000 per pending module (week)."
+  },
+  {
+    "question": "Can candidates pay the additional module fees separately over multiple payments?",
+    "ground_truth": "No. Payment must be made as a single, one-time payment covering all pending modules."
+  },
+  {
+    "question": "How much additional time does a candidate receive for each paid pending module?",
+    "ground_truth": "For each paid module (week), the candidate receives a duration of two weeks, during which no condonation fees will apply."
+  },
+  {
+    "question": "Can a candidate return to the old condonation policy after migrating to the new policy?",
+    "ground_truth": "No. Once migration is completed, reversion to the old policy is restricted."
+  },
+  {
+    "question": "How early must candidates inform their Batch Counsellor if they want to cancel a review?",
+    "ground_truth": "Candidates must inform their Batch Counsellor at least two days in advance if they wish to cancel a review."
+  },
+  {
+    "question": "What is the fine for cancelling a review without authorization?",
+    "ground_truth": "Unauthorized review cancellations result in a fine of ₹1,000."
+  },
+  {
+    "question": "What happens if a candidate misses two consecutive reviews?",
+    "ground_truth": "The candidate must submit a written explanation with supporting documents via email within three days. If no response is received or the explanation is unsatisfactory, a video call with the parent may be arranged. The candidate may attend subsequent reviews only after completing this process."
+  },
+  {
+    "question": "Are candidates allowed to miss reviews due to personal reasons?",
+    "ground_truth": "Absence from reviews is not permitted except in cases of genuine emergencies, such as hospitalisation."
+  },
+  {
+    "question": "Does the new condonation policy provide bonus weeks?",
+    "ground_truth": "No. The new policy follows a fixed duration and does not include bonus weeks."
+  },
+  {
+    "question": "Will the money-back policy change for Premium 1-Year Program candidates after migration?",
+    "ground_truth": "No. The existing money-back policy terms for Premium 1-Year Program candidates will remain the same after migration. The migration guidelines do not specify the detailed money-back policy terms."
+  },
+  {
+    "question": "What is the difference between the maximum program duration and the additional duration granted for paid pending modules?",
+    "ground_truth": "The maximum program duration is the fixed duration allowed after migration for each program. If a candidate needs additional time beyond that duration, they can pay for all pending modules in a single payment. Each paid module grants two additional weeks without condonation fees."
+  },
+  {
+    "question": "Does the new policy count PRP, cool-off periods, and personal breaks as part of the program duration?",
+    "ground_truth": "Yes. PRP, cool-off periods, personal breaks, review holds, refresh periods, delays, and similar situations are counted within the maximum allowed program duration and do not extend it."
+  }
+]

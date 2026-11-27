@@ -482,12 +482,8 @@ export default function SchedulingOnboarding() {
                     : 'border-neutral-200 bg-[#fbfbfb] hover:border-neutral-300 hover:bg-white'
                 }`}
               >
-                {/* Recommended Badge */}
-                {service.id === 'medical' && (
-                  <span className="absolute right-6 top-6 rounded-full bg-amber-50 border border-amber-200 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">
-                    Recommended
-                  </span>
-                )}
+              
+                
 
                 {/* Icon */}
                 <div

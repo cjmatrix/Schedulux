@@ -708,6 +708,19 @@ export function getWidgetStyles(config?: Partial<WidgetConfig>, inline?: boolean
       color: #94A3B8;
     }
 
+    .schedulux-char-counter {
+      font-size: 10.5px;
+      color: #64748B;
+      text-align: right;
+      padding-right: 4px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .schedulux-char-counter.is-limit {
+      color: #EF4444;
+      font-weight: 600;
+    }
+
     .schedulux-send-btn {
       background: var(--schedulux-primary);
       color: #ffffff;

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UpdateWidgetConfigDto = exports.UpdateWidgetConfigSchema = exports.PublicChatMessagesQueryDto = exports.PublicChatMessagesQuerySchema = exports.PublicChatConfigQueryDto = exports.PublicChatConfigQuerySchema = exports.ListDocumentsQueryDto = exports.ListDocumentsQuerySchema = exports.ConfirmDocumentUploadDto = exports.ConfirmDocumentUploadSchema = exports.GetDocumentUploadUrlDto = exports.GetDocumentUploadUrlSchema = exports.GetOnboardingMessagesQueryDto = exports.GetOnboardingMessagesQuerySchema = exports.GetAgentMessagesQueryDto = exports.GetAgentMessagesQuerySchema = exports.GetSandboxMessagesQueryDto = exports.GetSandboxMessagesQuerySchema = exports.GetSandboxWidgetConfigQueryDto = exports.GetSandboxWidgetConfigQuerySchema = exports.SendSandboxMessageDto = exports.SendSandboxMessageSchema = exports.CustomerChatDto = exports.CustomerChatSchema = exports.InitSandboxChatDto = exports.InitSandboxChatSchema = exports.InitCustomerChatDto = exports.InitCustomerChatSchema = exports.SaveInitialAgentDraftDto = exports.SaveInitialAgentDraftSchema = exports.ResumeOnboardingDto = exports.ResumeOnboardingSchema = exports.StartOnboardingDto = exports.StartOnboardingSchema = exports.GetSchemaQueryDto = exports.GetSchemaQuerySchema = exports.GetCrawlStatusDto = exports.GetCrawlStatusSchema = exports.CrawlSiteDto = exports.CrawlSiteSchema = void 0;
+exports.UpdateWidgetConfigDto = exports.UpdateWidgetConfigSchema = exports.PublicChatMessagesQueryDto = exports.PublicChatMessagesQuerySchema = exports.PublicChatConfigQueryDto = exports.PublicChatConfigQuerySchema = exports.ListDocumentsQueryDto = exports.ListDocumentsQuerySchema = exports.ConfirmDocumentUploadDto = exports.ConfirmDocumentUploadSchema = exports.GetDocumentUploadUrlDto = exports.GetDocumentUploadUrlSchema = exports.GetOnboardingMessagesQueryDto = exports.GetOnboardingMessagesQuerySchema = exports.GetAgentMessagesQueryDto = exports.GetAgentMessagesQuerySchema = exports.GetSandboxMessagesQueryDto = exports.GetSandboxMessagesQuerySchema = exports.GetSandboxWidgetConfigQueryDto = exports.GetSandboxWidgetConfigQuerySchema = exports.SendSandboxMessageDto = exports.SendSandboxMessageSchema = exports.CustomerChatDto = exports.CustomerChatSchema = exports.InitSandboxChatDto = exports.InitSandboxChatSchema = exports.InitCustomerChatDto = exports.InitCustomerChatSchema = exports.SaveInitialAgentDraftDto = exports.SaveInitialAgentDraftSchema = exports.ResumeOnboardingDto = exports.ResumeOnboardingSchema = exports.MAX_CUSTOMER_MESSAGE_CHARS = exports.MAX_TENANT_MESSAGE_CHARS = exports.StartOnboardingDto = exports.StartOnboardingSchema = exports.GetSchemaQueryDto = exports.GetSchemaQuerySchema = exports.GetCrawlStatusDto = exports.GetCrawlStatusSchema = exports.CrawlSiteDto = exports.CrawlSiteSchema = void 0;
 const nestjs_zod_1 = require("nestjs-zod");
 const zod_1 = require("zod");
 exports.CrawlSiteSchema = zod_1.z.object({
@@ -31,10 +31,16 @@ exports.StartOnboardingSchema = zod_1.z.object({
 class StartOnboardingDto extends (0, nestjs_zod_1.createZodDto)(exports.StartOnboardingSchema) {
 }
 exports.StartOnboardingDto = StartOnboardingDto;
+exports.MAX_TENANT_MESSAGE_CHARS = 20000; // ~5,000 tokens (1 token ≈ 4 chars)
+exports.MAX_CUSTOMER_MESSAGE_CHARS = 4000; // ~1,000 tokens (1 token ≈ 4 chars)
 exports.ResumeOnboardingSchema = zod_1.z.object({
     tenant_id: zod_1.z.string().optional(),
     agent_id: zod_1.z.string().optional(),
-    user_answer: zod_1.z.string().min(1, 'User answer is required'),
+    user_answer: zod_1.z
+        .string()
+        .trim()
+        .min(1, 'User answer is required')
+        .max(exports.MAX_TENANT_MESSAGE_CHARS, 'Input exceeds the 5,000-token (20,000-character) limit'),
 });
 class ResumeOnboardingDto extends (0, nestjs_zod_1.createZodDto)(exports.ResumeOnboardingSchema) {
 }
@@ -74,7 +80,11 @@ exports.CustomerChatSchema = zod_1.z.object({
     agent_id: zod_1.z.string().min(1, 'Agent ID is required'),
     session_id: zod_1.z.string().optional(),
     token: zod_1.z.string().optional(),
-    message: zod_1.z.string().min(1, 'Message cannot be empty'),
+    message: zod_1.z
+        .string()
+        .trim()
+        .min(1, 'Message cannot be empty')
+        .max(exports.MAX_CUSTOMER_MESSAGE_CHARS, 'Message exceeds the 1,000-token (4,000-character) limit'),
     customer_id: zod_1.z.string().optional(),
     customer_phone: zod_1.z.string().optional(),
     customer_name: zod_1.z.string().optional(),
@@ -87,7 +97,11 @@ exports.SendSandboxMessageSchema = zod_1.z.object({
     agent_id: zod_1.z.string().optional().default('default'),
     session_id: zod_1.z.string().optional(),
     token: zod_1.z.string().optional(),
-    message: zod_1.z.string().min(1, 'Message cannot be empty'),
+    message: zod_1.z
+        .string()
+        .trim()
+        .min(1, 'Message cannot be empty')
+        .max(exports.MAX_CUSTOMER_MESSAGE_CHARS, 'Message exceeds the 1,000-token (4,000-character) limit'),
     customer_id: zod_1.z.string().optional(),
     customer_phone: zod_1.z.string().optional(),
     customer_name: zod_1.z.string().optional(),

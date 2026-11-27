@@ -10,12 +10,23 @@ export const InitCustomerChatSchema = z.object({
 
 export class InitCustomerChatDto extends createZodDto(InitCustomerChatSchema) {}
 
+
+
+export const MAX_CUSTOMER_MESSAGE_CHARS = 4000; // ~1,000 tokens (1 token ≈ 4 chars)
+
 export const CustomerChatSchema = z.object({
   tenant_id: z.string().min(1, 'tenant_id is required'),
   agent_id: z.string().min(1, 'agent_id is required'),
   session_id: z.string().optional(),
   token: z.string().optional(),
-  message: z.string().min(1, 'message is required'),
+  message: z
+    .string()
+    .trim()
+    .min(1, 'message is required')
+    .max(
+      MAX_CUSTOMER_MESSAGE_CHARS,
+      'Message exceeds the 1,000-token (4,000-character) limit',
+    ),
   customer_id: z.string().optional(),
   customer_phone: z.string().optional(),
   customer_name: z.string().optional(),

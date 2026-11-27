@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import json
 import os
 import re
@@ -26,7 +25,6 @@ except ImportError:
     ChatGroq = None
 
 
-CACHE_TTL_SECONDS = int(os.environ.get("CRAWL_CACHE_TTL_SECONDS", "86400"))
 DEFAULT_MIN_LINKS = 4
 DEFAULT_MAX_LINKS = 6
 MAX_CRAWL_ATTEMPTS = 3
@@ -99,12 +97,6 @@ class SelectedLinksSchema(BaseModel):
         default_factory=list,
         description="List of selected internal URLs most relevant for services, pricing, hours, staff, and booking."
     )
-
-
-def make_cache_key(tenant_id: str, url: str) -> str:
-    """Creates a tenant-isolated Redis cache key for crawled URLs."""
-    url_hash = hashlib.sha256(url.strip().encode()).hexdigest()[:16]
-    return f"crawl:cache:{tenant_id}:{url_hash}"
 
 
 def clean_page_markdown(text: str) -> str:
@@ -321,114 +313,75 @@ def _format_crawl_error(exc: Exception) -> str:
 
 
 async def crawl_site_knowledge(target_url: str, tenant_id: str = "default") -> dict:
-  
     semaphore = asyncio.Semaphore(2)
     site_knowledge = {}
-    redis = get_redis_client()
-
     urls_to_crawl = []
-    initial_cache_key = make_cache_key(tenant_id, target_url)
-
-    cached_initial = await redis.get(initial_cache_key)
-    if cached_initial:
-        try:
-            cached_data = json.loads(cached_initial)
-            site_knowledge[target_url] = cached_data.get("markdown", "")
-            urls_to_crawl = cached_data.get("internal_links", [])
-            print(f"[Crawl Cache] HIT for homepage: {target_url} (Restored {len(urls_to_crawl)} targeted links from cache)")
-        except Exception as e:
-            print(f"[Crawl Cache] Error parsing cached homepage data: {e}")
-            cached_initial = None
 
     async with AsyncWebCrawler(config=browser_cfg) as crawler:
-        if not cached_initial:
-            print(f"[Crawl] Starting discovery on: {target_url}")
-            with tracer.start_as_current_span(
-                "crawl.homepage.fetch",
-                attributes={"crawl.url": target_url, "tenant.id": tenant_id},
-            ) as hp_span:
-                initial_result = await _fetch_homepage_result(crawler, target_url)
+        print(f"[Crawl] Starting discovery on: {target_url}")
+        with tracer.start_as_current_span(
+            "crawl.homepage.fetch",
+            attributes={"crawl.url": target_url, "tenant.id": tenant_id},
+        ) as hp_span:
+            initial_result = await _fetch_homepage_result(crawler, target_url)
 
-                status_code = getattr(initial_result, "status_code", None)
-                error_msg = getattr(initial_result, "error_message", "") or ""
-                if status_code:
-                    hp_span.set_attribute("http.status_code", status_code)
+            status_code = getattr(initial_result, "status_code", None)
+            error_msg = getattr(initial_result, "error_message", "") or ""
+            if status_code:
+                hp_span.set_attribute("http.status_code", status_code)
 
-                
-                if status_code in (401, 403, 404, 410, 451):
-                    raise PermanentCrawlError(
-                        f"HTTP {status_code}: Site returned client error or access denied"
-                    )
-
-               
-                permanent_network_indicators = [
-                    "ERR_NAME_NOT_RESOLVED",
-                    "ERR_CONNECTION_REFUSED",
-                    "ERR_INVALID_URL",
-                    "ERR_CERT_",
-                    "DNS_PROBE_",
-                ]
-                if any(ind in error_msg for ind in permanent_network_indicators):
-                    raise PermanentCrawlError(
-                        f"Unreachable domain or invalid URL ({error_msg})"
-                    )
-
-                if not initial_result.success:
-                    lower_err = error_msg.lower()
-                    if "404" in lower_err or "not found" in lower_err:
-                        raise PermanentCrawlError(f"Page not found (404): {error_msg}")
-                    if any(kw in lower_err for kw in ("403", "forbidden", "cloudflare", "access denied", "blocked")):
-                        raise PermanentCrawlError(f"Access blocked or forbidden: {error_msg}")
-                    raise Exception(f"Failed to crawl homepage: {error_msg}")
-
-                clean_home_md = clean_page_markdown(initial_result.markdown)
-                if not clean_home_md or len(clean_home_md.strip()) < 10:
-                    raise PermanentCrawlError("Homepage contained no readable content or extractable text.")
-
-                site_knowledge[target_url] = clean_home_md
-
-            raw_links = initial_result.links.get("internal", [])
-          
-            candidate_links = extract_and_score_candidate_links(target_url, raw_links)
-            print(f"[Crawl] Discovered {len(candidate_links)} non-junk candidate internal links.")
-
-            with tracer.start_as_current_span(
-                "crawl.links.llm_select",
-                attributes={"candidate_links_count": len(candidate_links)},
-            ):
-                urls_to_crawl = await select_relevant_links_with_llm(
-                    target_url,
-                    candidate_links,
-                    min_links=DEFAULT_MIN_LINKS,
-                    max_links=DEFAULT_MAX_LINKS
+            if status_code in (401, 403, 404, 410, 451):
+                raise PermanentCrawlError(
+                    f"HTTP {status_code}: Site returned client error or access denied"
                 )
 
-            homepage_payload = {
-                "url": target_url,
-                "markdown": clean_home_md,
-                "internal_links": urls_to_crawl,
-                "is_homepage": True
-            }
-            await redis.setex(initial_cache_key, CACHE_TTL_SECONDS, json.dumps(homepage_payload))
-            print(f"[Crawl Cache] STORED homepage cache for {target_url} (TTL: {CACHE_TTL_SECONDS}s)")
+            permanent_network_indicators = [
+                "ERR_NAME_NOT_RESOLVED",
+                "ERR_CONNECTION_REFUSED",
+                "ERR_INVALID_URL",
+                "ERR_CERT_",
+                "DNS_PROBE_",
+            ]
+            if any(ind in error_msg for ind in permanent_network_indicators):
+                raise PermanentCrawlError(
+                    f"Unreachable domain or invalid URL ({error_msg})"
+                )
+
+            if not initial_result.success:
+                lower_err = error_msg.lower()
+                if "404" in lower_err or "not found" in lower_err:
+                    raise PermanentCrawlError(f"Page not found (404): {error_msg}")
+                if any(kw in lower_err for kw in ("403", "forbidden", "cloudflare", "access denied", "blocked")):
+                    raise PermanentCrawlError(f"Access blocked or forbidden: {error_msg}")
+                raise Exception(f"Failed to crawl homepage: {error_msg}")
+
+            clean_home_md = clean_page_markdown(initial_result.markdown)
+            if not clean_home_md or len(clean_home_md.strip()) < 10:
+                raise PermanentCrawlError("Homepage contained no readable content or extractable text.")
+
+            site_knowledge[target_url] = clean_home_md
+
+        raw_links = initial_result.links.get("internal", [])
+
+        candidate_links = extract_and_score_candidate_links(target_url, raw_links)
+        print(f"[Crawl] Discovered {len(candidate_links)} non-junk candidate internal links.")
+
+        with tracer.start_as_current_span(
+            "crawl.links.llm_select",
+            attributes={"candidate_links_count": len(candidate_links)},
+        ):
+            urls_to_crawl = await select_relevant_links_with_llm(
+                target_url,
+                candidate_links,
+                min_links=DEFAULT_MIN_LINKS,
+                max_links=DEFAULT_MAX_LINKS
+            )
 
         print(f"[Crawl] Scanning {len(urls_to_crawl)} targeted pages (bounded at least 5 links if available).")
 
         async def crawl_single_page(page_url: str):
             async with semaphore:
-                page_cache_key = make_cache_key(tenant_id, page_url)
-
-                cached_page = await redis.get(page_cache_key)
-                if cached_page:
-                    try:
-                        cached_data = json.loads(cached_page)
-                        site_knowledge[page_url] = cached_data.get("markdown", "")
-                        print(f"[Crawl Cache] HIT for page: {page_url}")
-                        return
-                    except Exception as e:
-                        print(f"[Crawl Cache] Error reading cache for {page_url}: {e}")
-
-                print(f"[Crawl] Crawling targeted page (Cache MISS): {page_url}")
+                print(f"[Crawl] Crawling targeted page: {page_url}")
                 try:
                     with tracer.start_as_current_span(
                         "crawl.page.fetch",
@@ -441,12 +394,6 @@ async def crawl_site_knowledge(target_url: str, tenant_id: str = "default") -> d
                         if res.success:
                             clean_md = clean_page_markdown(res.markdown)
                             site_knowledge[page_url] = clean_md
-                            page_payload = {
-                                "url": page_url,
-                                "markdown": clean_md,
-                                "is_homepage": False
-                            }
-                            await redis.setex(page_cache_key, CACHE_TTL_SECONDS, json.dumps(page_payload))
                         else:
                             print(f"[Crawl] Failed: {page_url} - {res.error_message}")
                 except Exception as e:

@@ -2,6 +2,8 @@ import type { JSX } from 'preact';
 import { useRef } from 'preact/hooks';
 import { SendIcon } from '../icons';
 
+const MAX_CUSTOMER_INPUT_CHARS = 4000; // ~1,000 tokens (1 token ≈ 4 chars)
+
 interface WidgetInputProps {
   input: string;
   setInput: (value: string) => void;
@@ -23,7 +25,7 @@ export function WidgetInput({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       const trimmed = input.trim();
-      if (trimmed && !disabled) {
+      if (trimmed && trimmed.length <= MAX_CUSTOMER_INPUT_CHARS && !disabled) {
         onSend(trimmed);
         setInput('');
         if (textareaRef.current) {
@@ -34,7 +36,7 @@ export function WidgetInput({
   };
 
   const handleInput = (e: JSX.TargetedEvent<HTMLTextAreaElement, Event>) => {
-    const val = (e.target as HTMLTextAreaElement).value;
+    const val = (e.target as HTMLTextAreaElement).value.slice(0, MAX_CUSTOMER_INPUT_CHARS);
     setInput(val);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -44,7 +46,7 @@ export function WidgetInput({
 
   const handleButtonClick = () => {
     const trimmed = input.trim();
-    if (trimmed && !disabled) {
+    if (trimmed && trimmed.length <= MAX_CUSTOMER_INPUT_CHARS && !disabled) {
       onSend(trimmed);
       setInput('');
       if (textareaRef.current) {
@@ -53,7 +55,8 @@ export function WidgetInput({
     }
   };
 
-  const canSend = Boolean(input.trim()) && !disabled;
+  const canSend =
+    Boolean(input.trim()) && input.trim().length <= MAX_CUSTOMER_INPUT_CHARS && !disabled;
 
   return (
     <div className="schedulux-footer">
@@ -62,6 +65,7 @@ export function WidgetInput({
           ref={textareaRef}
           rows={1}
           value={input}
+          maxLength={MAX_CUSTOMER_INPUT_CHARS}
           onInput={handleInput}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
@@ -80,6 +84,16 @@ export function WidgetInput({
           <SendIcon size={16} />
         </button>
       </div>
+      {input.length >= MAX_CUSTOMER_INPUT_CHARS * 0.75 && (
+        <div
+          className={`schedulux-char-counter ${
+            input.length >= MAX_CUSTOMER_INPUT_CHARS ? 'is-limit' : ''
+          }`}
+        >
+          {input.length.toLocaleString()} / {MAX_CUSTOMER_INPUT_CHARS.toLocaleString()} chars (~
+          {Math.ceil(input.length / 4).toLocaleString()} / 1,000 tokens)
+        </div>
+      )}
       <div className="schedulux-powered-by">
         Powered by{' '}
         <a href="https://schedulux.ai" target="_blank" rel="noopener noreferrer">

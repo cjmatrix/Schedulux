@@ -6,6 +6,8 @@ import type { Message } from '../types.js';
 import { DiffDrawer } from './DiffDrawer.js';
 import { renderMarkdown } from '../../../utils/markdown.js';
 
+const MAX_TENANT_INPUT_CHARS = 20000; // ~5,000 tokens (1 token ≈ 4 chars)
+
 interface WizardChatColumnProps {
   allMessages: Message[];
   status: 'idle' | 'loading' | 'awaiting_input' | 'processing';
@@ -186,14 +188,20 @@ export const WizardChatColumn: React.FC<WizardChatColumnProps> = ({
             <input
               type="text"
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
+              onChange={(e) => setInputValue(e.target.value.slice(0, MAX_TENANT_INPUT_CHARS))}
+              maxLength={MAX_TENANT_INPUT_CHARS}
               disabled={status === 'processing' || status === 'loading'}
               placeholder="Type your business rules..."
               className="flex-1 bg-transparent text-[13px] text-slate-900 placeholder-slate-400 outline-none min-w-0"
             />
             <button
               type="submit"
-              disabled={!inputValue.trim() || status === 'processing' || status === 'loading'}
+              disabled={
+                !inputValue.trim() ||
+                inputValue.trim().length > MAX_TENANT_INPUT_CHARS ||
+                status === 'processing' ||
+                status === 'loading'
+              }
               className="w-8 h-8 rounded-full bg-neutral-950 text-white flex items-center justify-center hover:bg-black disabled:bg-slate-200 disabled:text-slate-400 transition cursor-pointer shadow-xs active:scale-95 flex-shrink-0"
               title="Compile instruction"
             >
@@ -206,7 +214,23 @@ export const WizardChatColumn: React.FC<WizardChatColumnProps> = ({
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0"></span>
               <span className="truncate">Deterministic compiler: Synced with preview</span>
             </span>
-            <span className="hidden sm:inline font-mono flex-shrink-0">Press Return ↵</span>
+            <div className="flex items-center gap-2 flex-shrink-0 font-mono">
+              {inputValue.length > 0 && (
+                <span
+                  className={
+                    inputValue.length >= MAX_TENANT_INPUT_CHARS
+                      ? 'text-red-500 font-semibold'
+                      : inputValue.length >= MAX_TENANT_INPUT_CHARS * 0.85
+                        ? 'text-amber-500 font-semibold'
+                        : 'text-slate-400'
+                  }
+                >
+                  {inputValue.length.toLocaleString()}/{MAX_TENANT_INPUT_CHARS.toLocaleString()} (~
+                  {Math.ceil(inputValue.length / 4).toLocaleString()}/5,000 tok)
+                </span>
+              )}
+              <span className="hidden sm:inline">Press Return ↵</span>
+            </div>
           </div>
         </form>
       </div>

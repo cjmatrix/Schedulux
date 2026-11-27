@@ -23,10 +23,10 @@ Drop this one-liner anywhere before the closing `</body>` tag on any CMS or stat
 
 ```html
 <script
-  src="https://cdn.schedulux.ai/widget.js"
+  src="https://app.schedulux.xyz/widget.js"
   data-tenant-id="your_tenant_id"
   data-agent-id="your_agent_id"
-  data-api-base="https://api.schedulux.ai"
+  data-api-base="https://client-api.schedulux.xyz"
   data-primary-color="#4F46E5"
   data-agent-name="AI Booking Receptionist"
   data-position="bottom-right"
@@ -42,7 +42,7 @@ import { initScheduluxWidget } from '@repo/widget';
 const widget = initScheduluxWidget({
   tenantId: 'tenant_123',
   agentId: 'agent_456',
-  apiBase: 'https://api.schedulux.ai',
+  apiBase: 'https://client-api.schedulux.xyz',
   config: {
     agent_name: 'Apex AI',
     position: 'bottom-right',

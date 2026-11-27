@@ -29,10 +29,20 @@ export const StartOnboardingSchema = z.object({
 
 export class StartOnboardingDto extends createZodDto(StartOnboardingSchema) {}
 
+export const MAX_TENANT_MESSAGE_CHARS = 20000; // ~5,000 tokens (1 token ≈ 4 chars)
+export const MAX_CUSTOMER_MESSAGE_CHARS = 4000; // ~1,000 tokens (1 token ≈ 4 chars)
+
 export const ResumeOnboardingSchema = z.object({
   tenant_id: z.string().optional(),
   agent_id: z.string().optional(),
-  user_answer: z.string().min(1, 'User answer is required'),
+  user_answer: z
+    .string()
+    .trim()
+    .min(1, 'User answer is required')
+    .max(
+      MAX_TENANT_MESSAGE_CHARS,
+      'Input exceeds the 5,000-token (20,000-character) limit',
+    ),
 });
 
 export class ResumeOnboardingDto extends createZodDto(ResumeOnboardingSchema) {}
@@ -72,7 +82,14 @@ export const CustomerChatSchema = z.object({
   agent_id: z.string().min(1, 'Agent ID is required'),
   session_id: z.string().optional(),
   token: z.string().optional(),
-  message: z.string().min(1, 'Message cannot be empty'),
+  message: z
+    .string()
+    .trim()
+    .min(1, 'Message cannot be empty')
+    .max(
+      MAX_CUSTOMER_MESSAGE_CHARS,
+      'Message exceeds the 1,000-token (4,000-character) limit',
+    ),
   customer_id: z.string().optional(),
   customer_phone: z.string().optional(),
   customer_name: z.string().optional(),
@@ -85,7 +102,14 @@ export const SendSandboxMessageSchema = z.object({
   agent_id: z.string().optional().default('default'),
   session_id: z.string().optional(),
   token: z.string().optional(),
-  message: z.string().min(1, 'Message cannot be empty'),
+  message: z
+    .string()
+    .trim()
+    .min(1, 'Message cannot be empty')
+    .max(
+      MAX_CUSTOMER_MESSAGE_CHARS,
+      'Message exceeds the 1,000-token (4,000-character) limit',
+    ),
   customer_id: z.string().optional(),
   customer_phone: z.string().optional(),
   customer_name: z.string().optional(),

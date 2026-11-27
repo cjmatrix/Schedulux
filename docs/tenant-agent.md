@@ -25,7 +25,7 @@ sequenceDiagram
     participant DB as "MongoDB (Draft / Msg / Runtime)"
     participant Q as "Qdrant + Voyage (Memory)"
     participant SI as "scheduling-inventory (gRPC)"
-    participant RMQ as "RabbitMQ Memory Worker"
+    participant SQS as "AWS SQS Memory Worker"
     participant LS as "LangSmith (tenant-onboarding-agent)"
     participant Obs as "OTel Collector -> Kafka -> otel-ingestor -> OpenSearch"
 
@@ -46,7 +46,7 @@ sequenceDiagram
     TA->>SI: "BatchSyncInventory (resources + services)"
     TA->>DB: "Persist AgentRuntimeConfig (status=live)"
     TA->>Cache: "Refresh draft & invalidate biz_context"
-    OS-)RMQ: "Async check_and_trigger_memory (agent-memory-queue)"
+    OS-)SQS: "Async check_and_trigger_memory (agent-memory-queue)"
 ```
 
 ---
@@ -102,7 +102,7 @@ flowchart TD
 ### Long-Term Rolling Memory & Fact Retrieval
 - Unsummarized chat history is rehydrated from MongoDB `AgentMessage` (`seq > last_summarized_seq`) within `MEMORY_TRIGGER_TOKEN_THRESHOLD` (`3000` tokens).
 - `node_llm_semantic_review` embeds the latest user message via Voyage (`embed_query`) and retrieves up to 5 permanent business rules/facts from Qdrant (`agent_semantic_memory`, `score_threshold=0.45`), combined with `AgentDraft.conversation_summary`.
-- After each turn (`OnboardingService`), `MemoryService.check_and_trigger_memory` enqueues asynchronous consolidation jobs on RabbitMQ (`agent-memory-queue`) so older turns are summarized and distilled into Qdrant facts without blocking user latency.
+- After each turn (`OnboardingService`), `MemoryService.check_and_trigger_memory` enqueues asynchronous consolidation jobs on AWS SQS (`agent-memory-queue`) so older turns are summarized and distilled into Qdrant facts without blocking user latency.
 
 ### Minimal-Delta JSON Merge & Semantic ID Integrity (`tools.py`)
 - The LLM emits only modified fields in `SemanticAction.draft_update` (`StrictDraftPatchValidator`), never echoing unchanged arrays.

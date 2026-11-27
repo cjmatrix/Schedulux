@@ -35,7 +35,21 @@ spec:
               cpu: 200m
               memory: 220Mi
 ---
-# KEDA ScaledObject: Auto-scale worker on Kafka Consumer Lag
+# KEDA TriggerAuthentication & ScaledObject: Auto-scale worker on Aiven Kafka Consumer Lag
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: kafka-consumer-auth
+  namespace: schedulux
+spec:
+  secretTargetRef:
+    - parameter: username
+      name: kafka-consumer-secrets
+      key: KAFKA_USERNAME
+    - parameter: password
+      name: kafka-consumer-secrets
+      key: KAFKA_PASSWORD
+---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -49,8 +63,24 @@ spec:
   cooldownPeriod: 300
   triggers:
     - type: kafka
+      authenticationRef:
+        name: kafka-consumer-auth
       metadata:
-        bootstrapServers: kafka-service.schedulux.svc.cluster.local:9092
+        bootstrapServers: kafka-schedulux-schdulux.d.aivencloud.com:10858
         consumerGroup: kafka-consumer-booking-events
-        topic: booking.events
+        topic: scheduling.booking.events
         lagThreshold: "10"
+        sasl: scram_sha256
+        tls: enable
+        unsafeSsl: "true"
+    - type: kafka
+      authenticationRef:
+        name: kafka-consumer-auth
+      metadata:
+        bootstrapServers: kafka-schedulux-schdulux.d.aivencloud.com:10858
+        consumerGroup: kafka-consumer-token-ledger
+        topic: billing.tokens.consumed
+        lagThreshold: "20"
+        sasl: scram_sha256
+        tls: enable
+        unsafeSsl: "true"

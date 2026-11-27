@@ -19,13 +19,13 @@ Schedulux's Retrieval-Augmented Generation (RAG) subsystem powers tenant-specifi
 ```mermaid
 flowchart TB
     subgraph Ingest["1. Async Document Ingestion & Indexing (python-worker)"]
-        Upload["Tenant Browser -> Presigned AWS S3 PUT\n(tenants/{tenant_id}/agents/{agent_id}/documents/{doc_id})"] --> Confirm["DocumentService.confirm_upload()\nPublish to RabbitMQ: knowledge-document-indexing-queue"]
+        Upload["Tenant Browser -> Presigned AWS S3 PUT\n(tenants/{tenant_id}/agents/{agent_id}/documents/{doc_id})"] --> Confirm["DocumentService.confirm_upload()\nPublish to AWS SQS: knowledge-document-indexing-queue"]
         Confirm --> DLQ["Dead-Letter Queue:\nknowledge-document-indexing-dlq"]
         Confirm --> Worker["python-worker: process_document_indexing()"]
         Worker --> Parse["pymupdf4llm -> MarkdownPdfChunker\nHeaders split + Atomic Table Preservation\n(max_chunk_chars=2400, overlap=400)"]
         Parse --> EmbedBoth["asyncio.gather Concurrent Embeddings\nVoyage AI (voyage-4, 1024d) + FastEmbed BM25 (Qdrant/bm25)"]
         EmbedBoth --> Upsert["Qdrant Upsert (UUID5 deterministic point IDs)\nCollection: knowledge_documents (dense-text + sparse-text)"]
-        Worker -.->|"Publish indexing/indexed/failed\n(with W3C traceparent)"| StatusQ["RabbitMQ: knowledge-document-status-queue"]
+        Worker -.->|"Publish indexing/indexed/failed\n(with W3C traceparent)"| StatusQ["AWS SQS: knowledge-document-status-queue"]
         StatusQ --> StatusConsumer["ai-orchestration: DocumentStatusConsumer\nUpdate MongoDB KnowledgeDocument"]
     end
 

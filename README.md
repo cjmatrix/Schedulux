@@ -33,7 +33,7 @@ Business owners connect a website or upload PDFs, configure services and staff r
 - **Deterministic Concurrency & Tool Execution:** Prevents double-booking via **Redis distributed slot locks / hold tokens**, deterministic availability calculation in `scheduling-inventory`, and **MCP tools executed over internal gRPC** protected by Opossum circuit breakers (`@repo/circuit-breaker`).
 - **Dual-Gateway Traffic Isolation:** Strictly separates authenticated tenant control-plane traffic ([`api.schedulux.xyz`](https://api.schedulux.xyz) → `api-gateway`) from high-volume public widget & customer chat traffic ([`client-api.schedulux.xyz`](https://client-api.schedulux.xyz) → `customer-api-gateway`) with dedicated CORS origin guards and rate-limit isolation.
 - **Strict Multi-Tenant Data & RAG Isolation:** Enforces `tenant_id` boundaries across MongoDB schemas, Redis session/OTP keys, Qdrant metadata filters, S3 knowledge prefixes, and Paddle subscription tier quotas.
-- **Event-Driven & Non-Blocking Mutations:** Decouples state changes using **Apache Kafka**, **RabbitMQ**, and **AWS SQS + Lambda** workers (email/SMS OTP & booking notifications) alongside **Gemini → Groq automatic LLM failover**.
+- **Event-Driven & Non-Blocking Mutations:** Decouples state changes using **Apache Kafka** and **AWS SQS** (+ Lambda workers for Brevo emails and Twilio SMS) alongside **Gemini → Groq automatic LLM failover**.
 
 ---
 
@@ -76,10 +76,10 @@ Managed as a **pnpm + Turborepo** polyglot monorepo (`apps/` + `packages/`), inc
 | :--- | :--- | :--- | :--- |
 | **`api-gateway`** | NestJS (TS) | Tenant auth, RBAC, onboarding proxy, billing & analytics BFF | REST / SSE, gRPC |
 | **`customer-api-gateway`** | NestJS (TS) | Public chat & widget BFF, domain CORS guard, circuit breaking | REST / SSE, gRPC |
-| **`identity-tenant`** | NestJS (TS) | Multi-tenant auth, Google OAuth, tenant/tier config, Paddle billing | gRPC (Headless), RabbitMQ / SQS |
-| **`scheduling-inventory`** | NestJS (TS) | Services, resources, shifts, Redis slot holds, deterministic booking engine | gRPC (Headless), Kafka, RabbitMQ |
-| **`ai-orchestration`** | Python 3.12 | LangGraph Tenant & Customer agents, MCP tool server, RAG retrieval, memory consolidation | gRPC (Headless), Kafka, RabbitMQ |
-| **`python-worker`** | Python 3.12 | Async web crawling, S3 PDF chunking, vector embedding ingestion | RabbitMQ, S3, Qdrant |
+| **`identity-tenant`** | NestJS (TS) | Multi-tenant auth, Google OAuth, tenant/tier config, Paddle billing | gRPC (Headless), SQS |
+| **`scheduling-inventory`** | NestJS (TS) | Services, resources, shifts, Redis slot holds, deterministic booking engine | gRPC (Headless), Kafka |
+| **`ai-orchestration`** | Python 3.12 | LangGraph Tenant & Customer agents, MCP tool server, RAG retrieval, memory consolidation | gRPC (Headless), Kafka, SQS |
+| **`python-worker`** | Python 3.12 | Async web crawling, S3 PDF chunking, vector embedding ingestion | SQS, S3, Qdrant |
 | **`kafka-consumer`** | Node.js (TS) | Domain event consumption, cache invalidation, audit/notification dispatch | Kafka, SQS |
 
 → Deep dive: **[docs/microservices.md](./docs/microservices.md)**

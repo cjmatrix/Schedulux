@@ -75,7 +75,7 @@ sequenceDiagram
     participant GW as "api-gateway / customer-api-gateway"
     participant Sched as "scheduling-inventory"
     participant AI as "ai-orchestration"
-    participant RMQ as "RabbitMQ / python-worker"
+    participant SQSW as "AWS SQS / python-worker"
     participant Kafka as "Kafka -> kafka-consumer -> AWS SQS"
 
     Client->>GW: "HTTPS Request"
@@ -83,15 +83,15 @@ sequenceDiagram
     GW->>AI: "gRPC + W3C traceparent"
     AI->>Sched: "FastMCP over gRPC + traceparent"
     Sched-)Kafka: "Outbox payload embeds traceparent"
-    Kafka-)SQS: "bookingEventsConsumer extracts &\nforwards traceparent in SQS MessageAttributes"
-    AI-)RMQ: "inject_trace_context() sets\ntraceparent in AMQP headers & payload"
-    RMQ->>AI: "extract_trace_context() resumes parent span\nin python-worker & DocumentStatusConsumer"
+    Kafka-)SQSW: "bookingEventsConsumer extracts &\nforwards traceparent in SQS MessageAttributes"
+    AI-)SQSW: "extract_active_trace_context() sets\ntraceparent in SQS MessageAttributes & payload"
+    SQSW->>AI: "extract_trace_context() resumes parent span\nin python-worker & DocumentStatusConsumer"
 ```
 
 ### Multi-Tenant Context Enrichment
 - **Node.js (`apps/*/src/tracing.ts`):** Uses `NodeSDK` with `@opentelemetry/auto-instrumentations-node` (`fs` and `dns` disabled to avoid noise), `RuntimeNodeInstrumentation`, and `PinoInstrumentation` whose `logHook` copies `tenant.id`, `agent.id`, `session.id`, `user.id`, `tenant.tier`, and `tenant.role` from the active span onto every JSON log line.
 - **Python (`ai-orchestration/tracing.py`):** Instruments `GrpcInstrumentorClient/Server`, `GrpcAioInstrumentorClient/Server`, `SystemMetricsInstrumentor`, and `LoggingInstrumentor`, plus an `OtelContextFilter` that injects `trace_id`, `span_id`, `tenant_id`, `agent_id`, `session_id`, `tenant_tier`, and `user_id` into Python `logging` records.
-- **RAG & Worker Spans (`python-worker/tracing.py`):** Propagates W3C `traceparent` across RabbitMQ messages into fine-grained indexing spans (`rag.s3.download`, `rag.pdf.parse_and_chunk`, `rag.embeddings.generate`, `rag.qdrant.upsert`, `rag.status.publish`) and back into `DocumentStatusConsumer`.
+- **RAG & Worker Spans (`python-worker/tracing.py`):** Propagates W3C `traceparent` across AWS SQS messages into fine-grained indexing spans (`rag.s3.download`, `rag.pdf.parse_and_chunk`, `rag.embeddings.generate`, `rag.qdrant.upsert`, `rag.status.publish`) and back into `DocumentStatusConsumer`.
 - **LangSmith Pivot (`otel_trace_id`):** Both `tenant_agent` and `customer_agent` read `get_current_trace_id()` and store it in LangSmith run metadata (`otel_trace_id`), linking prompt/token traces directly to OpenSearch trace records.
 
 ---

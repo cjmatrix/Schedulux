@@ -1,6 +1,6 @@
 # Microservices Architecture & Monorepo Topology
 
-Schedulux is built as a **polyglot pnpm + Turborepo monorepo** combining TypeScript/NestJS services with Python 3.12 AsyncIO AI/worker runtimes. Internal synchronous RPC runs over **gRPC (HTTP/2 Protobuf)** via Kubernetes Headless Services (`round_robin`), while mutations, billing ledgers, crawling, and notifications stream asynchronously across **Apache Kafka**, **RabbitMQ**, and **AWS SQS + Lambda**.
+Schedulux is built as a **polyglot pnpm + Turborepo monorepo** combining TypeScript/NestJS services with Python 3.12 AsyncIO AI/worker runtimes. Internal synchronous RPC runs over **gRPC (HTTP/2 Protobuf)** via Kubernetes Headless Services (`round_robin`), while mutations, billing ledgers, crawling, and notifications stream asynchronously across **Apache Kafka** and **AWS SQS** (+ Lambda workers).
 
 ---
 
@@ -26,8 +26,7 @@ flowchart TB
 
     subgraph Bus["Event Streaming & Async Queues"]
         Kafka["Apache Kafka\n• scheduling.domain.events\n• scheduling.booking.events\n• billing.tokens.consumed"]
-        RMQ["RabbitMQ\n• knowledge-crawl-queue (+DLQ)\n• knowledge-document-indexing-queue (+DLQ)\n• knowledge-document-status-queue\n• agent-memory-queue (+DLQ)"]
-        SQS["AWS SQS + Lambda\n• lambda_email\n• lambda_sms (Twilio)"]
+        SQS["AWS SQS (+14d DLQs)\n• knowledge-crawl & schema-generation\n• knowledge-document-indexing & status\n• agent-memory-queue\n• email-queue (lambda_email) & sms-queue (lambda_sms)"]
     end
 
     subgraph Workers["Background Workers"]
@@ -57,15 +56,15 @@ flowchart TB
     Kafka -->|"scheduling.domain.events"| AI
     Kafka --> KafkaWorker
 
-    AI --> RMQ
+    AI --> SQS
     Identity -->|"Emails"| SQS
     KafkaWorker -->|"SMS OTP / Alerts"| SQS
     KafkaWorker -->|"Bulk token-ledger"| OS
 
-    RMQ --> PyWorker
+    SQS --> PyWorker
     PyWorker -->|"S3 PDFs & Qdrant Upsert"| S3
     PyWorker --> Qdrant
-    PyWorker -.->|"Status Updates"| RMQ
+    PyWorker -.->|"Status Updates"| SQS
 
     Identity --> Mongo
     Identity --> Redis
@@ -96,7 +95,7 @@ Splitting tenant administration from public customer widget traffic prevents cha
 
 - **`identity-tenant` (`apps/identity-tenant`, gRPC `:50051`)**
   - Owns authentication (JWT + Google OAuth), workspace RBAC, superadmin operations, Paddle billing webhooks, subscription tier quotas (`TierConfigRepository`), and `OpenSearchAnalyticsService` (reads aggregated token usage from `token-ledger`).
-  - Dispatches transactional emails via `SqsEmailProducer` (`AWS_SQS_EMAIL_QUEUE_URL`) with RabbitMQ `EmailProducer` fallback for local development.
+  - Dispatches transactional emails via `SqsEmailProducer` (`AWS_SQS_EMAIL_QUEUE_URL`).
 - **`scheduling-inventory` (`apps/scheduling-inventory`, gRPC `:50053`)**
   - Owns services, staff/equipment resources, weekly shifts, deterministic slot availability, and transactional booking mutations (`BookingModule`, `InventoryModule`, `ScheduleModule`, `ServiceModule`, `ResourceModule`).
   - Uses **Redis atomic slot holds/locks** and pure-write transactions paired with a **Transactional Outbox** (`outbox-recovery.service.ts`) publishing to Kafka topics `scheduling.domain.events` and `scheduling.booking.events`.
@@ -104,17 +103,17 @@ Splitting tenant administration from public customer widget traffic prevents cha
   - Single AsyncIO supervisor (`main.py`) running five concurrent loops:
     1. **gRPC Server (`serve()`):** Hosts `knowledge.proto` RPCs (Tenant Onboarding Agent, Customer Agent, Document URLs, Crawling, Chat History).
     2. **Kafka `SchedulingConsumer`:** Consumes `scheduling.domain.events` to keep `AgentRuntimeConfig`, `AgentDraft`, and Redis `biz_context` caches synchronized with inventory edits.
-    3. **RabbitMQ `run_memory_worker`:** Summarizes long tenant onboarding transcripts (`agent-memory-queue`) and writes permanent facts to Qdrant (`agent_semantic_memory`).
-    4. **RabbitMQ `DocumentStatusConsumer`:** Consumes `knowledge-document-status-queue` and updates MongoDB `KnowledgeDocument` statuses (`indexing` / `indexed` / `failed`).
+    3. **SQS `run_memory_worker`:** Summarizes long tenant onboarding transcripts (`agent-memory-queue`) and writes permanent facts to Qdrant (`agent_semantic_memory`).
+    4. **SQS `DocumentStatusConsumer`:** Consumes `knowledge-document-status-queue` (`SqsEventSubscriber`) and updates MongoDB `KnowledgeDocument` statuses (`indexing` / `indexed` / `failed`).
     5. **Outbox Recovery (`run_outbox_recovery_loop`):** Reliably retries unsent token/event outbox records every 10 seconds.
 
 ### Asynchronous Workers
 
 - **`python-worker` (`apps/python-worker/worker.py`)**
-  - Consumes RabbitMQ queues with dead-letter exchange bindings and W3C `traceparent` extraction:
-    - `knowledge-crawl-queue` (+ `-dlq`) → `process_crawl_job` (`crawler.py`)
-    - `schema-generation-queue` → `process_schema_generation` (`schema_generator.py`)
-    - `knowledge-document-indexing-queue` (+ `-dlq`) → `process_document_indexing` (`document_indexer.py`)
+  - Long-polls AWS SQS queues (`WaitTimeSeconds=20`, DLQ redrive via Terraform) with W3C `traceparent` extraction:
+    - `knowledge-crawl-queue` (+ DLQ) → `process_crawl_job` (`crawler.py`)
+    - `schema-generation-queue` (+ DLQ, with Redis Claim Check for large crawl payloads) → `process_schema_generation` (`schema_generator.py`)
+    - `knowledge-document-indexing-queue` (+ DLQ) → `process_document_indexing` (`document_indexer.py`)
 - **`kafka-consumer` (`apps/kafka-consumer/src/index.ts`)**
   - Runs two independent KafkaJS consumers:
     - **`bookingEventsConsumer` (`scheduling.booking.events`):** Validates and forwards SMS OTP / booking confirmation notifications to **AWS SQS** (`AWS_SQS_SMS_QUEUE_URL` → `lambda_sms` / Twilio) with OTel trace context attributes.

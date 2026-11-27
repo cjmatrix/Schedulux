@@ -20,23 +20,22 @@ flowchart TB
         Gateways --> Core["identity-tenant, scheduling-inventory, ai-orchestration\n(Headless Services + CPU HPA)"]
         Workers["python-worker & kafka-consumer\n(KEDA Queue/Lag Autoscaling)"]
         ObsPods["otel-collector & otel-ingestor"]
-        RMQ["RabbitMQ"]
         DopplerOp["Doppler Kubernetes Operator\n(8 Isolated DopplerSecret CRDs)"] -.->|"Sync per-service Secrets"| Gateways
         DopplerOp -.-> Core
         DopplerOp -.-> Workers
         DopplerOp -.-> ObsPods
     end
 
-    subgraph Serverless["AWS Async Notification Pipeline"]
-        SQS["AWS SQS\n(email-queue & sms-queue + 14d DLQs)"]
+    subgraph Serverless["AWS SQS Queues & Lambda Workers"]
+        SQS["AWS SQS (with 14d DLQs)\n• email-queue & sms-queue\n• crawl, schema, doc-indexing, doc-status, memory"]
         LEmail["Lambda: email-worker (Brevo)"]
         LSms["Lambda: sms-worker (Twilio)"]
         SQS --> LEmail
         SQS --> LSms
     end
 
-    Core -->|"Email Jobs"| SQS
-    Workers -->|"SMS Jobs"| SQS
+    Core -->|"Email / Crawl / Indexing / Memory"| SQS
+    Workers <-->|"Poll & Status Updates"| SQS
     Workers -->|"Download PDFs"| S3Rag
 ```
 
@@ -51,7 +50,7 @@ All AWS infrastructure lives under `infra/terraform/main.tf` and is split into f
 | **`modules/ec2`** | Ubuntu 24.04 EC2 (`c7i-flex.large`), 40GB encrypted `gp3` EBS (`3000` IOPS), RSA-4096 SSH key, Security Group (`22`, `80`, `443`, `6443`), Elastic IP | Allocates static EIP for DNS A records (`api`, `client-api`, `*`) and disables UFW blocking on container ports via `user_data` |
 | **`modules/frontend`** | Private S3 bucket, OAC, `us-east-1` ACM SSL certificate, CloudFront Function (`cloudfront-js-2.0`), Cache & CORS Response Policies, CloudFront Distribution | **Split Routing:** Extensionless React Router URLs rewrite to `/index.html` (`no-cache`), `/assets/*` cache immutably (`1y`), and `/widget.js` bypasses SPA rewrite with `Access-Control-Allow-Origin: *` (`5m` TTL) |
 | **`modules/rag_storage`** | Private S3 bucket (`prevent_destroy = true`, AES256 + Bucket Key, public access blocked) | Configures `PUT`/`GET`/`HEAD` CORS for `app.schedulux.xyz` so browsers upload PDFs directly via presigned URLs |
-| **`modules/sqs`** | `email-queue` + `email-dlq`, `sms-queue` + `sms-dlq` | Managed SSE, configurable `maxReceiveCount`, redrive allow policies, and 14-day (`1209600s`) DLQ retention |
+| **`modules/sqs`** | `email-queue`, `sms-queue`, `knowledge-crawl-queue`, `schema-generation-queue`, `knowledge-document-indexing-queue`, `knowledge-document-status-queue`, `agent-memory-queue` (+ DLQs) | Managed SSE, `20s` long polling, per-queue visibility timeouts (`60s`–`360s`), `maxReceiveCount`, redrive allow policies, and 14-day (`1209600s`) DLQ retention |
 | **`modules/lambda_email`** | IAM role/policy + CloudWatch log group + SQS-triggered Lambda | Consumes `email-queue` and sends transactional workspace/booking emails via Brevo Transactional Email API |
 | **`modules/lambda_sms`** | IAM role/policy + CloudWatch log group (14d retention) + SQS-triggered Lambda | Consumes `sms-queue` and dispatches SMS OTPs and booking alerts via Twilio |
 | **`budget.tf`** | AWS Budgets monthly threshold alert | Notifies on spend approaching `monthly_budget_limit` (default `$30`) |
@@ -74,7 +73,7 @@ All AWS infrastructure lives under `infra/terraform/main.tf` and is split into f
 - **Horizontal Pod Autoscalers (`autoscaling/v2`):** Scale `api-gateway`, `customer-api-gateway`, `identity-tenant`, `scheduling-inventory`, and `ai-orchestration` (`minReplicas: 1`, `maxReplicas: 2`, `75%` CPU target, `300s` scale-down stabilization).
 - **KEDA Event-Driven Scalers (`keda.sh/v1alpha1`):**
   - `kafka-consumer-scaler`: Scales `kafka-consumer` on Kafka consumer group lag.
-  - `crawler-worker-scaler`: Scales the Python crawler/indexer deployment on RabbitMQ `knowledge-document-indexing-queue` backlog (`QueueLength >= 2`).
+  - `crawler-worker-scaler`: Scales the Python crawler/indexer deployment on AWS SQS `knowledge-document-indexing-queue` and `knowledge-crawl-queue` backlog (`queueLength >= 2`) via `TriggerAuthentication` (`crawler-worker-aws-auth`).
 
 ---
 

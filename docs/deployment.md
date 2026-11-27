@@ -10,15 +10,14 @@ This guide covers running Schedulux locally, understanding the automated GitHub 
 - **Node.js 22+** & **`pnpm@11.20.0`**
 - **Python 3.12+** & **`uv`**
 - **`protoc`** (Protocol Buffers compiler, e.g. `sudo apt install protobuf-compiler`)
-- **Docker** (for local RabbitMQ and optional local OTel containers via `docker-compose.yml`)
-- Configured `.env` files (external managed services: MongoDB, Redis, Kafka, Qdrant, OpenSearch, Voyage/Gemini/Groq keys, or `MOCK_LLM=true` for mocked chat runs)
+- **Docker** *(optional, for local OTel Collector / Ingestor containers via `docker-compose.yml`)*
+- Configured `.env` files (external managed services: MongoDB, Redis, Kafka, AWS SQS, Qdrant, OpenSearch, Voyage/Gemini/Groq keys, or `MOCK_LLM=true` for mocked chat runs)
 
 ### Start Everything Locally
 ```bash
 git clone https://github.com/cjmatrix/Schedulux.git && cd Schedulux
 pnpm install
 pnpm build:proto:py          # Generate Python gRPC stubs from packages/proto/src/*.proto
-pnpm rabbitmq:up              # Start RabbitMQ (:5672 / UI :15672)
 pnpm dev                      # Launch gateways, core services, workers, and React UI concurrently
 ```
 

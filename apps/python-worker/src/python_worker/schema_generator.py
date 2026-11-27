@@ -130,7 +130,7 @@ async def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) ->
                 google_api_key=gemini_api_key,
                 temperature=0,
                 max_retries=2,
-                timeout=30,
+                timeout=90,
             )
         elif provider == "groq" and groq_api_key:
             groq_model = os.environ.get("GROQ_MODEL") or "openai/gpt-oss-120b"

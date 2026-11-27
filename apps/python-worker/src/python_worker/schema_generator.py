@@ -129,6 +129,8 @@ async def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) ->
                 model=model_name,
                 google_api_key=gemini_api_key,
                 temperature=0,
+                max_retries=2,
+                timeout=30,
             )
         elif provider == "groq" and groq_api_key:
             groq_model = os.environ.get("GROQ_MODEL") or "openai/gpt-oss-120b"
@@ -138,6 +140,8 @@ async def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) ->
                     model_name=groq_model,
                     groq_api_key=groq_api_key,
                     temperature=0,
+                    max_retries=2,
+                    request_timeout=30,
                 )
             else:
                 print(f"[Schema Generator] Initializing ChatOpenAI (Groq endpoint) with model '{groq_model}'.", flush=True)
@@ -146,6 +150,8 @@ async def generate_agent_schema(crawled_data: dict, tenant_id: str, url: str) ->
                     api_key=groq_api_key,
                     base_url="https://api.groq.com/openai/v1",
                     temperature=0,
+                    max_retries=2,
+                    timeout=30,
                 )
         return None
 

@@ -203,6 +203,8 @@ def _get_classifier_llm():
             model=model,
             google_api_key=gemini_key,
             temperature=0,
+            max_retries=1,
+            timeout=15,
         )
 
     groq_key = os.environ.get("GROQ_API_KEY")
@@ -212,6 +214,8 @@ def _get_classifier_llm():
             model_name=model,
             groq_api_key=groq_key,
             temperature=0,
+            max_retries=1,
+            request_timeout=15,
         )
 
     return None

@@ -163,20 +163,6 @@ export default function VerifyEmailPage() {
               </div>
             )}
           </div>
-
-          {/* Trust & Cluster Info */}
-          <div className="mt-6 text-center space-y-2">
-            <div className="inline-flex items-center gap-2 text-xs font-medium text-gray-600">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Autonomous Cluster: US-East (Virginia) • 99.99% operational</span>
-            </div>
-            <div className="flex items-center justify-center gap-1.5 text-[11px] text-gray-400">
-              <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
-              <span>
-                Enterprise SAML 2.0 Ready • SOC2 Type II Certified • 256-Bit Vault Storage
-              </span>
-            </div>
-          </div>
         </div>
       </main>
 

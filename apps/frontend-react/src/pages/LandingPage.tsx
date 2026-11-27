@@ -3,47 +3,37 @@ import {
   Briefcase,
   Building2,
   Car,
-  Check,
   CheckCircle2,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   FileText,
-  Loader2,
   Lock,
-  Menu,
-  MessageSquare,
   Scissors,
   ShieldCheck,
-  Sparkles,
   Users,
-  X,
-  Zap,
 } from 'lucide-react';
 import React, { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
+import { PublicLayout } from '../components/PublicLayout';
 import { useAuthStore } from '../store/useAuthStore';
 
 interface VerticalData {
   name: string;
   dotColor: string;
   category: string;
-  nodes: {
-    leftNode: string;
-    diagnosticTitle: string;
-    diagnosticDesc: string;
-    centerTitle: string;
-    centerDesc: string;
-    confirmTitle: string;
-    confirmDesc: string;
-    rightNode: string;
+  builderPrompt: string;
+  builderReply: string;
+  canvas: {
+    serviceName: string;
+    duration: string;
+    buffer: string;
+    resources: string;
+    guardrail: string;
   };
   simulation: {
     customerMessage: string;
     intentBadge: string;
     agentResponse: string;
     systemAction: string;
-    resourceAllocation: string;
   };
 }
 
@@ -52,70 +42,70 @@ const VERTICALS: Record<string, VerticalData> = {
     name: 'Consulting & Studios',
     dotColor: 'bg-indigo-500',
     category: 'Professional Services & Advisory',
-    nodes: {
-      leftNode: 'Intake Brief',
-      diagnosticTitle: 'Consultant Matching',
-      diagnosticDesc: 'Analyze project scope, client requirements, and advisor availability.',
-      centerTitle: 'Deterministic Booking',
-      centerDesc: 'Hold candidate slots in RAM with preparation and wrap-up buffers.',
-      confirmTitle: 'SMS Verification',
-      confirmDesc: '6-digit SMS OTP verification, self-service rescheduling, and instant alerts.',
-      rightNode: 'Meeting Suite 2',
+    builderPrompt:
+      'Add a 60m Strategy Audit with Sarah in Executive Suite 2, 15m prep buffer, and require SMS verification.',
+    builderReply:
+      'Updated your Services, Staff & Rooms, and Booking Rules. Ready to test in your sandbox.',
+    canvas: {
+      serviceName: 'Strategy Audit (60m)',
+      duration: '60 min',
+      buffer: '15 min buffer',
+      resources: 'Sarah M. + Executive Suite 2',
+      guardrail: 'SMS Verification • 10m Slot Hold',
     },
     simulation: {
       customerMessage:
         'Hi, I need a 60-minute strategy audit session with Sarah next Tuesday morning.',
-      intentBadge: 'Intent: Booking • Service: Strategy Audit (60m)',
+      intentBadge: 'Appointment Booking',
       agentResponse:
-        'Sarah has an opening on Tuesday, November 17 at 10:00 AM in Executive Suite 2. We factor in 15 minutes of preparation buffer before your session. May I send a 6-digit SMS verification code to confirm this reservation?',
-      systemAction: 'RAM Slot Hold: 15-minute lock • Specialist Sarah + Suite 2 Co-allocated',
-      resourceAllocation: 'Lead: Sarah M. • Facility: Executive Suite 2',
+        'Sarah has an opening next Tuesday at 10:00 AM in Executive Suite 2 (with a 15-minute prep buffer). I am holding this time for 10 minutes—may I send a 6-digit verification code to your phone?',
+      systemAction: '10-Minute Slot Hold • Sarah M. + Suite 2 Reserved',
     },
   },
   salons: {
     name: 'Salons & Wellness',
     dotColor: 'bg-rose-500',
     category: 'Salons, Spas & Personal Care',
-    nodes: {
-      leftNode: 'Consultation',
-      diagnosticTitle: 'Stylist & Station Match',
-      diagnosticDesc: 'Custom processing buffers, stylist skillsets, and VIP client preferences.',
-      centerTitle: 'Deterministic Booking',
-      centerDesc: 'Hold slots in RAM while balancing treatment time and station turnaround.',
-      confirmTitle: 'SMS Verification',
-      confirmDesc: 'SMS OTP verification, self-service cancellation, and instant reminders.',
-      rightNode: 'Station Chair 4',
+    builderPrompt:
+      'Configure Balayage & Blowout (135m) with Elena at Station Chair 4, and let clients pick their stylist.',
+    builderReply:
+      'Updated your Services and Stylist Roster with client-selectable booking.',
+    canvas: {
+      serviceName: 'Balayage & Blowout (135m)',
+      duration: '135 min',
+      buffer: '15 min turnover',
+      resources: 'Elena R. + Station Chair 4',
+      guardrail: 'Pick Your Stylist • 10m Slot Hold',
     },
     simulation: {
-      customerMessage: 'I would like a balayage and blowout with Elena sometime next Saturday.',
-      intentBadge: 'Intent: Booking • Service: Balayage & Blowout (135m)',
+      customerMessage: 'I would like a balayage and blowout with Elena next Saturday afternoon.',
+      intentBadge: 'Stylist Selection',
       agentResponse:
-        'Elena has an opening on Saturday, November 21 at 2:00 PM. We allocate 90 minutes for color processing plus a 45-minute finish blowout at Station Chair 4. I can hold this slot and send an SMS verification code now!',
-      systemAction: 'Hold Duration: 15m active • Elena + Station 4 co-scheduled',
-      resourceAllocation: 'Stylist: Elena R. • Resource: Station Chair 4',
+        'Elena has an opening next Saturday at 2:00 PM at Station Chair 4. Shall I hold this 135-minute slot and send your 6-digit SMS verification code?',
+      systemAction: '10-Minute Slot Hold • Elena R. + Chair 4 Reserved',
     },
   },
   auto: {
     name: 'Auto & Repair Bays',
     dotColor: 'bg-emerald-500',
     category: 'Auto Repair & Service Bays',
-    nodes: {
-      leftNode: 'Diagnostics',
-      diagnosticTitle: 'Bay & Tech Dispatch',
-      diagnosticDesc: 'Co-allocate certified technicians and physical heavy hoist bays.',
-      centerTitle: 'Deterministic Booking',
-      centerDesc: 'Real-time slot locking factoring mechanic shift hours and bay turnover.',
-      confirmTitle: 'SMS Verification',
-      confirmDesc: 'SMS OTP verification, self-service appointment lookups, and job readiness.',
-      rightNode: 'Lift Bay 3',
+    builderPrompt:
+      'Add Brake Pad Service (90m) requiring both Senior Tech Marco and Lift Bay 3.',
+    builderReply:
+      'Configured combined technician + service bay scheduling and synced your live calendar.',
+    canvas: {
+      serviceName: 'Brake Pad Service (90m)',
+      duration: '90 min',
+      buffer: '10 min bay reset',
+      resources: 'Tech Marco V. + Lift Bay 3',
+      guardrail: 'Tech + Bay Lock • SMS Verified',
     },
     simulation: {
-      customerMessage: 'My sedan needs brake pad replacement and 40k inspection before Friday.',
-      intentBadge: 'Intent: Booking • Service: Brake Pad Service (90m)',
+      customerMessage: 'My sedan needs brake pad replacement and inspection before Friday.',
+      intentBadge: 'Technician + Bay',
       agentResponse:
-        'Brake pad replacement requires a heavy hoist bay. Senior Technician Marco is available Thursday, November 19 at 9:00 AM with Lift Bay 3. Would you like me to reserve this appointment for your vehicle?',
-      systemAction: 'Multi-Resource Reservation: Tech Marco + Lift Bay 3 Locked',
-      resourceAllocation: 'Mechanic: Marco V. • Asset: Hoist Bay 3',
+        'Senior Technician Marco is available Thursday at 9:00 AM with Lift Bay 3. Would you like me to hold this slot and send an SMS verification code?',
+      systemAction: 'Combined Slot Hold • Marco V. + Lift Bay 3 Reserved',
     },
   },
 };
@@ -164,27 +154,24 @@ const FAQS: FaqItem[] = [
 ];
 
 export default function LandingPage() {
-  const { user, isAuthenticated } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
+  const navigate = useNavigate();
   const [activeVertical, setActiveVertical] = useState<'consulting' | 'salons' | 'auto'>(
     'consulting',
   );
-  const [showDemoModal, setShowDemoModal] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
   const [websiteUrl, setWebsiteUrl] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedSuccess, setGeneratedSuccess] = useState(false);
 
   const currentVertical = VERTICALS[activeVertical];
 
   const handleGenerateAgent = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!websiteUrl) return;
-    setIsGenerating(true);
-    setTimeout(() => {
-      setIsGenerating(false);
-      setGeneratedSuccess(true);
-    }, 1800);
+    if (!websiteUrl.trim()) return;
+    if (isAuthenticated) {
+      navigate(`/tenant/landingboard?url=${encodeURIComponent(websiteUrl.trim())}`);
+    } else {
+      navigate('/register');
+    }
   };
 
   const toggleFaq = (index: number) => {
@@ -192,148 +179,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-neutral-900 antialiased selection:bg-neutral-900 selection:text-white font-sans">
-      {/* Navigation Bar */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-neutral-100">
-        <div className="max-w-7xl mx-auto px-6 sm:px-8 h-20 flex items-center justify-between">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2.5">
-            <div className="flex items-center gap-1">
-              <span className="w-1.5 h-5 bg-neutral-950 rounded-full inline-block" />
-              <span className="w-1.5 h-5 bg-neutral-950 rounded-full inline-block" />
-            </div>
-            <span className="font-bold text-lg tracking-tight text-neutral-950">Schedulux AI</span>
-          </Link>
-
-          {/* Navigation Links */}
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-neutral-600">
-            <a href="#features" className="hover:text-neutral-950 transition-colors">
-              Features
-            </a>
-            <a href="#how-it-works" className="hover:text-neutral-950 transition-colors">
-              How It Works
-            </a>
-            <a href="#industries" className="hover:text-neutral-950 transition-colors">
-              Industries
-            </a>
-            <a href="#pricing" className="hover:text-neutral-950 transition-colors">
-              Pricing
-            </a>
-            <a href="#faq" className="hover:text-neutral-950 transition-colors">
-              FAQ
-            </a>
-          </nav>
-
-          {/* Nav Actions */}
-          <div className="hidden sm:flex items-center gap-4">
-            {isAuthenticated ? (
-              <Link
-                to="/tenant/dashboard"
-                className="rounded-full bg-neutral-950 text-white text-sm font-medium px-5 py-2 hover:bg-neutral-800 transition shadow-xs cursor-pointer inline-flex items-center gap-2"
-              >
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                {user?.business_name || 'Dashboard'}
-              </Link>
-            ) : (
-              <div className="flex items-center gap-3">
-                <Link
-                  to="/login"
-                  className="text-sm font-medium text-neutral-700 hover:text-neutral-950 transition-colors px-2 py-1"
-                >
-                  Log in
-                </Link>
-                <Link
-                  to="/register"
-                  className="rounded-full bg-neutral-950 text-white text-sm font-medium px-5 py-2 hover:bg-neutral-800 transition shadow-xs cursor-pointer inline-flex items-center justify-center"
-                >
-                  Get Started Free
-                </Link>
-              </div>
-            )}
-          </div>
-
-          {/* Mobile Menu Button */}
-          <div className="flex items-center gap-2 md:hidden">
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 text-neutral-700 hover:text-neutral-950 hover:bg-neutral-100 rounded-lg cursor-pointer"
-              aria-label="Toggle Navigation Menu"
-            >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile Navigation Dropdown */}
-        {mobileMenuOpen && (
-          <div className="md:hidden border-b border-neutral-100 bg-white px-6 py-5 flex flex-col gap-4 animate-in slide-in-from-top-2 duration-200">
-            <a
-              href="#features"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-sm font-medium text-neutral-700 hover:text-neutral-950 py-1"
-            >
-              Features
-            </a>
-            <a
-              href="#how-it-works"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-sm font-medium text-neutral-700 hover:text-neutral-950 py-1"
-            >
-              How It Works
-            </a>
-            <a
-              href="#industries"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-sm font-medium text-neutral-700 hover:text-neutral-950 py-1"
-            >
-              Industries
-            </a>
-            <a
-              href="#pricing"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-sm font-medium text-neutral-700 hover:text-neutral-950 py-1"
-            >
-              Pricing
-            </a>
-            <a
-              href="#faq"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-sm font-medium text-neutral-700 hover:text-neutral-950 py-1"
-            >
-              FAQ
-            </a>
-            <div className="pt-3 border-t border-neutral-100 flex flex-col gap-2.5">
-              {isAuthenticated ? (
-                <Link
-                  to="/tenant/dashboard"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="w-full text-center rounded-full bg-neutral-950 text-white text-sm font-medium py-2.5"
-                >
-                  Dashboard
-                </Link>
-              ) : (
-                <>
-                  <Link
-                    to="/login"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="w-full text-center py-2 text-sm font-medium text-neutral-700"
-                  >
-                    Log in
-                  </Link>
-                  <Link
-                    to="/register"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="w-full text-center rounded-full bg-neutral-950 text-white text-sm font-medium py-2.5"
-                  >
-                    Get Started Free
-                  </Link>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-      </header>
-
+    <PublicLayout>
       <main className="max-w-7xl mx-auto px-6 sm:px-8 pt-16 pb-24 space-y-24">
         {/* Hero Section */}
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -371,12 +217,13 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Central Visual Showcase Card (Interactive Concierge Simulator) */}
-        <section className="relative rounded-[32px] border border-neutral-200/90 bg-gradient-to-b from-[#fafaf9] via-[#f7f7f6] to-[#f4f4f2] p-6 sm:p-10 shadow-[0_8px_30px_rgb(0,0,0,0.03)] overflow-hidden">
+        {/* Central Visual Showcase Card (Split-Pane Agent Builder Studio Preview) */}
+        <section className="relative rounded-[32px] border border-neutral-200/90 bg-gradient-to-b from-[#fafaf9] via-[#f7f7f6] to-[#f4f4f2] p-6 sm:p-10 shadow-[0_8px_30px_rgb(0,0,0,0.03)] overflow-hidden space-y-6">
           {/* Top Switcher Pill Bar */}
-          <div className="flex justify-start">
-            <div className="inline-flex items-center gap-1 sm:gap-2 p-1 rounded-full bg-white border border-neutral-200/80 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="inline-flex items-center gap-1 sm:gap-2 p-1 rounded-full bg-white border border-neutral-200/80 shadow-xs self-start">
               <button
+                type="button"
                 onClick={() => setActiveVertical('consulting')}
                 className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium transition cursor-pointer ${
                   activeVertical === 'consulting'
@@ -384,10 +231,11 @@ export default function LandingPage() {
                     : 'text-neutral-600 hover:text-neutral-950'
                 }`}
               >
-                <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" />
                 Consulting &amp; Studios
               </button>
               <button
+                type="button"
                 onClick={() => setActiveVertical('salons')}
                 className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium transition cursor-pointer ${
                   activeVertical === 'salons'
@@ -399,6 +247,7 @@ export default function LandingPage() {
                 Salons &amp; Wellness
               </button>
               <button
+                type="button"
                 onClick={() => setActiveVertical('auto')}
                 className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium transition cursor-pointer ${
                   activeVertical === 'auto'
@@ -410,135 +259,96 @@ export default function LandingPage() {
                 Auto &amp; Repair Bays
               </button>
             </div>
+
+            <span className="text-[11px] font-mono text-neutral-500 bg-white px-3 py-1 rounded-full border border-neutral-200/80 self-start sm:self-auto">
+              Agent Builder Studio • Live Preview
+            </span>
           </div>
 
-          {/* Visual Architecture Node Flow */}
-          <div className="py-10 sm:py-14 flex items-center justify-between gap-4 overflow-x-auto no-scrollbar">
-            {/* 1. Left Node: Intake */}
-            <div className="flex flex-col items-center flex-shrink-0 w-28 text-center opacity-85 hover:opacity-100 transition">
-              <div className="w-22 h-22 sm:w-26 sm:h-26 rounded-full bg-gradient-to-tr from-[#99f6e4]/40 via-[#ccfbf1]/50 to-[#e0f2fe]/60 border border-teal-200/50 shadow-inner flex items-center justify-center backdrop-blur-xs">
-                <div className="w-10 h-10 rounded-full bg-white/40 blur-xs" />
+          {/* Split-Pane Builder Preview: AI Architect Chat (Left) + Compiled Canvas (Right) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            {/* Left: AI Architect Conversation */}
+            <div className="lg:col-span-5 rounded-2xl bg-white border border-neutral-200/90 p-5 flex flex-col justify-between gap-4 shadow-2xs">
+              <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-xs font-bold text-neutral-950">AI Setup Assistant</span>
+                </div>
+                <span className="text-[10px] font-medium text-neutral-400">
+                  Live Change Preview
+                </span>
               </div>
-              <span className="text-xs text-neutral-400 font-medium mt-3">
-                {currentVertical.nodes.leftNode}
-              </span>
-            </div>
 
-            {/* 2. Intake & Diagnostic Disc */}
-            <div className="flex flex-col items-center flex-shrink-0 w-44 sm:w-48 text-center">
-              <div className="relative group cursor-pointer">
-                <div className="w-28 h-28 sm:w-34 sm:h-34 rounded-full bg-gradient-to-br from-[#f472b6] via-[#ec4899] to-[#d946ef] p-0.5 shadow-xl shadow-pink-500/20 flex items-center justify-center transform group-hover:scale-105 transition-transform duration-300">
-                  <div className="w-24 h-24 sm:w-30 sm:h-30 rounded-full bg-gradient-to-tr from-[#db2777] to-[#f472b6] flex items-center justify-center">
-                    <div className="w-9 h-9 rounded-full bg-white/20 backdrop-blur-md border border-white/40 flex items-center justify-center shadow-xs">
-                      <MessageSquare className="w-4 h-4 text-white" />
-                    </div>
-                  </div>
+              <div className="space-y-3 text-xs">
+                <div className="rounded-2xl bg-neutral-950 text-white p-3.5 ml-6 leading-relaxed">
+                  &ldquo;{currentVertical.builderPrompt}&rdquo;
                 </div>
-                <div className="absolute inset-0 rounded-full border-2 border-pink-400/40 animate-ping pointer-events-none opacity-20" />
+                <div className="rounded-2xl bg-neutral-50 border border-neutral-200/80 text-neutral-700 p-3.5 mr-4 leading-relaxed">
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase block mb-1">
+                    Schedulux Builder
+                  </span>
+                  {currentVertical.builderReply}
+                </div>
               </div>
-              <h4 className="font-semibold text-neutral-900 text-sm mt-4">
-                {currentVertical.nodes.diagnosticTitle}
-              </h4>
-              <p className="text-xs text-neutral-500 max-w-[170px] mt-1 leading-snug">
-                {currentVertical.nodes.diagnosticDesc}
-              </p>
-            </div>
 
-            {/* 3. Center Featured Node: Core Booking Engine */}
-            <div className="flex flex-col items-center flex-shrink-0 w-60 sm:w-72">
-              <div className="w-full bg-[#dedede]/65 border border-neutral-300/80 rounded-2xl p-6 sm:p-7 flex flex-col items-center justify-center shadow-sm relative group hover:bg-[#dedede]/85 transition">
-                <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-neutral-950 text-white shadow-md flex items-center justify-center">
-                  <Lock className="w-5 h-5 text-white" />
-                </div>
-
-                <div className="mt-3 flex items-center gap-1 text-[11px] text-emerald-700 font-medium bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/60">
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>Deterministic RAM Lock Active</span>
-                </div>
-
-                <div className="flex items-center gap-2 mt-4 text-xs font-semibold text-neutral-900">
-                  <ChevronLeft className="w-3.5 h-3.5 text-neutral-400" />
-                  <span>{currentVertical.nodes.centerTitle}</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-neutral-400" />
-                </div>
-
-                <p className="text-xs text-neutral-600 text-center max-w-[210px] mt-1.5 leading-snug">
-                  {currentVertical.nodes.centerDesc}
-                </p>
+              <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] text-neutral-400">
+                <span>Instant sandbox preview</span>
+                <span>20-step undo history</span>
               </div>
             </div>
 
-            {/* 4. Follow-up & Verification: Dark Charcoal Disc */}
-            <div className="flex flex-col items-center flex-shrink-0 w-44 sm:w-48 text-center">
-              <div className="relative group cursor-pointer">
-                <div className="w-28 h-28 sm:w-34 sm:h-34 rounded-full bg-gradient-to-br from-neutral-800 via-neutral-900 to-[#27211e] p-1 border border-neutral-700/60 shadow-xl shadow-neutral-900/15 flex items-center justify-center transform group-hover:scale-105 transition-transform duration-300">
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border border-neutral-700/50 flex items-center justify-center">
-                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border border-neutral-600/50 flex items-center justify-center">
-                      <div className="w-3 h-3 rounded-full bg-rose-500/80 shadow-xs" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <h4 className="font-semibold text-neutral-900 text-sm mt-4">
-                {currentVertical.nodes.confirmTitle}
-              </h4>
-              <p className="text-xs text-neutral-500 max-w-[170px] mt-1 leading-snug">
-                {currentVertical.nodes.confirmDesc}
-              </p>
-            </div>
-
-            {/* 5. Right Node: Facility Asset */}
-            <div className="flex flex-col items-center flex-shrink-0 w-28 text-center opacity-85 hover:opacity-100 transition">
-              <div className="w-22 h-22 sm:w-26 sm:h-26 rounded-full bg-gradient-to-tr from-[#99f6e4]/40 via-[#ccfbf1]/50 to-[#e0f2fe]/60 border border-teal-200/50 shadow-inner flex items-center justify-center backdrop-blur-xs">
-                <div className="w-10 h-10 rounded-full bg-white/40 blur-xs" />
-              </div>
-              <span className="text-xs text-neutral-400 font-medium mt-3">
-                {currentVertical.nodes.rightNode}
-              </span>
-            </div>
-          </div>
-
-          {/* Live Conversational Simulation Box */}
-          <div className="mb-6 p-4 rounded-2xl bg-white border border-neutral-200/90 shadow-sm animate-in fade-in duration-300">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-100 pb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-neutral-950 text-white flex items-center justify-center">
-                  <MessageSquare className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-xs font-semibold text-neutral-900">
-                    Live Booking Concierge: {currentVertical.category}
-                  </div>
-                  <div className="text-[11px] text-emerald-600 font-mono">
-                    {currentVertical.simulation.resourceAllocation}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-mono bg-neutral-100 text-neutral-700 px-2.5 py-0.5 rounded-full">
+            {/* Right: Live Compiled Canvas + Customer Concierge Result */}
+            <div className="lg:col-span-7 rounded-2xl bg-white border border-neutral-200/90 p-5 space-y-4 shadow-2xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 pb-3">
+                <span className="text-xs font-bold text-neutral-950">
+                  Your Live Booking Rules — {currentVertical.category}
+                </span>
+                <span className="text-[11px] font-medium bg-neutral-100 text-neutral-700 px-2.5 py-0.5 rounded-full">
                   {currentVertical.simulation.intentBadge}
                 </span>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 text-xs">
-              <div className="p-3.5 rounded-xl bg-neutral-50 border border-neutral-200/60">
-                <span className="text-[10px] uppercase font-semibold text-neutral-400 block mb-1">
-                  Customer Input (Web Chat Widget):
-                </span>
-                <p className="text-neutral-700 italic">
-                  "{currentVertical.simulation.customerMessage}"
-                </p>
+              {/* Structured Canvas Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="rounded-xl bg-neutral-50 border border-neutral-200/70 p-3 space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-neutral-400">Service</span>
+                  <div className="font-semibold text-neutral-900">
+                    {currentVertical.canvas.serviceName}
+                  </div>
+                  <div className="text-[11px] text-neutral-500">
+                    {currentVertical.canvas.duration} • {currentVertical.canvas.buffer}
+                  </div>
+                </div>
+                <div className="rounded-xl bg-neutral-50 border border-neutral-200/70 p-3 space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-neutral-400">
+                    Staff &amp; Rooms
+                  </span>
+                  <div className="font-semibold text-neutral-900">
+                    {currentVertical.canvas.resources}
+                  </div>
+                  <div className="text-[11px] text-neutral-500">Checked against shifts &amp; holidays</div>
+                </div>
+                <div className="rounded-xl bg-neutral-50 border border-neutral-200/70 p-3 space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-neutral-400">
+                    Safety Rules
+                  </span>
+                  <div className="font-semibold text-neutral-900">
+                    {currentVertical.canvas.guardrail}
+                  </div>
+                  <div className="text-[11px] text-neutral-500">Grounded in your PDFs</div>
+                </div>
               </div>
-              <div className="p-3.5 rounded-xl bg-neutral-950 text-white border border-neutral-800">
-                <span className="text-[10px] uppercase font-semibold text-neutral-400 block mb-1">
-                  Schedulux Concierge Response:
-                </span>
-                <p className="text-neutral-100 leading-relaxed">
-                  "{currentVertical.simulation.agentResponse}"
-                </p>
-                <div className="mt-2 text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
-                  <CheckCircle2 className="w-3 h-3 shrink-0" />
+
+              {/* Embedded Widget Simulation */}
+              <div className="rounded-xl bg-neutral-950 text-white p-4 space-y-2 text-xs">
+                <div className="text-[11px] text-neutral-400">
+                  Customer: &ldquo;{currentVertical.simulation.customerMessage}&rdquo;
+                </div>
+                <div className="text-neutral-100 leading-relaxed">
+                  Concierge: &ldquo;{currentVertical.simulation.agentResponse}&rdquo;
+                </div>
+                <div className="pt-1 text-[10px] text-emerald-400 flex items-center gap-1.5 font-mono">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                   <span>{currentVertical.simulation.systemAction}</span>
                 </div>
               </div>
@@ -546,46 +356,43 @@ export default function LandingPage() {
           </div>
 
           {/* Bottom Badges Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-neutral-200/60">
+          <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-neutral-200/60">
             <div className="flex flex-wrap items-center gap-2">
               <span className="bg-neutral-950 text-white text-xs font-medium px-3.5 py-1.5 rounded-full shadow-2xs">
-                Deterministic Slot Lock
+                Zero Double-Bookings
               </span>
-              <span className="bg-white/90 border border-neutral-200/80 text-neutral-700 text-xs font-medium px-3 py-1.5 rounded-full hover:border-neutral-300 transition cursor-default">
-                Embeddable Web Widget
+              <span className="bg-white/90 border border-neutral-200/80 text-neutral-700 text-xs font-medium px-3 py-1.5 rounded-full">
+                1-Line Website Embed
               </span>
-              <span className="bg-white/90 border border-neutral-200/80 text-neutral-700 text-xs font-medium px-3 py-1.5 rounded-full hover:border-neutral-300 transition cursor-default">
-                SMS OTP Verification
+              <span className="bg-white/90 border border-neutral-200/80 text-neutral-700 text-xs font-medium px-3 py-1.5 rounded-full">
+                SMS Phone Verification
               </span>
-              <span className="bg-white/90 border border-neutral-200/80 text-neutral-700 text-xs font-medium px-3 py-1.5 rounded-full hover:border-neutral-300 transition cursor-default">
-                Qdrant Vector RAG
+              <span className="bg-white/90 border border-neutral-200/80 text-neutral-700 text-xs font-medium px-3 py-1.5 rounded-full">
+                PDF Policy Answers
               </span>
-              <span className="bg-white/90 border border-neutral-200/80 text-neutral-700 text-xs font-medium px-3 py-1.5 rounded-full hover:border-neutral-300 transition cursor-default">
-                Staff &amp; Facility Co-Allocation
-              </span>
-              <span className="bg-white/90 border border-neutral-200/80 text-neutral-700 text-xs font-medium px-3 py-1.5 rounded-full hover:border-neutral-300 transition cursor-default">
-                Emergency Triage Guardrails
+              <span className="bg-white/90 border border-neutral-200/80 text-neutral-700 text-xs font-medium px-3 py-1.5 rounded-full">
+                Emergency Escalation
               </span>
             </div>
 
-            <a
-              href="#how-it-works"
-              className="text-xs font-medium text-neutral-600 hover:text-neutral-950 flex items-center gap-1.5 transition-colors group cursor-pointer"
+            <Link
+              to="/product"
+              className="text-xs font-medium text-neutral-600 hover:text-neutral-950 flex items-center gap-1.5 transition-colors group"
             >
-              <span>See How It Works</span>
+              <span>See how the studio works</span>
               <ArrowRight className="w-3.5 h-3.5 text-neutral-400 group-hover:translate-x-0.5 group-hover:text-neutral-950 transition-all" />
-            </a>
+            </Link>
           </div>
         </section>
 
-        {/* Section: ENGINE ARCHITECTURE & FEATURES */}
+        {/* Section: CORE CAPABILITIES */}
         <section id="features" className="scroll-mt-28">
           <div className="mb-8">
             <span className="text-xs font-semibold tracking-wider uppercase text-neutral-400 block mb-2">
-              ENGINE ARCHITECTURE
+              WHY SCHEDULUX
             </span>
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-950">
-              Engineered for deterministic precision, not guesses.
+              Built for real bookings, not just chat replies.
             </h2>
           </div>
 
@@ -597,19 +404,18 @@ export default function LandingPage() {
                   <Lock className="w-4 h-4 text-neutral-800" />
                 </div>
                 <h3 className="text-base font-bold text-neutral-950 mb-2">
-                  Deterministic Slot Locking
+                  Zero Double-Bookings
                 </h3>
                 <p className="text-xs text-neutral-500 leading-relaxed">
-                  Eliminate double-booking forever. Schedulux evaluates operating hours, shift
-                  calendars, and buffer intervals, holding a temporary lock in RAM until the
-                  appointment is confirmed.
+                  Schedulux checks your live hours, staff shifts, and prep buffers—then holds the
+                  time slot for 10 minutes while your customer confirms.
                 </p>
               </div>
 
-              <div className="pt-5 mt-6 border-t border-neutral-150 flex items-center gap-2 text-[11px] font-mono tracking-wider text-neutral-400 uppercase">
-                <span>LATENCY: &lt; 240MS</span>
+              <div className="pt-5 mt-6 border-t border-neutral-150 flex items-center gap-2 text-[11px] font-medium tracking-wider text-neutral-400 uppercase">
+                <span>10-MIN SLOT HOLD</span>
                 <span className="text-neutral-300">|</span>
-                <span>ZERO OVERLAPS</span>
+                <span>NO OVERLAPS</span>
               </div>
             </div>
 
@@ -620,19 +426,18 @@ export default function LandingPage() {
                   <Users className="w-4 h-4 text-neutral-800" />
                 </div>
                 <h3 className="text-base font-bold text-neutral-950 mb-2">
-                  Staff &amp; Facility Co-Allocation
+                  Staff &amp; Room Pairing
                 </h3>
                 <p className="text-xs text-neutral-500 leading-relaxed">
-                  Co-allocate human specialists (advisors, stylists, technicians) and physical
-                  assets (meeting suites, styling stations, service bays) in a single unified
-                  booking.
+                  Reserve both a specialist (doctor, stylist, mechanic) and a physical room, chair,
+                  or service bay together in one seamless booking.
                 </p>
               </div>
 
-              <div className="pt-5 mt-6 border-t border-neutral-150 flex items-center gap-2 text-[11px] font-mono tracking-wider text-neutral-400 uppercase">
+              <div className="pt-5 mt-6 border-t border-neutral-150 flex items-center gap-2 text-[11px] font-medium tracking-wider text-neutral-400 uppercase">
                 <span>STAFF + ROOMS</span>
                 <span className="text-neutral-300">|</span>
-                <span>ASSET DISPATCH</span>
+                <span>EQUIPMENT &amp; BAYS</span>
               </div>
             </div>
 
@@ -643,34 +448,33 @@ export default function LandingPage() {
                   <ShieldCheck className="w-4 h-4 text-neutral-800" />
                 </div>
                 <h3 className="text-base font-bold text-neutral-950 mb-2">
-                  SMS OTP Customer Verification
+                  SMS Phone Verification
                 </h3>
                 <p className="text-xs text-neutral-500 leading-relaxed">
-                  Protect appointments with 6-digit SMS OTP verification powered by Twilio.
-                  Customers can securely self-serve to reschedule, cancel, or look up past bookings.
+                  Stop spam bookings with instant 6-digit SMS verification codes. Verified clients
+                  can also reschedule, cancel, or check upcoming visits themselves.
                 </p>
               </div>
 
-              <div className="pt-5 mt-6 border-t border-neutral-150 flex items-center gap-2 text-[11px] font-mono tracking-wider text-neutral-400 uppercase">
-                <span>TWILIO SMS OTP</span>
+              <div className="pt-5 mt-6 border-t border-neutral-150 flex items-center gap-2 text-[11px] font-medium tracking-wider text-neutral-400 uppercase">
+                <span>6-DIGIT SMS CODE</span>
                 <span className="text-neutral-300">|</span>
-                <span>FRAUD DEFENSE</span>
+                <span>SELF-SERVICE</span>
               </div>
             </div>
 
-            {/* Feature 4: PDF Knowledge Base RAG */}
+            {/* Feature 4: PDF Knowledge Base */}
             <div className="rounded-2xl border border-neutral-200/80 bg-[#fbfbfb] p-7 flex flex-col justify-between hover:border-neutral-300 hover:bg-white transition-all duration-200 group shadow-2xs">
               <div>
                 <div className="w-10 h-10 rounded-full border border-neutral-200 bg-white flex items-center justify-center text-neutral-700 mb-6 shadow-2xs group-hover:border-neutral-300 transition">
                   <FileText className="w-4 h-4 text-neutral-800" />
                 </div>
                 <h3 className="text-base font-bold text-neutral-950 mb-2">
-                  PDF Knowledge Base RAG
+                  Answers from Your PDFs
                 </h3>
                 <p className="text-xs text-neutral-500 leading-relaxed">
-                  Upload service guidelines, pricing sheets, or cancellation policies. Qdrant vector
-                  search and Voyage AI embeddings answer customer questions with strict
-                  zero-hallucination grounding.
+                  Upload pricing menus, prep instructions, or cancellation policies. Your assistant
+                  answers customer questions accurately using only your approved documents.
                 </p>
               </div>
 
@@ -752,13 +556,13 @@ export default function LandingPage() {
                 Tailored to any appointment-based business.
               </h2>
             </div>
-            <button
-              onClick={() => setShowDemoModal(true)}
-              className="text-xs font-medium text-neutral-600 hover:text-neutral-950 flex items-center gap-1.5 transition-colors group cursor-pointer self-start sm:self-auto"
+            <Link
+              to="/solutions"
+              className="text-xs font-medium text-neutral-600 hover:text-neutral-950 flex items-center gap-1.5 transition-colors group self-start sm:self-auto"
             >
-              <span>Schedule custom blueprint walkthrough</span>
+              <span>Explore all industry solutions</span>
               <ArrowRight className="w-3.5 h-3.5 text-neutral-400 group-hover:translate-x-0.5 group-hover:text-neutral-950 transition-all" />
-            </button>
+            </Link>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -818,248 +622,35 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Section: TRANSPARENT PRICING (MATCHING TIER CONFIGS) */}
+        {/* Section: TRANSPARENT PRICING CTA */}
         <section id="pricing" className="scroll-mt-28">
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <span className="text-xs font-semibold tracking-wider uppercase text-neutral-400 block mb-2">
-              TRANSPARENT PRICING
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-950">
-              Simple, predictable plans for growing businesses.
-            </h2>
-            <p className="text-sm text-neutral-500 mt-2">
-              Every plan includes autonomous AI booking concierges, deterministic slot locking, and
-              zero double-booking.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
-            {/* Plan 1: Starter */}
-            <div className="rounded-3xl border border-neutral-200/80 bg-white p-7 flex flex-col justify-between shadow-xs hover:border-neutral-300 transition">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-2">
-                  Starter
-                </div>
-                <div className="flex items-baseline gap-1 mb-3">
-                  <span className="text-3xl font-extrabold text-neutral-950 tracking-tight">
-                    $0
-                  </span>
-                  <span className="text-xs text-neutral-500 font-medium">/ forever</span>
-                </div>
-                <p className="text-xs text-neutral-500 leading-relaxed mb-6">
-                  Baseline tier for solo operators and independent specialists building their first
-                  AI scheduling agent.
-                </p>
-
-                <div className="space-y-3 pt-6 border-t border-neutral-100 text-xs text-neutral-700">
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>
-                      <strong>1</strong> AI Booking Agent
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>
-                      Up to <strong>2</strong> Bookable Services
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>
-                      Up to <strong>2</strong> Staff / Bay Resources
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>3 Knowledge Base PDFs (5MB max)</span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>100,000 Weekly AI Tokens</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-8 mt-6">
-                <Link
-                  to="/register"
-                  className="w-full rounded-full border border-neutral-300 bg-white hover:bg-neutral-50 hover:border-neutral-400 text-neutral-900 font-semibold py-2.5 text-xs transition flex items-center justify-center cursor-pointer shadow-2xs"
-                >
-                  Start Free
-                </Link>
-              </div>
+          <div className="rounded-3xl border border-neutral-200/80 bg-[#fafaf9] p-8 sm:p-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="max-w-xl space-y-2">
+              <span className="text-xs font-semibold tracking-wider uppercase text-neutral-400 block">
+                TRANSPARENT PRICING
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-950">
+                Start free. Scale when your bookings grow.
+              </h2>
+              <p className="text-sm text-neutral-500">
+                Compare Starter, Pro, Business, and Enterprise plans with live agent, service,
+                knowledge base, and token quotas.
+              </p>
             </div>
-
-            {/* Plan 2: Pro */}
-            <div className="rounded-3xl border border-neutral-200/80 bg-white p-7 flex flex-col justify-between shadow-xs hover:border-neutral-300 transition">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-2">
-                  Pro
-                </div>
-                <div className="flex items-baseline gap-1 mb-3">
-                  <span className="text-3xl font-extrabold text-neutral-950 tracking-tight">
-                    $29
-                  </span>
-                  <span className="text-xs text-neutral-500 font-medium">/ month</span>
-                </div>
-                <p className="text-xs text-neutral-500 leading-relaxed mb-6">
-                  For growing businesses with multiple bookable services and custom team resources.
-                </p>
-
-                <div className="space-y-3 pt-6 border-t border-neutral-100 text-xs text-neutral-700">
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>
-                      <strong>2</strong> AI Booking Agents
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>
-                      Up to <strong>15</strong> Bookable Services
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>
-                      Up to <strong>10</strong> Staff / Bay Resources
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>10 Knowledge Base PDFs (25MB max)</span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>500,000 Weekly AI Tokens</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-8 mt-6">
-                <Link
-                  to="/register"
-                  className="w-full rounded-full border border-neutral-300 bg-white hover:bg-neutral-50 hover:border-neutral-400 text-neutral-900 font-semibold py-2.5 text-xs transition flex items-center justify-center cursor-pointer shadow-2xs"
-                >
-                  Start Pro Trial
-                </Link>
-              </div>
-            </div>
-
-            {/* Plan 3: Business (Most Popular) */}
-            <div className="rounded-3xl border-2 border-neutral-950 bg-[#fafafa] p-7 flex flex-col justify-between shadow-md relative">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-neutral-950 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-0.5 rounded-full shadow-xs">
-                Most Popular
-              </div>
-
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-neutral-900 mb-2">
-                  Business
-                </div>
-                <div className="flex items-baseline gap-1 mb-3">
-                  <span className="text-3xl font-extrabold text-neutral-950 tracking-tight">
-                    $79
-                  </span>
-                  <span className="text-xs text-neutral-500 font-medium">/ month</span>
-                </div>
-                <p className="text-xs text-neutral-500 leading-relaxed mb-6">
-                  High-capacity tier for busy multi-staff businesses, studios, and high-volume
-                  operations.
-                </p>
-
-                <div className="space-y-3 pt-6 border-t border-neutral-200 text-xs text-neutral-800 font-medium">
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>
-                      <strong>5</strong> AI Booking Agents
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>
-                      Up to <strong>50</strong> Bookable Services
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>
-                      Up to <strong>50</strong> Staff / Bay Resources
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>50 Knowledge Base PDFs (100MB max)</span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>2,500,000 Weekly AI Tokens</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-8 mt-6">
-                <Link
-                  to="/register"
-                  className="w-full rounded-full bg-neutral-950 text-white font-semibold py-2.5 text-xs hover:bg-neutral-800 transition flex items-center justify-center cursor-pointer shadow-xs"
-                >
-                  Get Business
-                </Link>
-              </div>
-            </div>
-
-            {/* Plan 4: Enterprise */}
-            <div className="rounded-3xl border border-neutral-200/80 bg-white p-7 flex flex-col justify-between shadow-xs hover:border-neutral-300 transition">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-2">
-                  Enterprise
-                </div>
-                <div className="flex items-baseline gap-1 mb-3">
-                  <span className="text-3xl font-extrabold text-neutral-950 tracking-tight">
-                    $199
-                  </span>
-                  <span className="text-xs text-neutral-500 font-medium">/ month</span>
-                </div>
-                <p className="text-xs text-neutral-500 leading-relaxed mb-6">
-                  Unlimited enterprise capability with bespoke rate limits and dedicated SLA.
-                </p>
-
-                <div className="space-y-3 pt-6 border-t border-neutral-100 text-xs text-neutral-700">
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>
-                      <strong>Unlimited</strong> AI Agents
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>
-                      <strong>Unlimited</strong> Services &amp; Resources
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Unlimited Knowledge Base Documents</span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Unlimited Weekly AI Tokens</span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>1,000 RPM API Limit &amp; 99.9% SLA</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-8 mt-6">
-                <Link
-                  to="/register"
-                  className="w-full rounded-full border border-neutral-300 bg-white hover:bg-neutral-50 hover:border-neutral-400 text-neutral-900 font-semibold py-2.5 text-xs transition flex items-center justify-center cursor-pointer shadow-2xs"
-                >
-                  Get Enterprise
-                </Link>
-              </div>
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <Link
+                to="/pricing"
+                className="rounded-full bg-neutral-950 text-white px-6 py-3 text-xs font-semibold hover:bg-neutral-800 transition inline-flex items-center gap-2"
+              >
+                <span>View Live Plans &amp; Limits</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+              <Link
+                to="/product"
+                className="rounded-full border border-neutral-300 bg-white text-neutral-800 px-6 py-3 text-xs font-semibold hover:bg-neutral-50 transition"
+              >
+                Explore Product
+              </Link>
             </div>
           </div>
         </section>
@@ -1123,37 +714,20 @@ export default function LandingPage() {
             <form onSubmit={handleGenerateAgent} className="relative max-w-lg mx-auto">
               <div className="relative flex items-center">
                 <input
-                  type="text"
+                  type="url"
                   value={websiteUrl}
                   onChange={(e) => setWebsiteUrl(e.target.value)}
-                  placeholder="Enter your business website URL"
+                  placeholder="https://yourbusiness.com"
                   className="w-full pl-5 pr-38 py-3.5 rounded-full border border-neutral-300 bg-white text-sm text-neutral-900 placeholder-neutral-400 shadow-xs focus:outline-none focus:ring-2 focus:ring-neutral-950 focus:border-transparent transition"
                 />
                 <button
                   type="submit"
-                  disabled={isGenerating}
-                  className="absolute right-1.5 top-1.5 bottom-1.5 rounded-full bg-neutral-950 text-white px-5 text-xs font-semibold hover:bg-neutral-800 disabled:opacity-75 transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  className="absolute right-1.5 top-1.5 bottom-1.5 rounded-full bg-neutral-950 text-white px-5 text-xs font-semibold hover:bg-neutral-800 transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
                 >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Analyzing...
-                    </>
-                  ) : (
-                    'Generate Agent'
-                  )}
+                  <span>Build Agent</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
-
-              {generatedSuccess && (
-                <div className="mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-center gap-2 animate-in fade-in duration-200">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>
-                    Agent scaffold generated successfully for <strong>{websiteUrl}</strong>! Ready
-                    to customize in your studio.
-                  </span>
-                </div>
-              )}
             </form>
 
             <p className="text-xs text-neutral-400 mt-5">
@@ -1162,114 +736,6 @@ export default function LandingPage() {
           </div>
         </section>
       </main>
-
-      {/* Footer */}
-      <footer className="border-t border-neutral-200 py-10 bg-white">
-        <div className="max-w-7xl mx-auto px-6 sm:px-8 flex flex-col sm:flex-row items-center justify-between gap-6">
-          {/* Logo & Copyright */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1">
-              <span className="w-1.5 h-4 bg-neutral-950 rounded-full inline-block" />
-              <span className="w-1.5 h-4 bg-neutral-950 rounded-full inline-block" />
-            </div>
-            <span className="font-bold text-sm tracking-tight text-neutral-950">Schedulux AI</span>
-            <span className="text-neutral-400 text-xs ml-2">
-              &copy; 2026 Schedulux Inc. All rights reserved.
-            </span>
-          </div>
-
-          {/* Links */}
-          <div className="flex flex-wrap items-center gap-6 text-xs text-neutral-500 font-medium">
-            <a href="#features" className="hover:text-neutral-950 transition-colors">
-              Features
-            </a>
-            <a href="#how-it-works" className="hover:text-neutral-950 transition-colors">
-              Workflow
-            </a>
-            <a href="#pricing" className="hover:text-neutral-950 transition-colors">
-              Pricing
-            </a>
-            <a href="#faq" className="hover:text-neutral-950 transition-colors">
-              FAQ
-            </a>
-          </div>
-        </div>
-      </footer>
-
-      {/* Interactive Contact / Demo Modal */}
-      {showDemoModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-neutral-200 p-8 max-w-md w-full shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
-            <button
-              onClick={() => setShowDemoModal(false)}
-              className="absolute top-5 right-5 text-neutral-400 hover:text-neutral-800 p-1 cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="w-5 h-5 text-amber-500" />
-              <h3 className="text-xl font-bold text-neutral-950">Experience Schedulux AI</h3>
-            </div>
-            <p className="text-xs text-neutral-500 mb-6">
-              Connect with our solutions team to test custom scheduling rules or multi-resource
-              allocation.
-            </p>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                alert('Thank you! A Schedulux engineer will connect with you within 15 minutes.');
-                setShowDemoModal(false);
-              }}
-              className="space-y-3.5"
-            >
-              <div>
-                <label className="text-xs font-semibold text-neutral-700 block mb-1">
-                  Work Email
-                </label>
-                <input
-                  type="email"
-                  required
-                  placeholder="alex@yourbusiness.com"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-950"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-neutral-700 block mb-1">
-                  Primary Appointment Type
-                </label>
-                <select className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-950 text-neutral-700">
-                  <option>Professional &amp; Consulting Services</option>
-                  <option>Salons, Spas &amp; Personal Care</option>
-                  <option>Automotive &amp; Equipment Services</option>
-                  <option>Healthcare &amp; Wellness Clinics</option>
-                  <option>Other Custom Appointment Business</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-neutral-700 block mb-1">
-                  Monthly Booking Volume
-                </label>
-                <select className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-950 text-neutral-700">
-                  <option>100 – 500 appointments / mo</option>
-                  <option>500 – 2,500 appointments / mo</option>
-                  <option>2,500+ enterprise appointments</option>
-                </select>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  className="w-full rounded-full bg-neutral-950 text-white font-medium py-3 text-xs hover:bg-neutral-800 transition shadow-sm cursor-pointer"
-                >
-                  Schedule 1-on-1 Sandbox Demo
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+    </PublicLayout>
   );
 }

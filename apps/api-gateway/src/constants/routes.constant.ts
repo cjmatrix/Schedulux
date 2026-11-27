@@ -58,6 +58,7 @@ export const API_ROUTES = {
       BASE: 'api/v1/tenant/billing',
       SUBSCRIPTION: 'subscription',
       CONFIG: 'config',
+      TIERS: 'tiers',
       WEBHOOK: 'webhook',
       CHECKOUT: 'checkout',
     },

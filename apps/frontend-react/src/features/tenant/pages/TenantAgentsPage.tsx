@@ -9,6 +9,7 @@ import {
   Copy,
   FileText,
   Globe,
+  Home,
   Layers,
   LayoutDashboard,
   Loader2,
@@ -96,7 +97,12 @@ export default function TenantAgentsPage() {
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-6 sm:px-10 h-16 flex items-center justify-between shrink-0 shadow-2xs">
         {/* Brand Logo & Workspace Info */}
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2.5 text-left cursor-pointer hover:opacity-80 transition-opacity"
+            title="Go to Home"
+          >
             <div className="w-8 h-8 rounded-xl bg-black text-white flex items-center justify-center font-black text-sm shadow-sm">
               <Calendar className="w-4 h-4" />
             </div>
@@ -108,7 +114,7 @@ export default function TenantAgentsPage() {
                 Multi-Agent Workspace
               </span>
             </div>
-          </div>
+          </button>
 
           <div className="h-5 w-px bg-slate-200 hidden sm:block" />
 
@@ -118,8 +124,18 @@ export default function TenantAgentsPage() {
           </div>
         </div>
 
-        {/* User Profile & Sign Out */}
+        {/* User Profile, Home & Sign Out */}
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            title="Back to Landing Page"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200/80 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-950 text-xs font-semibold transition-colors cursor-pointer"
+          >
+            <Home className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Home</span>
+          </button>
+
           <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full border border-slate-200/80 bg-white">
             <div className="w-6 h-6 rounded-full bg-slate-900 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
               {userInitials}

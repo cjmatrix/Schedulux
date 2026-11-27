@@ -13,6 +13,11 @@ import { TenantProtectedRoute } from './features/tenant/components/TenantProtect
 // Lazy-loaded Layouts & Pages (Route-level Code Splitting)
 const App = lazy(() => import('./App.tsx'));
 const LandingPage = lazy(() => import('./pages/LandingPage.tsx'));
+const ProductPage = lazy(() => import('./pages/ProductPage.tsx'));
+const SolutionsPage = lazy(() => import('./pages/SolutionsPage.tsx'));
+const SecurityPage = lazy(() => import('./pages/SecurityPage.tsx'));
+const DocsPage = lazy(() => import('./pages/DocsPage.tsx'));
+const PricingPage = lazy(() => import('./pages/PricingPage.tsx'));
 const PublicChatPage = lazy(() => import('./features/public/pages/PublicChatPage.tsx'));
 
 // Auth & Invite Pages
@@ -93,6 +98,26 @@ const router = createBrowserRouter([
   {
     path: '/home',
     element: withSuspense(<LandingPage />),
+  },
+  {
+    path: '/product',
+    element: withSuspense(<ProductPage />),
+  },
+  {
+    path: '/solutions',
+    element: withSuspense(<SolutionsPage />),
+  },
+  {
+    path: '/security',
+    element: withSuspense(<SecurityPage />),
+  },
+  {
+    path: '/docs',
+    element: withSuspense(<DocsPage />),
+  },
+  {
+    path: '/pricing',
+    element: withSuspense(<PricingPage />),
   },
   {
     path: '/register',

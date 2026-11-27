@@ -1,11 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import { billingApi, type PaddlePublicConfig, type SubscriptionDetails } from '../api/billingApi';
+import {
+  billingApi,
+  type PaddlePublicConfig,
+  type SubscriptionDetails,
+  type TierConfig,
+} from '../api/billingApi';
 
 export const BILLING_KEYS = {
   all: ['billing'] as const,
   subscription: () => ['billing', 'subscription'] as const,
   config: () => ['billing', 'config'] as const,
+  tiers: () => ['billing', 'tiers'] as const,
 };
 
 export function useBillingSubscription() {
@@ -26,6 +32,18 @@ export function useBillingConfig() {
     queryFn: async () => {
       const res = await billingApi.getConfig();
       return res.data;
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function usePublicTiers() {
+  return useQuery<Record<string, TierConfig>, Error>({
+    queryKey: BILLING_KEYS.tiers(),
+    queryFn: async () => {
+      const res = await billingApi.getPublicTiers();
+      return res.data.tiers;
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,

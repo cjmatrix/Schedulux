@@ -19,7 +19,7 @@
 
 No forms. No code. Just conversation.
 
-[🌐 Website](https://schedulux.xyz) · [🚀 Dashboard](https://app.schedulux.xyz) · [📐 Architecture](#architecture-overview)
+[🌐 Website](https://app.schedulux.xyz)  · [📐 Architecture](#architecture-overview)
 
 </div>
 
@@ -99,6 +99,8 @@ The result: a dentist, salon owner, auto shop, or hotel can go from zero to a li
 ---
 
 ## Architecture Overview
+
+![Schedulux Multi-Tenant AI Scheduling Architecture](./docs/Schedulux%20Multi-Tenant%20AI%20Scheduling%20Architecture%20(23).png)
 
 ![Schedulux System Architecture](./docs/assets/architecture.png)
 

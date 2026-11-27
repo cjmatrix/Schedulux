@@ -17,9 +17,11 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { ClientGrpc } from '@nestjs/microservices';
 import { SkipThrottle } from '@nestjs/throttler';
+import { SuperAdminTierConfigServiceClient } from '@repo/proto/superadmin';
 import { TenantServiceClient } from '@repo/proto/tenant';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { lastValueFrom } from 'rxjs';
+import { STATIC_TIER_CONFIGS, type TierConfig } from '../../constants/tiers.constant.js';
 import { API_ROUTES } from '../../constants/routes.constant.js';
 import { RESPONSE_MESSAGES } from '../../constants/messages.constant.js';
 import { Roles } from '../../decorators/roles.decorator.js';
@@ -35,9 +37,11 @@ import { CreateCheckoutDto } from './dtos/checkout.dto.js';
 export class BillingController implements OnModuleInit {
   private readonly _logger = new Logger(BillingController.name);
   private _tenantService!: TenantServiceClient;
+  private _tierConfigService!: SuperAdminTierConfigServiceClient;
 
   constructor(
     @Inject('TENANT_PACKAGE') private readonly _tenantClient: ClientGrpc,
+    @Inject('SUPERADMIN_PACKAGE') private readonly _superadminClient: ClientGrpc,
     @Inject(RedisService) private readonly _redisService: RedisService,
     @Inject(ConfigService) private readonly _configService: ConfigService,
     @Inject(CIRCUIT_BREAKER_SERVICE)
@@ -48,6 +52,12 @@ export class BillingController implements OnModuleInit {
     this._tenantService = this._circuitBreakerService.wrapGrpcClient(
       'tenant-service',
       this._tenantClient.getService<TenantServiceClient>('TenantService'),
+    );
+    this._tierConfigService = this._circuitBreakerService.wrapGrpcClient(
+      'superadmin-service',
+      this._superadminClient.getService<SuperAdminTierConfigServiceClient>(
+        'SuperAdminTierConfigService',
+      ),
     );
   }
 
@@ -78,6 +88,53 @@ export class BillingController implements OnModuleInit {
           business: this._configService.get<string>('PADDLE_PRICE_ID_BUSINESS') || '',
           enterprise: this._configService.get<string>('PADDLE_PRICE_ID_ENTERPRISE') || '',
         },
+      },
+    };
+  }
+
+  @Get(API_ROUTES.TENANT.BILLING.TIERS)
+  async getPublicTiers() {
+    let tiers = await this._redisService.getCachedAllTierConfigsRaw();
+
+    if (!tiers) {
+      try {
+        const res = await lastValueFrom(this._tierConfigService.listTierConfigs({}));
+        if (res.configs && res.configs.length > 0) {
+          tiers = {};
+          for (const item of res.configs) {
+            tiers[item.tier] = {
+              tier: item.tier,
+              name: item.name,
+              max_agents: Number(item.max_agents),
+              max_services: Number(item.max_services),
+              max_resources: Number(item.max_resources),
+              max_kb_docs: Number(item.max_kb_docs),
+              max_kb_doc_size_mb: Number(item.max_kb_doc_size_mb),
+              weekly_token_limit: Number(item.weekly_token_limit),
+              rate_limit_rpm: Number(item.rate_limit_rpm),
+              weekly_crawl_limit: Number(
+                item.weekly_crawl_limit ?? (item.tier === 'enterprise' ? -1 : 5),
+              ),
+              status: (['active', 'deprecated', 'inactive'].includes(item.status)
+                ? item.status
+                : 'active') as TierConfig['status'],
+              description: item.description,
+            };
+          }
+        }
+      } catch (err: any) {
+        this._logger.warn(
+          `Could not fetch tiers via identity-tenant gRPC, using static fallback: ${err?.message}`,
+        );
+      }
+    }
+
+    const resolvedTiers: Record<string, TierConfig> = tiers || { ...STATIC_TIER_CONFIGS };
+
+    return {
+      message: 'Subscription tiers retrieved successfully',
+      data: {
+        tiers: resolvedTiers,
       },
     };
   }

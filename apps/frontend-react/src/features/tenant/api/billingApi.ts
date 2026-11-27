@@ -55,6 +55,13 @@ export const billingApi = {
     return response.data;
   },
 
+  getPublicTiers: async (): Promise<ApiResponse<{ tiers: Record<string, TierConfig> }>> => {
+    const response = await axiosClient.get<ApiResponse<{ tiers: Record<string, TierConfig> }>>(
+      '/api/v1/tenant/billing/tiers',
+    );
+    return response.data;
+  },
+
   createCheckout: async (plan: string): Promise<ApiResponse<{ transaction_id: string }>> => {
     const response = await axiosClient.post<ApiResponse<{ transaction_id: string }>>(
       '/api/v1/tenant/billing/checkout',

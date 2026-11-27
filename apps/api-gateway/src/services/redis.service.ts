@@ -232,44 +232,47 @@ export class RedisService
     return fallback;
   }
 
-  async getCachedAllTierConfigs(): Promise<Record<string, TierConfig>> {
-    const fallback = { ...STATIC_TIER_CONFIGS };
-    if (!this._client) return fallback;
+  async getCachedAllTierConfigsRaw(): Promise<Record<string, TierConfig> | null> {
+    if (!this._client) return null;
 
     try {
       const raw = await this._client.get('tier_config:all');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          const result: Record<string, TierConfig> = {};
-          for (const item of parsed) {
-            result[item.tier] = {
-              tier: item.tier,
-              name: item.name,
-              max_agents: Number(item.max_agents),
-              max_services: Number(item.max_services),
-              max_resources: Number(item.max_resources),
-              max_kb_docs: Number(item.max_kb_docs),
-              max_kb_doc_size_mb: Number(item.max_kb_doc_size_mb),
-              weekly_token_limit: Number(item.weekly_token_limit),
-              rate_limit_rpm: Number(item.rate_limit_rpm),
-              weekly_crawl_limit: Number(
-                item.weekly_crawl_limit ?? (item.tier === 'enterprise' ? -1 : 5),
-              ),
-              status: item.status,
-              description: item.description,
-            };
-          }
-          return result;
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const result: Record<string, TierConfig> = {};
+        for (const item of parsed) {
+          result[item.tier] = {
+            tier: item.tier,
+            name: item.name,
+            max_agents: Number(item.max_agents),
+            max_services: Number(item.max_services),
+            max_resources: Number(item.max_resources),
+            max_kb_docs: Number(item.max_kb_docs),
+            max_kb_doc_size_mb: Number(item.max_kb_doc_size_mb),
+            weekly_token_limit: Number(item.weekly_token_limit),
+            rate_limit_rpm: Number(item.rate_limit_rpm),
+            weekly_crawl_limit: Number(
+              item.weekly_crawl_limit ?? (item.tier === 'enterprise' ? -1 : 5),
+            ),
+            status: item.status,
+            description: item.description,
+          };
         }
-        if (typeof parsed === 'object' && parsed !== null) {
-          return parsed as Record<string, TierConfig>;
-        }
+        return result;
+      }
+      if (typeof parsed === 'object' && parsed !== null && Object.keys(parsed).length > 0) {
+        return parsed as Record<string, TierConfig>;
       }
     } catch (err) {
-      this._logger.warn('Failed to read tier_config:all from Redis, using fallback:', err);
+      this._logger.warn('Failed to read tier_config:all from Redis:', err);
     }
-    return fallback;
+    return null;
+  }
+
+  async getCachedAllTierConfigs(): Promise<Record<string, TierConfig>> {
+    const cached = await this.getCachedAllTierConfigsRaw();
+    return cached || { ...STATIC_TIER_CONFIGS };
   }
 
   async invalidateTierConfigCache(tier?: string): Promise<void> {

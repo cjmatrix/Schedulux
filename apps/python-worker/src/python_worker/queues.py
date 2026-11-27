@@ -162,7 +162,7 @@ async def publish_schema_generation_job(
     """Stores crawled markdown in Redis (Claim Check) and enqueues schema generation on SQS."""
     redis = get_redis_client()
     schema_data_key = f"crawl:schema_data:{job_id}"
-    await redis.setex(schema_data_key, 86400, json.dumps(crawled_data))
+    await redis.setex(schema_data_key, 600, json.dumps(crawled_data))
 
     queue_url = await resolve_queue_url(
         "AWS_SQS_SCHEMA_QUEUE_URL",

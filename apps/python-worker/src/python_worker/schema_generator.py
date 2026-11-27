@@ -316,6 +316,7 @@ async def process_schema_generation(job_or_data, token=None):
     url = data.get("url")
     job_id = data.get("job_id")
     crawled_data = data.get("crawled_data")
+    redis_key: str | None = None
     if not crawled_data and job_id:
         redis_key = data.get("crawled_data_redis_key") or f"crawl:schema_data:{job_id}"
         raw_cached = await get_redis_client().get(redis_key)
@@ -340,8 +341,8 @@ async def process_schema_generation(job_or_data, token=None):
         latest_key = f"agent:draft:{tenant_id}"
         schema_json = json.dumps(schema)
 
-        await redis.setex(draft_key, 86400, schema_json)
-        await redis.setex(latest_key, 86400, schema_json)
+        await redis.setex(draft_key, 1800, schema_json)
+        await redis.setex(latest_key, 1800, schema_json)
 
         print(f"[Schema Worker] Stored draft schema in Redis: {draft_key}", flush=True)
         print(f"[Schema Worker] Schema JSON preview: {schema_json[:500]}...", flush=True)
@@ -374,5 +375,10 @@ async def process_schema_generation(job_or_data, token=None):
 
         await publish_schema_failure_event(tenant_id, url, job_id, friendly_err)
 
-     
         raise RuntimeError(friendly_err) from exc
+    finally:
+        if redis_key:
+            try:
+                await get_redis_client().delete(redis_key)
+            except Exception:
+                pass

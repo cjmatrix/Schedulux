@@ -281,30 +281,30 @@ export default function SchedulingOnboarding() {
             </div>
           )}
 
-          {/* Generated Schema Display (Real-time via WebSocket) */}
+          {/* Generated Schema Display */}
           {schema && stage === 'completed' && (
-            <div className="mt-8 rounded-2xl border border-emerald-300 bg-emerald-50/30 p-6 shadow-sm animate-in slide-in-from-top-4 duration-400">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-emerald-200/60">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-white">
+            <div className="mt-8 rounded-2xl border border-emerald-300 bg-emerald-50/30 p-4 sm:p-6 shadow-sm animate-in slide-in-from-top-4 duration-400 min-w-0 overflow-hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-emerald-200/60">
+                <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
                     <CheckCircle2 className="w-4 h-4" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-neutral-950 text-base">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-bold text-neutral-950 text-sm sm:text-base">
                         AI Generated Schema Ready
                       </h3>
-                      <span className="rounded-full bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 uppercase tracking-wider">
+                      <span className="rounded-full bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 uppercase tracking-wider shrink-0">
                         Live via Redis
                       </span>
                     </div>
-                    <p className="text-xs text-neutral-500">
-                      Inferred from {websiteUrl} & compiled via Schedulux AI
+                    <p className="text-xs text-neutral-500 break-all mt-0.5">
+                      Inferred from {websiteUrl} &amp; compiled via Schedulux AI
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => setShowJsonRaw(!showJsonRaw)}
@@ -325,14 +325,14 @@ export default function SchedulingOnboarding() {
 
               {/* Business Overview */}
               <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                <div className="rounded-xl border border-neutral-200 bg-white p-4 min-w-0">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1">
-                    <Building2 className="w-3 h-3" /> Business Profile
+                    <Building2 className="w-3 h-3 shrink-0" /> Business Profile
                   </span>
-                  <p className="text-sm font-bold text-neutral-950 mt-1">
+                  <p className="text-sm font-bold text-neutral-950 mt-1 break-words">
                     {schema?.business_profile?.name || 'Inferred Business'}
                   </p>
-                  <p className="text-xs text-neutral-500 mt-0.5">
+                  <p className="text-xs text-neutral-500 mt-0.5 break-words">
                     Vertical:{' '}
                     <span className="font-semibold text-neutral-800 capitalize">
                       {schema?.business_profile?.vertical || 'Service'}
@@ -346,7 +346,7 @@ export default function SchedulingOnboarding() {
                   )}
                 </div>
 
-                <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                <div className="rounded-xl border border-neutral-200 bg-white p-4 min-w-0">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1">
                     <Clock className="w-3 h-3" /> Operating Hours
                   </span>
@@ -379,10 +379,10 @@ export default function SchedulingOnboarding() {
               </div>
 
               {/* Detected Services */}
-              <div className="mt-5">
-                <div className="flex items-center justify-between mb-3">
+              <div className="mt-5 min-w-0">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                   <span className="text-xs font-bold uppercase tracking-wider text-neutral-600 flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-neutral-500" />
+                    <Layers className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
                     Detected Services ({schema?.services?.length || 0})
                   </span>
                   <span className="text-[11px] text-neutral-400">
@@ -394,7 +394,7 @@ export default function SchedulingOnboarding() {
                   {schema?.services?.map((srv, idx: number) => (
                     <div
                       key={srv.service_id || idx}
-                      className="rounded-xl border border-neutral-200 bg-white p-4"
+                      className="rounded-xl border border-neutral-200 bg-white p-4 min-w-0"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-bold text-neutral-950 truncate">{srv.name}</p>
@@ -417,8 +417,10 @@ export default function SchedulingOnboarding() {
 
               {/* Raw JSON viewer */}
               {showJsonRaw && (
-                <div className="mt-5 rounded-xl bg-neutral-950 p-4 text-emerald-400 font-mono text-xs overflow-x-auto max-h-80">
-                  <pre>{JSON.stringify(schema, null, 2)}</pre>
+                <div className="mt-5 rounded-xl bg-neutral-950 p-4 text-emerald-400 font-mono text-xs overflow-x-auto max-w-full max-h-80">
+                  <pre className="whitespace-pre-wrap break-words">
+                    {JSON.stringify(schema, null, 2)}
+                  </pre>
                 </div>
               )}
 
@@ -431,15 +433,15 @@ export default function SchedulingOnboarding() {
               )}
 
               {/* Action to proceed with generated schema */}
-              <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-neutral-100">
-                <span className="text-xs text-neutral-500">
+              <div className="mt-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-4 border-t border-neutral-100">
+                <span className="text-xs text-neutral-500 text-center sm:text-left">
                   Ready to configure? Click below to save this draft to your agents collection.
                 </span>
                 <button
                   type="button"
                   disabled={isSavingDraft}
                   onClick={handleContinue}
-                  className="rounded-full bg-neutral-950 px-6 py-3 text-xs font-bold text-white hover:bg-neutral-800 transition cursor-pointer flex items-center gap-2 shadow-sm disabled:opacity-60"
+                  className="w-full sm:w-auto justify-center rounded-full bg-neutral-950 px-6 py-3 text-xs font-bold text-white hover:bg-neutral-800 transition cursor-pointer flex items-center gap-2 shadow-sm disabled:opacity-60 shrink-0"
                 >
                   {isSavingDraft ? (
                     <>

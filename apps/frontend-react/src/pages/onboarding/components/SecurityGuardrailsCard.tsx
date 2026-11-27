@@ -79,30 +79,30 @@ export const SecurityGuardrailsCard: React.FC<SecurityGuardrailsCardProps> = ({
   const handoffMessage = handoff?.handoff_message || null;
 
   return (
-    <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-2xs space-y-6">
+    <div className="bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-6 shadow-2xs space-y-6 min-w-0">
       {/* ── CARD HEADER ── */}
       <div className="flex items-start justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-xs">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 shrink-0 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-xs">
             <ShieldCheck className="w-5 h-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h3 className="text-sm font-bold text-slate-900">Security &amp; Intake Guardrails</h3>
             <p className="text-xs text-slate-500">
-              Deterministic policies enforced before conversation response generation
+              Live policy preview — ask the AI Architect in chat to adjust any rule
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isHipaaCompliant && (
-            <span className="flex items-center gap-1 bg-emerald-50 border border-emerald-200/70 text-emerald-800 text-[10px] font-bold px-2.5 py-1 rounded-full">
+            <span className="flex items-center gap-1 bg-emerald-50 border border-emerald-200/70 text-emerald-800 text-[10px] font-bold px-2.5 py-1 rounded-md whitespace-nowrap">
               <BadgeCheck className="w-3.5 h-3.5 text-emerald-600" />
               HIPAA COMPLIANT
             </span>
           )}
           {phiPolicy && (
-            <span className="font-extrabold text-[10px] px-3 py-1 rounded-full tracking-wider uppercase bg-slate-900 text-white">
+            <span className="font-extrabold text-[10px] px-2.5 py-1 rounded-md tracking-wider uppercase bg-slate-100 text-slate-700 border border-slate-200 whitespace-nowrap">
               {phiPolicy.toUpperCase()}
             </span>
           )}
@@ -190,79 +190,67 @@ export const SecurityGuardrailsCard: React.FC<SecurityGuardrailsCardProps> = ({
 
         {/* MODULE 2: DATA PRIVACY & PHI SCRUBBING */}
         <div className="pt-4 space-y-2">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <FileLock2 className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-xs font-bold text-slate-900">
-                  Data Privacy &amp; PHI Scrubbing
-                </span>
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    isPhiEnabled ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'
-                  }`}
-                >
-                  {isPhiEnabled ? 'Active' : 'Disabled'}
-                </span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 shrink-0 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <FileLock2 className="w-3.5 h-3.5" />
               </div>
-              <p className="text-[11px] text-slate-500 leading-relaxed max-w-xl pl-8">
-                {phiDescription ||
-                  (isPhiEnabled
-                    ? 'Automated tokenization and redaction of sensitive client data before LLM inference.'
-                    : 'Data redaction guardrail is not configured for this agent.')}
-              </p>
+              <span className="text-xs font-bold text-slate-900">
+                Data Privacy &amp; PHI Scrubbing
+              </span>
             </div>
-
-            <div
-              className={`w-11 h-6 flex items-center rounded-full p-1 transition flex-shrink-0 cursor-default select-none ${
-                isPhiEnabled ? 'bg-slate-950 justify-end' : 'bg-slate-200 justify-start'
+            <span
+              className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-md border whitespace-nowrap ${
+                isPhiEnabled
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200/80'
+                  : 'bg-slate-50 text-slate-500 border-slate-200/80'
               }`}
             >
-              <div className="w-4 h-4 rounded-full bg-white shadow-xs"></div>
-            </div>
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${isPhiEnabled ? 'bg-emerald-500' : 'bg-slate-400'}`}
+              />
+              {isPhiEnabled ? 'Active' : 'Off'}
+            </span>
           </div>
+          <p className="text-[11px] text-slate-500 leading-relaxed max-w-xl sm:pl-8">
+            {phiDescription ||
+              (isPhiEnabled
+                ? 'Automated tokenization and redaction of sensitive client data before LLM inference.'
+                : 'Data redaction guardrail is not configured for this agent.')}
+          </p>
         </div>
 
         {/* MODULE 3: EMERGENCY & SAFETY TRIAGE */}
         <div className="pt-4 space-y-3">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-xs font-bold text-slate-900">
-                  Emergency / Safety Triage Deflection
-                </span>
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    isTriageEnabled
-                      ? 'bg-rose-100 text-rose-800 border border-rose-200/80'
-                      : 'bg-slate-100 text-slate-500'
-                  }`}
-                >
-                  {isTriageEnabled ? 'Deflection Active' : 'Disabled'}
-                </span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 shrink-0 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                <AlertTriangle className="w-3.5 h-3.5" />
               </div>
-              <p className="text-[11px] text-slate-500 leading-relaxed max-w-xl pl-8">
-                {isTriageEnabled
-                  ? 'Immediate deflection to emergency response lines when acute safety or critical issues are detected.'
-                  : 'Emergency triage deflection is not configured for this agent.'}
-              </p>
+              <span className="text-xs font-bold text-slate-900">
+                Emergency / Safety Triage Deflection
+              </span>
             </div>
-
-            <div
-              className={`w-11 h-6 flex items-center rounded-full p-1 transition flex-shrink-0 cursor-default select-none ${
-                isTriageEnabled ? 'bg-slate-950 justify-end' : 'bg-slate-200 justify-start'
+            <span
+              className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-md border whitespace-nowrap ${
+                isTriageEnabled
+                  ? 'bg-rose-50 text-rose-800 border-rose-200/80'
+                  : 'bg-slate-50 text-slate-500 border-slate-200/80'
               }`}
             >
-              <div className="w-4 h-4 rounded-full bg-white shadow-xs"></div>
-            </div>
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${isTriageEnabled ? 'bg-rose-500' : 'bg-slate-400'}`}
+              />
+              {isTriageEnabled ? 'Deflection Active' : 'Off'}
+            </span>
           </div>
+          <p className="text-[11px] text-slate-500 leading-relaxed max-w-xl sm:pl-8">
+            {isTriageEnabled
+              ? 'Immediate deflection to emergency response lines when acute safety or critical issues are detected.'
+              : 'Emergency triage deflection is not configured for this agent.'}
+          </p>
 
-          <div className="ml-8 space-y-2.5">
+          <div className="sm:ml-8 space-y-2.5">
             <div className="space-y-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 Trigger Keywords:
@@ -298,40 +286,35 @@ export const SecurityGuardrailsCard: React.FC<SecurityGuardrailsCardProps> = ({
 
         {/* MODULE 4: HUMAN ESCALATION & STAFF HANDOFF */}
         <div className="pt-4 space-y-3">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-                  <Headphones className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-xs font-bold text-slate-900">
-                  Human Escalation &amp; Live Staff Handoff
-                </span>
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    isHandoffEnabled ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'
-                  }`}
-                >
-                  {isHandoffEnabled ? 'Active' : 'Disabled'}
-                </span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 shrink-0 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Headphones className="w-3.5 h-3.5" />
               </div>
-              <p className="text-[11px] text-slate-500 leading-relaxed max-w-xl pl-8">
-                {isHandoffEnabled
-                  ? 'Seamless handoff to human front desk or staff when customer inquiries exceed automated capabilities.'
-                  : 'Live staff handoff is not configured for this agent.'}
-              </p>
+              <span className="text-xs font-bold text-slate-900">
+                Human Escalation &amp; Live Staff Handoff
+              </span>
             </div>
-
-            <div
-              className={`w-11 h-6 flex items-center rounded-full p-1 transition flex-shrink-0 cursor-default select-none ${
-                isHandoffEnabled ? 'bg-slate-950 justify-end' : 'bg-slate-200 justify-start'
+            <span
+              className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-md border whitespace-nowrap ${
+                isHandoffEnabled
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200/80'
+                  : 'bg-slate-50 text-slate-500 border-slate-200/80'
               }`}
             >
-              <div className="w-4 h-4 rounded-full bg-white shadow-xs"></div>
-            </div>
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${isHandoffEnabled ? 'bg-emerald-500' : 'bg-slate-400'}`}
+              />
+              {isHandoffEnabled ? 'Active' : 'Off'}
+            </span>
           </div>
+          <p className="text-[11px] text-slate-500 leading-relaxed max-w-xl sm:pl-8">
+            {isHandoffEnabled
+              ? 'Seamless handoff to human front desk or staff when customer inquiries exceed automated capabilities.'
+              : 'Live staff handoff is not configured for this agent.'}
+          </p>
 
-          <div className="ml-8 space-y-2.5">
+          <div className="sm:ml-8 space-y-2.5">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 Staff Contact:

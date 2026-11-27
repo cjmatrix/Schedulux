@@ -1,6 +1,8 @@
 from enum import Enum
 from typing import Optional, Any
 import copy
+import re
+import secrets
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 class BookingMode(str, Enum):
@@ -246,6 +248,58 @@ class GeneratedAgentDraftSchema(BaseModel):
     runtime_meta: Optional[StrictRuntimeMetaSchema] = None
 
 
+_HEX_SUFFIX_RE = re.compile(r"_[0-9a-f]{6}$")
+
+
+def _slugify(value: str, fallback: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", (value or "").strip().lower()).strip("_")
+    return slug[:40] or fallback
+
+
+def _ensure_hex_id(raw_id: Optional[str], prefix: str, name: Optional[str]) -> str:
+    base = (raw_id or "").strip()
+    if not base:
+        base = f"{prefix}_{_slugify(name or '', prefix)}"
+    elif not base.startswith(f"{prefix}_"):
+        base = f"{prefix}_{_slugify(base, prefix)}"
+    if _HEX_SUFFIX_RE.search(base):
+        return base
+    return f"{base}_{secrets.token_hex(3)}"
+
+
+def _uniquify_inventory_ids(cleaned: dict) -> None:
+    """Appends a 6-char random hex suffix to resource_id & service_id and remaps references."""
+    resource_id_map: dict[str, str] = {}
+
+    resources = cleaned.get("resources")
+    if isinstance(resources, list):
+        for res in resources:
+            if not isinstance(res, dict):
+                continue
+            old_id = res.get("resource_id")
+            new_id = _ensure_hex_id(old_id, "res", res.get("name"))
+            res["resource_id"] = new_id
+            if isinstance(old_id, str) and old_id:
+                resource_id_map[old_id] = new_id
+
+    services = cleaned.get("services")
+    if isinstance(services, list):
+        for srv in services:
+            if not isinstance(srv, dict):
+                continue
+            srv["service_id"] = _ensure_hex_id(srv.get("service_id"), "srv", srv.get("name"))
+            reqs = srv.get("resource_requirements")
+            if isinstance(reqs, list):
+                for req in reqs:
+                    if not isinstance(req, dict):
+                        continue
+                    eligible = req.get("eligible_resource_ids")
+                    if isinstance(eligible, list):
+                        req["eligible_resource_ids"] = [
+                            resource_id_map.get(rid, rid) for rid in eligible
+                        ]
+
+
 def validate_and_sanitize_schema(schema: dict) -> tuple[dict, bool, list[str]]:
     """
     Validates and cleans the generated draft schema using StrictDraftPatchValidator.
@@ -282,7 +336,8 @@ def validate_and_sanitize_schema(schema: dict) -> tuple[dict, bool, list[str]]:
             cleaned["supervisor_prompt"] = validated.supervisor_prompt
         if validated.runtime_meta:
             cleaned["runtime_meta"] = validated.runtime_meta.model_dump(mode="json", exclude_none=True)
-            
+
+        _uniquify_inventory_ids(cleaned)
         return cleaned, True, []
     except ValidationError as ve:
         errors = [f"{'.'.join(str(loc) for loc in err['loc'])}: {err['msg']}" for err in ve.errors()]

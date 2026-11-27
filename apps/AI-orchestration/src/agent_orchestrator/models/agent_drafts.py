@@ -334,8 +334,6 @@ class AgentDraftConfig(TolerantBaseModel):
 def canonicalize_agent_schema(
     data: dict[str, object] | Any, status: str = "draft"
 ) -> dict[str, object]:
-    from agent_orchestrator.models.agent_runtime_configs import AgentRuntimeConfig
-
     if not data:
         return {}
 
@@ -347,31 +345,6 @@ def canonicalize_agent_schema(
     if "agent_id" not in clean_data:
         clean_data["agent_id"] = ""
 
-    if status == "draft":
-        try:
-            validated = AgentDraftConfig.model_validate(clean_data)
-            res_draft = validated.model_dump(exclude_unset=True)
-        except Exception:
-            res_draft = clean_data
-
-        res_draft.setdefault("schema_version", clean_data.get("schema_version", "2.4"))
-        res_draft.setdefault("status", "draft")
-        res_draft.setdefault("tenant_id", clean_data.get("tenant_id", ""))
-        res_draft.setdefault("agent_id", clean_data.get("agent_id", ""))
-        res_draft.setdefault("creation_source", clean_data.get("creation_source", "custom"))
-        res_draft.setdefault("business_profile", clean_data.get("business_profile") or {})
-        res_draft.setdefault("operating_hours", clean_data.get("operating_hours") or {})
-        res_draft.setdefault("scheduling_engine", clean_data.get("scheduling_engine") or {})
-        res_draft.setdefault("services", clean_data.get("services") or [])
-        res_draft.setdefault("resources", clean_data.get("resources") or [])
-        res_draft.setdefault("guardrails", clean_data.get("guardrails") or {})
-        res_draft.setdefault("widget_config", clean_data.get("widget_config") or {})
-        if "supervisor_prompt" in clean_data:
-            res_draft["supervisor_prompt"] = clean_data["supervisor_prompt"]
-        if "llm_engine" in clean_data:
-            res_draft["llm_engine"] = clean_data["llm_engine"]
-        return res_draft
-
     resources_data = clean_data.get("resources")
     if isinstance(resources_data, list):
         for r in resources_data:
@@ -379,7 +352,7 @@ def canonicalize_agent_schema(
                 r["custom_shift_overrides"] = {}
 
     try:
-        cfg = AgentRuntimeConfig(**clean_data)
+        cfg = AgentDraftConfig(**clean_data)
         res: dict[str, object] = {
             "schema_version": cfg.schema_version,
             "status": status,

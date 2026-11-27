@@ -24,19 +24,19 @@ export const ResourcesRosterCard: React.FC<ResourcesRosterCardProps> = ({ resour
   ];
 
   return (
-    <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-2xs space-y-4">
+    <div className="bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-6 shadow-2xs space-y-4 min-w-0">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-700">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 shrink-0 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-700">
             <Users className="w-5 h-5" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-bold text-slate-900">
                 Practitioners &amp; Resources Roster
               </h3>
-              <span className="bg-slate-100 text-slate-700 font-extrabold text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+              <span className="bg-slate-100 text-slate-700 font-extrabold text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap">
                 {resourcesList.length} {resourcesList.length === 1 ? 'Resource' : 'Resources'}
               </span>
             </div>
@@ -49,7 +49,8 @@ export const ResourcesRosterCard: React.FC<ResourcesRosterCardProps> = ({ resour
 
       {/* Table of Resources */}
       <div className="border border-slate-100 rounded-2xl overflow-hidden">
-        <table className="w-full text-left text-xs">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[680px] text-left text-xs">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50/60 text-[10px] font-bold uppercase tracking-wider text-slate-400">
               <th className="py-3 px-4">PROVIDER / ASSET</th>
@@ -224,7 +225,7 @@ export const ResourcesRosterCard: React.FC<ResourcesRosterCardProps> = ({ resour
                                 Working Shift Overrides
                               </span>
                               {hasCustomShifts ? (
-                                <div className="grid grid-cols-7 gap-1 pt-1">
+                                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-1.5 pt-1">
                                   {daysList.map((d) => {
                                     const shifts = customShifts[d.key];
                                     const hasShift =
@@ -234,14 +235,14 @@ export const ResourcesRosterCard: React.FC<ResourcesRosterCardProps> = ({ resour
                                     return (
                                       <div
                                         key={d.key}
-                                        className={`text-center py-1 px-0.5 rounded-lg text-[9px] border ${
+                                        className={`text-center py-1.5 px-1 rounded-lg text-[10px] border ${
                                           hasShift
                                             ? 'bg-indigo-50/60 border-indigo-200 text-indigo-900 font-semibold'
                                             : 'bg-slate-50 border-slate-200/60 text-slate-400'
                                         }`}
                                       >
                                         <p className="font-bold uppercase text-[8px]">{d.label}</p>
-                                        <p className="truncate mt-0.5">
+                                        <p className="mt-0.5 whitespace-nowrap">
                                           {hasShift ? `${shifts[0].start?.slice(0, 5)}` : 'Off'}
                                         </p>
                                       </div>
@@ -265,9 +266,10 @@ export const ResourcesRosterCard: React.FC<ResourcesRosterCardProps> = ({ resour
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
-      <div className="flex items-center justify-between text-xs pt-1">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs pt-1">
         <span className="text-slate-400 font-medium">
           Showing {resourcesList.length} providers with real-time slot conflict locking
         </span>

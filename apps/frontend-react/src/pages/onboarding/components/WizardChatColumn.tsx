@@ -1,5 +1,5 @@
 import type { Operation } from 'fast-json-patch';
-import { ArrowRight, Bot, Paperclip, SlidersHorizontal } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Bot, Paperclip, SlidersHorizontal } from 'lucide-react';
 import React, { useRef } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import type { Message } from '../types.js';
@@ -65,6 +65,27 @@ export const WizardChatColumn: React.FC<WizardChatColumnProps> = ({
         >
           <SlidersHorizontal className="w-4 h-4" />
         </button>
+      </div>
+
+      {/* Always-visible AI accuracy reminder */}
+      <div className="px-4 sm:px-6 py-2 bg-amber-50/80 border-b border-amber-200/70 flex items-center gap-2 text-[11px] text-amber-900 flex-shrink-0">
+        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+        <p className="leading-snug">
+          <span className="font-semibold">AI can make mistakes.</span> Always check the{' '}
+          {onNavigateToCanvas ? (
+            <button
+              type="button"
+              onClick={onNavigateToCanvas}
+              className="lg:hidden font-semibold underline underline-offset-2 cursor-pointer"
+            >
+              Canvas
+            </button>
+          ) : null}
+          <span className={onNavigateToCanvas ? 'hidden lg:inline font-semibold' : 'font-semibold'}>
+            Canvas
+          </span>{' '}
+          to verify your services, hours, and rules before publishing.
+        </p>
       </div>
 
       {/* Pending Changes Floating Drawer (if diffs exist) */}

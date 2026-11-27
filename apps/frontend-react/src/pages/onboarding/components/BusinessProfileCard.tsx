@@ -58,21 +58,21 @@ export const BusinessProfileCard: React.FC<BusinessProfileCardProps> = ({
   const terminology = businessProfile?.terminology || null;
 
   return (
-    <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-2xs space-y-5">
+    <div className="bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-6 shadow-2xs space-y-5 min-w-0">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-700">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 shrink-0 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-700">
             <Building2 className="w-5 h-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h3 className="text-sm font-bold text-slate-900">Business Profile</h3>
             <p className="text-xs text-slate-500">
               Core identity anchored across conversational prompts &amp; AI receptionist
             </p>
           </div>
         </div>
-        <span className="bg-slate-100 text-slate-700 font-bold text-[11px] px-3 py-1 rounded-full flex items-center gap-1.5">
+        <span className="bg-slate-100 text-slate-700 font-bold text-[11px] px-3 py-1 rounded-full flex items-center gap-1.5 whitespace-nowrap shrink-0">
           <span
             className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-500' : 'bg-slate-900'}`}
           />
@@ -253,14 +253,16 @@ export const BusinessProfileCard: React.FC<BusinessProfileCardProps> = ({
           </div>
 
           {/* Weekly Day Pills */}
-          <div className="grid grid-cols-7 gap-1.5 pt-2 border-t border-slate-200/60">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 pt-2 border-t border-slate-200/60">
             {days.map((day) => {
               const slots = operatingHours?.[day.key];
               const isOpen = Array.isArray(slots) && slots.length > 0 && slots[0]?.start;
+              const startStr = slots?.[0]?.start?.slice(0, 5);
+              const endStr = slots?.[0]?.end?.slice(0, 5);
               return (
                 <div
                   key={day.key}
-                  className={`text-center py-1.5 px-1 rounded-xl text-[10px] ${
+                  className={`text-center py-2 px-2 rounded-xl text-[10px] ${
                     isOpen
                       ? 'bg-white border border-slate-200 text-slate-800 font-bold shadow-2xs'
                       : 'bg-slate-100/70 text-slate-400 font-medium'
@@ -269,8 +271,12 @@ export const BusinessProfileCard: React.FC<BusinessProfileCardProps> = ({
                   <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">
                     {day.label}
                   </p>
-                  <p className="truncate mt-0.5">
-                    {isOpen ? (slots?.[0]?.start?.slice(0, 5) ?? 'Open') : 'Closed'}
+                  <p className="mt-0.5 whitespace-nowrap">
+                    {isOpen
+                      ? endStr
+                        ? `${startStr}–${endStr}`
+                        : startStr || 'Open'
+                      : 'Closed'}
                   </p>
                 </div>
               );

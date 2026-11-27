@@ -19,17 +19,17 @@ export const ServicesCatalogCard: React.FC<ServicesCatalogCardProps> = ({
   };
 
   return (
-    <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-2xs space-y-4">
+    <div className="bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-6 shadow-2xs space-y-4 min-w-0">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-700">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 shrink-0 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-700">
             <Layers className="w-5 h-5" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-bold text-slate-900">Services &amp; Pricing Catalog</h3>
-              <span className="bg-slate-100 text-slate-700 font-extrabold text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+              <span className="bg-slate-100 text-slate-700 font-extrabold text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap">
                 {servicesList.length} {servicesList.length === 1 ? 'Service' : 'Services'}
               </span>
             </div>
@@ -42,7 +42,8 @@ export const ServicesCatalogCard: React.FC<ServicesCatalogCardProps> = ({
 
       {/* Table of Services */}
       <div className="border border-slate-100 rounded-2xl overflow-hidden">
-        <table className="w-full text-left text-xs">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[680px] text-left text-xs">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50/60 text-[10px] font-bold uppercase tracking-wider text-slate-400">
               <th className="py-3 px-4">SERVICE &amp; CATEGORY</th>
@@ -255,6 +256,7 @@ export const ServicesCatalogCard: React.FC<ServicesCatalogCardProps> = ({
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       <div className="flex items-center justify-between text-xs pt-1">

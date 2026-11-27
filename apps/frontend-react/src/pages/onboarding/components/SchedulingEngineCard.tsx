@@ -22,19 +22,19 @@ export const SchedulingEngineCard: React.FC<SchedulingEngineCardProps> = ({ sche
   const holdMinutes = schedulingEngine?.hold_duration_minutes ?? 10;
 
   return (
-    <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-2xs space-y-5">
+    <div className="bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-6 shadow-2xs space-y-5 min-w-0">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-xs">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 shrink-0 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-xs">
             <CalendarClock className="w-5 h-5" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-bold text-slate-900">
                 Scheduling Engine &amp; Booking Guardrails
               </h3>
-              <span className="bg-indigo-50 text-indigo-700 font-extrabold text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+              <span className="bg-indigo-50 text-indigo-700 font-extrabold text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap shrink-0">
                 Active Engine
               </span>
             </div>

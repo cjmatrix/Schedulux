@@ -55,7 +55,7 @@ export default function () {
   });
 
   // 2. Query Services Catalog (High frequency lookup)
-  const servicesUrl = `${CONFIG.CORE_GATEWAY_URL}/api/v1/tenant/scheduling/services`;
+  const servicesUrl = `${CONFIG.CORE_GATEWAY_URL}/api/v1/tenant/scheduling/services?agent_id=${CONFIG.AGENT_ID}`;
   const servRes = http.get(servicesUrl, {
     headers,
     tags: { endpoint: 'services' },
@@ -71,7 +71,7 @@ export default function () {
 export function handleSummary(data) {
   const title = 'Schedulux Core Engine - Availability Ramp-Up';
   return {
-    stdout: generateTextSummary(data, title),
+    stdout: generateTextSummary(data, title), 
     'loadtests/results/core-availability-ramp.html': generateHtmlReport(data, title),
     'loadtests/results/core-availability-ramp.json': JSON.stringify(data, null, 2),
   };

@@ -44,7 +44,7 @@ export function setup() {
     headers['Cookie'] = `access_token=${CONFIG.TENANT_TOKEN}`;
   }
 
-  const servicesUrl = `${CONFIG.CORE_GATEWAY_URL}/api/v1/tenant/scheduling/services?limit=50`;
+  const servicesUrl = `${CONFIG.CORE_GATEWAY_URL}/api/v1/tenant/scheduling/services?agent_id=${CONFIG.AGENT_ID}&limit=50`;
   const res = http.get(servicesUrl, { headers });
 
   let services = [];

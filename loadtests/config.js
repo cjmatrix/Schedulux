@@ -4,8 +4,8 @@
 
 export const CONFIG = {
   // Gateways
-  CORE_GATEWAY_URL: __ENV.CORE_GATEWAY_URL || 'http://localhost:5000',
-  CUSTOMER_GATEWAY_URL: __ENV.CUSTOMER_GATEWAY_URL || 'http://localhost:5001',
+  CORE_GATEWAY_URL: __ENV.CORE_GATEWAY_URL || 'https://api.schedulux.xyz',
+  CUSTOMER_GATEWAY_URL: __ENV.CUSTOMER_GATEWAY_URL || 'https://client-api.schedulux.xyz',
 
   // Tenant / Agent context
   TENANT_ID: __ENV.TENANT_ID || 'tnt_Qb012pyfTyZDwW1ctXTF6',

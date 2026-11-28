@@ -1,6 +1,6 @@
 import type { Operation } from 'fast-json-patch';
 import { AlertTriangle, ArrowRight, Bot, Paperclip, SlidersHorizontal } from 'lucide-react';
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import type { Message } from '../types.js';
 import { DiffDrawer } from './DiffDrawer.js';
@@ -44,6 +44,50 @@ export const WizardChatColumn: React.FC<WizardChatColumnProps> = ({
   onNavigateToCanvas,
 }) => {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const isAtBottomRef = useRef(true);
+  const lastMsg = allMessages[allMessages.length - 1];
+  const lastMessageKey = lastMsg
+    ? `${(firstItemIndex ?? 0) + allMessages.length - 1}:${lastMsg.role}:${lastMsg.text.length}`
+    : '';
+  const prevLastMessageKeyRef = useRef<string>(lastMessageKey);
+  const prevStatusRef = useRef(status);
+
+  useEffect(() => {
+    const statusJustStartedProcessing =
+      status === 'processing' && prevStatusRef.current !== 'processing';
+    const lastMessageChanged = lastMessageKey !== prevLastMessageKeyRef.current;
+
+    prevStatusRef.current = status;
+    prevLastMessageKeyRef.current = lastMessageKey;
+
+    if (!statusJustStartedProcessing && !lastMessageChanged) {
+      return;
+    }
+
+    const shouldForceScroll = statusJustStartedProcessing || lastMsg?.role === 'tenant';
+    if (!shouldForceScroll && !isAtBottomRef.current) {
+      return;
+    }
+
+    if (shouldForceScroll) {
+      isAtBottomRef.current = true;
+    }
+
+    const scrollToBottom = () => {
+      virtuosoRef.current?.scrollTo({
+        top: Number.MAX_SAFE_INTEGER,
+        behavior: 'smooth',
+      });
+    };
+
+    const rafId = requestAnimationFrame(scrollToBottom);
+    const timerId = window.setTimeout(scrollToBottom, 60);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.clearTimeout(timerId);
+    };
+  }, [lastMessageKey, lastMsg?.role, status]);
 
   return (
     <div
@@ -101,7 +145,11 @@ export const WizardChatColumn: React.FC<WizardChatColumnProps> = ({
           data={allMessages}
           firstItemIndex={firstItemIndex}
           initialTopMostItemIndex={allMessages.length > 0 ? allMessages.length - 1 : 0}
-          followOutput="auto"
+          atBottomThreshold={60}
+          atBottomStateChange={(atBottom) => {
+            isAtBottomRef.current = atBottom;
+          }}
+          followOutput={(isAtBottom) => (isAtBottom ? 'smooth' : false)}
           startReached={() => {
             if (hasPreviousPage && !isFetchingPreviousPage && onLoadPreviousMessages) {
               onLoadPreviousMessages();

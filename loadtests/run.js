@@ -61,8 +61,8 @@ console.log('='.repeat(70));
 console.log(`• Script:         ${path.relative(ROOT_DIR, fullPath)}`);
 console.log(`• Results Dir:    ${path.relative(ROOT_DIR, RESULTS_DIR)}`);
 console.log(`• Tenant ID:      ${process.env.TENANT_ID || 'tnt_Qb012pyfTyZDwW1ctXTF6'}`);
-console.log(`• Core Gateway:   ${process.env.CORE_GATEWAY_URL || 'http://localhost:5000'}`);
-console.log(`• Customer GW:    ${process.env.CUSTOMER_GATEWAY_URL || 'http://localhost:5001'}`);
+console.log(`• Core Gateway:   ${process.env.CORE_GATEWAY_URL || 'https://api.schedulux.xyz'}`);
+console.log(`• Customer GW:    ${process.env.CUSTOMER_GATEWAY_URL || 'https://client-api.schedulux.xyz'}`);
 console.log('='.repeat(70) + '\n');
 
 // Forward remaining CLI arguments to k6 (e.g. --duration, -u, etc.)

@@ -114,3 +114,5 @@ __pycache__/
 doppler-secrets.yaml
 
 *.tsbuildinfo
+
+pt.txt
